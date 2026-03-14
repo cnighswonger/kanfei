@@ -2719,10 +2719,109 @@ export default function Settings() {
       {/* AI Nowcast section */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>AI Nowcast</h3>
+
+        {/* Mode selector + Remote URL — always visible */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          gap: isMobile ? "12px" : "16px",
+          marginBottom: "16px",
+        }}>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Nowcast Mode</label>
+            <select
+              style={selectStyle}
+              value={String(val("nowcast_mode") || "local")}
+              onChange={(e) => updateField("nowcast_mode", e.target.value)}
+            >
+              <option value="local">Local (kanfei-nowcast installed)</option>
+              <option value="remote">Remote (external endpoint)</option>
+            </select>
+          </div>
+          {String(val("nowcast_mode") || "local") === "remote" && (
+            <div style={fieldGroup}>
+              <label style={labelStyle}>
+                Remote Endpoint URL
+                <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+                  kanfei-nowcast server address
+                </span>
+              </label>
+              <input
+                style={{ ...inputStyle }}
+                type="text"
+                placeholder="http://192.168.1.100:8100"
+                value={String(val("nowcast_remote_url") || "")}
+                onChange={(e) => updateField("nowcast_remote_url", e.target.value)}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Remote mode — minimal config, everything else is on the remote server */}
+        {String(val("nowcast_mode") || "local") === "remote" && (
+          <p style={{ fontSize: "12px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0", lineHeight: 1.5 }}>
+            In remote mode, all nowcast engine settings (model, data sources, radar, nearby stations) are
+            configured on the remote kanfei-nowcast server. Only the endpoint URL is needed here.
+          </p>
+        )}
+
+        {/* Local mode — full engine configuration */}
+        {String(val("nowcast_mode") || "local") !== "remote" && (<>
         <p style={{ fontSize: "12px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0 0 16px 0", lineHeight: 1.5 }}>
-          NWS alerts, forecast integration, NEXRAD radar, and nearby ASOS/AWOS stations require a US location.
-          International stations can still use the base nowcast with local sensor data and CWOP/APRS-IS neighbors.
+          Requires the kanfei-nowcast package. NWS alerts, forecast integration, NEXRAD radar, and nearby
+          ASOS/AWOS stations require a US location. International stations can still use the base nowcast
+          with local sensor data and CWOP/APRS-IS neighbors.
         </p>
+
+        {/* API Key */}
+        <div style={fieldGroup}>
+          <label style={labelStyle}>
+            Anthropic API Key
+            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+              Or set ANTHROPIC_API_KEY environment variable
+            </span>
+          </label>
+          <input
+            style={{ ...inputStyle, maxWidth: "480px" }}
+            type="password"
+            placeholder="sk-ant-..."
+            value={String(val("nowcast_api_key") || "")}
+            onChange={(e) => updateField("nowcast_api_key", e.target.value)}
+          />
+        </div>
+
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          gap: isMobile ? "12px" : "16px",
+        }}>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Model</label>
+            <select
+              style={selectStyle}
+              value={String(val("nowcast_model") || "claude-haiku-4-5-20251001")}
+              onChange={(e) => updateField("nowcast_model", e.target.value)}
+            >
+              <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fastest, lowest cost)</option>
+              <option value="claude-sonnet-4-5-20250929">Sonnet 4.5 (better reasoning)</option>
+            </select>
+          </div>
+
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Update Interval</label>
+            <select
+              style={selectStyle}
+              value={String(val("nowcast_interval") || "900")}
+              onChange={(e) => updateField("nowcast_interval", parseInt(e.target.value))}
+            >
+              <option value="300">5 minutes</option>
+              <option value="600">10 minutes</option>
+              <option value="900">15 minutes</option>
+              <option value="1800">30 minutes</option>
+              <option value="3600">1 hour</option>
+            </select>
+          </div>
+        </div>
 
         <div style={fieldGroup}>
           <label style={checkboxLabel}>
@@ -2855,95 +2954,7 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Mode selector + Remote URL */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-          gap: isMobile ? "12px" : "16px",
-        }}>
-          <div style={fieldGroup}>
-            <label style={labelStyle}>Nowcast Mode</label>
-            <select
-              style={selectStyle}
-              value={String(val("nowcast_mode") || "local")}
-              onChange={(e) => updateField("nowcast_mode", e.target.value)}
-            >
-              <option value="local">Local (in-process engine)</option>
-              <option value="remote">Remote (external endpoint)</option>
-            </select>
-          </div>
-          {String(val("nowcast_mode") || "local") === "remote" && (
-            <div style={fieldGroup}>
-              <label style={labelStyle}>
-                Remote Endpoint URL
-                <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
-                  kanfei-nowcast server address
-                </span>
-              </label>
-              <input
-                style={{ ...inputStyle }}
-                type="text"
-                placeholder="http://192.168.1.100:8100"
-                value={String(val("nowcast_remote_url") || "")}
-                onChange={(e) => updateField("nowcast_remote_url", e.target.value)}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* API Key — full width (local mode only) */}
-        {String(val("nowcast_mode") || "local") === "local" && (
-        <div style={fieldGroup}>
-          <label style={labelStyle}>
-            Anthropic API Key
-            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
-              Or set ANTHROPIC_API_KEY environment variable
-            </span>
-          </label>
-          <input
-            style={{ ...inputStyle, maxWidth: "480px" }}
-            type="password"
-            placeholder="sk-ant-..."
-            value={String(val("nowcast_api_key") || "")}
-            onChange={(e) => updateField("nowcast_api_key", e.target.value)}
-          />
-        </div>
-        )}
-
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-          gap: isMobile ? "12px" : "16px",
-        }}>
-          <div style={fieldGroup}>
-            <label style={labelStyle}>Model</label>
-            <select
-              style={selectStyle}
-              value={String(val("nowcast_model") || "claude-haiku-4-5-20251001")}
-              onChange={(e) => updateField("nowcast_model", e.target.value)}
-            >
-              <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fastest, lowest cost)</option>
-              <option value="claude-sonnet-4-5-20250929">Sonnet 4.5 (better reasoning)</option>
-            </select>
-          </div>
-
-          <div style={fieldGroup}>
-            <label style={labelStyle}>Update Interval</label>
-            <select
-              style={selectStyle}
-              value={String(val("nowcast_interval") || "900")}
-              onChange={(e) => updateField("nowcast_interval", parseInt(e.target.value))}
-            >
-              <option value="300">5 minutes</option>
-              <option value="600">10 minutes</option>
-              <option value="900">15 minutes</option>
-              <option value="1800">30 minutes</option>
-              <option value="3600">1 hour</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Fallback Providers */}
+        {/* Fallback Providers (local mode only) */}
         <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "16px", marginTop: "16px", marginBottom: "16px" }}>
           <div style={{ fontSize: "15px", fontFamily: "var(--font-heading)", color: "var(--color-text)", marginBottom: "4px" }}>
             Fallback Providers
@@ -3104,6 +3115,7 @@ export default function Settings() {
             />
           </div>
         </div>
+        </>)}{/* end local mode settings */}
       </div>
       </>)}
 
