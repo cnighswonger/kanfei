@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 # Resolve .env from the project root (one level above backend/)
@@ -25,6 +25,20 @@ class Settings(BaseSettings):
     latitude: float = 0.0
     longitude: float = 0.0
     elevation_ft: float = 0.0
+
+    @field_validator(
+        "baud_rate", "serial_timeout", "poll_interval_sec",
+        "latitude", "longitude", "elevation_ft",
+        "metar_enabled", "nws_enabled",
+        "ipc_port", "port",
+        mode="before",
+    )
+    @classmethod
+    def _empty_str_to_default(cls, v, info):
+        """Let empty .env values fall through to field defaults."""
+        if v == "":
+            return info.default
+        return v
 
     # Database
     db_path: str = "davis_wx.db"
