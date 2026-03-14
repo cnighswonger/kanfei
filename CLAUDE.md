@@ -14,7 +14,7 @@ Self-hosted weather station dashboard and data logger for Davis Instruments stat
   - `app/main.py` — FastAPI web application entry point
 - `frontend/` — React + TypeScript + Vite
   - `src/pages/` — Page components (Dashboard, History, Settings, etc.)
-- `davis-wx.service` — sample systemd unit for manual Linux deployment in this branch
+- `kanfei.service` — sample systemd unit for manual Linux deployment
 - `reference/` — Davis technical reference docs
 
 ## Git Workflow

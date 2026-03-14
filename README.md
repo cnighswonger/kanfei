@@ -219,11 +219,11 @@ systemctl list-unit-files | rg kanfei
 
 ### Manual systemd (Linux)
 
-A sample unit file is included at `davis-wx.service`:
+A sample unit file is included at `kanfei.service`:
 
 ```bash
 python station.py setup
-sudo cp davis-wx.service /etc/systemd/system/kanfei.service
+sudo cp kanfei.service /etc/systemd/system/kanfei.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now kanfei
 ```
