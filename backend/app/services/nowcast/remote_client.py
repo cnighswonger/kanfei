@@ -44,6 +44,12 @@ class NowcastRemoteClient:
         self._latest: Optional[dict] = None
         self._last_push_ts: Optional[str] = None
         self._client: Optional[httpx.AsyncClient] = None
+        self._auth_error: Optional[str] = None  # Set on 401/403/429
+
+    @property
+    def auth_error(self) -> Optional[str]:
+        """Last auth error message, or None if authenticated successfully."""
+        return self._auth_error
 
     def reload_config(self) -> None:
         """Read remote nowcast config."""
@@ -143,13 +149,16 @@ class NowcastRemoteClient:
         try:
             resp = await self._client.get(f"{self._remote_url}/api/nowcast")
             if resp.status_code == 401:
-                logger.warning("Nowcast fetch rejected: invalid or missing API key")
+                self._auth_error = "Invalid or missing API key"
+                logger.warning("Nowcast fetch rejected: %s", self._auth_error)
                 return
             if resp.status_code == 403:
-                logger.warning("Nowcast fetch rejected: API key disabled or expired")
+                self._auth_error = "API key disabled or expired"
+                logger.warning("Nowcast fetch rejected: %s", self._auth_error)
                 return
             if resp.status_code == 429:
-                logger.warning("Nowcast fetch rejected: rate limit exceeded")
+                self._auth_error = "Rate limit exceeded — try again shortly"
+                logger.warning("Nowcast fetch rejected: %s", self._auth_error)
                 return
             if resp.status_code != 200:
                 logger.warning(
@@ -157,6 +166,9 @@ class NowcastRemoteClient:
                     resp.status_code, resp.text[:200],
                 )
                 return
+
+            # Successful fetch — clear any previous auth error
+            self._auth_error = None
 
             data = resp.json()
             if data is None:

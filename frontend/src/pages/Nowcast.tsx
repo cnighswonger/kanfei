@@ -12,7 +12,9 @@ import {
   fetchNowcastKnowledge,
   updateNowcastKnowledge,
   fetchNWSAlerts,
+  fetchNowcastStatus,
 } from "../api/client.ts";
+import type { NowcastStatus } from "../api/client.ts";
 import type {
   NowcastVerification,
   NowcastKnowledgeEntry,
@@ -303,6 +305,17 @@ export default function Nowcast() {
   const isMobile = useIsMobile();
   const { flags } = useFeatureFlags();
 
+  // Nowcast service status (for auth error display)
+  const [ncStatus, setNcStatus] = useState<NowcastStatus | null>(null);
+  useEffect(() => {
+    if (!flags.nowcastEnabled) return;
+    fetchNowcastStatus().then(setNcStatus).catch(() => {});
+    const id = setInterval(() => {
+      fetchNowcastStatus().then(setNcStatus).catch(() => {});
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [flags.nowcastEnabled]);
+
   // Verification state
   const [verificationsExpanded, setVerificationsExpanded] = useState(false);
   const [verifications, setVerifications] = useState<NowcastVerification[]>([]);
@@ -368,9 +381,16 @@ export default function Nowcast() {
   );
 
   if (!nowcast) {
-    const message = flags.nowcastEnabled
-      ? "Nowcast is enabled but no forecast data is available yet. If you are using remote mode, verify that the remote endpoint is reachable and the kanfei-nowcast service is running. For local mode, ensure the kanfei-nowcast package is installed and your API key is configured."
-      : "Enable the AI Nowcast service in Settings to get started. Nowcast requires either a local installation of the kanfei-nowcast package or a remote endpoint.";
+    let message: string;
+    if (!flags.nowcastEnabled) {
+      message = "Enable the AI Nowcast service in Settings to get started. Nowcast requires either a local installation of the kanfei-nowcast package or a remote endpoint.";
+    } else if (ncStatus?.error) {
+      message = `Nowcast service error: ${ncStatus.error}. Check your API key and endpoint configuration in Settings.`;
+    } else if (ncStatus?.active && !ncStatus?.has_data) {
+      message = "Nowcast service is running but no forecast data has been generated yet. The first nowcast should appear within a few minutes.";
+    } else {
+      message = "Nowcast is enabled but no forecast data is available yet. If you are using remote mode, verify that the remote endpoint is reachable and the kanfei-nowcast service is running. For local mode, ensure the kanfei-nowcast package is installed and your API key is configured.";
+    }
 
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
