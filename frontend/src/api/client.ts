@@ -177,6 +177,17 @@ export function fetchNowcast(): Promise<NowcastData | null> {
   return request<NowcastData | null>("/api/nowcast");
 }
 
+export interface NowcastStatus {
+  active: boolean;
+  enabled?: boolean;
+  has_data?: boolean;
+  error: string | null;
+}
+
+export function fetchNowcastStatus(): Promise<NowcastStatus> {
+  return request<NowcastStatus>("/api/nowcast/status");
+}
+
 export function fetchNowcastHistory(
   limit: number = 20,
 ): Promise<NowcastData[]> {

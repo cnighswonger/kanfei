@@ -51,6 +51,21 @@ async def generate_now():
     return result
 
 
+@router.get("/nowcast/status")
+def get_nowcast_status():
+    """Return nowcast service status including auth errors."""
+    svc = _svc_ref.nowcast_service
+    if svc is None:
+        return {"active": False, "error": None}
+    auth_error = getattr(svc, "auth_error", None)
+    return {
+        "active": True,
+        "enabled": svc.is_enabled(),
+        "has_data": svc.get_latest() is not None,
+        "error": auth_error,
+    }
+
+
 @router.get("/nowcast/alerts")
 async def get_nws_alerts(db: Session = Depends(get_db)):
     """Return currently active NWS alerts for the station location."""

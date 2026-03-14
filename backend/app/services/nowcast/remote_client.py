@@ -40,14 +40,22 @@ class NowcastRemoteClient:
         self._events = events
         self._enabled: bool = False
         self._remote_url: str = ""
+        self._api_key: str = ""
         self._latest: Optional[dict] = None
         self._last_push_ts: Optional[str] = None
         self._client: Optional[httpx.AsyncClient] = None
+        self._auth_error: Optional[str] = None  # Set on 401/403/429
+
+    @property
+    def auth_error(self) -> Optional[str]:
+        """Last auth error message, or None if authenticated successfully."""
+        return self._auth_error
 
     def reload_config(self) -> None:
         """Read remote nowcast config."""
         self._enabled = self._config.get_bool("nowcast_enabled", False)
         self._remote_url = self._config.get("nowcast_remote_url", "").rstrip("/")
+        self._api_key = self._config.get("nowcast_remote_api_key", "")
 
     def is_enabled(self) -> bool:
         return self._enabled and bool(self._remote_url)
@@ -63,7 +71,10 @@ class NowcastRemoteClient:
         """Main loop — push readings and poll for nowcasts."""
         logger.info("Nowcast remote client started")
         self.reload_config()
-        self._client = httpx.AsyncClient(timeout=30.0)
+        headers = {}
+        if self._api_key:
+            headers["X-API-Key"] = self._api_key
+        self._client = httpx.AsyncClient(timeout=30.0, headers=headers)
 
         # Seed from remote on startup
         if self.is_enabled():
@@ -78,9 +89,13 @@ class NowcastRemoteClient:
 
     async def _tick(self) -> None:
         """Single iteration: push readings, poll for results."""
+        old_key = self._api_key
         self.reload_config()
         if not self.is_enabled():
             return
+        # Update auth header if key changed
+        if self._api_key != old_key and self._client:
+            self._client.headers["X-API-Key"] = self._api_key if self._api_key else ""
 
         await self._push_readings()
         await self._poll_nowcast()
@@ -115,6 +130,12 @@ class NowcastRemoteClient:
                     "Pushed %d readings to %s",
                     len(batch), self._remote_url,
                 )
+            elif resp.status_code == 401:
+                logger.warning("Push rejected: invalid or missing API key")
+            elif resp.status_code == 403:
+                logger.warning("Push rejected: API key disabled or expired")
+            elif resp.status_code == 429:
+                logger.warning("Push rejected: rate limit exceeded")
             else:
                 logger.warning(
                     "Failed to push readings: %d %s",
@@ -127,12 +148,27 @@ class NowcastRemoteClient:
         """Fetch the latest nowcast from the remote endpoint."""
         try:
             resp = await self._client.get(f"{self._remote_url}/api/nowcast")
+            if resp.status_code == 401:
+                self._auth_error = "Invalid or missing API key"
+                logger.warning("Nowcast fetch rejected: %s", self._auth_error)
+                return
+            if resp.status_code == 403:
+                self._auth_error = "API key disabled or expired"
+                logger.warning("Nowcast fetch rejected: %s", self._auth_error)
+                return
+            if resp.status_code == 429:
+                self._auth_error = "Rate limit exceeded — try again shortly"
+                logger.warning("Nowcast fetch rejected: %s", self._auth_error)
+                return
             if resp.status_code != 200:
                 logger.warning(
                     "Failed to fetch nowcast: %d %s",
                     resp.status_code, resp.text[:200],
                 )
                 return
+
+            # Successful fetch — clear any previous auth error
+            self._auth_error = None
 
             data = resp.json()
             if data is None:
