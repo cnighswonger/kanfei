@@ -41,7 +41,7 @@ class Settings(BaseSettings):
         return v
 
     # Database
-    db_path: str = "davis_wx.db"
+    db_path: str = "kanfei.db"
 
     @model_validator(mode="after")
     def _resolve_db_path(self) -> "Settings":

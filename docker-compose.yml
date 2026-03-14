@@ -1,17 +1,17 @@
 services:
-  davis-wx:
+  kanfei:
     build: .
     ports:
       - "8000:8000"
     volumes:
-      - davis-data:/app/data
+      - kanfei-data:/app/data
     devices:
       - /dev/ttyUSB0:/dev/ttyUSB0
     environment:
       - KANFEI_SERIAL_PORT=/dev/ttyUSB0
       - KANFEI_BAUD_RATE=19200
-      - KANFEI_DB_PATH=/app/data/weather.db
+      - KANFEI_DB_PATH=/app/data/kanfei.db
     restart: unless-stopped
 
 volumes:
-  davis-data:
+  kanfei-data:

@@ -100,7 +100,7 @@ This is the most complex subsystem. Four-layer architecture:
 
 ### 8. Deployment
 - Debian package with two systemd services (logger + web)
-- This branch includes `davis-wx.service` for manual systemd deployment.
+- This branch includes `kanfei.service` for manual systemd deployment.
   Packaging assets may be maintained on the `deb` branch.
 - Targets Debian/Ubuntu on ARM or x86 (Raspberry Pi common target)
 

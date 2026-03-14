@@ -1,0 +1,18 @@
+[Unit]
+Description=Kanfei Weather Station
+After=network.target
+
+[Service]
+Type=simple
+User=kanfei
+Group=kanfei
+WorkingDirectory=/opt/kanfei/backend
+ExecStart=/opt/kanfei/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+Environment=KANFEI_SERIAL_PORT=/dev/ttyUSB0
+Environment=KANFEI_BAUD_RATE=19200
+Environment=KANFEI_DB_PATH=/var/lib/kanfei/kanfei.db
+
+[Install]
+WantedBy=multi-user.target
