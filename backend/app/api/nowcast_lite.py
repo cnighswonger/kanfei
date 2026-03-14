@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from ..models.database import get_db
 from ..models.station_config import StationConfigModel
-from ..services.nowcast.service_ref import nowcast_service
+from ..services.nowcast import service_ref as _svc_ref
 from ..services.alerts_nws import fetch_nws_active_alerts
 
 logger = logging.getLogger(__name__)
@@ -28,24 +28,24 @@ router = APIRouter()
 @router.get("/nowcast")
 def get_nowcast():
     """Return the latest nowcast, or null if none available."""
-    if nowcast_service is None:
+    if _svc_ref.nowcast_service is None:
         return None
-    return nowcast_service.get_latest()
+    return _svc_ref.nowcast_service.get_latest()
 
 
 @router.post("/nowcast/generate")
 async def generate_now():
     """Trigger an immediate nowcast fetch and return the result."""
-    if nowcast_service is None:
+    if _svc_ref.nowcast_service is None:
         raise HTTPException(status_code=400, detail="Nowcast service not active")
-    nowcast_service.reload_config()
-    if not nowcast_service.is_enabled():
+    _svc_ref.nowcast_service.reload_config()
+    if not _svc_ref.nowcast_service.is_enabled():
         raise HTTPException(status_code=400, detail="Nowcast is not enabled")
     try:
-        await nowcast_service.generate_once()
+        await _svc_ref.nowcast_service.generate_once()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
-    result = nowcast_service.get_latest()
+    result = _svc_ref.nowcast_service.get_latest()
     if result is None:
         raise HTTPException(status_code=500, detail="Generation produced no result")
     return result
