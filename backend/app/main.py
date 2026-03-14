@@ -83,34 +83,52 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.warning("Logger daemon not reachable — running in degraded mode")
 
-    # Construct nowcast service with Kanfei adapters (optional add-on).
-    nowcast_task = None
-    if _NOWCAST_AVAILABLE:
-        from .models.database import SessionLocal
-        from .ws.handler import ws_manager
-        from .services.nowcast.kanfei_adapters import (
-            KanfeiConfigProvider,
-            KanfeiStorageBackend,
-            KanfeiEventEmitter,
-        )
-        config = KanfeiConfigProvider(SessionLocal)
-        storage = KanfeiStorageBackend(SessionLocal)
-        events = KanfeiEventEmitter(ws_manager)
+    # Construct nowcast service — remote mode is built-in, local requires
+    # the optional kanfei-nowcast package.
+    from .models.database import SessionLocal
+    from .ws.handler import ws_manager
+    from .services.nowcast.kanfei_adapters import (
+        KanfeiConfigProvider,
+        KanfeiStorageBackend,
+        KanfeiEventEmitter,
+    )
+    from .services.nowcast import service_ref
 
-        nowcast_mode = config.get("nowcast_mode", "local")
-        if nowcast_mode == "remote":
-            from kanfei_nowcast.remote import NowcastRemoteClient
-            nowcast_service = NowcastRemoteClient(config, storage, events)
-            # Store reference so API endpoints can access it
+    nc_config = KanfeiConfigProvider(SessionLocal)
+    nc_storage = KanfeiStorageBackend(SessionLocal)
+    nc_events = KanfeiEventEmitter(ws_manager)
+
+    nowcast_task = None
+    nowcast_mode = nc_config.get("nowcast_mode", "local")
+    nowcast_enabled = nc_config.get_bool("nowcast_enabled", False)
+
+    if nowcast_enabled and nowcast_mode == "remote":
+        # Remote mode — built-in client, no kanfei-nowcast needed
+        from .services.nowcast.remote_client import NowcastRemoteClient
+        nc_service = NowcastRemoteClient(nc_config, nc_storage, nc_events)
+        service_ref.nowcast_service = nc_service
+        nowcast_task = asyncio.create_task(nc_service.start())
+        logger.info("Nowcast mode: REMOTE (%s)", nc_config.get("nowcast_remote_url"))
+    elif nowcast_enabled and _NOWCAST_AVAILABLE:
+        # Local mode — kanfei-nowcast package installed
+        nc_service = create_nowcast_service(nc_config, nc_storage, nc_events)
+        service_ref.nowcast_service = nc_service
+        # Also store in kanfei_nowcast.service for the full API module
+        try:
             import kanfei_nowcast.service as _svc_mod
-            _svc_mod.nowcast_service = nowcast_service
-            logger.info("Nowcast mode: REMOTE (%s)", config.get("nowcast_remote_url"))
-        else:
-            nowcast_service = create_nowcast_service(config, storage, events)
-            logger.info("Nowcast mode: LOCAL")
-        nowcast_task = asyncio.create_task(nowcast_service.start())
+            _svc_mod.nowcast_service = nc_service
+        except ImportError:
+            pass
+        nowcast_task = asyncio.create_task(nc_service.start())
+        logger.info("Nowcast mode: LOCAL")
+    elif nowcast_enabled:
+        logger.warning(
+            "Nowcast is enabled (mode=%s) but kanfei-nowcast package is not installed. "
+            "Install kanfei-nowcast for local mode, or switch to remote mode in Settings.",
+            nowcast_mode,
+        )
     else:
-        logger.info("AI nowcast not installed — running without nowcast features")
+        logger.info("AI nowcast not enabled")
 
     yield
 

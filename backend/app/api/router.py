@@ -26,9 +26,12 @@ api_router.include_router(usage.router)
 api_router.include_router(db_admin.router)
 api_router.include_router(logs.router)
 
-# Nowcast API requires the optional kanfei-nowcast package.
+# Nowcast API — full version requires kanfei-nowcast, lite version is built-in.
 try:
     from . import nowcast
     api_router.include_router(nowcast.router)
+    logger.info("Nowcast API: full (kanfei-nowcast installed)")
 except ImportError:
-    logger.info("Nowcast API endpoints not available (kanfei-nowcast not installed)")
+    from . import nowcast_lite
+    api_router.include_router(nowcast_lite.router)
+    logger.info("Nowcast API: lite (remote mode only)")
