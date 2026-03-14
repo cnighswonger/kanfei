@@ -2758,13 +2758,28 @@ export default function Settings() {
           )}
         </div>
 
-        {/* Remote mode — minimal config, everything else is on the remote server */}
-        {String(val("nowcast_mode") || "local") === "remote" && (
+        {/* Remote mode — endpoint URL, API key, and info */}
+        {String(val("nowcast_mode") || "local") === "remote" && (<>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>
+              API Key
+              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+                Provided with your kanfei-nowcast subscription
+              </span>
+            </label>
+            <input
+              style={{ ...inputStyle, maxWidth: "480px" }}
+              type="password"
+              placeholder="knc_live_..."
+              value={String(val("nowcast_remote_api_key") || "")}
+              onChange={(e) => updateField("nowcast_remote_api_key", e.target.value)}
+            />
+          </div>
           <p style={{ fontSize: "12px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0", lineHeight: 1.5 }}>
             In remote mode, all nowcast engine settings (model, data sources, radar, nearby stations) are
-            configured on the remote kanfei-nowcast server. Only the endpoint URL is needed here.
+            configured on the remote kanfei-nowcast server. Only the endpoint URL and API key are needed here.
           </p>
-        )}
+        </>)}
 
         {/* Local mode — full engine configuration */}
         {String(val("nowcast_mode") || "local") !== "remote" && (<>

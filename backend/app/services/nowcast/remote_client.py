@@ -40,6 +40,7 @@ class NowcastRemoteClient:
         self._events = events
         self._enabled: bool = False
         self._remote_url: str = ""
+        self._api_key: str = ""
         self._latest: Optional[dict] = None
         self._last_push_ts: Optional[str] = None
         self._client: Optional[httpx.AsyncClient] = None
@@ -48,6 +49,7 @@ class NowcastRemoteClient:
         """Read remote nowcast config."""
         self._enabled = self._config.get_bool("nowcast_enabled", False)
         self._remote_url = self._config.get("nowcast_remote_url", "").rstrip("/")
+        self._api_key = self._config.get("nowcast_remote_api_key", "")
 
     def is_enabled(self) -> bool:
         return self._enabled and bool(self._remote_url)
@@ -63,7 +65,10 @@ class NowcastRemoteClient:
         """Main loop — push readings and poll for nowcasts."""
         logger.info("Nowcast remote client started")
         self.reload_config()
-        self._client = httpx.AsyncClient(timeout=30.0)
+        headers = {}
+        if self._api_key:
+            headers["X-API-Key"] = self._api_key
+        self._client = httpx.AsyncClient(timeout=30.0, headers=headers)
 
         # Seed from remote on startup
         if self.is_enabled():
@@ -78,9 +83,13 @@ class NowcastRemoteClient:
 
     async def _tick(self) -> None:
         """Single iteration: push readings, poll for results."""
+        old_key = self._api_key
         self.reload_config()
         if not self.is_enabled():
             return
+        # Update auth header if key changed
+        if self._api_key != old_key and self._client:
+            self._client.headers["X-API-Key"] = self._api_key if self._api_key else ""
 
         await self._push_readings()
         await self._poll_nowcast()
@@ -115,6 +124,12 @@ class NowcastRemoteClient:
                     "Pushed %d readings to %s",
                     len(batch), self._remote_url,
                 )
+            elif resp.status_code == 401:
+                logger.warning("Push rejected: invalid or missing API key")
+            elif resp.status_code == 403:
+                logger.warning("Push rejected: API key disabled or expired")
+            elif resp.status_code == 429:
+                logger.warning("Push rejected: rate limit exceeded")
             else:
                 logger.warning(
                     "Failed to push readings: %d %s",
@@ -127,6 +142,15 @@ class NowcastRemoteClient:
         """Fetch the latest nowcast from the remote endpoint."""
         try:
             resp = await self._client.get(f"{self._remote_url}/api/nowcast")
+            if resp.status_code == 401:
+                logger.warning("Nowcast fetch rejected: invalid or missing API key")
+                return
+            if resp.status_code == 403:
+                logger.warning("Nowcast fetch rejected: API key disabled or expired")
+                return
+            if resp.status_code == 429:
+                logger.warning("Nowcast fetch rejected: rate limit exceeded")
+                return
             if resp.status_code != 200:
                 logger.warning(
                     "Failed to fetch nowcast: %d %s",
