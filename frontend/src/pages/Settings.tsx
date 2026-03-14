@@ -2726,6 +2726,7 @@ export default function Settings() {
           gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
           gap: isMobile ? "12px" : "16px",
           marginBottom: "16px",
+          alignItems: "end",
         }}>
           <div style={fieldGroup}>
             <label style={labelStyle}>Nowcast Mode</label>
