@@ -109,17 +109,13 @@ export function WeatherDataProvider({ children }: WeatherDataProviderProps) {
       });
   }, []);
 
-  // Fetch slow-changing data (astronomy + station status + nowcast).
+  // Fetch slow-changing data (astronomy + nowcast — NOT station status,
+  // which has its own backoff-based polling below).
   const refreshSlowData = useCallback(() => {
     fetchAstronomy()
       .then(setAstronomy)
       .catch(() => {
         /* ignore -- will retry on next interval */
-      });
-    fetchStationStatus()
-      .then(setStationStatus)
-      .catch(() => {
-        /* ignore */
       });
     refreshNowcast();
   }, [refreshNowcast]);
@@ -138,11 +134,51 @@ export function WeatherDataProvider({ children }: WeatherDataProviderProps) {
       });
     refreshSlowData();
 
-    // Periodically refresh astronomy and station status.
+    // Periodically refresh astronomy and nowcast.
     const slowTimer = setInterval(refreshSlowData, ASTRONOMY_REFRESH_INTERVAL);
 
     // Periodically refresh forecast data.
     const forecastTimer = setInterval(refreshForecast, FORECAST_REFRESH_INTERVAL);
+
+    // --- Station status with backoff polling ---
+    // Start fast (5s) so the UI recovers quickly if the logger starts
+    // after the web app, then back off to the normal 5-minute cadence.
+    const INITIAL_INTERVAL = 5_000;
+    const MAX_INTERVAL = ASTRONOMY_REFRESH_INTERVAL; // 5 minutes
+    let statusInterval = INITIAL_INTERVAL;
+    let statusTimer: ReturnType<typeof setTimeout> | null = null;
+    let wasConnected = false;
+
+    const pollStationStatus = () => {
+      fetchStationStatus()
+        .then((status) => {
+          setStationStatus(status);
+          if (status.connected) {
+            // Logger is up — settle into the normal cadence.
+            wasConnected = true;
+            statusInterval = MAX_INTERVAL;
+          } else if (wasConnected) {
+            // Was connected but lost — reset to fast polling for recovery.
+            wasConnected = false;
+            statusInterval = INITIAL_INTERVAL;
+          } else {
+            // Still disconnected — back off: 5s, 10s, 20s, 40s, 80s, then cap at 5min.
+            statusInterval = Math.min(statusInterval * 2, MAX_INTERVAL);
+          }
+        })
+        .catch(() => {
+          if (wasConnected) {
+            wasConnected = false;
+            statusInterval = INITIAL_INTERVAL;
+          } else {
+            statusInterval = Math.min(statusInterval * 2, MAX_INTERVAL);
+          }
+        })
+        .finally(() => {
+          statusTimer = setTimeout(pollStationStatus, statusInterval);
+        });
+    };
+    pollStationStatus();
 
     // --- WebSocket setup ---
     const manager = new WebSocketManager();
@@ -191,6 +227,7 @@ export function WeatherDataProvider({ children }: WeatherDataProviderProps) {
       clearInterval(slowTimer);
       clearInterval(forecastTimer);
       clearInterval(wsStateTimer);
+      if (statusTimer !== null) clearTimeout(statusTimer);
       manager.disconnect();
       setWs(null);
     };
