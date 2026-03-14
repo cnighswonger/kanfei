@@ -2758,7 +2758,7 @@ export default function Settings() {
           )}
         </div>
 
-        {/* Remote mode — endpoint URL, API key, and info */}
+        {/* Remote mode — endpoint URL, API key, preset, and info */}
         {String(val("nowcast_mode") || "local") === "remote" && (<>
           <div style={fieldGroup}>
             <label style={labelStyle}>
@@ -2775,9 +2775,27 @@ export default function Settings() {
               onChange={(e) => updateField("nowcast_remote_api_key", e.target.value)}
             />
           </div>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>
+              Quality Preset
+              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+                Controls which AI model is used. During severe weather, the system automatically
+                uses the best available model regardless of this setting.
+              </span>
+            </label>
+            <select
+              style={{ ...selectStyle, maxWidth: "480px" }}
+              value={String(val("nowcast_quality_preset") || "economy")}
+              onChange={(e) => updateField("nowcast_quality_preset", e.target.value)}
+            >
+              <option value="economy">Economy — lowest cost, Haiku for routine, Sonnet for severe</option>
+              <option value="standard">Standard — Haiku for routine, Opus for warnings</option>
+              <option value="premium">Premium — Sonnet always, Opus for severe weather</option>
+            </select>
+          </div>
           <p style={{ fontSize: "12px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0", lineHeight: 1.5 }}>
-            In remote mode, all nowcast engine settings (model, data sources, radar, nearby stations) are
-            configured on the remote kanfei-nowcast server. Only the endpoint URL and API key are needed here.
+            Data sources, radar, and nearby stations are configured on the remote server.
+            The quality preset and update interval are the only engine settings managed here.
           </p>
         </>)}
 
@@ -2806,23 +2824,30 @@ export default function Settings() {
           />
         </div>
 
+        <div style={fieldGroup}>
+          <label style={labelStyle}>
+            Quality Preset
+            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+              Controls which AI model is used for routine weather. During severe weather,
+              the system automatically escalates to the best available model.
+            </span>
+          </label>
+          <select
+            style={{ ...selectStyle, maxWidth: "480px" }}
+            value={String(val("nowcast_quality_preset") || "economy")}
+            onChange={(e) => updateField("nowcast_quality_preset", e.target.value)}
+          >
+            <option value="economy">Economy — Haiku for routine, Sonnet for severe</option>
+            <option value="standard">Standard — Haiku for routine, Opus for warnings</option>
+            <option value="premium">Premium — Sonnet always, Opus for severe weather</option>
+          </select>
+        </div>
+
         <div style={{
           display: "grid",
           gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
           gap: isMobile ? "12px" : "16px",
         }}>
-          <div style={fieldGroup}>
-            <label style={labelStyle}>Model</label>
-            <select
-              style={selectStyle}
-              value={String(val("nowcast_model") || "claude-haiku-4-5-20251001")}
-              onChange={(e) => updateField("nowcast_model", e.target.value)}
-            >
-              <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fastest, lowest cost)</option>
-              <option value="claude-sonnet-4-5-20250929">Sonnet 4.5 (better reasoning)</option>
-            </select>
-          </div>
-
           <div style={fieldGroup}>
             <label style={labelStyle}>Update Interval</label>
             <select

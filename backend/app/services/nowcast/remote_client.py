@@ -56,6 +56,7 @@ class NowcastRemoteClient:
         self._enabled = self._config.get_bool("nowcast_enabled", False)
         self._remote_url = self._config.get("nowcast_remote_url", "").rstrip("/")
         self._api_key = self._config.get("nowcast_remote_api_key", "")
+        self._quality_preset = self._config.get("nowcast_quality_preset", "economy")
 
     def is_enabled(self) -> bool:
         return self._enabled and bool(self._remote_url)
@@ -88,17 +89,35 @@ class NowcastRemoteClient:
             await asyncio.sleep(PUSH_INTERVAL)
 
     async def _tick(self) -> None:
-        """Single iteration: push readings, poll for results."""
+        """Single iteration: push readings, sync config, poll for results."""
         old_key = self._api_key
+        old_preset = getattr(self, "_quality_preset", "")
         self.reload_config()
         if not self.is_enabled():
             return
         # Update auth header if key changed
         if self._api_key != old_key and self._client:
             self._client.headers["X-API-Key"] = self._api_key if self._api_key else ""
+        # Sync preset to remote server if changed
+        if self._quality_preset != old_preset:
+            await self._sync_config({"nowcast_quality_preset": self._quality_preset})
 
         await self._push_readings()
         await self._poll_nowcast()
+
+    async def _sync_config(self, updates: dict) -> None:
+        """Push config updates to the remote server."""
+        try:
+            resp = await self._client.post(
+                f"{self._remote_url}/api/config",
+                json=updates,
+            )
+            if resp.status_code == 200:
+                logger.info("Synced config to remote: %s", updates)
+            else:
+                logger.warning("Config sync failed: %d", resp.status_code)
+        except httpx.HTTPError as exc:
+            logger.warning("Config sync failed: %s", exc)
 
     async def _push_readings(self) -> None:
         """Push new sensor readings to the remote endpoint."""
