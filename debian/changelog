@@ -1,0 +1,17 @@
+kanfei (0.1.0~beta1) unstable; urgency=low
+
+  * First beta release under the Kanfei package name.
+  * Package renamed from davis-wx to kanfei — see migration guide for
+    users upgrading from alpha.
+  * Spray advisor rule engine included as open-source (no longer requires
+    external package for basic go/no-go evaluation).
+  * AI nowcast available as optional add-on via kanfei-nowcast package.
+  * NWS forecast and alert clients restored as built-in features.
+  * Station status polling with exponential backoff for faster recovery
+    when logger daemon starts after the web application.
+  * Fix empty .env values crashing Pydantic settings parser.
+  * Pluggable hardware drivers: Davis (serial, Vantage, WeatherLink IP,
+    WeatherLink Live), Ecowitt/Fine Offset, Ambient Weather, WeatherFlow
+    Tempest — all awaiting community hardware validation.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Fri, 14 Mar 2026 00:00:00 +0000

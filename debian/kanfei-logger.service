@@ -1,0 +1,16 @@
+[Unit]
+Description=Kanfei Weather Station Logger
+After=network.target
+
+[Service]
+Type=simple
+User=kanfei
+Group=kanfei
+WorkingDirectory=/opt/kanfei/backend
+EnvironmentFile=/etc/kanfei/kanfei.conf
+ExecStart=/opt/kanfei/backend/.venv/bin/python logger_main.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
