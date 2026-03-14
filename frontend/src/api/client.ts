@@ -188,6 +188,22 @@ export function fetchNowcastStatus(): Promise<NowcastStatus> {
   return request<NowcastStatus>("/api/nowcast/status");
 }
 
+export interface NowcastPresetOption {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface NowcastPresetsResponse {
+  tier: string;
+  current_preset: string;
+  available: NowcastPresetOption[];
+}
+
+export function fetchNowcastPresets(): Promise<NowcastPresetsResponse> {
+  return request<NowcastPresetsResponse>("/api/nowcast/presets");
+}
+
 export function fetchNowcastHistory(
   limit: number = 20,
 ): Promise<NowcastData[]> {

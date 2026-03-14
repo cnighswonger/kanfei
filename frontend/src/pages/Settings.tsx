@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchConfig, updateConfig, fetchSerialPorts, reconnectStation, fetchWeatherLinkConfig, updateWeatherLinkConfig, clearRainDaily, clearRainYearly, forceArchive, fetchLocalUsage, fetchUsageStatus, fetchAnthropicCost, fetchDbStats, purgeTable, purgeAll, compactReadings, getDbBackupUrl, getDbExportUrl, fetchLogs } from "../api/client.ts";
+import { fetchConfig, updateConfig, fetchSerialPorts, reconnectStation, fetchWeatherLinkConfig, updateWeatherLinkConfig, clearRainDaily, clearRainYearly, forceArchive, fetchLocalUsage, fetchUsageStatus, fetchAnthropicCost, fetchDbStats, purgeTable, purgeAll, compactReadings, getDbBackupUrl, getDbExportUrl, fetchLogs, fetchNowcastPresets } from "../api/client.ts";
+import type { NowcastPresetOption } from "../api/client.ts";
 import type { ConfigItem, WeatherLinkConfig, WeatherLinkCalibration, AlertThreshold, LocalUsageResponse, UsageStatus, DbStats, LogEntry } from "../api/types.ts";
 import { useTheme } from "../context/ThemeContext.tsx";
 import { useWeatherBackground } from "../context/WeatherBackgroundContext.tsx";
@@ -1280,6 +1281,16 @@ export default function Settings() {
     refreshCustomImages: refreshBgImages,
   } = useWeatherBackground();
   const [scenesExpanded, setScenesExpanded] = useState(false);
+
+  // --- Nowcast presets (tier-gated from server) ---
+  const [presetOptions, setPresetOptions] = useState<NowcastPresetOption[]>([]);
+  useEffect(() => {
+    if (flags.nowcastEnabled) {
+      fetchNowcastPresets()
+        .then((resp) => setPresetOptions(resp.available))
+        .catch(() => {});
+    }
+  }, [flags.nowcastEnabled]);
 
   // --- Nowcast disclaimer ---
   const [showNowcastDisclaimer, setShowNowcastDisclaimer] = useState(false);
@@ -2788,9 +2799,16 @@ export default function Settings() {
               value={String(val("nowcast_quality_preset") || "economy")}
               onChange={(e) => updateField("nowcast_quality_preset", e.target.value)}
             >
-              <option value="economy">Economy — lowest cost, Haiku for routine, Sonnet for severe</option>
-              <option value="standard">Standard — Haiku for routine, Opus for warnings</option>
-              <option value="premium">Premium — Sonnet always, Opus for severe weather</option>
+              {presetOptions.length > 0
+                ? presetOptions.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} — {p.description}</option>
+                  ))
+                : <>
+                    <option value="economy">Economy — lowest cost, Haiku for routine, Sonnet for severe</option>
+                    <option value="standard">Standard — Haiku for routine, Opus for warnings</option>
+                    <option value="premium">Premium — Sonnet always, Opus for severe weather</option>
+                  </>
+              }
             </select>
           </div>
           <p style={{ fontSize: "12px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0", lineHeight: 1.5 }}>
@@ -2837,9 +2855,16 @@ export default function Settings() {
             value={String(val("nowcast_quality_preset") || "economy")}
             onChange={(e) => updateField("nowcast_quality_preset", e.target.value)}
           >
-            <option value="economy">Economy — Haiku for routine, Sonnet for severe</option>
-            <option value="standard">Standard — Haiku for routine, Opus for warnings</option>
-            <option value="premium">Premium — Sonnet always, Opus for severe weather</option>
+            {presetOptions.length > 0
+              ? presetOptions.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} — {p.description}</option>
+                ))
+              : <>
+                  <option value="economy">Economy — Haiku for routine, Sonnet for severe</option>
+                  <option value="standard">Standard — Haiku for routine, Opus for warnings</option>
+                  <option value="premium">Premium — Sonnet always, Opus for severe weather</option>
+                </>
+            }
           </select>
         </div>
 

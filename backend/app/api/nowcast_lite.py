@@ -66,6 +66,36 @@ def get_nowcast_status():
     }
 
 
+@router.get("/nowcast/presets")
+def get_presets():
+    """Return available quality presets for this customer's tier."""
+    svc = _svc_ref.nowcast_service
+    if svc is None:
+        # No service — return all presets as available (local mode fallback)
+        return {
+            "tier": "local",
+            "current_preset": "economy",
+            "available": [
+                {"id": "economy", "name": "Economy", "description": "Lowest cost. Haiku for routine, Sonnet during severe."},
+                {"id": "standard", "name": "Standard", "description": "Good balance. Haiku for routine, Opus for warnings."},
+                {"id": "premium", "name": "Premium", "description": "Best quality. Sonnet always, Opus during severe."},
+            ],
+        }
+    presets = getattr(svc, "available_presets", None)
+    if presets:
+        return presets
+    # Fallback — no presets fetched yet
+    return {
+        "tier": "unknown",
+        "current_preset": "economy",
+        "available": [
+            {"id": "economy", "name": "Economy", "description": "Lowest cost. Haiku for routine, Sonnet during severe."},
+            {"id": "standard", "name": "Standard", "description": "Good balance. Haiku for routine, Opus for warnings."},
+            {"id": "premium", "name": "Premium", "description": "Best quality. Sonnet always, Opus during severe."},
+        ],
+    }
+
+
 @router.get("/nowcast/alerts")
 async def get_nws_alerts(db: Session = Depends(get_db)):
     """Return currently active NWS alerts for the station location."""

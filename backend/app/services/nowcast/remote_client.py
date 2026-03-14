@@ -45,11 +45,17 @@ class NowcastRemoteClient:
         self._last_push_ts: Optional[str] = None
         self._client: Optional[httpx.AsyncClient] = None
         self._auth_error: Optional[str] = None  # Set on 401/403/429
+        self._available_presets: Optional[dict] = None  # Cached from remote
 
     @property
     def auth_error(self) -> Optional[str]:
         """Last auth error message, or None if authenticated successfully."""
         return self._auth_error
+
+    @property
+    def available_presets(self) -> Optional[dict]:
+        """Cached preset availability from the remote server."""
+        return self._available_presets
 
     def reload_config(self) -> None:
         """Read remote nowcast config."""
@@ -79,6 +85,7 @@ class NowcastRemoteClient:
 
         # Seed from remote on startup
         if self.is_enabled():
+            await self._fetch_presets()
             await self._poll_nowcast()
 
         while True:
@@ -101,9 +108,21 @@ class NowcastRemoteClient:
         # Sync preset to remote server if changed
         if self._quality_preset != old_preset:
             await self._sync_config({"nowcast_quality_preset": self._quality_preset})
+            await self._fetch_presets()  # Refresh in case tier changed
 
         await self._push_readings()
         await self._poll_nowcast()
+
+    async def _fetch_presets(self) -> None:
+        """Fetch available presets from the remote server."""
+        try:
+            resp = await self._client.get(f"{self._remote_url}/api/presets")
+            if resp.status_code == 200:
+                self._available_presets = resp.json()
+            else:
+                logger.debug("Presets fetch returned %d", resp.status_code)
+        except httpx.HTTPError as exc:
+            logger.debug("Presets fetch failed: %s", exc)
 
     async def _sync_config(self, updates: dict) -> None:
         """Push config updates to the remote server."""
