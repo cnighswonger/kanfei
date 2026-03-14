@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { useWeatherData } from "../context/WeatherDataContext.tsx";
+import { useFeatureFlags } from "../context/FeatureFlagsContext.tsx";
 import { useIsMobile } from "../hooks/useIsMobile.ts";
 import { resolveTimezone } from "../utils/timezone.ts";
 import {
@@ -300,6 +301,7 @@ function CategoryBadge({ category }: { category: string }) {
 export default function Nowcast() {
   const { nowcast, triggerNowcast, alertMode } = useWeatherData();
   const isMobile = useIsMobile();
+  const { flags } = useFeatureFlags();
 
   // Verification state
   const [verificationsExpanded, setVerificationsExpanded] = useState(false);
@@ -366,6 +368,10 @@ export default function Nowcast() {
   );
 
   if (!nowcast) {
+    const message = flags.nowcastEnabled
+      ? "Nowcast is enabled but no forecast data is available yet. If you are using remote mode, verify that the remote endpoint is reachable and the kanfei-nowcast service is running. For local mode, ensure the kanfei-nowcast package is installed and your API key is configured."
+      : "Enable the AI Nowcast service in Settings to get started. Nowcast requires either a local installation of the kanfei-nowcast package or a remote endpoint.";
+
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
         <div style={{ flexShrink: 0, padding: "24px 24px 0" }}>
@@ -392,8 +398,7 @@ export default function Nowcast() {
               lineHeight: 1.6,
             }}
           >
-            No nowcast available. Enable the AI Nowcast service in Settings
-            and configure your Anthropic API key to get started.
+            {message}
           </div>
         </div>
         </div>
