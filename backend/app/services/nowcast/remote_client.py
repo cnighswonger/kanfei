@@ -57,6 +57,18 @@ class NowcastRemoteClient:
         """Cached preset availability from the remote server."""
         return self._available_presets
 
+    async def fetch_radar_image(self, product_id: str = "nexrad_composite") -> Optional[bytes]:
+        """Fetch a radar image from the remote server. Returns PNG bytes or None."""
+        if not self._client or not self._remote_url:
+            return None
+        try:
+            resp = await self._client.get(f"{self._remote_url}/api/nowcast/radar/{product_id}")
+            if resp.status_code == 200:
+                return resp.content
+        except httpx.HTTPError:
+            pass
+        return None
+
     def reload_config(self) -> None:
         """Read remote nowcast config."""
         self._enabled = self._config.get_bool("nowcast_enabled", False)
