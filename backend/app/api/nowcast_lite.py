@@ -96,6 +96,41 @@ def get_presets():
     }
 
 
+@router.get("/nowcast/radar")
+async def get_radar():
+    """Proxy the default radar image from the remote server."""
+    return await _proxy_radar("nexrad_composite")
+
+
+@router.get("/nowcast/radar/{product_id}")
+async def get_radar_product(product_id: str):
+    """Proxy a radar image by product ID from the remote server."""
+    return await _proxy_radar(product_id)
+
+
+async def _proxy_radar(product_id: str):
+    """Fetch radar image from the remote nowcast service and return as PNG."""
+    from starlette.responses import Response
+
+    svc = _svc_ref.nowcast_service
+    if svc is None:
+        raise HTTPException(status_code=404, detail="Nowcast service not active")
+
+    fetch = getattr(svc, "fetch_radar_image", None)
+    if fetch is None:
+        raise HTTPException(status_code=404, detail="Radar not available in this mode")
+
+    png_bytes = await fetch(product_id)
+    if png_bytes is None:
+        raise HTTPException(status_code=404, detail=f"No radar image for '{product_id}'")
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
 @router.get("/nowcast/alerts")
 async def get_nws_alerts(db: Session = Depends(get_db)):
     """Return currently active NWS alerts for the station location."""
