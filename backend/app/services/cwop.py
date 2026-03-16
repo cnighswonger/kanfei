@@ -225,13 +225,16 @@ class CwopUploader:
         baro_inhg = _extract(data, ("barometer", "value"))
         rain_daily = _extract(data, ("rain", "daily", "value"))
 
+        # Wind gust: today's peak wind speed from daily extremes
+        wind_gust = _extract(data, ("daily_extremes", "wind_speed_hi", "value"))
+
         pkt = APRSWeatherPacket(
             callsign=self._callsign,
             latitude=self._latitude,
             longitude=self._longitude,
             wind_dir_deg=int(wind_dir) if wind_dir is not None else None,
             wind_speed_mph=int(wind_speed) if wind_speed is not None else 0,
-            wind_gust_mph=0,
+            wind_gust_mph=int(wind_gust) if wind_gust is not None else 0,
             temp_tenths_f=int(temp_f * 10),
             rain_hour_hundredths_in=0,
             rain_24h_hundredths_in=0,
