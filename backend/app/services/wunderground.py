@@ -33,10 +33,13 @@ FIELD_MAP: dict[str, tuple[str, ...]] = {
     "windspeedmph":     ("wind", "speed", "value"),
     "windgustmph":      ("daily_extremes", "wind_speed_hi", "value"),
     "winddir":          ("wind", "direction", "value"),
+    "windchillf":       ("derived", "wind_chill", "value"),
     "baromin":          ("barometer", "value"),
     "dailyrainin":      ("rain", "daily", "value"),
     "yearrainin":       ("rain", "yearly", "value"),
+    "rainratein":       ("rain", "rate", "value"),
     "dewptf":           ("derived", "dew_point", "value"),
+    "heatindexf":       ("derived", "heat_index", "value"),
     "solarradiation":   ("solar_radiation", "value"),
     "UV":               ("uv_index", "value"),
 }
