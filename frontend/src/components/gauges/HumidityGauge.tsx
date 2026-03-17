@@ -1,6 +1,7 @@
 /**
  * SVG semicircular arc gauge for humidity.
  * Yellow (dry) → Green (comfortable) → Blue (humid)
+ * Scale dynamically adapts to current value and daily hi/lo.
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
@@ -10,6 +11,52 @@ interface HumidityGaugeProps {
   label?: string;        // 'Inside' or 'Outside'
   high?: number | null;  // Today's high
   low?: number | null;   // Today's low
+}
+
+/** Compute a tight gauge range from the current value and daily hi/lo. */
+function autoRange(
+  value: number | null,
+  high: number | null | undefined,
+  low: number | null | undefined,
+): { min: number; max: number } {
+  const pts = [value, high ?? null, low ?? null].filter(
+    (v): v is number => v != null && Number.isFinite(v),
+  );
+  if (pts.length === 0) return { min: 0, max: 100 };
+
+  const dataMin = Math.min(...pts);
+  const dataMax = Math.max(...pts);
+  const PAD = 10;
+  const MIN_SPAN = 30;
+  const TICK = 10;
+
+  let lo = Math.floor((dataMin - PAD) / TICK) * TICK;
+  let hi = Math.ceil((dataMax + PAD) / TICK) * TICK;
+
+  // Ensure minimum span
+  const span = hi - lo;
+  if (span < MIN_SPAN) {
+    const center = (lo + hi) / 2;
+    lo = Math.floor((center - MIN_SPAN / 2) / TICK) * TICK;
+    hi = Math.ceil((center + MIN_SPAN / 2) / TICK) * TICK;
+  }
+
+  // Clamp to physical limits (0-100%)
+  lo = Math.max(0, lo);
+  hi = Math.min(100, hi);
+
+  return { min: lo, max: hi };
+}
+
+/** Generate tick values for the given range. */
+function generateTicks(min: number, max: number): number[] {
+  const span = max - min;
+  const step = span <= 40 ? 5 : 10;
+  const ticks: number[] = [];
+  for (let t = min; t <= max; t += step) {
+    ticks.push(t);
+  }
+  return ticks;
 }
 
 function humidityColor(pct: number): string {
@@ -50,7 +97,11 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
     return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
   };
 
-  const frac = value !== null ? Math.max(0, Math.min(0.998, value / 100)) : 0;
+  const range = autoRange(value, high, low);
+  const rangeSpan = range.max - range.min;
+  const frac = value !== null
+    ? Math.max(0, Math.min(0.998, (value - range.min) / rangeSpan))
+    : 0;
   const fillAngle = startAngle + frac * sweep;
   const color = value !== null ? humidityColor(value) : 'var(--color-text-muted)';
 
@@ -72,8 +123,7 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
     );
   }
 
-  // Tick marks at 0, 20, 40, 60, 80, 100
-  const ticks = [0, 20, 40, 60, 80, 100];
+  const ticks = generateTicks(range.min, range.max);
 
   return (
     <div style={{
@@ -125,7 +175,8 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
 
         {/* Tick marks */}
         {ticks.map((t) => {
-          const angle = startAngle + (t / 100) * sweep;
+          const tickFrac = (t - range.min) / rangeSpan;
+          const angle = startAngle + tickFrac * sweep;
           const rad = toRad(angle);
           const innerR = r - strokeWidth / 2 - 4;
           const outerR = r - strokeWidth / 2 - 14;
