@@ -41,9 +41,14 @@ function autoRange(
     hi = Math.ceil((center + MIN_SPAN / 2) / TICK) * TICK;
   }
 
-  // Clamp to physical limits (0-100%)
+  // Clamp to physical limits (0-100%), then re-expand the other end
+  // to maintain MIN_SPAN (avoids squished scale near 0% or 100%)
   lo = Math.max(0, lo);
   hi = Math.min(100, hi);
+  if (hi - lo < MIN_SPAN) {
+    if (lo === 0) hi = Math.min(100, MIN_SPAN);
+    else if (hi === 100) lo = Math.max(0, 100 - MIN_SPAN);
+  }
 
   return { min: lo, max: hi };
 }
