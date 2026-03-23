@@ -1,0 +1,81 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+    groups:
+      web-framework:
+        patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "pydantic-settings"
+          - "python-multipart"
+      database:
+        patterns:
+          - "sqlalchemy"
+          - "alembic"
+      ai-providers:
+        patterns:
+          - "anthropic"
+          - "openai"
+      nexrad:
+        patterns:
+          - "arm-pyart"
+          - "boto3"
+          - "numpy"
+          - "matplotlib"
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "react-router-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      charts-maps:
+        patterns:
+          - "highcharts"
+          - "highcharts-react-official"
+          - "leaflet"
+          - "react-leaflet"
+          - "@types/leaflet"
+      build-tools:
+        patterns:
+          - "vite"
+          - "@vitejs/plugin-react"
+          - "typescript"
+          - "typescript-eslint"
+      lint:
+        patterns:
+          - "eslint"
+          - "eslint-plugin-*"
+          - "@eslint/*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "ci"
