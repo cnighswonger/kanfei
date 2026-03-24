@@ -449,7 +449,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
         ok("Restore complete!")
         ok(f"  Database: {manifest['db_file']}")
         ok(f"  From: {manifest['timestamp']}")
-        step("Restart the server to use the restored data.")
+        step("Restart both the web app and logger daemon to use the restored data.")
     except Exception as exc:
         fail(f"Restore failed: {exc}")
         return 1
