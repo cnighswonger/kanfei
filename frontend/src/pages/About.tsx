@@ -203,10 +203,11 @@ export default function About() {
           </div>
         </div>
         <p style={bodyText}>
-          A self-hosted web dashboard and data logger for Davis weather
-          stations (Vantage Pro 2, Weather Monitor II, and compatible models).
-          Features real-time monitoring, historical charting, NWS forecasts,
-          AI-powered nowcasting, and spray application advisory.
+          A self-hosted web dashboard and data logger for personal weather
+          stations. Supports Davis Instruments, Ecowitt, WeatherFlow Tempest,
+          and Ambient Weather. Features real-time monitoring, historical
+          charting, NWS forecasts, AI-powered nowcasting, and spray
+          application advisory.
         </p>
       </div>
 
