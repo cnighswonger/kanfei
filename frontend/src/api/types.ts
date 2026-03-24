@@ -573,6 +573,26 @@ export interface WeatherLinkConfigUpdate {
   calibration?: WeatherLinkCalibration;
 }
 
+// --- Backup ---
+
+export interface BackupManifest {
+  kanfei_version: string;
+  timestamp: string;
+  db_file: string;
+  db_size_bytes: number;
+  row_counts: Record<string, number>;
+  backgrounds_included: boolean;
+  backgrounds_count: number;
+  archive_path: string;
+  archive_size_bytes: number;
+}
+
+export interface BackupInfo {
+  name: string;
+  size_bytes: number;
+  modified: string;
+}
+
 // --- System Logs ---
 
 export interface LogEntry {
