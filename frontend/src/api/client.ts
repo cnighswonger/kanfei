@@ -423,6 +423,24 @@ export function getDbExportUrl(table: string): string {
   return `${API_BASE}/api/db-admin/export/json/${table}`;
 }
 
+// --- Backup ---
+
+export function triggerBackup(): Promise<import("./types.ts").BackupManifest> {
+  return request("/api/backup", { method: "POST" });
+}
+
+export function listBackups(): Promise<import("./types.ts").BackupInfo[]> {
+  return request("/api/backup/list");
+}
+
+export function deleteBackup(name: string): Promise<{ status: string; name: string }> {
+  return request(`/api/backup/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
+export function getBackupDownloadUrl(name: string): string {
+  return `${API_BASE}/api/backup/download/${encodeURIComponent(name)}`;
+}
+
 // --- System Logs ---
 
 export function fetchLogs(

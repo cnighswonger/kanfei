@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchConfig, updateConfig, fetchSerialPorts, reconnectStation, fetchWeatherLinkConfig, updateWeatherLinkConfig, clearRainDaily, clearRainYearly, forceArchive, fetchLocalUsage, fetchUsageStatus, fetchAnthropicCost, fetchDbStats, purgeTable, purgeAll, compactReadings, getDbBackupUrl, getDbExportUrl, fetchLogs, fetchNowcastPresets } from "../api/client.ts";
+import { fetchConfig, updateConfig, fetchSerialPorts, reconnectStation, fetchWeatherLinkConfig, updateWeatherLinkConfig, clearRainDaily, clearRainYearly, forceArchive, fetchLocalUsage, fetchUsageStatus, fetchAnthropicCost, fetchDbStats, purgeTable, purgeAll, compactReadings, getDbBackupUrl, getDbExportUrl, fetchLogs, fetchNowcastPresets, triggerBackup, listBackups, deleteBackup, getBackupDownloadUrl } from "../api/client.ts";
 import type { NowcastPresetOption } from "../api/client.ts";
 import type { ConfigItem, WeatherLinkConfig, WeatherLinkCalibration, AlertThreshold, LocalUsageResponse, UsageStatus, DbStats, LogEntry } from "../api/types.ts";
 import { useTheme } from "../context/ThemeContext.tsx";
@@ -1103,6 +1103,301 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
   );
 }
 
+// --- Backup Tab ---
+
+function BackupTab({ val, updateField, isMobile }: {
+  val: (key: string) => string | number | boolean;
+  updateField: (key: string, value: string | number | boolean) => void;
+  isMobile: boolean;
+}) {
+  const [backups, setBackups] = useState<import("../api/types.ts").BackupInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [backingUp, setBackingUp] = useState(false);
+  const [backupResult, setBackupResult] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
+  const [restoreConfirm, setRestoreConfirm] = useState("");
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [restoreResult, setRestoreResult] = useState<string | null>(null);
+
+  const loadBackups = useCallback(() => {
+    setLoading(true);
+    listBackups()
+      .then(setBackups)
+      .catch(() => setBackups([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { loadBackups(); }, [loadBackups]);
+
+  const handleBackupNow = () => {
+    setBackingUp(true);
+    setBackupResult(null);
+    triggerBackup()
+      .then((m) => {
+        setBackupResult(`Backup created: ${formatBytes(m.archive_size_bytes)} — ${Object.entries(m.row_counts).map(([k, v]) => `${v} ${k.replace(/_/g, " ")}`).join(", ")}`);
+        loadBackups();
+      })
+      .catch((e) => setBackupResult(`Error: ${e.message}`))
+      .finally(() => setBackingUp(false));
+  };
+
+  const handleDelete = (name: string) => {
+    deleteBackup(name)
+      .then(() => { setDeleteConfirm(null); loadBackups(); })
+      .catch((e) => alert(`Delete failed: ${e.message}`));
+  };
+
+  const handleRestore = async (name: string) => {
+    setRestoreLoading(true);
+    setRestoreResult(null);
+    try {
+      const url = getBackupDownloadUrl(name);
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
+      const blob = await resp.blob();
+      const formData = new FormData();
+      formData.append("file", blob, name);
+      const restoreResp = await fetch(
+        `${API_BASE}/api/backup/restore?confirmation=RESTORE`,
+        { method: "POST", body: formData },
+      );
+      if (!restoreResp.ok) {
+        const err = await restoreResp.text();
+        throw new Error(err);
+      }
+      setRestoreResult("Restore complete. Restart both the web app and logger daemon to use the restored data.");
+      setRestoreTarget(null);
+      setRestoreConfirm("");
+    } catch (e: unknown) {
+      setRestoreResult(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
+
+  const lastSuccess = String(val("backup_last_success") || "");
+  const lastError = String(val("backup_last_error") || "");
+
+  return (
+    <>
+      {/* Automatic Backups */}
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Automatic Backups</h3>
+        <div style={gridTwoCol(isMobile)}>
+          <div style={fieldGroup}>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={val("backup_enabled") === true}
+                onChange={(e) => updateField("backup_enabled", e.target.checked)}
+              />
+              Enable automatic backups
+            </label>
+          </div>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Backup interval</label>
+            <select
+              style={selectStyle}
+              value={String(val("backup_interval_hours") || 24)}
+              onChange={(e) => updateField("backup_interval_hours", Number(e.target.value))}
+            >
+              <option value="6">Every 6 hours</option>
+              <option value="12">Every 12 hours</option>
+              <option value="24">Daily</option>
+              <option value="48">Every 2 days</option>
+              <option value="168">Weekly</option>
+            </select>
+          </div>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Keep last N backups</label>
+            <input
+              type="number"
+              style={inputStyle}
+              min={1}
+              max={100}
+              value={String(val("backup_retention_count") || 7)}
+              onChange={(e) => updateField("backup_retention_count", Number(e.target.value))}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Status & Manual Backup */}
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Backup Status</h3>
+        <div style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginBottom: "12px" }}>
+          <div>Last successful backup: {lastSuccess ? new Date(lastSuccess).toLocaleString() : "Never"}</div>
+          {lastError && (
+            <div style={{ color: "var(--color-danger)", marginTop: "4px" }}>Last error: {lastError}</div>
+          )}
+        </div>
+        <button
+          style={{ ...btnPrimary, opacity: backingUp ? 0.6 : 1 }}
+          onClick={handleBackupNow}
+          disabled={backingUp}
+        >
+          {backingUp ? "Creating backup..." : "Backup Now"}
+        </button>
+        {backupResult && (
+          <div style={{
+            marginTop: "8px",
+            padding: "8px 12px",
+            borderRadius: "6px",
+            fontSize: "13px",
+            fontFamily: "var(--font-body)",
+            background: backupResult.startsWith("Error") ? "rgba(211,47,47,0.1)" : "rgba(46,125,50,0.1)",
+            border: backupResult.startsWith("Error") ? "1px solid var(--color-danger)" : "1px solid var(--color-success)",
+            color: backupResult.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
+          }}>
+            {backupResult}
+          </div>
+        )}
+      </div>
+
+      {/* Existing Backups */}
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Existing Backups</h3>
+        {loading ? (
+          <div style={{ color: "var(--color-text-muted)", fontSize: "13px", fontFamily: "var(--font-body)" }}>Loading...</div>
+        ) : backups.length === 0 ? (
+          <div style={{ color: "var(--color-text-muted)", fontSize: "13px", fontFamily: "var(--font-body)" }}>No backups found.</div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: "13px",
+              fontFamily: "var(--font-body)",
+            }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
+                  <th style={{ textAlign: "left", padding: "8px", color: "var(--color-text-secondary)" }}>Filename</th>
+                  <th style={{ textAlign: "right", padding: "8px", color: "var(--color-text-secondary)" }}>Size</th>
+                  <th style={{ textAlign: "right", padding: "8px", color: "var(--color-text-secondary)" }}>Date</th>
+                  <th style={{ textAlign: "right", padding: "8px", color: "var(--color-text-secondary)" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {backups.map((b) => (
+                  <tr key={b.name} style={{ borderBottom: "1px solid var(--color-border)" }}>
+                    <td style={{ padding: "8px", color: "var(--color-text)" }}>{b.name}</td>
+                    <td style={{ padding: "8px", textAlign: "right", color: "var(--color-text-secondary)" }}>{formatBytes(b.size_bytes)}</td>
+                    <td style={{ padding: "8px", textAlign: "right", color: "var(--color-text-secondary)" }}>{new Date(b.modified).toLocaleString()}</td>
+                    <td style={{ padding: "8px", textAlign: "right", whiteSpace: "nowrap" }}>
+                      <a
+                        href={getBackupDownloadUrl(b.name)}
+                        style={{ color: "var(--color-accent)", marginRight: "12px", textDecoration: "none", fontWeight: 600 }}
+                      >
+                        Download
+                      </a>
+                      {deleteConfirm === b.name ? (
+                        <span>
+                          <button
+                            onClick={() => handleDelete(b.name)}
+                            style={{ background: "var(--color-danger)", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 10px", cursor: "pointer", fontSize: "12px", marginRight: "4px" }}
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirm(null)}
+                            style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", borderRadius: "4px", padding: "4px 10px", cursor: "pointer", fontSize: "12px" }}
+                          >
+                            Cancel
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setDeleteConfirm(b.name)}
+                          style={{ background: "none", border: "none", color: "var(--color-danger)", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}
+                        >
+                          Delete
+                        </button>
+                      )}
+                      {restoreTarget !== b.name && (
+                        <button
+                          onClick={() => { setRestoreTarget(b.name); setRestoreConfirm(""); setRestoreResult(null); }}
+                          style={{ background: "none", border: "none", color: "var(--color-warning, #f59e0b)", cursor: "pointer", fontWeight: 600, fontSize: "13px", marginLeft: "12px" }}
+                        >
+                          Restore
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Restore confirmation dialog */}
+        {restoreTarget && (
+          <div style={{
+            marginTop: "16px",
+            padding: "16px",
+            borderRadius: "8px",
+            border: "2px solid var(--color-warning, #f59e0b)",
+            background: "rgba(245,158,11,0.05)",
+          }}>
+            <div style={{ fontWeight: 600, fontSize: "14px", fontFamily: "var(--font-body)", color: "var(--color-text)", marginBottom: "8px" }}>
+              Restore from {restoreTarget}
+            </div>
+            <div style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginBottom: "12px" }}>
+              This will replace the current database. A .pre-restore copy will be created as a safety net.
+              You must restart both the web app and logger daemon after restore.
+            </div>
+            <div style={fieldGroup}>
+              <label style={labelStyle}>Type RESTORE to confirm:</label>
+              <input
+                type="text"
+                style={{ ...inputStyle, maxWidth: "200px" }}
+                value={restoreConfirm}
+                onChange={(e) => setRestoreConfirm(e.target.value)}
+                placeholder="RESTORE"
+              />
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={() => handleRestore(restoreTarget)}
+                disabled={restoreConfirm !== "RESTORE" || restoreLoading}
+                style={{
+                  ...btnPrimary,
+                  background: restoreConfirm === "RESTORE" ? "var(--color-warning, #f59e0b)" : "var(--color-bg-secondary)",
+                  color: restoreConfirm === "RESTORE" ? "#000" : "var(--color-text-muted)",
+                  opacity: restoreLoading ? 0.6 : 1,
+                }}
+              >
+                {restoreLoading ? "Restoring..." : "Restore"}
+              </button>
+              <button
+                onClick={() => { setRestoreTarget(null); setRestoreConfirm(""); }}
+                style={{ ...btnPrimary, background: "var(--color-bg-secondary)", color: "var(--color-text-secondary)" }}
+              >
+                Cancel
+              </button>
+            </div>
+            {restoreResult && (
+              <div style={{
+                marginTop: "8px",
+                padding: "8px 12px",
+                borderRadius: "6px",
+                fontSize: "13px",
+                fontFamily: "var(--font-body)",
+                background: restoreResult.startsWith("Error") ? "rgba(211,47,47,0.1)" : "rgba(46,125,50,0.1)",
+                border: restoreResult.startsWith("Error") ? "1px solid var(--color-danger)" : "1px solid var(--color-success)",
+                color: restoreResult.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
+              }}>
+                {restoreResult}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+
 // --- System Log Tab ---
 
 function SystemTab({ isMobile }: { isMobile: boolean }) {
@@ -1265,7 +1560,7 @@ export default function Settings() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [reconnectMsg, setReconnectMsg] = useState<string | null>(null);
   const [ports, setPorts] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<"station" | "display" | "services" | "alerts" | "nowcast" | "spray" | "usage" | "database" | "system">("station");
+  const [activeTab, setActiveTab] = useState<"station" | "display" | "services" | "alerts" | "nowcast" | "spray" | "usage" | "database" | "backup" | "system">("station");
 
   const { flags, refresh: refreshFeatureFlags } = useFeatureFlags();
   const { themeName, setThemeName } = useTheme();
@@ -1657,6 +1952,7 @@ export default function Settings() {
           ...(flags.sprayEnabled ? [["spray", "Spray"] as const] : []),
           ...(flags.nowcastEnabled ? [["usage", "Usage"] as const] : []),
           ["database", "Database"],
+          ["backup", "Backup"],
           ["system", "System"],
         ] as const).map(([key, label]) => (
           <button
@@ -3219,6 +3515,8 @@ export default function Settings() {
       />)}
 
       {activeTab === "database" && (<DatabaseTab isMobile={isMobile} />)}
+
+      {activeTab === "backup" && (<BackupTab val={val} updateField={updateField} isMobile={isMobile} />)}
 
       {activeTab === "system" && (<SystemTab isMobile={isMobile} />)}
 
