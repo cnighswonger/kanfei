@@ -356,22 +356,31 @@ def cmd_clean(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_db_path() -> str | None:
+    """Resolve the database path using the same config logic as the app."""
+    sys.path.insert(0, str(BACKEND_DIR))
+    try:
+        from app.config import settings
+        if Path(settings.db_path).exists():
+            return settings.db_path
+    except Exception:
+        pass
+    # Fallback: check common names in project root
+    for name in ("kanfei.db", "weather.db"):
+        candidate = ROOT / name
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
 def cmd_backup(args: argparse.Namespace) -> int:
     """Create a backup of the database and backgrounds."""
     heading("Creating backup")
 
-    # Resolve DB path the same way the app does
     sys.path.insert(0, str(BACKEND_DIR))
     from app.services.backup import create_backup, get_backup_dir, generate_backup_filename
 
-    # Find the database
-    db_candidates = [ROOT / "kanfei.db", BACKEND_DIR / "kanfei.db"]
-    db_path = None
-    for candidate in db_candidates:
-        if candidate.exists():
-            db_path = str(candidate)
-            break
-
+    db_path = _resolve_db_path()
     if db_path is None:
         fail("No database found. Is the station set up?")
         return 1
@@ -416,12 +425,8 @@ def cmd_restore(args: argparse.Namespace) -> int:
     from app.services.backup import restore_backup
 
     # Determine target directory (where the DB lives)
-    db_candidates = [ROOT / "kanfei.db", BACKEND_DIR / "kanfei.db"]
-    target_dir = str(ROOT)  # default
-    for candidate in db_candidates:
-        if candidate.exists():
-            target_dir = str(candidate.parent)
-            break
+    db_path = _resolve_db_path()
+    target_dir = str(Path(db_path).parent) if db_path else str(ROOT)
 
     step(f"Archive:    {archive}")
     step(f"Target dir: {target_dir}")
