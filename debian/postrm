@@ -1,0 +1,32 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    purge)
+        # Remove data directory (database, backgrounds) on purge
+        rm -rf /var/lib/kanfei
+
+        # Remove config
+        rm -rf /etc/kanfei
+
+        # Remove application files (includes venv)
+        rm -rf /opt/kanfei
+
+        # Remove system user
+        if id -u kanfei >/dev/null 2>&1; then
+            deluser --quiet --system kanfei 2>/dev/null || true
+        fi
+        if getent group kanfei >/dev/null 2>&1; then
+            delgroup --quiet --system kanfei 2>/dev/null || true
+        fi
+
+        systemctl daemon-reload
+        ;;
+
+    remove)
+        systemctl daemon-reload
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

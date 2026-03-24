@@ -1,0 +1,22 @@
+Source: kanfei
+Section: misc
+Priority: optional
+Maintainer: Chris Nighswonger <dev@veritassuperaitsolutions.com>
+Build-Depends: debhelper-compat (= 13), python3, nodejs, npm
+Standards-Version: 4.6.2
+Homepage: https://github.com/cnighswonger/kanfei
+Rules-Requires-Root: no
+
+Package: kanfei
+Architecture: all
+Depends: python3 (>= 3.10), python3-venv, adduser, ${misc:Depends}
+Description: Self-hosted weather station dashboard and data logger
+ Kanfei is a self-hosted weather station dashboard with pluggable hardware
+ drivers. It logs sensor data to SQLite and presents it through a modern,
+ theme-able browser dashboard with real-time updates and agricultural spray
+ advisory.
+ .
+ Supports Davis Instruments, Ecowitt/Fine Offset, Ambient Weather, and
+ WeatherFlow Tempest personal weather stations.
+ .
+ After installation, browse to http://localhost:8000.

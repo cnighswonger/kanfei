@@ -1,0 +1,47 @@
+kanfei (0.1.0~beta3) unstable; urgency=low
+
+  * Backup and restore: service, REST API, CLI commands, automatic
+    scheduler with rotation. Settings UI with manual trigger, backup
+    list, download, delete, and restore with RESTORE confirmation.
+  * Backend test suite: 149 tests covering METAR, APRS, protocol
+    commands, IPC, CWOP, CRC, LOOP packets, calculations, and backup.
+  * Fix HighchartsReact import for Vite 8 CJS interop (tile flip crash).
+  * Fix pydantic ValidationInfo.default for Python 3.13 compatibility.
+  * Update About page: list all supported station platforms.
+  * Pin TypeScript to 5.9.x (typescript-eslint incompatible with TS 6).
+  * Dependency updates via Dependabot (CI actions, npm packages).
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Mon, 24 Mar 2026 00:00:00 +0000
+
+kanfei (0.1.0~beta2) unstable; urgency=low
+
+  * Remote nowcast support: built-in HTTP client for hosted nowcast service,
+    API key authentication, quality preset selector (Economy/Standard/Premium).
+  * Fix missing wind gust in CWOP and Weather Underground uploads.
+  * Add missing WU upload fields: wind chill, heat index, rain rate.
+  * Dynamic scale on humidity gauges.
+  * Nowcast UI: contextual error messages, mode-aware settings, auth error
+    display, radar image proxy from remote server.
+  * Fix nowcast_lite stale service reference.
+  * Complete davis-wx to kanfei rename across remaining references.
+  * CI workflow and Dependabot configuration.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sun, 23 Mar 2026 00:00:00 +0000
+
+kanfei (0.1.0~beta1) unstable; urgency=low
+
+  * First beta release under the Kanfei package name.
+  * Package renamed from davis-wx to kanfei — see migration guide for
+    users upgrading from alpha.
+  * Spray advisor rule engine included as open-source (no longer requires
+    external package for basic go/no-go evaluation).
+  * AI nowcast available as optional add-on via kanfei-nowcast package.
+  * NWS forecast and alert clients restored as built-in features.
+  * Station status polling with exponential backoff for faster recovery
+    when logger daemon starts after the web application.
+  * Fix empty .env values crashing Pydantic settings parser.
+  * Pluggable hardware drivers: Davis (serial, Vantage, WeatherLink IP,
+    WeatherLink Live), Ecowitt/Fine Offset, Ambient Weather, WeatherFlow
+    Tempest — all awaiting community hardware validation.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Fri, 14 Mar 2026 00:00:00 +0000
