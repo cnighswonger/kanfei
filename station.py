@@ -356,6 +356,107 @@ def cmd_clean(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_db_path() -> str | None:
+    """Resolve the database path using the same config logic as the app."""
+    sys.path.insert(0, str(BACKEND_DIR))
+    try:
+        from app.config import settings
+        if Path(settings.db_path).exists():
+            return settings.db_path
+    except Exception:
+        pass
+    # Fallback: check common names in project root
+    for name in ("kanfei.db", "weather.db"):
+        candidate = ROOT / name
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
+def cmd_backup(args: argparse.Namespace) -> int:
+    """Create a backup of the database and backgrounds."""
+    heading("Creating backup")
+
+    sys.path.insert(0, str(BACKEND_DIR))
+    from app.services.backup import create_backup, get_backup_dir, generate_backup_filename
+
+    db_path = _resolve_db_path()
+    if db_path is None:
+        fail("No database found. Is the station set up?")
+        return 1
+
+    if args.output:
+        output = args.output
+    else:
+        backup_dir = get_backup_dir(db_path)
+        output = str(Path(backup_dir) / generate_backup_filename())
+
+    step(f"Database: {db_path}")
+    step(f"Output:   {output}")
+
+    try:
+        manifest = create_backup(db_path, output)
+        ok(f"Backup created: {output}")
+        ok(f"  Size: {manifest['archive_size_bytes']:,} bytes")
+        ok(f"  Rows: {manifest['row_counts']}")
+        if manifest.get("backgrounds_count", 0) > 0:
+            ok(f"  Backgrounds: {manifest['backgrounds_count']} files")
+    except Exception as exc:
+        fail(f"Backup failed: {exc}")
+        return 1
+
+    return 0
+
+
+def cmd_restore(args: argparse.Namespace) -> int:
+    """Restore from a backup archive."""
+    heading("Restoring from backup")
+
+    if not args.input:
+        fail("--input is required: path to .tar.gz backup archive")
+        return 1
+
+    archive = Path(args.input)
+    if not archive.exists():
+        fail(f"Archive not found: {archive}")
+        return 1
+
+    sys.path.insert(0, str(BACKEND_DIR))
+    from app.services.backup import restore_backup
+
+    # Determine target directory (where the DB lives)
+    db_path = _resolve_db_path()
+    target_dir = str(Path(db_path).parent) if db_path else str(ROOT)
+
+    step(f"Archive:    {archive}")
+    step(f"Target dir: {target_dir}")
+    warn("This will overwrite the current database!")
+    warn("A .pre-restore copy will be created as a safety net.")
+
+    try:
+        response = input("  Type RESTORE to confirm: ")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        step("Cancelled.")
+        return 1
+
+    if response.strip() != "RESTORE":
+        step("Cancelled — confirmation not matched.")
+        return 1
+
+    try:
+        manifest = restore_backup(str(archive), target_dir)
+        ok("Restore complete!")
+        ok(f"  Database: {manifest['db_file']}")
+        ok(f"  From: {manifest['timestamp']}")
+        step("Restart both the web app and logger daemon to use the restored data.")
+    except Exception as exc:
+        fail(f"Restore failed: {exc}")
+        return 1
+
+    return 0
+
+
 def cmd_status(_args: argparse.Namespace) -> int:
     """Check installation state."""
     heading("Installation status")
@@ -428,6 +529,17 @@ def main() -> int:
     sub.add_parser("clean", help="Remove build artifacts and caches")
     sub.add_parser("status", help="Check installation state")
 
+    backup_parser = sub.add_parser("backup", help="Create a backup of DB and backgrounds")
+    backup_parser.add_argument("--output", "-o", help="Output path for .tar.gz archive")
+
+    restore_parser = sub.add_parser(
+        "restore",
+        help="Restore from a backup archive",
+        epilog='Windows note: use forward slashes or quote paths in Git Bash, '
+               'e.g. --input "C:/Users/you/backups/kanfei-backup.tar.gz"',
+    )
+    restore_parser.add_argument("--input", "-i", help="Path to .tar.gz backup archive")
+
     args = parser.parse_args()
 
     commands = {
@@ -437,6 +549,8 @@ def main() -> int:
         "test": cmd_test,
         "clean": cmd_clean,
         "status": cmd_status,
+        "backup": cmd_backup,
+        "restore": cmd_restore,
     }
 
     if args.command is None:

@@ -80,6 +80,13 @@ _DEFAULTS: dict[str, object] = {
     "ui_weather_bg_intensity": 30,
     "ui_weather_bg_transparency": 15,
     "ui_dashboard_layout": "",
+    # Backup
+    "backup_enabled": False,
+    "backup_interval_hours": 24,
+    "backup_retention_count": 7,
+    "backup_directory": "",
+    "backup_last_success": "",
+    "backup_last_error": "",
 }
 
 
