@@ -37,7 +37,9 @@ class Settings(BaseSettings):
     def _empty_str_to_default(cls, v, info):
         """Let empty .env values fall through to field defaults."""
         if v == "":
-            return info.default
+            # info.default was removed in newer pydantic; get from model fields
+            field = cls.model_fields.get(info.field_name)
+            return field.default if field is not None else v
         return v
 
     # Database
