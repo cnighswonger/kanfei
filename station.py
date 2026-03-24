@@ -532,7 +532,12 @@ def main() -> int:
     backup_parser = sub.add_parser("backup", help="Create a backup of DB and backgrounds")
     backup_parser.add_argument("--output", "-o", help="Output path for .tar.gz archive")
 
-    restore_parser = sub.add_parser("restore", help="Restore from a backup archive")
+    restore_parser = sub.add_parser(
+        "restore",
+        help="Restore from a backup archive",
+        epilog='Windows note: use forward slashes or quote paths in Git Bash, '
+               'e.g. --input "C:/Users/you/backups/kanfei-backup.tar.gz"',
+    )
     restore_parser.add_argument("--input", "-i", help="Path to .tar.gz backup archive")
 
     args = parser.parse_args()
