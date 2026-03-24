@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import Highcharts from "highcharts";
-import HighchartsReact from "highcharts-react-official";
+import { HighchartsReact } from "highcharts-react-official";
 import { useHistoricalData } from "../hooks/useHistoricalData.ts";
 import {
   SENSOR_DISPLAY_NAMES,
