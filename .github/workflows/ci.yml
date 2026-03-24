@@ -65,6 +65,6 @@ jobs:
         run: python -c "from app.main import app; print('FastAPI app imports OK')"
 
       - name: Run tests
-        run: python -m pytest ../tests/backend/ -q --tb=short -x || echo "No backend tests found yet — see issue tracker"
+        run: python -m pytest ../tests/backend/ -q --tb=short -x
         env:
           PYTHONDONTWRITEBYTECODE: "1"
