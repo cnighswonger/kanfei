@@ -33,26 +33,26 @@ WIND_DIR_DEGREES = [
 
 @dataclass
 class VantageArchiveRecord:
-    """Parsed 52-byte Vantage archive record."""
+    """Parsed 52-byte Vantage archive record (SI units)."""
     timestamp: datetime
-    outside_temp_avg: Optional[float] = None    # °F
-    outside_temp_hi: Optional[float] = None     # °F
-    outside_temp_lo: Optional[float] = None     # °F
-    inside_temp: Optional[float] = None         # °F
+    outside_temp_avg: Optional[float] = None    # °C
+    outside_temp_hi: Optional[float] = None     # °C
+    outside_temp_lo: Optional[float] = None     # °C
+    inside_temp: Optional[float] = None         # °C
     inside_humidity: Optional[int] = None       # %
     outside_humidity: Optional[int] = None      # %
-    barometer: Optional[float] = None           # inHg
-    wind_speed_avg: Optional[int] = None        # mph
-    wind_speed_hi: Optional[int] = None         # mph
+    barometer: Optional[float] = None           # hPa
+    wind_speed_avg: Optional[float] = None      # m/s
+    wind_speed_hi: Optional[float] = None       # m/s
     wind_dir_hi: Optional[int] = None           # degrees
     wind_dir_prevailing: Optional[int] = None   # degrees
-    rainfall: Optional[float] = None            # inches
-    rain_rate_hi: Optional[float] = None        # in/hr
+    rainfall: Optional[float] = None            # mm
+    rain_rate_hi: Optional[float] = None        # mm/hr
     solar_radiation: Optional[int] = None       # W/m²
     solar_radiation_hi: Optional[int] = None    # W/m²
     uv_index: Optional[float] = None            # index
     uv_index_hi: Optional[float] = None         # index
-    et: Optional[float] = None                  # inches
+    et: Optional[float] = None                  # mm
     forecast_rule: Optional[int] = None
     record_type: int = 0xFF                     # 0xFF = Rev A, 0x00 = Rev B
     soil_temps: list[Optional[float]] = field(default_factory=list)
@@ -153,17 +153,19 @@ def parse_archive_record(
     record_type = data[42]
     is_rev_b = (record_type == 0x00)
 
-    # Temperatures (tenths °F → float °F)
+    # Temperatures (tenths °F → °C)
     def _temp(offset: int) -> Optional[float]:
         val = struct.unpack_from("<h", data, offset)[0]
         if val == INVALID_TEMP or val == -32768:
             return None
-        return val / 10.0
+        return round((val / 10.0 - 32) * 5 / 9, 1)
 
     def _extra_temp(raw: int) -> Optional[float]:
+        """Extra temps stored as °F + 90 offset."""
         if raw == INVALID_EXTRA_TEMP:
             return None
-        return float(raw - 90)
+        temp_f = float(raw - 90)
+        return round((temp_f - 32) * 5 / 9, 1)
 
     rec = VantageArchiveRecord(timestamp=ts)
     rec.record_type = record_type
@@ -172,15 +174,15 @@ def parse_archive_record(
     rec.outside_temp_lo = _temp(8)
     rec.inside_temp = _temp(20)
 
-    # Rain
+    # Rain (clicks → mm)
     rain_clicks = struct.unpack_from("<H", data, 10)[0]
-    rec.rainfall = rain_clicks * rain_click_inches if rain_clicks != 0xFFFF else None
+    rec.rainfall = round(rain_clicks * rain_click_inches * 25.4, 2) if rain_clicks != 0xFFFF else None
     rate_clicks = struct.unpack_from("<H", data, 12)[0]
-    rec.rain_rate_hi = rate_clicks * rain_click_inches if rate_clicks != 0xFFFF else None
+    rec.rain_rate_hi = round(rate_clicks * rain_click_inches * 25.4, 2) if rate_clicks != 0xFFFF else None
 
-    # Barometer
+    # Barometer (thousandths inHg → hPa)
     baro = struct.unpack_from("<H", data, 14)[0]
-    rec.barometer = baro / 1000.0 if baro not in (0, 0xFFFF) else None
+    rec.barometer = round(baro / 1000.0 * 33.8639, 1) if baro not in (0, 0xFFFF) else None
 
     # Solar
     solar = struct.unpack_from("<H", data, 16)[0]
@@ -190,9 +192,9 @@ def parse_archive_record(
     rec.inside_humidity = data[22] if data[22] != 0xFF and data[22] <= 100 else None
     rec.outside_humidity = data[23] if data[23] != 0xFF and data[23] <= 100 else None
 
-    # Wind
-    rec.wind_speed_avg = data[24] if data[24] != 0xFF else None
-    rec.wind_speed_hi = data[25] if data[25] != 0xFF else None
+    # Wind (mph → m/s)
+    rec.wind_speed_avg = round(data[24] * 0.44704, 1) if data[24] != 0xFF else None
+    rec.wind_speed_hi = round(data[25] * 0.44704, 1) if data[25] != 0xFF else None
     rec.wind_dir_hi = _decode_wind_dir(data[26])
     rec.wind_dir_prevailing = _decode_wind_dir(data[27])
 
@@ -200,9 +202,9 @@ def parse_archive_record(
     uv_raw = data[28]
     rec.uv_index = uv_raw / 10.0 if uv_raw != 0xFF else None
 
-    # ET
+    # ET (thousandths inch → mm)
     et_raw = data[29]
-    rec.et = et_raw / 1000.0 if et_raw != 0xFF else None
+    rec.et = round(et_raw / 1000.0 * 25.4, 2) if et_raw != 0xFF else None
 
     # Rev B extras
     if is_rev_b:
