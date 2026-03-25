@@ -391,44 +391,64 @@ def parse_loop2(raw: bytes) -> Optional[Loop2Data]:
 
 # --------------- Merge to SensorSnapshot ---------------
 
+def _f10_to_c(tenths_f: int) -> float:
+    """Tenths °F → °C float."""
+    return round((tenths_f / 10.0 - 32) * 5 / 9, 1)
+
+
+def _inhg1000_to_hpa(thousandths_inhg: int) -> float:
+    """Thousandths inHg → hPa float."""
+    return round(thousandths_inhg / 1000.0 * 33.8639, 1)
+
+
+def _mph_to_ms(mph: int) -> float:
+    """mph integer → m/s float."""
+    return round(mph * 0.44704, 1)
+
+
+def _clicks_to_mm(clicks: float, click_inches: float) -> float:
+    """Rain clicks → mm."""
+    return round(clicks * click_inches * 25.4, 2)
+
+
 def loop_to_snapshot(
     loop: LoopData,
     loop2: Optional[Loop2Data],
     rain_click_inches: float,
 ) -> SensorSnapshot:
-    """Merge LOOP + optional LOOP2 data into a SensorSnapshot.
+    """Merge LOOP + optional LOOP2 data into a SensorSnapshot (SI).
 
-    All values converted to standard float units.
-    LOOP2 fields override LOOP where both are available (e.g. wind precision).
+    Davis native units converted to SI: °C, hPa, m/s, mm.
+    LOOP2 fields override LOOP where both are available.
     """
-    # Temperature: tenths F → float F
-    inside_temp = loop.inside_temp / 10.0 if loop.inside_temp is not None else None
-    outside_temp = loop.outside_temp / 10.0 if loop.outside_temp is not None else None
+    # Temperature: tenths F → °C
+    inside_temp = _f10_to_c(loop.inside_temp) if loop.inside_temp is not None else None
+    outside_temp = _f10_to_c(loop.outside_temp) if loop.outside_temp is not None else None
 
-    # Barometer: thousandths inHg → float inHg
-    barometer = loop.barometer / 1000.0 if loop.barometer is not None else None
+    # Barometer: thousandths inHg → hPa
+    barometer = _inhg1000_to_hpa(loop.barometer) if loop.barometer is not None else None
 
-    # Wind: direct from LOOP, but prefer LOOP2 gust if available
-    wind_speed = loop.wind_speed
+    # Wind: mph → m/s; prefer LOOP2 gust if available
+    wind_speed = _mph_to_ms(loop.wind_speed) if loop.wind_speed is not None else None
     wind_direction = loop.wind_direction
     wind_gust = None
 
     if loop2 is not None:
         if loop2.wind_gust_10min is not None:
-            wind_gust = round(loop2.wind_gust_10min / 10.0)
+            wind_gust = _mph_to_ms(round(loop2.wind_gust_10min / 10.0))
 
-    # Rain: clicks → inches
+    # Rain: clicks → mm
     rain_rate = None
     if loop.rain_rate is not None:
-        rain_rate = loop.rain_rate * rain_click_inches
+        rain_rate = _clicks_to_mm(loop.rain_rate, rain_click_inches)
     if loop2 is not None and loop2.rain_rate is not None:
-        rain_rate = loop2.rain_rate * rain_click_inches
+        rain_rate = _clicks_to_mm(loop2.rain_rate, rain_click_inches)
 
-    rain_daily = loop.day_rain * rain_click_inches if loop.day_rain is not None else None
-    rain_yearly = loop.year_rain * rain_click_inches if loop.year_rain is not None else None
+    rain_daily = _clicks_to_mm(loop.day_rain, rain_click_inches) if loop.day_rain is not None else None
+    rain_yearly = _clicks_to_mm(loop.year_rain, rain_click_inches) if loop.year_rain is not None else None
 
     if loop2 is not None and loop2.day_rain is not None:
-        rain_daily = loop2.day_rain * rain_click_inches
+        rain_daily = _clicks_to_mm(loop2.day_rain, rain_click_inches)
 
     # UV: tenths → float
     uv = loop.uv_index
@@ -441,10 +461,10 @@ def loop_to_snapshot(
     if loop2 is not None and loop2.solar_radiation is not None:
         solar = loop2.solar_radiation
 
-    # Soil: first sensor only for SensorSnapshot.soil_temp / soil_moisture
+    # Soil: tenths F → °C
     soil_temp = None
     if loop.soil_temps and loop.soil_temps[0] is not None:
-        soil_temp = loop.soil_temps[0] / 10.0
+        soil_temp = _f10_to_c(loop.soil_temps[0])
 
     soil_moisture = None
     if loop.soil_moistures and loop.soil_moistures[0] is not None:
@@ -454,8 +474,10 @@ def loop_to_snapshot(
     if loop.leaf_wetnesses and loop.leaf_wetnesses[0] is not None:
         leaf_wetness = loop.leaf_wetnesses[0]
 
-    # ET: thousandths inch → float inches
-    et_daily = loop.day_et / 1000.0 if loop.day_et is not None else None
+    # ET: thousandths inch → mm
+    et_daily = None
+    if loop.day_et is not None:
+        et_daily = round(loop.day_et / 1000.0 * 25.4, 2)
 
     # Build extra dict with LOOP2-only and multi-sensor data
     extra: dict = {}
@@ -468,25 +490,25 @@ def loop_to_snapshot(
     if loop.sunset is not None:
         extra["sunset"] = loop.sunset
     if loop.storm_rain is not None and loop.storm_rain > 0:
-        extra["storm_rain_in"] = round(loop.storm_rain * rain_click_inches, 3)
+        extra["storm_rain_mm"] = _clicks_to_mm(loop.storm_rain, rain_click_inches)
     if loop.month_rain is not None:
-        extra["month_rain_in"] = round(loop.month_rain * rain_click_inches, 3)
+        extra["month_rain_mm"] = _clicks_to_mm(loop.month_rain, rain_click_inches)
 
     if loop2 is not None:
         if loop2.thsw_index is not None:
             extra["thsw_index"] = float(loop2.thsw_index)
         if loop2.wind_speed_2min is not None:
-            extra["wind_2min_avg_mph"] = loop2.wind_speed_2min / 10.0
+            extra["wind_2min_avg_ms"] = _mph_to_ms(round(loop2.wind_speed_2min / 10.0))
         if loop2.wind_speed_10min is not None:
-            extra["wind_10min_avg_mph"] = loop2.wind_speed_10min / 10.0
+            extra["wind_10min_avg_ms"] = _mph_to_ms(round(loop2.wind_speed_10min / 10.0))
         if loop2.wind_gust_10min is not None:
-            extra["wind_gust_10min_mph"] = loop2.wind_gust_10min / 10.0
+            extra["wind_gust_10min_ms"] = _mph_to_ms(round(loop2.wind_gust_10min / 10.0))
         if loop2.wind_gust_dir is not None:
             extra["wind_gust_dir"] = loop2.wind_gust_dir
         if loop2.rain_last_15min is not None:
-            extra["rain_15min_in"] = round(loop2.rain_last_15min * rain_click_inches, 3)
+            extra["rain_15min_mm"] = _clicks_to_mm(loop2.rain_last_15min, rain_click_inches)
         if loop2.rain_last_hour is not None:
-            extra["rain_hour_in"] = round(loop2.rain_last_hour * rain_click_inches, 3)
+            extra["rain_hour_mm"] = _clicks_to_mm(loop2.rain_last_hour, rain_click_inches)
 
     return SensorSnapshot(
         inside_temp=inside_temp,
