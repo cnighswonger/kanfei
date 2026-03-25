@@ -68,11 +68,58 @@ def _run_weatherlink_live(fixture: dict) -> SensorSnapshot:
     return snapshot
 
 
+def _run_tempest_air(fixture: dict) -> SensorSnapshot:
+    """Feed legacy Air obs through Tempest parser."""
+    from app.protocol.tempest.sensors import parse_obs_air, build_snapshot
+
+    obs_data = parse_obs_air(fixture["raw_obs"])
+    return build_snapshot(
+        obs_data,
+        rapid_wind=None,
+        rain_daily_mm=0.0,
+        rain_yearly_mm=0.0,
+        rain_rate_mm_hr=0.0,
+        elevation_m=0.0,
+    )
+
+
+def _run_tempest_sky(fixture: dict) -> SensorSnapshot:
+    """Feed legacy Sky obs through Tempest parser."""
+    from app.protocol.tempest.sensors import parse_obs_sky, build_snapshot
+
+    obs_data = parse_obs_sky(fixture["raw_obs"])
+    rain = fixture.get("rain_state", {})
+    return build_snapshot(
+        obs_data,
+        rapid_wind=None,
+        rain_daily_mm=rain.get("rain_daily_mm", 0.0),
+        rain_yearly_mm=rain.get("rain_yearly_mm", 0.0),
+        rain_rate_mm_hr=rain.get("rain_rate_mm_hr", 0.0),
+        elevation_m=0.0,
+    )
+
+
+def _run_vantage(fixture: dict) -> SensorSnapshot:
+    """Feed LoopData through Vantage loop_to_snapshot."""
+    from app.protocol.vantage.loop_packet import LoopData, Loop2Data, loop_to_snapshot
+
+    loop_fields = fixture.get("loop_data", {})
+    loop = LoopData(**loop_fields)
+    loop2 = None
+    if "loop2_data" in fixture:
+        loop2 = Loop2Data(**fixture["loop2_data"])
+    rain_click = fixture.get("rain_click_inches", 0.01)
+    return loop_to_snapshot(loop, loop2, rain_click)
+
+
 _DRIVER_RUNNERS = {
     "ecowitt": _run_ecowitt,
     "tempest": _run_tempest,
+    "tempest_air": _run_tempest_air,
+    "tempest_sky": _run_tempest_sky,
     "ambient": _run_ambient,
     "weatherlink_live": _run_weatherlink_live,
+    "vantage": _run_vantage,
 }
 
 
