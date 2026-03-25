@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question / Help
+    url: https://github.com/cnighswonger/kanfei/discussions/categories/q-a
+    about: Ask questions in Discussions — Issues are for bugs and feature requests.
+  - name: Feature idea / brainstorm
+    url: https://github.com/cnighswonger/kanfei/discussions/categories/ideas
+    about: For early-stage ideas, use Discussions. Use the Feature Request template for concrete proposals.
+  - name: Station hardware discussion
+    url: https://github.com/cnighswonger/kanfei/discussions/categories/station-hardware
+    about: General hardware questions and setup help.

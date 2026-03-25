@@ -1,0 +1,91 @@
+name: Bug Report
+description: Something isn't working correctly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug. Please fill in the details below so we can reproduce and fix it.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: "When I click X, Y happens instead of Z."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      placeholder: "I expected Y to happen."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this bug?
+      placeholder: |
+        1. Go to Settings > ...
+        2. Change ...
+        3. Click ...
+        4. See error
+    validations:
+      required: true
+
+  - type: dropdown
+    id: station
+    attributes:
+      label: Weather station type
+      options:
+        - Davis Vantage Pro2
+        - Davis Vantage Vue
+        - Davis Weather Monitor II
+        - Davis WeatherLink Live
+        - Davis WeatherLink IP
+        - Ecowitt / Fine Offset
+        - WeatherFlow Tempest
+        - Ambient Weather
+        - Other (describe below)
+        - Not applicable
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Kanfei version
+      description: "Run `dpkg -s kanfei | grep Version` or check the About page."
+      placeholder: "0.1.0~beta3"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Raspberry Pi (armhf/arm64)
+        - Linux x86_64
+        - Windows
+        - macOS
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste any relevant logs from the browser console, uvicorn, or logger daemon.
+      render: shell
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Screenshots, browser info, serial connection type, or anything else that might help.

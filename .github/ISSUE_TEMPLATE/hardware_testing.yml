@@ -1,0 +1,91 @@
+name: Hardware Testing Report
+description: Report results from testing a station driver with real hardware
+labels: ["help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing! This helps us validate station drivers against real hardware. See [Discussion #17](https://github.com/cnighswonger/kanfei/discussions/17) for the list of drivers needing testers.
+
+  - type: dropdown
+    id: driver
+    attributes:
+      label: Driver being tested
+      options:
+        - "Davis Vantage Pro/Pro2/Vue serial (#1)"
+        - "Ecowitt / Fine Offset TCP LAN API (#2)"
+        - "WeatherFlow Tempest UDP (#3)"
+        - "Ambient Weather HTTP push (#4)"
+        - "Davis WeatherLink Live HTTP (#5)"
+        - "Davis WeatherLink IP TCP (#6)"
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Station model and firmware version
+      placeholder: "Ecowitt GW2000 firmware v3.1.2"
+    validations:
+      required: true
+
+  - type: input
+    id: connection
+    attributes:
+      label: Connection method
+      placeholder: "WiFi gateway on LAN, USB-serial, etc."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Test platform
+      options:
+        - Raspberry Pi 3
+        - Raspberry Pi 4
+        - Raspberry Pi 5
+        - Linux x86_64
+        - Windows
+        - macOS
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: result
+    attributes:
+      label: Overall result
+      options:
+        - Working — all readings match console
+        - Partial — some readings work, some don't
+        - Not working — cannot connect or no data
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Test details
+      description: Which readings match? Which don't? Any errors?
+      placeholder: |
+        Temperature: matches console
+        Humidity: matches console
+        Wind: reads 0 when console shows 5 mph
+        Barometer: not reported
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Logger daemon output, error messages, etc.
+      render: shell
+
+  - type: textarea
+    id: sample_data
+    attributes:
+      label: Sample API response (if available)
+      description: Raw JSON/data from your station's API — helps us build test fixtures.
+      render: json
