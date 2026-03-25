@@ -5,6 +5,9 @@ for display, logging, or amateur radio transmission.  This is NOT a
 real aviation METAR -- it uses a simplified subset of the format for
 personal weather station data.
 
+All inputs are in SI units (tenths °C, tenths hPa, tenths m/s).
+Conversion to METAR units (°C, knots, inHg) happens internally.
+
 Format produced:
     METAR {ID} {DDHHMMz} {wind} {vis} {sky} {temp}/{dewpt} {altimeter}
 
@@ -38,18 +41,16 @@ def _format_wind(
     return f"{wind_dir_deg:03d}{wind_speed_knots:02d}KT"
 
 
-def _f_to_c(temp_tenths_f: int) -> int:
-    """Convert temperature from tenths of degrees F to whole degrees C.
+def _si_temp_to_whole_c(temp_tenths_c: int) -> int:
+    """Convert tenths of °C to whole degrees °C for METAR.
 
     Args:
-        temp_tenths_f: Temperature in tenths of degrees Fahrenheit.
+        temp_tenths_c: Temperature in tenths of degrees Celsius.
 
     Returns:
         Temperature in whole degrees Celsius.
     """
-    temp_f = temp_tenths_f / 10.0
-    temp_c = (temp_f - 32.0) * 5.0 / 9.0
-    return round(temp_c)
+    return round(temp_tenths_c / 10.0)
 
 
 def _format_temp_c(temp_c: int) -> str:
@@ -68,54 +69,56 @@ def _format_temp_c(temp_c: int) -> str:
     return f"{temp_c:02d}"
 
 
-def _mph_to_knots(speed_mph: int) -> int:
-    """Convert wind speed from mph to knots.
+def _ms_tenths_to_knots(speed_tenths_ms: int) -> int:
+    """Convert wind speed from tenths of m/s to knots.
 
     Args:
-        speed_mph: Wind speed in miles per hour.
+        speed_tenths_ms: Wind speed in tenths of m/s.
 
     Returns:
         Wind speed in knots (rounded to nearest integer).
     """
-    return round(speed_mph * 0.868976)
+    return round(speed_tenths_ms / 10.0 * 1.94384)
 
 
-def _format_altimeter(barometer_thousandths: int) -> str:
+def _format_altimeter(pressure_tenths_hpa: int) -> str:
     """Format barometric pressure as METAR altimeter setting.
 
     METAR uses 'A' followed by pressure in hundredths of inHg (4 digits).
 
     Args:
-        barometer_thousandths: Sea-level pressure in thousandths of inHg
-            (e.g., 29921 = 29.921 inHg).
+        pressure_tenths_hpa: Sea-level pressure in tenths of hPa
+            (e.g., 10132 = 1013.2 hPa).
 
     Returns:
         METAR altimeter string, e.g., "A2992".
     """
-    # Convert thousandths to hundredths (drop last digit, round)
-    hundredths = round(barometer_thousandths / 10.0)
+    # Convert tenths hPa to hundredths inHg
+    inhg = pressure_tenths_hpa / 10.0 / 33.8639
+    hundredths = round(inhg * 100)
     return f"A{hundredths:04d}"
 
 
 def format_metar(
     station_id: str,
     wind_dir_deg: Optional[int],
-    wind_speed_mph: int,
-    temp_tenths_f: int,
-    dew_point_tenths_f: int,
-    barometer_thousandths: int,
+    wind_speed_tenths_ms: int,
+    temp_tenths_c: int,
+    dew_point_tenths_c: int,
+    pressure_tenths_hpa: int,
     obs_time: Optional[datetime] = None,
 ) -> str:
     """Format current conditions as a pseudo-METAR string.
 
+    All inputs in SI units.
+
     Args:
         station_id: 4-character station identifier (e.g., "KWXS").
         wind_dir_deg: Wind direction in degrees (0-359), or None if calm.
-        wind_speed_mph: Wind speed in mph (will be converted to knots).
-        temp_tenths_f: Temperature in tenths of degrees Fahrenheit.
-        dew_point_tenths_f: Dew point in tenths of degrees Fahrenheit.
-        barometer_thousandths: Sea-level barometric pressure in thousandths
-            of inHg (e.g., 29921 = 29.921 inHg).
+        wind_speed_tenths_ms: Wind speed in tenths of m/s.
+        temp_tenths_c: Temperature in tenths of °C.
+        dew_point_tenths_c: Dew point in tenths of °C.
+        pressure_tenths_hpa: Sea-level pressure in tenths of hPa.
         obs_time: Observation time (defaults to current UTC time).
 
     Returns:
@@ -131,7 +134,7 @@ def format_metar(
     time_str = obs_time.strftime("%d%H%MZ")
 
     # Wind
-    wind_knots = _mph_to_knots(wind_speed_mph)
+    wind_knots = _ms_tenths_to_knots(wind_speed_tenths_ms)
     wind_str = _format_wind(wind_dir_deg, wind_knots)
 
     # Visibility: always 10SM (we don't measure visibility)
@@ -140,12 +143,12 @@ def format_metar(
     # Sky condition: always CLR (we don't measure cloud cover)
     sky_str = "CLR"
 
-    # Temperature / dew point in Celsius
-    temp_c = _f_to_c(temp_tenths_f)
-    dewpt_c = _f_to_c(dew_point_tenths_f)
+    # Temperature / dew point in whole Celsius
+    temp_c = _si_temp_to_whole_c(temp_tenths_c)
+    dewpt_c = _si_temp_to_whole_c(dew_point_tenths_c)
     temp_str = f"{_format_temp_c(temp_c)}/{_format_temp_c(dewpt_c)}"
 
     # Altimeter
-    alt_str = _format_altimeter(barometer_thousandths)
+    alt_str = _format_altimeter(pressure_tenths_hpa)
 
     return f"METAR {sid} {time_str} {wind_str} {vis_str} {sky_str} {temp_str} {alt_str}"

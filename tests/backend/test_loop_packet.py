@@ -41,14 +41,15 @@ class TestBasicLoopParsing:
         raw = _make_basic_packet()
         reading = parse_loop_packet(raw, StationModel.MONITOR)
         assert reading is not None
-        assert reading.inside_temp == 720
-        assert reading.outside_temp == 451
-        assert reading.wind_speed == 12
-        assert reading.wind_direction == 225
-        assert reading.barometer == 30120
-        assert reading.inside_humidity == 45
-        assert reading.outside_humidity == 78
-        assert reading.rain_total == 150
+        # Values converted from Davis native to SI at parse boundary
+        assert reading.inside_temp == 222       # 72.0°F → 22.2°C (tenths)
+        assert reading.outside_temp == 73       # 45.1°F → 7.3°C (tenths)
+        assert reading.wind_speed == 54         # 12 mph → 5.4 m/s (tenths)
+        assert reading.wind_direction == 225    # degrees (unchanged)
+        assert reading.barometer == 10200       # 30.120 inHg → 1020.0 hPa (tenths)
+        assert reading.inside_humidity == 45    # percent (unchanged)
+        assert reading.outside_humidity == 78   # percent (unchanged)
+        assert reading.rain_total == 381        # 1.50 in → 38.1 mm (tenths)
 
     def test_parse_works_for_all_basic_stations(self):
         raw = _make_basic_packet()
@@ -60,13 +61,13 @@ class TestBasicLoopParsing:
         ]:
             reading = parse_loop_packet(raw, model)
             assert reading is not None
-            assert reading.inside_temp == 720
+            assert reading.inside_temp == 222   # 72.0°F → 22.2°C
 
     def test_negative_temperature(self):
-        raw = _make_basic_packet(outside_temp=-100)  # -10.0 F
+        raw = _make_basic_packet(outside_temp=-100)  # -10.0°F
         reading = parse_loop_packet(raw, StationModel.MONITOR)
         assert reading is not None
-        assert reading.outside_temp == -100
+        assert reading.outside_temp == -233     # -10.0°F → -23.3°C
 
     def test_invalid_temp_returns_none(self):
         raw = _make_basic_packet(inside_temp=0x7FFF)
