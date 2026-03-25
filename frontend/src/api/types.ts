@@ -533,6 +533,11 @@ export interface SetupConfig {
   serial_port: string;
   baud_rate: number;
   station_driver_type: string;
+  weatherlink_ip: string;
+  weatherlink_port: number;
+  ecowitt_ip: string;
+  tempest_hub_sn: string;
+  ambient_listen_port: number;
   latitude: number;
   longitude: number;
   elevation: number;

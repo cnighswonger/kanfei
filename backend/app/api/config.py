@@ -70,6 +70,12 @@ _DEFAULTS: dict[str, object] = {
     "usage_budget_auto_pause": False,
     "usage_budget_paused": False,
     "station_driver_type": "legacy",
+    "station_connection_type": "serial",  # "serial", "network", "udp", "http_push"
+    "weatherlink_ip": "",
+    "weatherlink_port": 22222,
+    "ecowitt_ip": "",
+    "tempest_hub_sn": "",
+    "ambient_listen_port": 8080,
     # Rain midnight auto-reset
     "rain_yesterday": 0.0,
     # UI preferences (persisted server-side so they survive browser resets)

@@ -6,7 +6,7 @@
 import { useState, useCallback } from "react";
 import { completeSetup } from "../../api/client.ts";
 import type { SetupConfig } from "../../api/types.ts";
-import StepSerial from "./StepSerial.tsx";
+import StepStation from "./StepStation.tsx";
 import StepLocation from "./StepLocation.tsx";
 import StepPreferences from "./StepPreferences.tsx";
 
@@ -19,6 +19,11 @@ interface WizardState {
   baudRate: number;
   stationType: string | null;
   driverType: string;
+  weatherlinkIp: string;
+  weatherlinkPort: number;
+  ecowittIp: string;
+  tempestHubSn: string;
+  ambientListenPort: number;
   latitude: number;
   longitude: number;
   elevation: number;
@@ -103,6 +108,11 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     baudRate: 2400,
     stationType: null,
     driverType: "legacy",
+    weatherlinkIp: "",
+    weatherlinkPort: 22222,
+    ecowittIp: "",
+    tempestHubSn: "",
+    ambientListenPort: 8080,
     latitude: 0,
     longitude: 0,
     elevation: 0,
@@ -123,7 +133,17 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
   );
 
   const canAdvance = (): boolean => {
-    if (step === 0) return !!state.stationType;
+    if (step === 0) {
+      // Serial drivers need a detected station type; others just need a driver selection
+      const isSerial = ["legacy", "vantage"].includes(state.driverType);
+      if (isSerial) return !!state.stationType;
+      // Network drivers need an IP
+      if (["weatherlink_ip", "weatherlink_live"].includes(state.driverType))
+        return !!state.weatherlinkIp;
+      if (state.driverType === "ecowitt") return !!state.ecowittIp;
+      // Tempest and Ambient can proceed with defaults
+      return !!state.driverType;
+    }
     if (step === 1)
       return state.latitude !== 0 || state.longitude !== 0;
     return true;
@@ -137,6 +157,11 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
         serial_port: state.serialPort,
         baud_rate: state.baudRate,
         station_driver_type: state.driverType,
+        weatherlink_ip: state.weatherlinkIp,
+        weatherlink_port: state.weatherlinkPort,
+        ecowitt_ip: state.ecowittIp,
+        tempest_hub_sn: state.tempestHubSn,
+        ambient_listen_port: state.ambientListenPort,
         latitude: state.latitude,
         longitude: state.longitude,
         elevation: state.elevation,
@@ -192,11 +217,16 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
         {/* Step content */}
         <div style={{ marginBottom: "32px" }}>
           {step === 0 && (
-            <StepSerial
+            <StepStation
+              driverType={state.driverType}
               serialPort={state.serialPort}
               baudRate={state.baudRate}
               stationType={state.stationType}
-              driverType={state.driverType}
+              weatherlinkIp={state.weatherlinkIp}
+              weatherlinkPort={state.weatherlinkPort}
+              ecowittIp={state.ecowittIp}
+              tempestHubSn={state.tempestHubSn}
+              ambientListenPort={state.ambientListenPort}
               onChange={handleChange}
             />
           )}
