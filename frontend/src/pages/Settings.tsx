@@ -2183,64 +2183,28 @@ export default function Settings() {
         </div>
       )}
 
-      {/* Station section */}
+      {/* Station section — driver-aware */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Station</h3>
         <div style={gridTwoCol(isMobile)}>
           <div style={fieldGroup}>
-            <label style={labelStyle}>
-              Serial Port
-              <button
-                style={{
-                  fontSize: "11px",
-                  padding: "2px 8px",
-                  marginLeft: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid var(--color-border)",
-                  background: "var(--color-bg-secondary)",
-                  color: "var(--color-text)",
-                  cursor: "pointer",
-                  fontFamily: "var(--font-body)",
-                }}
-                onClick={refreshPorts}
-              >
-                Refresh
-              </button>
-            </label>
+            <label style={labelStyle}>Driver Type</label>
             <select
               style={selectStyle}
-              value={String(val("serial_port"))}
-              onChange={(e) => updateField("serial_port", e.target.value)}
+              value={String(val("station_driver_type") || "legacy")}
+              onChange={(e) => updateField("station_driver_type", e.target.value)}
             >
-              {ports.length === 0 && (
-                <option value="">No ports detected</option>
-              )}
-              {ports.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-              {/* Keep current value visible even if not in detected list */}
-              {val("serial_port") &&
-                !ports.includes(String(val("serial_port"))) && (
-                  <option value={String(val("serial_port"))}>
-                    {String(val("serial_port"))}
-                  </option>
-                )}
+              <option value="legacy">Davis Weather Monitor / Wizard (serial)</option>
+              <option value="vantage">Davis Vantage Pro / Pro2 / Vue (serial)</option>
+              <option value="weatherlink_ip">Davis WeatherLink IP (TCP)</option>
+              <option value="weatherlink_live">Davis WeatherLink Live (HTTP)</option>
+              <option value="ecowitt">Ecowitt / Fine Offset (LAN)</option>
+              <option value="tempest">WeatherFlow Tempest (UDP)</option>
+              <option value="ambient">Ambient Weather (HTTP push)</option>
             </select>
-          </div>
-          <div style={fieldGroup}>
-            <label style={labelStyle}>Baud Rate</label>
-            <select
-              style={selectStyle}
-              value={String(val("baud_rate"))}
-              onChange={(e) =>
-                updateField("baud_rate", parseInt(e.target.value))
-              }
-            >
-              <option value="2400">2400 (default)</option>
-              <option value="1200">1200</option>
-            </select>
+            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
+              Changing driver type requires a restart of both the web app and logger daemon.
+            </span>
           </div>
           <div style={fieldGroup}>
             <label style={labelStyle}>Poll Interval (seconds)</label>
@@ -2252,9 +2216,133 @@ export default function Settings() {
             />
           </div>
         </div>
+
+        {/* Serial config — legacy and vantage */}
+        {["legacy", "vantage"].includes(String(val("station_driver_type") || "legacy")) && (
+          <div style={{ ...gridTwoCol(isMobile), marginTop: "12px" }}>
+            <div style={fieldGroup}>
+              <label style={labelStyle}>
+                Serial Port
+                <button
+                  style={{
+                    fontSize: "11px",
+                    padding: "2px 8px",
+                    marginLeft: "8px",
+                    borderRadius: "4px",
+                    border: "1px solid var(--color-border)",
+                    background: "var(--color-bg-secondary)",
+                    color: "var(--color-text)",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-body)",
+                  }}
+                  onClick={refreshPorts}
+                >
+                  Refresh
+                </button>
+              </label>
+              <select
+                style={selectStyle}
+                value={String(val("serial_port"))}
+                onChange={(e) => updateField("serial_port", e.target.value)}
+              >
+                {ports.length === 0 && (
+                  <option value="">No ports detected</option>
+                )}
+                {ports.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+                {val("serial_port") && !ports.includes(String(val("serial_port"))) && (
+                  <option value={String(val("serial_port"))}>{String(val("serial_port"))}</option>
+                )}
+              </select>
+            </div>
+            <div style={fieldGroup}>
+              <label style={labelStyle}>Baud Rate</label>
+              <select
+                style={selectStyle}
+                value={String(val("baud_rate"))}
+                onChange={(e) => updateField("baud_rate", parseInt(e.target.value))}
+              >
+                <option value="19200">19200 (Vantage Pro/Pro2/Vue)</option>
+                <option value="2400">2400 (Weather Monitor/Wizard)</option>
+                <option value="1200">1200</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* Network config — WeatherLink IP/Live, Ecowitt */}
+        {["weatherlink_ip", "weatherlink_live", "ecowitt"].includes(String(val("station_driver_type"))) && (
+          <div style={{ ...gridTwoCol(isMobile), marginTop: "12px" }}>
+            <div style={fieldGroup}>
+              <label style={labelStyle}>
+                {String(val("station_driver_type")) === "ecowitt" ? "Gateway" : "Device"} IP Address
+              </label>
+              <input
+                style={inputStyle}
+                type="text"
+                placeholder="192.168.1.100"
+                value={String(val(String(val("station_driver_type")) === "ecowitt" ? "ecowitt_ip" : "weatherlink_ip") || "")}
+                onChange={(e) => updateField(
+                  String(val("station_driver_type")) === "ecowitt" ? "ecowitt_ip" : "weatherlink_ip",
+                  e.target.value,
+                )}
+              />
+            </div>
+            {String(val("station_driver_type")) === "weatherlink_ip" && (
+              <div style={fieldGroup}>
+                <label style={labelStyle}>TCP Port</label>
+                <input
+                  style={inputStyle}
+                  type="number"
+                  value={String(val("weatherlink_port") || 22222)}
+                  onChange={(e) => updateField("weatherlink_port", parseInt(e.target.value) || 22222)}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tempest config */}
+        {String(val("station_driver_type")) === "tempest" && (
+          <div style={{ marginTop: "12px" }}>
+            <div style={fieldGroup}>
+              <label style={labelStyle}>Hub Serial Number (optional)</label>
+              <input
+                style={inputStyle}
+                type="text"
+                placeholder="Leave blank to accept any hub"
+                value={String(val("tempest_hub_sn") || "")}
+                onChange={(e) => updateField("tempest_hub_sn", e.target.value)}
+              />
+              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
+                The Tempest hub broadcasts on your local network automatically.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Ambient config */}
+        {String(val("station_driver_type")) === "ambient" && (
+          <div style={{ marginTop: "12px" }}>
+            <div style={fieldGroup}>
+              <label style={labelStyle}>Listen Port</label>
+              <input
+                style={inputStyle}
+                type="number"
+                value={String(val("ambient_listen_port") || 8080)}
+                onChange={(e) => updateField("ambient_listen_port", parseInt(e.target.value) || 8080)}
+              />
+              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
+                Configure your station to push data to this computer's IP on this port.
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* WeatherLink section */}
+      {/* WeatherLink section — only for Davis serial drivers */}
+      {["legacy", "vantage"].includes(String(val("station_driver_type") || "legacy")) && (
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>WeatherLink</h3>
 
@@ -2427,6 +2515,7 @@ export default function Settings() {
           )}
         </div>
       </div>
+      )}
 
       {/* Location section */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
