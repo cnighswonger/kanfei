@@ -228,18 +228,26 @@ class CwopUploader:
         # Wind gust: today's peak wind speed from daily extremes
         wind_gust = _extract(data, ("daily_extremes", "wind_speed_hi", "value"))
 
+        # Broadcast data is in display units (°F, mph, inHg, in).
+        # Convert to SI for the APRSWeatherPacket (tenths °C, tenths m/s, tenths hPa, tenths mm).
+        temp_c_tenths = round((temp_f - 32) * 5 / 9 * 10) if temp_f is not None else 222
+        wind_ms_tenths = round(float(wind_speed) * 4.4704) if wind_speed is not None else 0
+        gust_ms_tenths = round(float(wind_gust) * 4.4704) if wind_gust is not None else 0
+        baro_hpa_tenths = round(float(baro_inhg) * 33.8639 * 10) if baro_inhg is not None else 10132
+        rain_mm_tenths = round(float(rain_daily) * 25.4 * 10) if rain_daily is not None else 0
+
         pkt = APRSWeatherPacket(
             callsign=self._callsign,
             latitude=self._latitude,
             longitude=self._longitude,
             wind_dir_deg=int(wind_dir) if wind_dir is not None else None,
-            wind_speed_mph=int(wind_speed) if wind_speed is not None else 0,
-            wind_gust_mph=int(wind_gust) if wind_gust is not None else 0,
-            temp_tenths_f=int(temp_f * 10),
-            rain_hour_hundredths_in=0,
-            rain_24h_hundredths_in=0,
-            rain_midnight_hundredths_in=int(rain_daily * 100) if rain_daily is not None else 0,
+            wind_speed_tenths_ms=wind_ms_tenths,
+            wind_gust_tenths_ms=gust_ms_tenths,
+            temp_tenths_c=temp_c_tenths,
+            rain_hour_tenths_mm=0,
+            rain_24h_tenths_mm=0,
+            rain_midnight_tenths_mm=rain_mm_tenths,
             humidity_pct=int(humidity) if humidity is not None else 0,
-            barometer_thousandths_inhg=int(baro_inhg * 1000) if baro_inhg is not None else 29920,
+            pressure_tenths_hpa=baro_hpa_tenths,
         )
         return pkt.format_packet()

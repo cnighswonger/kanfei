@@ -26,8 +26,56 @@ from .constants import (
 )
 from .crc import crc_validate
 from .station_types import SensorReading
+from ..utils.units import (
+    f_tenths_to_c_tenths,
+    inhg_thousandths_to_hpa_tenths,
+    mph_to_ms_tenths,
+    in_hundredths_to_mm_tenths,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _to_si(reading: SensorReading) -> SensorReading:
+    """Convert a Davis-native SensorReading to SI units at the parse boundary.
+
+    Davis reports: tenths °F, thousandths inHg, mph, hundredths inches.
+    SI storage: tenths °C, tenths hPa, tenths m/s, tenths mm.
+    """
+    def _temp(v: Optional[int]) -> Optional[int]:
+        return f_tenths_to_c_tenths(v) if v is not None else None
+
+    def _press(v: Optional[int]) -> Optional[int]:
+        return inhg_thousandths_to_hpa_tenths(v) if v is not None else None
+
+    def _wind(v: Optional[int]) -> Optional[int]:
+        return mph_to_ms_tenths(v) if v is not None else None
+
+    def _rain(v: Optional[int]) -> Optional[int]:
+        return in_hundredths_to_mm_tenths(v) if v is not None else None
+
+    return SensorReading(
+        inside_temp=_temp(reading.inside_temp),
+        outside_temp=_temp(reading.outside_temp),
+        soil_temp=_temp(reading.soil_temp),
+        wind_speed=_wind(reading.wind_speed),
+        wind_direction=reading.wind_direction,
+        barometer=_press(reading.barometer),
+        inside_humidity=reading.inside_humidity,
+        outside_humidity=reading.outside_humidity,
+        rain_total=_rain(reading.rain_total),
+        rain_rate=_rain(reading.rain_rate),
+        rain_yearly=_rain(reading.rain_yearly),
+        solar_radiation=reading.solar_radiation,
+        uv_index=reading.uv_index,
+        # Pass through fields that don't need conversion
+        wind_run_total=reading.wind_run_total,
+        et_total=reading.et_total,
+        degree_days_total=reading.degree_days_total,
+        solar_energy_total=reading.solar_energy_total,
+        leaf_wetness=reading.leaf_wetness,
+        uv_dose=reading.uv_dose,
+    )
 
 
 def _unpack_u8(data: bytes, offset: int) -> int:
@@ -130,13 +178,13 @@ def parse_loop_packet(raw: bytes, model: StationModel) -> Optional[SensorReading
     data = raw[1:1 + expected_data_size]
 
     if model in BASIC_STATIONS:
-        return _parse_basic(data)
+        return _to_si(_parse_basic(data))
     elif model == StationModel.GROWEATHER:
-        return _parse_groweather(data)
+        return _to_si(_parse_groweather(data))
     elif model == StationModel.ENERGY:
-        return _parse_energy(data)
+        return _to_si(_parse_energy(data))
     elif model == StationModel.HEALTH:
-        return _parse_health(data)
+        return _to_si(_parse_health(data))
     else:
         logger.error("Unknown station model: %s", model)
         return None

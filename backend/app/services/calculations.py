@@ -3,11 +3,19 @@
 Heat index, dew point, wind chill, atmospheric entropy (theta_e),
 feels-like composite, and rain rate.
 
-All temperatures in tenths of degrees Fahrenheit unless noted.
+All inputs and outputs in SI units:
+  - Temperature: tenths of °C
+  - Pressure: tenths of hPa
+  - Wind speed: tenths of m/s
+
+Internal calculations use the original Davis formulas (°F-based for THI
+table, mph-based for wind chill). Conversion happens at function boundaries.
 """
 
 import math
 from typing import Optional
+
+from ..utils.units import c_tenths_to_f_tenths, f_tenths_to_c_tenths, ms_tenths_to_mph
 
 # THI table ported from reference/thitable.h
 # Rows: 68F to 122F (55 rows), Columns: 0% to 100% humidity in 10% steps (11 cols)
@@ -78,16 +86,18 @@ CHILL_TABLE_ONE = [156, 151, 146, 141, 133, 123, 110, 87, 61, 14, 0]
 CHILL_TABLE_TWO = [0, 16, 16, 16, 25, 33, 41, 74, 82, 152, 0]
 
 
-def heat_index(temp_tenths_f: int, humidity: int) -> Optional[int]:
+def heat_index(temp_tenths_c: int, humidity: int) -> Optional[int]:
     """Calculate heat index using THI table with bilinear interpolation.
 
     Args:
-        temp_tenths_f: Temperature in tenths of degrees F (e.g., 850 = 85.0F)
+        temp_tenths_c: Temperature in tenths of °C (e.g., 294 = 29.4°C)
         humidity: Relative humidity 0-100%
 
     Returns:
-        Heat index in tenths of degrees F, or None if out of range.
+        Heat index in tenths of °C, or None if out of range.
     """
+    # THI table is in °F — convert at boundary
+    temp_tenths_f = c_tenths_to_f_tenths(temp_tenths_c)
     temp_f = temp_tenths_f / 10.0
 
     if temp_f < THI_BASE_TEMP:
@@ -123,25 +133,26 @@ def heat_index(temp_tenths_f: int, humidity: int) -> Optional[int]:
     if result > 125:
         return None
 
-    return round(result * 10)  # Convert to tenths F
+    # Convert result (whole °F) back to tenths °C
+    return f_tenths_to_c_tenths(round(result * 10))
 
 
-def dew_point(temp_tenths_f: int, humidity: int) -> Optional[int]:
+def dew_point(temp_tenths_c: int, humidity: int) -> Optional[int]:
     """Calculate dew point using Magnus formula.
 
     Per techref.txt lines 1547-1572.
 
     Args:
-        temp_tenths_f: Temperature in tenths of degrees F
+        temp_tenths_c: Temperature in tenths of °C
         humidity: Relative humidity 0-100%
 
     Returns:
-        Dew point in tenths of degrees F, or None if invalid.
+        Dew point in tenths of °C, or None if invalid.
     """
     if humidity <= 0 or humidity > 100:
         return None
 
-    temp_c = (temp_tenths_f / 10.0 - 32.0) * 5.0 / 9.0
+    temp_c = temp_tenths_c / 10.0
     rh_frac = humidity / 100.0
 
     # Magnus formula constants
@@ -152,31 +163,32 @@ def dew_point(temp_tenths_f: int, humidity: int) -> Optional[int]:
     gamma = math.log(rh_frac) + (a * temp_c) / (b + temp_c)
     dp_c = (b * gamma) / (a - gamma)
 
-    dp_f = dp_c * 9.0 / 5.0 + 32.0
-    return round(dp_f * 10)  # Convert to tenths F
+    return round(dp_c * 10)  # tenths °C
 
 
-def wind_chill(temp_tenths_f: int, wind_speed_mph: int) -> Optional[int]:
+def wind_chill(temp_tenths_c: int, wind_speed_tenths_ms: int) -> Optional[int]:
     """Calculate wind chill using Davis chill factor tables.
 
-    Per techref.txt lines 1514-1536 (ChillCalc function):
-      index = 10 - speed / 5
-      cf = chillTableOne[index] + (chillTableTwo[index] / 16.0) * (speed % 5)
-      chill = cf * ((t - 91.4) / 256.0) + t
+    Per techref.txt lines 1514-1536 (ChillCalc function).
+    Internally converts to °F/mph for the Davis formula, returns °C.
 
     Args:
-        temp_tenths_f: Temperature in tenths of degrees F
-        wind_speed_mph: Wind speed in mph
+        temp_tenths_c: Temperature in tenths of °C
+        wind_speed_tenths_ms: Wind speed in tenths of m/s
 
     Returns:
-        Wind chill in tenths of degrees F, or None if not applicable.
+        Wind chill in tenths of °C, or None if not applicable.
     """
+    # Convert to Davis units for the formula
+    temp_tenths_f = c_tenths_to_f_tenths(temp_tenths_c)
+    wind_speed_mph = ms_tenths_to_mph(wind_speed_tenths_ms)
+
     temp_f = temp_tenths_f / 10.0
 
     if temp_f >= 91.4:
         return None  # Wind chill not applicable above 91.4F
     if wind_speed_mph <= 0:
-        return temp_tenths_f  # No wind, no chill
+        return temp_tenths_c  # No wind, no chill
 
     # Cap at 50 mph per Davis implementation
     speed = min(wind_speed_mph, 50)
@@ -185,7 +197,6 @@ def wind_chill(temp_tenths_f: int, wind_speed_mph: int) -> Optional[int]:
     index = 10 - speed // 5
 
     # Chill factor with interpolation
-    # chillTableTwo is divided by 16.0 and multiplied by (speed % 5)
     cf = CHILL_TABLE_ONE[index] + (CHILL_TABLE_TWO[index] / 16.0) * (speed % 5)
 
     # Wind chill formula
@@ -194,61 +205,61 @@ def wind_chill(temp_tenths_f: int, wind_speed_mph: int) -> Optional[int]:
     # Wind chill should not exceed actual temperature
     chill_f = min(chill_f, temp_f)
 
-    return round(chill_f * 10)
+    # Convert result back to tenths °C
+    return f_tenths_to_c_tenths(round(chill_f * 10))
 
 
 def feels_like(
-    temp_tenths_f: int,
+    temp_tenths_c: int,
     humidity: int,
-    wind_speed_mph: int,
+    wind_speed_tenths_ms: int,
 ) -> int:
     """Calculate "feels like" composite temperature.
 
-    - If temp > 80F and humidity > 40%: use heat index
-    - If temp < 50F and wind > 3 mph: use wind chill
+    - If temp > 26.7°C (80°F) and humidity > 40%: use heat index
+    - If temp < 10°C (50°F) and wind > 1.3 m/s (3 mph): use wind chill
     - Otherwise: actual temperature
-    """
-    temp_f = temp_tenths_f / 10.0
 
-    if temp_f > 80.0 and humidity > 40:
-        hi = heat_index(temp_tenths_f, humidity)
+    All values in SI: tenths °C, tenths m/s.
+    """
+    temp_c = temp_tenths_c / 10.0
+
+    if temp_c > 26.7 and humidity > 40:
+        hi = heat_index(temp_tenths_c, humidity)
         if hi is not None:
             return hi
 
-    if temp_f < 50.0 and wind_speed_mph > 3:
-        wc = wind_chill(temp_tenths_f, wind_speed_mph)
+    if temp_c < 10.0 and wind_speed_tenths_ms > 13:  # 1.3 m/s ≈ 3 mph
+        wc = wind_chill(temp_tenths_c, wind_speed_tenths_ms)
         if wc is not None:
             return wc
 
-    return temp_tenths_f
+    return temp_tenths_c
 
 
 def equivalent_potential_temperature(
-    temp_tenths_f: int,
+    temp_tenths_c: int,
     humidity: int,
-    pressure_thousandths_inhg: int,
+    pressure_tenths_hpa: int,
 ) -> Optional[int]:
     """Calculate equivalent potential temperature (atmospheric entropy proxy).
 
-    Uses Bolton (1980) formula:
-    theta_e = T * (1000/P)^0.2854 * exp((3.376/T_LCL - 0.00254) * r * (1 + 0.81e-3 * r))
+    Uses Bolton (1980) formula.
 
     Args:
-        temp_tenths_f: Temperature in tenths F
+        temp_tenths_c: Temperature in tenths °C
         humidity: RH 0-100%
-        pressure_thousandths_inhg: Barometric pressure in thousandths inHg
+        pressure_tenths_hpa: Barometric pressure in tenths hPa
 
     Returns:
         Theta_e in tenths of Kelvin, or None if invalid.
     """
-    if humidity <= 0 or pressure_thousandths_inhg <= 0:
+    if humidity <= 0 or pressure_tenths_hpa <= 0:
         return None
 
-    # Convert to SI
-    temp_f = temp_tenths_f / 10.0
-    temp_c = (temp_f - 32.0) * 5.0 / 9.0
+    temp_c = temp_tenths_c / 10.0
     temp_k = temp_c + 273.15
-    pressure_hpa = pressure_thousandths_inhg / 1000.0 * 33.8639  # inHg to hPa
+    pressure_hpa = pressure_tenths_hpa / 10.0
     rh = humidity / 100.0
 
     # Saturation vapor pressure (Bolton 1980)

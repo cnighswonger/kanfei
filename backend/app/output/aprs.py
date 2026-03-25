@@ -65,46 +65,47 @@ class APRSWeatherPacket:
         latitude: float,
         longitude: float,
         wind_dir_deg: Optional[int] = None,
-        wind_speed_mph: int = 0,
-        wind_gust_mph: int = 0,
-        temp_tenths_f: int = 720,
-        rain_hour_hundredths_in: int = 0,
-        rain_24h_hundredths_in: int = 0,
-        rain_midnight_hundredths_in: int = 0,
+        wind_speed_tenths_ms: int = 0,
+        wind_gust_tenths_ms: int = 0,
+        temp_tenths_c: int = 222,
+        rain_hour_tenths_mm: int = 0,
+        rain_24h_tenths_mm: int = 0,
+        rain_midnight_tenths_mm: int = 0,
         humidity_pct: int = 0,
-        barometer_thousandths_inhg: int = 29920,
+        pressure_tenths_hpa: int = 10132,
         obs_time: Optional[datetime] = None,
     ) -> None:
         """Initialize an APRS weather packet.
+
+        All values in SI units.
 
         Args:
             callsign: Amateur radio callsign (e.g., "N0CALL").
             latitude: Station latitude in decimal degrees.
             longitude: Station longitude in decimal degrees.
             wind_dir_deg: Wind direction in degrees (0-359), or None if calm.
-            wind_speed_mph: Sustained wind speed in mph.
-            wind_gust_mph: Wind gust speed in mph.
-            temp_tenths_f: Temperature in tenths of degrees Fahrenheit.
-            rain_hour_hundredths_in: Rain in last hour (hundredths of inch).
-            rain_24h_hundredths_in: Rain in last 24 hours (hundredths of inch).
-            rain_midnight_hundredths_in: Rain since midnight (hundredths of inch).
+            wind_speed_tenths_ms: Sustained wind speed in tenths of m/s.
+            wind_gust_tenths_ms: Wind gust speed in tenths of m/s.
+            temp_tenths_c: Temperature in tenths of °C.
+            rain_hour_tenths_mm: Rain in last hour (tenths of mm).
+            rain_24h_tenths_mm: Rain in last 24 hours (tenths of mm).
+            rain_midnight_tenths_mm: Rain since midnight (tenths of mm).
             humidity_pct: Relative humidity 0-100%.
-            barometer_thousandths_inhg: Sea-level barometric pressure in
-                thousandths of inHg.
+            pressure_tenths_hpa: Sea-level barometric pressure in tenths of hPa.
             obs_time: Observation UTC time (defaults to now).
         """
         self.callsign = callsign
         self.latitude = latitude
         self.longitude = longitude
         self.wind_dir_deg = wind_dir_deg
-        self.wind_speed_mph = wind_speed_mph
-        self.wind_gust_mph = wind_gust_mph
-        self.temp_tenths_f = temp_tenths_f
-        self.rain_hour_hundredths_in = rain_hour_hundredths_in
-        self.rain_24h_hundredths_in = rain_24h_hundredths_in
-        self.rain_midnight_hundredths_in = rain_midnight_hundredths_in
+        self.wind_speed_tenths_ms = wind_speed_tenths_ms
+        self.wind_gust_tenths_ms = wind_gust_tenths_ms
+        self.temp_tenths_c = temp_tenths_c
+        self.rain_hour_tenths_mm = rain_hour_tenths_mm
+        self.rain_24h_tenths_mm = rain_24h_tenths_mm
+        self.rain_midnight_tenths_mm = rain_midnight_tenths_mm
         self.humidity_pct = humidity_pct
-        self.barometer_thousandths_inhg = barometer_thousandths_inhg
+        self.pressure_tenths_hpa = pressure_tenths_hpa
         self.obs_time = obs_time or datetime.now(timezone.utc)
 
     def _format_latitude(self) -> str:
@@ -131,21 +132,19 @@ class APRSWeatherPacket:
         minutes = (abs_lon - degrees) * 60.0
         return f"{degrees:03d}{minutes:05.2f}{hemisphere}"
 
-    def _inhg_to_tenths_hpa(self, thousandths_inhg: int) -> int:
-        """Convert thousandths of inHg to tenths of hPa.
+    def _pressure_to_aprs(self, tenths_hpa: int) -> int:
+        """Convert tenths of hPa to APRS barometric pressure (tenths of hPa).
 
-        APRS barometric pressure is in tenths of millibars (hPa).
-        1 inHg = 33.8639 hPa
+        APRS barometric pressure is already in tenths of millibars (hPa),
+        which is the same as our SI storage unit. Pass through.
 
         Args:
-            thousandths_inhg: Pressure in thousandths of inHg.
+            tenths_hpa: Pressure in tenths of hPa.
 
         Returns:
-            Pressure in tenths of hPa.
+            Pressure in tenths of hPa (unchanged).
         """
-        inhg = thousandths_inhg / 1000.0
-        hpa = inhg * 33.8639
-        return round(hpa * 10)
+        return tenths_hpa
 
     def format_packet(self) -> str:
         """Format current weather data as an APRS weather packet string.
@@ -167,31 +166,32 @@ class APRSWeatherPacket:
         wind_dir = self.wind_dir_deg if self.wind_dir_deg is not None else 0
         dir_str = f"{wind_dir:03d}"
 
-        # Wind speed (3 digits, mph)
-        spd_str = f"{self.wind_speed_mph:03d}"
+        # Wind speed (3 digits, mph) — convert from tenths m/s
+        wind_mph = round(self.wind_speed_tenths_ms / 10.0 * 2.23694)
+        spd_str = f"{wind_mph:03d}"
 
         # Wind gust (3 digits, mph)
-        gust_str = f"{self.wind_gust_mph:03d}"
+        gust_mph = round(self.wind_gust_tenths_ms / 10.0 * 2.23694)
+        gust_str = f"{gust_mph:03d}"
 
-        # Temperature (3 digits, whole degrees F)
-        temp_f = round(self.temp_tenths_f / 10.0)
-        if temp_f < 0:
-            temp_str = f"{temp_f:03d}"  # Includes minus sign
-        else:
-            temp_str = f"{temp_f:03d}"
+        # Temperature (3 digits, whole degrees F) — convert from tenths °C
+        temp_f = round(self.temp_tenths_c / 10.0 * 9 / 5 + 32)
+        temp_str = f"{temp_f:03d}"
 
-        # Rain (3 digits each, hundredths of inch)
-        rain_hr = f"{self.rain_hour_hundredths_in:03d}"
-        rain_24 = f"{self.rain_24h_hundredths_in:03d}"
-        rain_mid = f"{self.rain_midnight_hundredths_in:03d}"
+        # Rain (3 digits each, hundredths of inch) — convert from tenths mm
+        rain_hr_in = round(self.rain_hour_tenths_mm / 10.0 / 25.4 * 100)
+        rain_24_in = round(self.rain_24h_tenths_mm / 10.0 / 25.4 * 100)
+        rain_mid_in = round(self.rain_midnight_tenths_mm / 10.0 / 25.4 * 100)
+        rain_hr = f"{rain_hr_in:03d}"
+        rain_24 = f"{rain_24_in:03d}"
+        rain_mid = f"{rain_mid_in:03d}"
 
         # Humidity (2 digits, 00 = 100%)
         hum = self.humidity_pct % 100  # 100 becomes 00
         hum_str = f"{hum:02d}"
 
-        # Barometric pressure (5 digits, tenths of hPa)
-        baro_tenths_hpa = self._inhg_to_tenths_hpa(self.barometer_thousandths_inhg)
-        baro_str = f"{baro_tenths_hpa:05d}"
+        # Barometric pressure (5 digits, tenths of hPa) — already SI
+        baro_str = f"{self.pressure_tenths_hpa:05d}"
 
         # Assemble the packet
         packet = (
