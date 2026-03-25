@@ -42,14 +42,58 @@ logger = logging.getLogger("davis.logger")
 
 # --------------- Driver Factory ---------------
 
-def _create_driver(driver_type: str, port: str, baud: int) -> StationDriver:
+def _create_driver(driver_type: str, config: dict) -> StationDriver:
     """Create a StationDriver instance based on config.
 
-    Currently only 'legacy' (Davis WeatherLink serial) is supported.
-    Future driver types will be added here.
+    Args:
+        driver_type: One of: legacy, vantage, weatherlink_ip,
+            weatherlink_live, ecowitt, tempest, ambient.
+        config: Effective station config dict.
     """
+    port = str(config.get("serial_port", settings.serial_port))
+    baud = int(config.get("baud_rate", settings.baud_rate))
+
     if driver_type == "legacy":
         return LinkDriver(port=port, baud_rate=baud, timeout=settings.serial_timeout)
+
+    elif driver_type == "vantage":
+        from app.protocol.vantage.driver import VantageDriver
+        return VantageDriver(port=port, baud_rate=baud)
+
+    elif driver_type == "weatherlink_ip":
+        from app.protocol.weatherlink_ip.driver import WeatherLinkIPDriver
+        ip = str(config.get("weatherlink_ip", ""))
+        wl_port = int(config.get("weatherlink_port", 22222))
+        if not ip:
+            raise ValueError("weatherlink_ip is required for WeatherLink IP driver")
+        return WeatherLinkIPDriver(ip=ip, port=wl_port)
+
+    elif driver_type == "weatherlink_live":
+        from app.protocol.weatherlink_live.driver import WeatherLinkLiveDriver
+        ip = str(config.get("weatherlink_ip", ""))
+        if not ip:
+            raise ValueError("weatherlink_ip is required for WeatherLink Live driver")
+        return WeatherLinkLiveDriver(ip=ip)
+
+    elif driver_type == "ecowitt":
+        from app.protocol.ecowitt.driver import EcowittDriver
+        ip = str(config.get("ecowitt_ip", ""))
+        if not ip:
+            raise ValueError("ecowitt_ip is required for Ecowitt driver")
+        return EcowittDriver(ip=ip)
+
+    elif driver_type == "tempest":
+        from app.protocol.tempest.driver import TempestDriver
+        hub_sn = str(config.get("tempest_hub_sn", ""))
+        elevation_ft = float(config.get("elevation", 0))
+        tz = str(config.get("station_timezone", ""))
+        return TempestDriver(hub_sn=hub_sn, elevation_ft=elevation_ft, timezone_name=tz)
+
+    elif driver_type == "ambient":
+        from app.protocol.ambient.driver import AmbientDriver
+        listen_port = int(config.get("ambient_listen_port", 8080))
+        return AmbientDriver(port=listen_port)
+
     raise ValueError(f"Unknown driver type: {driver_type!r}")
 
 
@@ -127,10 +171,11 @@ class LoggerDaemon:
 
     async def _connect(self, port: str, baud: int) -> None:
         """Create driver, connect, sync hardware, start poller."""
-        driver_type = self._get_driver_type()
-        logger.info("Connecting to %s at %d baud (driver: %s)...", port, baud, driver_type)
+        config = self._get_effective_config()
+        driver_type = str(config.get("station_driver_type", "legacy"))
+        logger.info("Connecting (driver: %s)...", driver_type)
 
-        self.driver = _create_driver(driver_type, port, baud)
+        self.driver = _create_driver(driver_type, config)
         await self.driver.connect()
         logger.info("Station: %s", self.driver.station_name)
 
@@ -280,6 +325,16 @@ class LoggerDaemon:
             from app.api.config import get_effective_config
             cfg = get_effective_config(db)
             return str(cfg.get("serial_port", settings.serial_port)), int(cfg.get("baud_rate", settings.baud_rate))
+        finally:
+            db.close()
+
+    @staticmethod
+    def _get_effective_config() -> dict:
+        """Get the full effective config (DB values merged with defaults)."""
+        db = SessionLocal()
+        try:
+            from app.api.config import get_effective_config
+            return get_effective_config(db)
         finally:
             db.close()
 
