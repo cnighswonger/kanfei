@@ -32,28 +32,30 @@ StationDriver (ABC)
 
 ### SensorSnapshot
 
-A canonical data class returned by every driver's `poll()` method. All values are in **standard units** — the driver is responsible for converting from native units.
+A canonical data class returned by every driver's `poll()` method. All values are in **SI units** — the driver is responsible for converting from its hardware-native format to SI. Everything downstream (poller, calculations, DB storage) assumes SI.
 
 | Field | Unit | Notes |
 |-------|------|-------|
-| `inside_temp` | °F | `None` if sensor absent |
-| `outside_temp` | °F | |
+| `inside_temp` | °C | `None` if sensor absent |
+| `outside_temp` | °C | |
 | `inside_humidity` | % | |
 | `outside_humidity` | % | |
-| `wind_speed` | mph | |
+| `wind_speed` | m/s | |
 | `wind_direction` | degrees (0–359) | |
-| `wind_gust` | mph | |
-| `barometer` | inHg | Sea-level corrected |
-| `rain_rate` | in/hr | |
-| `rain_daily` | inches | Since midnight |
-| `rain_yearly` | inches | Since Jan 1 |
+| `wind_gust` | m/s | |
+| `barometer` | hPa | Sea-level corrected |
+| `rain_rate` | mm/hr | |
+| `rain_daily` | mm | Since midnight |
+| `rain_yearly` | mm | Since Jan 1 |
 | `solar_radiation` | W/m² | `None` if no sensor |
 | `uv_index` | index | `None` if no sensor |
-| `soil_temp` | °F | `None` if no sensor |
+| `soil_temp` | °C | `None` if no sensor |
 | `soil_moisture` | cb | Centibars, `None` if absent |
 | `leaf_wetness` | 0–15 | `None` if no sensor |
-| `et_daily` | inches | Evapotranspiration |
+| `et_daily` | mm | Evapotranspiration |
 | `extra` | dict | Vendor-specific fields |
+
+Display-unit conversion (°C → °F, hPa → inHg, etc.) happens at the API/broadcast boundary, not in the driver.
 
 ### Integration Points
 
@@ -61,8 +63,8 @@ A canonical data class returned by every driver's `poll()` method. All values ar
 |-------|--------------|-------------------|
 | **IPC protocol** | Generic JSON-over-TCP | No change needed |
 | **API responses** | Generic shape (temp, humidity, wind, etc.) | No change needed |
-| **Database** | `SensorReadingModel` with standard columns | Add `extra_json` TEXT column for vendor-specific fields |
-| **Poller** | Tightly coupled to `LinkDriver` | Accept any `StationDriver`; derived calculations (heat index, dew point, wind chill) move to generic layer |
+| **Database** | `SensorReadingModel` stores SI (tenths °C, tenths hPa, tenths m/s, tenths mm) with `extra_json` TEXT for vendor-specific fields | No change needed — already unit-agnostic |
+| **Poller** | Accepts any `StationDriver` via SI `SensorSnapshot`; stores ×10 to DB; calculations accept SI | No change needed — driver-agnostic |
 | **Logger daemon** | Creates `LinkDriver` directly | Driver factory based on config (`station_driver_type`) |
 | **Settings UI** | Davis-specific fields (calibration, rain clicks) | Driver reports its configurable parameters; UI renders dynamically |
 
