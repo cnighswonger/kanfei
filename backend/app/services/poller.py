@@ -182,18 +182,21 @@ class Poller:
             snapshot.rain_rate = self._rain_rate_in_per_hr
             self._last_rain_daily = snapshot.rain_daily
 
-        # Convert to native units for the calculation functions (tenths F,
-        # thousandths inHg) which have been validated against reference tables.
-        temp_tenths = (
-            round(snapshot.outside_temp * 10)
+        # Convert SensorSnapshot display floats (°F, inHg, mph) to SI for
+        # the calculation functions (tenths °C, tenths hPa, tenths m/s).
+        temp_tenths_c = (
+            round((snapshot.outside_temp - 32) * 5 / 9 * 10)
             if snapshot.outside_temp is not None else None
         )
         hum = snapshot.outside_humidity
-        baro_thou = (
-            round(snapshot.barometer * 1000)
+        baro_tenths_hpa = (
+            round(snapshot.barometer * 33.8639 * 10)
             if snapshot.barometer is not None else None
         )
-        wind = snapshot.wind_speed
+        wind_tenths_ms = (
+            round(snapshot.wind_speed * 4.4704)
+            if snapshot.wind_speed is not None else None
+        )
 
         # Compute derived values
         hi = None
@@ -202,54 +205,58 @@ class Poller:
         fl = None
         theta = None
 
-        if temp_tenths is not None and hum is not None:
-            hi = heat_index(temp_tenths, hum)
-            dp = dew_point(temp_tenths, hum)
+        if temp_tenths_c is not None and hum is not None:
+            hi = heat_index(temp_tenths_c, hum)
+            dp = dew_point(temp_tenths_c, hum)
 
-            if baro_thou is not None:
-                theta = equivalent_potential_temperature(temp_tenths, hum, baro_thou)
+            if baro_tenths_hpa is not None:
+                theta = equivalent_potential_temperature(temp_tenths_c, hum, baro_tenths_hpa)
 
-        if temp_tenths is not None and wind is not None:
-            wc = wind_chill(temp_tenths, wind)
+        if temp_tenths_c is not None and wind_tenths_ms is not None:
+            wc = wind_chill(temp_tenths_c, wind_tenths_ms)
 
-        if temp_tenths is not None and hum is not None and wind is not None:
-            fl = feels_like(temp_tenths, hum, wind)
+        if temp_tenths_c is not None and hum is not None and wind_tenths_ms is not None:
+            fl = feels_like(temp_tenths_c, hum, wind_tenths_ms)
 
         # Pressure trend from recent history
         trend = await self._get_pressure_trend()
 
-        # Store to database — convert SensorSnapshot floats to DB integer columns
+        # Store to database in SI units (tenths °C, tenths hPa, tenths m/s, tenths mm).
+        # Convert SensorSnapshot display floats (°F, inHg, mph, inches) to SI integers.
         db = SessionLocal()
         try:
             model = SensorReadingModel(
                 timestamp=datetime.now(timezone.utc),
                 station_type=self._station_type_code,
                 inside_temp=(
-                    round(snapshot.inside_temp * 10)
+                    round((snapshot.inside_temp - 32) * 5 / 9 * 10)
                     if snapshot.inside_temp is not None else None
                 ),
                 outside_temp=(
-                    round(snapshot.outside_temp * 10)
+                    round((snapshot.outside_temp - 32) * 5 / 9 * 10)
                     if snapshot.outside_temp is not None else None
                 ),
                 inside_humidity=snapshot.inside_humidity,
                 outside_humidity=snapshot.outside_humidity,
-                wind_speed=snapshot.wind_speed,
+                wind_speed=(
+                    round(snapshot.wind_speed * 4.4704)
+                    if snapshot.wind_speed is not None else None
+                ),
                 wind_direction=snapshot.wind_direction,
                 barometer=(
-                    round(snapshot.barometer * 1000)
+                    round(snapshot.barometer * 33.8639 * 10)
                     if snapshot.barometer is not None else None
                 ),
                 rain_total=(
-                    round(snapshot.rain_daily * 100)
+                    round(snapshot.rain_daily * 25.4 * 10)
                     if snapshot.rain_daily is not None else None
                 ),
                 rain_rate=(
-                    round(snapshot.rain_rate * 10)
+                    round(snapshot.rain_rate * 25.4 * 10)
                     if snapshot.rain_rate is not None else None
                 ),
                 rain_yearly=(
-                    round(snapshot.rain_yearly * 100)
+                    round(snapshot.rain_yearly * 25.4 * 10)
                     if snapshot.rain_yearly is not None else None
                 ),
                 solar_radiation=snapshot.solar_radiation,
@@ -347,22 +354,24 @@ class Poller:
         if row is None or row[0] is None:
             return None
 
-        def _val(raw, divisor=1, unit=""):
+        from ..models.sensor_meta import convert, SENSOR_UNITS
+
+        def _val(column, raw):
             if raw is None:
                 return None
-            return {"value": round(raw / divisor, 2) if divisor != 1 else raw, "unit": unit}
+            return {"value": convert(column, raw), "unit": SENSOR_UNITS.get(column, "")}
 
         return {
-            "outside_temp_hi": _val(row[0], 10, "F"),
-            "outside_temp_lo": _val(row[1], 10, "F"),
-            "inside_temp_hi": _val(row[2], 10, "F"),
-            "inside_temp_lo": _val(row[3], 10, "F"),
-            "wind_speed_hi": _val(row[4], 1, "mph"),
-            "barometer_hi": _val(row[5], 1000, "inHg"),
-            "barometer_lo": _val(row[6], 1000, "inHg"),
-            "humidity_hi": _val(row[7], 1, "%"),
-            "humidity_lo": _val(row[8], 1, "%"),
-            "rain_rate_hi": _val(row[9], 10, "in/hr"),
+            "outside_temp_hi": _val("outside_temp", row[0]),
+            "outside_temp_lo": _val("outside_temp", row[1]),
+            "inside_temp_hi": _val("inside_temp", row[2]),
+            "inside_temp_lo": _val("inside_temp", row[3]),
+            "wind_speed_hi": _val("wind_speed", row[4]),
+            "barometer_hi": _val("barometer", row[5]),
+            "barometer_lo": _val("barometer", row[6]),
+            "humidity_hi": _val("outside_humidity", row[7]),
+            "humidity_lo": _val("outside_humidity", row[8]),
+            "rain_rate_hi": _val("rain_rate", row[9]),
         }
 
     @staticmethod
