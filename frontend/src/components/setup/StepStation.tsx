@@ -91,17 +91,6 @@ const btnAccent: React.CSSProperties = {
   fontWeight: 600,
 };
 
-const driverCard = (selected: boolean): React.CSSProperties => ({
-  ...cardStyle,
-  border: selected
-    ? "2px solid var(--color-accent)"
-    : "1px solid var(--color-border)",
-  cursor: "pointer",
-  transition: "border-color 0.2s, background 0.2s",
-  background: selected
-    ? "var(--color-bg-secondary)"
-    : "var(--color-bg-card)",
-});
 
 export default function StepStation({
   driverType,
@@ -215,37 +204,37 @@ export default function StepStation({
       </p>
 
       <div style={{ marginBottom: "24px" }}>
-        {drivers.map((d) => (
-          <div
-            key={d.type}
-            style={driverCard(driverType === d.type)}
-            onClick={() => {
-              onChange({ driverType: d.type, stationType: null });
+        <div style={cardStyle}>
+          <label style={labelStyle}>Weather Station</label>
+          <select
+            style={selectStyle}
+            value={driverType}
+            onChange={(e) => {
+              onChange({ driverType: e.target.value, stationType: null });
               setError(null);
             }}
           >
-            <div
-              style={{
-                fontSize: "15px",
-                fontWeight: 600,
-                fontFamily: "var(--font-heading)",
-                color: "var(--color-text)",
-                marginBottom: "4px",
-              }}
-            >
-              {d.name}
-            </div>
-            <div
+            {drivers.map((d) => (
+              <option key={d.type} value={d.type}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+          {selectedDriver && (
+            <p
               style={{
                 fontSize: "12px",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-muted)",
+                marginTop: "8px",
+                marginBottom: 0,
+                lineHeight: 1.4,
               }}
             >
-              {d.description}
-            </div>
-          </div>
-        ))}
+              {selectedDriver.description}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Connection config — adapts to selected driver */}
