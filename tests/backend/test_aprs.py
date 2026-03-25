@@ -13,9 +13,8 @@ class TestAPRSLatitude:
 
     def test_south_hemisphere(self):
         pkt = APRSWeatherPacket("N0CALL", -33.8688, 151.2093)
-        lat = pkt._format_latitude()
-        assert lat.endswith("S")
-        assert lat.startswith("33")
+        # 33.8688° S → 33°52.13'S
+        assert pkt._format_latitude() == "3352.13S"
 
     def test_equator(self):
         pkt = APRSWeatherPacket("N0CALL", 0.0, 0.0)
@@ -30,9 +29,8 @@ class TestAPRSLongitude:
 
     def test_east_hemisphere(self):
         pkt = APRSWeatherPacket("N0CALL", 0.0, 151.2093)
-        lon = pkt._format_longitude()
-        assert lon.endswith("E")
-        assert lon.startswith("151")
+        # 151.2093° E → 151°12.56'E
+        assert pkt._format_longitude() == "15112.56E"
 
     def test_prime_meridian(self):
         pkt = APRSWeatherPacket("N0CALL", 0.0, 0.0)
@@ -70,14 +68,7 @@ class TestAPRSFormatPacket:
             barometer_thousandths_inhg=29920,
             obs_time=obs,
         )
-        result = pkt.format_packet()
-        assert result.startswith("@151753z")
-        assert "4903.50N" in result
-        assert "07201.75W" in result
-        assert "_270/010" in result
-        assert "g015" in result
-        assert "t072" in result
-        assert "h50" in result
+        assert pkt.format_packet() == "@151753z4903.50N/07201.75W_270/010g015t072r000p000P000h50b10132"
 
     def test_humidity_100_becomes_00(self):
         obs = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)

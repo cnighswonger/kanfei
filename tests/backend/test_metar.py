@@ -99,17 +99,16 @@ class TestFormatMetar:
             barometer_thousandths=29921,
             obs_time=obs,
         )
-        assert result.startswith("METAR KWXS 151753Z")
-        assert "10SM" in result
-        assert "CLR" in result
-        assert "A2992" in result
+        # 12 mph → 10 knots, 72.0°F → 22°C, 59.0°F → 15°C
+        assert result == "METAR KWXS 151753Z 27010KT 10SM CLR 22/15 A2992"
 
     def test_station_id_padded(self):
         obs = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         result = format_metar("AB", 0, 0, 700, 500, 29920, obs)
-        assert "METAR ABXX" in result
+        # 0 mph → 0 knots calm, 70.0°F → 21°C, 50.0°F → 10°C
+        assert result == "METAR ABXX 010000Z 00000KT 10SM CLR 21/10 A2992"
 
     def test_station_id_truncated(self):
         obs = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         result = format_metar("TOOLONG", 0, 0, 700, 500, 29920, obs)
-        assert "METAR TOOL" in result
+        assert result == "METAR TOOL 010000Z 00000KT 10SM CLR 21/10 A2992"
