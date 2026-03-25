@@ -116,3 +116,64 @@ async def sync_station_time():
         return {"status": "error", "message": result.get("error", "Unknown error")}
     except (ConnectionRefusedError, OSError):
         return {"status": "error", "message": "Logger daemon not running"}
+
+
+# --------------- Driver catalog ---------------
+
+DRIVER_CATALOG = [
+    {
+        "type": "legacy",
+        "name": "Davis Weather Monitor / Wizard",
+        "connection": "serial",
+        "description": "Legacy serial protocol for Weather Monitor II, Wizard III, Wizard II, Perception II, GroWeather, Energy, Health stations.",
+        "config_fields": ["serial_port", "baud_rate"],
+    },
+    {
+        "type": "vantage",
+        "name": "Davis Vantage Pro / Pro2 / Vue",
+        "connection": "serial",
+        "description": "Serial protocol for Vantage Pro1, Pro2, and Vue consoles via RS-232 or USB adapter.",
+        "config_fields": ["serial_port"],
+    },
+    {
+        "type": "weatherlink_ip",
+        "name": "Davis WeatherLink IP (6555)",
+        "connection": "network",
+        "description": "Vantage protocol over TCP for the WeatherLink IP data logger.",
+        "config_fields": ["weatherlink_ip", "weatherlink_port"],
+    },
+    {
+        "type": "weatherlink_live",
+        "name": "Davis WeatherLink Live (6100)",
+        "connection": "network",
+        "description": "HTTP + UDP for the WeatherLink Live device.",
+        "config_fields": ["weatherlink_ip"],
+    },
+    {
+        "type": "ecowitt",
+        "name": "Ecowitt / Fine Offset",
+        "connection": "network",
+        "description": "TCP LAN API for Ecowitt gateways (GW1000, GW2000, HP2551) and Fine Offset branded variants (Froggit, Bresser, Sainlogic, etc.).",
+        "config_fields": ["ecowitt_ip"],
+    },
+    {
+        "type": "tempest",
+        "name": "WeatherFlow Tempest",
+        "connection": "udp",
+        "description": "Local UDP broadcast from the Tempest hub. No cloud account needed.",
+        "config_fields": ["tempest_hub_sn"],
+    },
+    {
+        "type": "ambient",
+        "name": "Ambient Weather",
+        "connection": "http_push",
+        "description": "HTTP push from Ambient Weather stations (WS-2902, WS-5000) or any Fine Offset station with Ecowitt firmware.",
+        "config_fields": ["ambient_listen_port"],
+    },
+]
+
+
+@router.get("/station/drivers")
+def get_driver_catalog():
+    """Return the list of supported station drivers with metadata."""
+    return DRIVER_CATALOG

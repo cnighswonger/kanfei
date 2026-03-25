@@ -12,7 +12,8 @@ A self-hosted weather station dashboard and data logger with pluggable hardware 
 - **Astronomy**: sunrise/sunset arc, twilight times (civil/nautical/astronomical), moon phase with illumination
 - **NWS alerts**: active alert monitoring for your station location
 - **Data uploads**: Weather Underground PWS and CWOP/APRS-IS for NWS citizen weather data
-- **Database admin**: stats, JSON export, full SQLite backup, sensor data compaction, and tiered purge
+- **Backup and restore**: scheduled automatic backups with rotation, CLI commands, REST API, and Settings UI with download/restore
+- **Database admin**: stats, JSON export, sensor data compaction, and tiered purge
 - **Calculated parameters**: heat index, dew point, wind chill, feels-like composite, equivalent potential temperature (theta-e)
 - **Weather backgrounds**: condition-driven gradients with custom image uploads per scene
 - **Three themes**: Dark, Light, and Classic Instrumental (brass/cream analog aesthetic)
@@ -82,6 +83,8 @@ All settings are also editable from the Settings page in the browser, including 
 | `python station.py run` | Start production server on port 8000 |
 | `python station.py dev` | Start backend (8000) + frontend HMR dev server (3000) |
 | `python station.py test` | Run the backend test suite |
+| `python station.py backup` | Create a backup of DB and backgrounds (.tar.gz) |
+| `python station.py restore` | Restore from a backup archive |
 | `python station.py status` | Check what's installed and ready |
 | `python station.py clean` | Remove venv, node_modules, and build artifacts |
 
@@ -159,6 +162,10 @@ frontend/src/
 | GET | `/api/db-admin/stats` | Database row counts and file size |
 | GET | `/api/db-admin/export/backup` | Full SQLite database backup |
 | POST | `/api/db-admin/compact` | Compact sensor readings to 5-minute averages |
+| POST | `/api/backup` | Create backup archive (DB + backgrounds) |
+| GET | `/api/backup/list` | List existing backups |
+| GET | `/api/backup/download/{name}` | Download a backup archive |
+| POST | `/api/backup/restore` | Restore from uploaded archive |
 | WS | `/ws/live` | Real-time sensor updates |
 
 Additional API endpoints for AI nowcast, usage tracking, and NWS alerts are available when the optional [kanfei-nowcast](https://github.com/cnighswonger/kanfei-nowcast) package is installed.

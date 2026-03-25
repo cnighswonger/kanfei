@@ -1,0 +1,348 @@
+{
+  "_comment": "Driver test fixtures. Each entry specifies raw hardware data and expected SI SensorSnapshot output.",
+
+  "ecowitt_basic": {
+    "driver": "ecowitt",
+    "description": "Ecowitt GW2000 basic reading — all primary sensors",
+    "input_format": "livedata_markers",
+    "raw_markers": {
+      "0x01": 225,
+      "0x02": 318,
+      "0x06": 45,
+      "0x07": 78,
+      "0x09": 10132,
+      "0x0A": 225,
+      "0x0B": 45,
+      "0x0C": 67,
+      "0x0E": 12,
+      "0x10": 254,
+      "0x13": 5080,
+      "0x16": 8500,
+      "0x17": 6
+    },
+    "expected": {
+      "inside_temp": 22.5,
+      "outside_temp": 31.8,
+      "inside_humidity": 45,
+      "outside_humidity": 78,
+      "barometer": 1013.2,
+      "wind_direction": 225,
+      "wind_speed": 4.5,
+      "wind_gust": 6.7,
+      "rain_rate": 1.2,
+      "rain_daily": 25.4,
+      "rain_yearly": 508.0,
+      "solar_radiation": 850,
+      "uv_index": 6.0
+    }
+  },
+
+  "ecowitt_freezing": {
+    "driver": "ecowitt",
+    "description": "Ecowitt below-freezing reading",
+    "input_format": "livedata_markers",
+    "raw_markers": {
+      "0x01": 180,
+      "0x02": -50,
+      "0x06": 55,
+      "0x07": 90,
+      "0x09": 9800,
+      "0x0A": 0,
+      "0x0B": 0,
+      "0x10": 0
+    },
+    "expected": {
+      "inside_temp": 18.0,
+      "outside_temp": -5.0,
+      "inside_humidity": 55,
+      "outside_humidity": 90,
+      "barometer": 980.0,
+      "wind_direction": 0,
+      "wind_speed": 0.0,
+      "rain_daily": 0.0
+    }
+  },
+
+  "tempest_obs_st": {
+    "driver": "tempest",
+    "description": "Tempest all-in-one observation — native SI passthrough",
+    "input_format": "obs_st",
+    "raw_obs": [1711382400, 0.5, 2.3, 4.1, 180, 3, 1013.5, 22.5, 65, 45000, 5.2, 850, 0.1, 0, 15, 3, 2.7, 60],
+    "rain_state": {
+      "rain_daily_mm": 3.5,
+      "rain_yearly_mm": 125.0,
+      "rain_rate_mm_hr": 6.0
+    },
+    "expected": {
+      "outside_temp": 22.5,
+      "outside_humidity": 65,
+      "wind_speed": 2.3,
+      "wind_gust": 4.1,
+      "wind_direction": 180,
+      "solar_radiation": 850,
+      "uv_index": 5.2,
+      "rain_daily": 3.5,
+      "rain_yearly": 125.0,
+      "rain_rate": 6.0
+    }
+  },
+
+  "ambient_wu_format": {
+    "driver": "ambient",
+    "description": "Ambient Weather WS-2902 via Wunderground push format",
+    "input_format": "http_params",
+    "params": {
+      "ID": "KTEST001",
+      "PASSWORD": "test",
+      "action": "updateraw",
+      "tempf": "72.5",
+      "humidity": "55",
+      "baromin": "29.92",
+      "windspeedmph": "10",
+      "winddir": "225",
+      "windgustmph": "15",
+      "rainin": "0.05",
+      "dailyrainin": "0.25",
+      "yearlyrainin": "12.5",
+      "solarradiation": "850",
+      "UV": "5.2",
+      "indoortempf": "70.0",
+      "indoorhumidity": "45"
+    },
+    "expected": {
+      "outside_temp": 22.5,
+      "outside_humidity": 55,
+      "barometer": 1013.2,
+      "wind_speed": 4.5,
+      "wind_direction": 225,
+      "wind_gust": 6.7,
+      "rain_rate": 1.3,
+      "rain_daily": 6.4,
+      "rain_yearly": 317.5,
+      "solar_radiation": 850,
+      "uv_index": 5.2,
+      "inside_temp": 21.1,
+      "inside_humidity": 45
+    }
+  },
+
+  "ambient_ecowitt_format": {
+    "driver": "ambient",
+    "description": "Ambient Weather via Ecowitt push format",
+    "input_format": "http_params",
+    "params": {
+      "PASSKEY": "abc123",
+      "stationtype": "GW2000A_V2.1.8",
+      "tempf": "85.0",
+      "humidity": "70",
+      "baromrelin": "30.10",
+      "windspeedmph": "5",
+      "winddir": "180",
+      "windgustmph": "8",
+      "rainratein": "0.0",
+      "dailyrainin": "0.0",
+      "yearlyrainin": "25.0",
+      "tempinf": "72.0",
+      "humidityin": "50"
+    },
+    "expected": {
+      "outside_temp": 29.4,
+      "outside_humidity": 70,
+      "barometer": 1019.3,
+      "wind_speed": 2.2,
+      "wind_direction": 180,
+      "wind_gust": 3.6,
+      "rain_rate": 0.0,
+      "rain_daily": 0.0,
+      "rain_yearly": 635.0,
+      "inside_temp": 22.2,
+      "inside_humidity": 50
+    }
+  },
+
+  "wll_standard": {
+    "driver": "weatherlink_live",
+    "description": "WeatherLink Live standard ISS + barometer + indoor",
+    "input_format": "wll_json",
+    "raw_json": {
+      "data": {
+        "did": "001D0A123456",
+        "ts": 1711382400,
+        "conditions": [
+          {
+            "data_structure_type": 1,
+            "temp": 72.5,
+            "hum": 55,
+            "wind_speed_last": 10,
+            "wind_dir_last": 225,
+            "wind_speed_hi_last_10_min": 15,
+            "solar_rad": 850,
+            "uv_index": 5.2,
+            "rain_size": 1,
+            "rain_rate_last": 5,
+            "rainfall_daily": 25,
+            "rainfall_year": 1250
+          },
+          {
+            "data_structure_type": 3,
+            "bar_sea_level": 29.92,
+            "bar_trend": -0.02,
+            "bar_absolute": 29.85
+          },
+          {
+            "data_structure_type": 4,
+            "temp_in": 70.0,
+            "hum_in": 45
+          }
+        ]
+      }
+    },
+    "expected": {
+      "outside_temp": 22.5,
+      "outside_humidity": 55,
+      "wind_speed": 4.5,
+      "wind_direction": 225,
+      "wind_gust": 6.7,
+      "solar_radiation": 850,
+      "uv_index": 5.2,
+      "barometer": 1013.2,
+      "inside_temp": 21.1,
+      "inside_humidity": 45
+    }
+  },
+
+  "tempest_obs_air": {
+    "driver": "tempest_air",
+    "description": "Tempest legacy Air sensor observation",
+    "input_format": "obs_air",
+    "raw_obs": [1711382400, 1013.5, 22.5, 65, 3, 15, 2.7, 60],
+    "expected": {
+      "outside_temp": 22.5,
+      "outside_humidity": 65
+    }
+  },
+
+  "tempest_obs_sky": {
+    "driver": "tempest_sky",
+    "description": "Tempest legacy Sky sensor observation",
+    "input_format": "obs_sky",
+    "raw_obs": [1711382400, 45000, 5.2, 0.3, 0.5, 2.3, 4.1, 180, 2.7, 60, 850, 0, 0, 0],
+    "rain_state": {
+      "rain_daily_mm": 5.0,
+      "rain_yearly_mm": 200.0,
+      "rain_rate_mm_hr": 18.0
+    },
+    "expected": {
+      "wind_speed": 2.3,
+      "wind_gust": 4.1,
+      "wind_direction": 180,
+      "solar_radiation": 850,
+      "uv_index": 5.2,
+      "rain_daily": 5.0,
+      "rain_yearly": 200.0,
+      "rain_rate": 18.0
+    }
+  },
+
+  "vantage_loop_only": {
+    "driver": "vantage",
+    "description": "Davis Vantage Pro2 — LOOP packet only (no LOOP2)",
+    "input_format": "loop_data",
+    "rain_click_inches": 0.01,
+    "loop_data": {
+      "inside_temp": 720,
+      "outside_temp": 850,
+      "inside_humidity": 45,
+      "outside_humidity": 70,
+      "barometer": 29920,
+      "wind_speed": 12,
+      "wind_direction": 225,
+      "rain_rate": 5,
+      "day_rain": 25,
+      "year_rain": 1250,
+      "uv_index": 52,
+      "solar_radiation": 850
+    },
+    "expected": {
+      "inside_temp": 22.2,
+      "outside_temp": 29.4,
+      "inside_humidity": 45,
+      "outside_humidity": 70,
+      "barometer": 1013.2,
+      "wind_speed": 5.4,
+      "wind_direction": 225,
+      "rain_rate": 1.27,
+      "rain_daily": 6.35,
+      "rain_yearly": 317.5,
+      "solar_radiation": 850,
+      "uv_index": 5.2
+    }
+  },
+
+  "vantage_loop_plus_loop2": {
+    "driver": "vantage",
+    "description": "Davis Vantage Pro2 — LOOP + LOOP2 with gust override",
+    "input_format": "loop_data",
+    "rain_click_inches": 0.01,
+    "loop_data": {
+      "inside_temp": 720,
+      "outside_temp": 320,
+      "inside_humidity": 50,
+      "outside_humidity": 90,
+      "barometer": 30100,
+      "wind_speed": 8,
+      "wind_direction": 0,
+      "rain_rate": 0,
+      "day_rain": 0,
+      "year_rain": 500
+    },
+    "loop2_data": {
+      "wind_gust_10min": 150,
+      "wind_gust_dir": 315,
+      "rain_rate": 10,
+      "day_rain": 5
+    },
+    "expected": {
+      "inside_temp": 22.2,
+      "outside_temp": 0.0,
+      "inside_humidity": 50,
+      "outside_humidity": 90,
+      "barometer": 1019.3,
+      "wind_speed": 3.6,
+      "wind_direction": 0,
+      "rain_daily": 1.27,
+      "rain_yearly": 127.0
+    }
+  },
+
+  "vantage_freezing": {
+    "driver": "vantage",
+    "description": "Davis Vantage — below-freezing with zero rain",
+    "input_format": "loop_data",
+    "rain_click_inches": 0.01,
+    "loop_data": {
+      "inside_temp": 680,
+      "outside_temp": -100,
+      "inside_humidity": 40,
+      "outside_humidity": 95,
+      "barometer": 28500,
+      "wind_speed": 25,
+      "wind_direction": 315,
+      "rain_rate": 0,
+      "day_rain": 0,
+      "year_rain": 0
+    },
+    "expected": {
+      "inside_temp": 20.0,
+      "outside_temp": -23.3,
+      "inside_humidity": 40,
+      "outside_humidity": 95,
+      "barometer": 965.0,
+      "wind_speed": 11.2,
+      "wind_direction": 315,
+      "rain_rate": 0.0,
+      "rain_daily": 0.0,
+      "rain_yearly": 0.0
+    }
+  }
+}

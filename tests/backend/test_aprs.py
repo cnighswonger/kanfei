@@ -1,4 +1,4 @@
-"""Tests for APRS weather packet formatting."""
+"""Tests for APRS weather packet formatting (SI inputs)."""
 
 from datetime import datetime, timezone
 
@@ -13,9 +13,7 @@ class TestAPRSLatitude:
 
     def test_south_hemisphere(self):
         pkt = APRSWeatherPacket("N0CALL", -33.8688, 151.2093)
-        lat = pkt._format_latitude()
-        assert lat.endswith("S")
-        assert lat.startswith("33")
+        assert pkt._format_latitude() == "3352.13S"
 
     def test_equator(self):
         pkt = APRSWeatherPacket("N0CALL", 0.0, 0.0)
@@ -30,9 +28,7 @@ class TestAPRSLongitude:
 
     def test_east_hemisphere(self):
         pkt = APRSWeatherPacket("N0CALL", 0.0, 151.2093)
-        lon = pkt._format_longitude()
-        assert lon.endswith("E")
-        assert lon.startswith("151")
+        assert pkt._format_longitude() == "15112.56E"
 
     def test_prime_meridian(self):
         pkt = APRSWeatherPacket("N0CALL", 0.0, 0.0)
@@ -43,15 +39,14 @@ class TestAPRSPressureConversion:
 
     def test_standard_pressure(self):
         pkt = APRSWeatherPacket("N0CALL", 0.0, 0.0)
-        # 29.92 inHg = 1013.25 hPa → 10132 tenths
-        result = pkt._inhg_to_tenths_hpa(29920)
-        assert 10130 <= result <= 10135
+        # tenths hPa pass through directly to APRS (already tenths hPa)
+        result = pkt._pressure_to_aprs(10132)
+        assert result == 10132
 
     def test_low_pressure(self):
         pkt = APRSWeatherPacket("N0CALL", 0.0, 0.0)
-        # 28.50 inHg ≈ 965 hPa → ~9650 tenths
-        result = pkt._inhg_to_tenths_hpa(28500)
-        assert 9640 <= result <= 9660
+        result = pkt._pressure_to_aprs(9650)
+        assert result == 9650
 
 
 class TestAPRSFormatPacket:
@@ -63,11 +58,11 @@ class TestAPRSFormatPacket:
             latitude=49.0583,
             longitude=-72.0292,
             wind_dir_deg=270,
-            wind_speed_mph=10,
-            wind_gust_mph=15,
-            temp_tenths_f=720,
+            wind_speed_tenths_ms=45,     # 4.5 m/s ≈ 10 mph
+            wind_gust_tenths_ms=67,      # 6.7 m/s ≈ 15 mph
+            temp_tenths_c=222,           # 22.2°C = 72°F
             humidity_pct=50,
-            barometer_thousandths_inhg=29920,
+            pressure_tenths_hpa=10132,   # 1013.2 hPa
             obs_time=obs,
         )
         result = pkt.format_packet()
@@ -78,6 +73,7 @@ class TestAPRSFormatPacket:
         assert "g015" in result
         assert "t072" in result
         assert "h50" in result
+        assert "b10132" in result
 
     def test_humidity_100_becomes_00(self):
         obs = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
@@ -91,7 +87,7 @@ class TestAPRSFormatPacket:
         obs = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         pkt = APRSWeatherPacket(
             callsign="N0CALL", latitude=0.0, longitude=0.0,
-            wind_dir_deg=None, wind_speed_mph=0, obs_time=obs,
+            wind_dir_deg=None, wind_speed_tenths_ms=0, obs_time=obs,
         )
         assert "_000/000" in pkt.format_packet()
 
@@ -99,7 +95,7 @@ class TestAPRSFormatPacket:
         obs = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         pkt = APRSWeatherPacket(
             callsign="N0CALL", latitude=0.0, longitude=0.0,
-            temp_tenths_f=-100, obs_time=obs,  # -10°F
+            temp_tenths_c=-233, obs_time=obs,  # -23.3°C ≈ -10°F
         )
         result = pkt.format_packet()
         assert "t-10" in result
@@ -108,9 +104,9 @@ class TestAPRSFormatPacket:
         obs = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         pkt = APRSWeatherPacket(
             callsign="N0CALL", latitude=0.0, longitude=0.0,
-            rain_hour_hundredths_in=5,
-            rain_24h_hundredths_in=25,
-            rain_midnight_hundredths_in=12,
+            rain_hour_tenths_mm=13,       # 1.3 mm ≈ 0.05 in → 5 hundredths
+            rain_24h_tenths_mm=64,        # 6.4 mm ≈ 0.25 in → 25 hundredths
+            rain_midnight_tenths_mm=30,   # 3.0 mm ≈ 0.12 in → 12 hundredths
             obs_time=obs,
         )
         result = pkt.format_packet()

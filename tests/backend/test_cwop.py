@@ -14,24 +14,18 @@ class TestAprsPasscode:
         assert aprs_passcode("") == "-1"
         assert aprs_passcode("  ") == "-1"
 
-    def test_ham_callsign_returns_numeric(self):
-        result = aprs_passcode("N0CALL")
-        assert result.isdigit()
-        assert 0 <= int(result) <= 32767  # 15-bit hash
+    def test_ham_callsign_exact_hash(self):
+        assert aprs_passcode("N0CALL") == "13023"
 
     def test_case_insensitive(self):
-        assert aprs_passcode("n0call") == aprs_passcode("N0CALL")
+        assert aprs_passcode("n0call") == "13023"
 
     def test_strips_ssid(self):
         # N0CALL-13 should hash same as N0CALL
-        assert aprs_passcode("N0CALL-13") == aprs_passcode("N0CALL")
+        assert aprs_passcode("N0CALL-13") == "13023"
 
-    def test_known_callsign(self):
-        # The hash is deterministic — same input always gives same output
-        result1 = aprs_passcode("W3ADO")
-        result2 = aprs_passcode("W3ADO")
-        assert result1 == result2
-        assert result1.isdigit()
+    def test_known_callsign_w3ado(self):
+        assert aprs_passcode("W3ADO") == "10901"
 
 
 class TestExtract:

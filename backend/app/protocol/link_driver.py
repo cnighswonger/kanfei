@@ -989,6 +989,8 @@ class LinkDriver(StationDriver):
             daily_clicks if daily_clicks is not None else reading.rain_total
         )
 
+        # SensorReading is in SI (tenths °C, tenths hPa, tenths m/s, tenths mm)
+        # after _to_si() in loop_packet.py. Divide by 10 to get SI floats.
         return SensorSnapshot(
             inside_temp=(
                 reading.inside_temp / 10.0
@@ -1000,14 +1002,17 @@ class LinkDriver(StationDriver):
             ),
             inside_humidity=reading.inside_humidity,
             outside_humidity=reading.outside_humidity,
-            wind_speed=reading.wind_speed,
+            wind_speed=(
+                reading.wind_speed / 10.0
+                if reading.wind_speed is not None else None
+            ),
             wind_direction=reading.wind_direction,
             barometer=(
-                reading.barometer / 1000.0
+                reading.barometer / 10.0
                 if reading.barometer is not None else None
             ),
             rain_daily=(
-                rain_daily_clicks * 0.01
+                rain_daily_clicks / 10.0
                 if rain_daily_clicks is not None else None
             ),
             rain_rate=(
@@ -1015,7 +1020,7 @@ class LinkDriver(StationDriver):
                 if reading.rain_rate is not None else None
             ),
             rain_yearly=(
-                yearly_clicks * 0.01
+                yearly_clicks / 10.0
                 if yearly_clicks is not None else None
             ),
             solar_radiation=reading.solar_radiation,

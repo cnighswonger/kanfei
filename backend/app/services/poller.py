@@ -182,18 +182,21 @@ class Poller:
             snapshot.rain_rate = self._rain_rate_in_per_hr
             self._last_rain_daily = snapshot.rain_daily
 
-        # Convert to native units for the calculation functions (tenths F,
-        # thousandths inHg) which have been validated against reference tables.
-        temp_tenths = (
+        # SensorSnapshot is now SI (°C, hPa, m/s, mm).
+        # Scale to tenths for calculation functions and DB storage.
+        temp_tenths_c = (
             round(snapshot.outside_temp * 10)
             if snapshot.outside_temp is not None else None
         )
         hum = snapshot.outside_humidity
-        baro_thou = (
-            round(snapshot.barometer * 1000)
+        baro_tenths_hpa = (
+            round(snapshot.barometer * 10)
             if snapshot.barometer is not None else None
         )
-        wind = snapshot.wind_speed
+        wind_tenths_ms = (
+            round(snapshot.wind_speed * 10)
+            if snapshot.wind_speed is not None else None
+        )
 
         # Compute derived values
         hi = None
@@ -202,23 +205,23 @@ class Poller:
         fl = None
         theta = None
 
-        if temp_tenths is not None and hum is not None:
-            hi = heat_index(temp_tenths, hum)
-            dp = dew_point(temp_tenths, hum)
+        if temp_tenths_c is not None and hum is not None:
+            hi = heat_index(temp_tenths_c, hum)
+            dp = dew_point(temp_tenths_c, hum)
 
-            if baro_thou is not None:
-                theta = equivalent_potential_temperature(temp_tenths, hum, baro_thou)
+            if baro_tenths_hpa is not None:
+                theta = equivalent_potential_temperature(temp_tenths_c, hum, baro_tenths_hpa)
 
-        if temp_tenths is not None and wind is not None:
-            wc = wind_chill(temp_tenths, wind)
+        if temp_tenths_c is not None and wind_tenths_ms is not None:
+            wc = wind_chill(temp_tenths_c, wind_tenths_ms)
 
-        if temp_tenths is not None and hum is not None and wind is not None:
-            fl = feels_like(temp_tenths, hum, wind)
+        if temp_tenths_c is not None and hum is not None and wind_tenths_ms is not None:
+            fl = feels_like(temp_tenths_c, hum, wind_tenths_ms)
 
         # Pressure trend from recent history
         trend = await self._get_pressure_trend()
 
-        # Store to database — convert SensorSnapshot floats to DB integer columns
+        # Store to database — SensorSnapshot is SI, DB wants tenths (×10).
         db = SessionLocal()
         try:
             model = SensorReadingModel(
@@ -234,14 +237,17 @@ class Poller:
                 ),
                 inside_humidity=snapshot.inside_humidity,
                 outside_humidity=snapshot.outside_humidity,
-                wind_speed=snapshot.wind_speed,
+                wind_speed=(
+                    round(snapshot.wind_speed * 10)
+                    if snapshot.wind_speed is not None else None
+                ),
                 wind_direction=snapshot.wind_direction,
                 barometer=(
-                    round(snapshot.barometer * 1000)
+                    round(snapshot.barometer * 10)
                     if snapshot.barometer is not None else None
                 ),
                 rain_total=(
-                    round(snapshot.rain_daily * 100)
+                    round(snapshot.rain_daily * 10)
                     if snapshot.rain_daily is not None else None
                 ),
                 rain_rate=(
@@ -249,7 +255,7 @@ class Poller:
                     if snapshot.rain_rate is not None else None
                 ),
                 rain_yearly=(
-                    round(snapshot.rain_yearly * 100)
+                    round(snapshot.rain_yearly * 10)
                     if snapshot.rain_yearly is not None else None
                 ),
                 solar_radiation=snapshot.solar_radiation,
@@ -347,22 +353,24 @@ class Poller:
         if row is None or row[0] is None:
             return None
 
-        def _val(raw, divisor=1, unit=""):
+        from ..models.sensor_meta import convert, SENSOR_UNITS
+
+        def _val(column, raw):
             if raw is None:
                 return None
-            return {"value": round(raw / divisor, 2) if divisor != 1 else raw, "unit": unit}
+            return {"value": convert(column, raw), "unit": SENSOR_UNITS.get(column, "")}
 
         return {
-            "outside_temp_hi": _val(row[0], 10, "F"),
-            "outside_temp_lo": _val(row[1], 10, "F"),
-            "inside_temp_hi": _val(row[2], 10, "F"),
-            "inside_temp_lo": _val(row[3], 10, "F"),
-            "wind_speed_hi": _val(row[4], 1, "mph"),
-            "barometer_hi": _val(row[5], 1000, "inHg"),
-            "barometer_lo": _val(row[6], 1000, "inHg"),
-            "humidity_hi": _val(row[7], 1, "%"),
-            "humidity_lo": _val(row[8], 1, "%"),
-            "rain_rate_hi": _val(row[9], 10, "in/hr"),
+            "outside_temp_hi": _val("outside_temp", row[0]),
+            "outside_temp_lo": _val("outside_temp", row[1]),
+            "inside_temp_hi": _val("inside_temp", row[2]),
+            "inside_temp_lo": _val("inside_temp", row[3]),
+            "wind_speed_hi": _val("wind_speed", row[4]),
+            "barometer_hi": _val("barometer", row[5]),
+            "barometer_lo": _val("barometer", row[6]),
+            "humidity_hi": _val("outside_humidity", row[7]),
+            "humidity_lo": _val("outside_humidity", row[8]),
+            "rain_rate_hi": _val("rain_rate", row[9]),
         }
 
     @staticmethod
@@ -383,59 +391,82 @@ class Poller:
         trend: Optional[str],
         extremes: Optional[dict] = None,
     ) -> dict:
-        """Convert a SensorSnapshot to a JSON-serializable dict for WebSocket.
+        """Convert a SensorSnapshot (SI) to a JSON-serializable dict for WebSocket.
 
         Format matches the REST /api/current response so the frontend
         can use the same CurrentConditions type for both sources.
 
-        Derived values (hi, dp, wc, fl, theta) remain in native tenths-F /
-        tenths-K for compatibility with the existing API contract.
+        This is the ONLY place SI → display conversion happens for live data.
+        Derived values (hi, dp, wc, fl, theta) are in tenths °C / tenths K.
         """
-        def temp_f(tenths: Optional[int]) -> Optional[float]:
-            """Convert derived value from tenths-F to float F."""
-            return tenths / 10.0 if tenths is not None else None
+        from ..utils.units import (
+            si_temp_to_display_f,
+            si_pressure_to_display_inhg,
+            si_wind_to_display_mph,
+            si_rain_to_display_in,
+        )
+
+        def _temp_f(c: Optional[float]) -> Optional[float]:
+            """°C float → °F display float."""
+            return round(c * 9 / 5 + 32, 1) if c is not None else None
+
+        def _derived_f(tenths_c: Optional[int]) -> Optional[float]:
+            """Derived value tenths °C → °F display float."""
+            return si_temp_to_display_f(tenths_c) if tenths_c is not None else None
+
+        def _baro(hpa: Optional[float]) -> Optional[float]:
+            """hPa float → inHg display float."""
+            return round(hpa / 33.8639, 2) if hpa is not None else None
+
+        def _wind(ms: Optional[float]) -> Optional[int]:
+            """m/s float → mph display int."""
+            return round(ms * 2.23694) if ms is not None else None
+
+        def _rain(mm: Optional[float]) -> Optional[float]:
+            """mm float → inches display float."""
+            return round(mm / 25.4, 2) if mm is not None else None
 
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "station_type": self.driver.station_name,
             "temperature": {
-                "inside": {"value": snapshot.inside_temp, "unit": "F"},
-                "outside": {"value": snapshot.outside_temp, "unit": "F"},
+                "inside": {"value": _temp_f(snapshot.inside_temp), "unit": "F"},
+                "outside": {"value": _temp_f(snapshot.outside_temp), "unit": "F"},
             },
             "humidity": {
                 "inside": {"value": snapshot.inside_humidity, "unit": "%"},
                 "outside": {"value": snapshot.outside_humidity, "unit": "%"},
             },
             "wind": {
-                "speed": {"value": snapshot.wind_speed, "unit": "mph"},
+                "speed": {"value": _wind(snapshot.wind_speed), "unit": "mph"},
                 "direction": {"value": snapshot.wind_direction, "unit": "°"},
                 "cardinal": self._cardinal(snapshot.wind_direction),
             },
             "barometer": {
-                "value": snapshot.barometer,
+                "value": _baro(snapshot.barometer),
                 "unit": "inHg",
                 "trend": trend,
             },
             "rain": {
                 "daily": (
-                    {"value": round(snapshot.rain_daily, 2), "unit": "in"}
+                    {"value": _rain(snapshot.rain_daily), "unit": "in"}
                     if snapshot.rain_daily is not None else None
                 ),
                 "yearly": (
-                    {"value": round(snapshot.rain_yearly, 2), "unit": "in"}
+                    {"value": _rain(snapshot.rain_yearly), "unit": "in"}
                     if snapshot.rain_yearly is not None else None
                 ),
                 "rate": (
-                    {"value": round(snapshot.rain_rate, 2), "unit": "in/hr"}
+                    {"value": _rain(snapshot.rain_rate), "unit": "in/hr"}
                     if snapshot.rain_rate is not None else None
                 ),
                 "yesterday": {"value": round(self.rain_yesterday, 2), "unit": "in"},
             },
             "derived": {
-                "heat_index": {"value": temp_f(hi), "unit": "F"},
-                "dew_point": {"value": temp_f(dp), "unit": "F"},
-                "wind_chill": {"value": temp_f(wc), "unit": "F"},
-                "feels_like": {"value": temp_f(fl), "unit": "F"},
+                "heat_index": {"value": _derived_f(hi), "unit": "F"},
+                "dew_point": {"value": _derived_f(dp), "unit": "F"},
+                "wind_chill": {"value": _derived_f(wc), "unit": "F"},
+                "feels_like": {"value": _derived_f(fl), "unit": "F"},
                 "theta_e": {"value": theta / 10.0 if theta is not None else None, "unit": "K"},
             },
             "solar_radiation": (

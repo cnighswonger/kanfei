@@ -1,0 +1,57 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea for Kanfei? We'd love to hear it. For general discussion or brainstorming, consider using [Discussions — Ideas](https://github.com/cnighswonger/kanfei/discussions/categories/ideas) instead.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use case or pain point.
+      placeholder: "I need to ... but currently I have to ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How do you think this should work?
+      placeholder: "It would be great if Kanfei could ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you tried any workarounds or other approaches?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Kanfei does this affect?
+      options:
+        - Dashboard / UI
+        - Station drivers / hardware
+        - Data logging / archive
+        - Upload services (WU, CWOP)
+        - Nowcast / AI
+        - Spray advisor
+        - Backup / restore
+        - API / integration
+        - Debian packaging / installation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Screenshots, mockups, links to related projects, or anything else.

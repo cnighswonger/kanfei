@@ -18,11 +18,12 @@ from typing import Optional
 class SensorSnapshot:
     """Canonical sensor data returned by every driver's poll() method.
 
-    All values use standard units.  Fields are None when the sensor is
-    absent or the reading is invalid.
+    All values use SI units.  The driver is responsible for converting
+    from its native format to SI before returning.  Everything downstream
+    (poller, calculations, DB storage) assumes SI.
     """
 
-    # Temperatures (°F)
+    # Temperatures (°C)
     inside_temp: Optional[float] = None
     outside_temp: Optional[float] = None
 
@@ -31,28 +32,28 @@ class SensorSnapshot:
     outside_humidity: Optional[int] = None
 
     # Wind
-    wind_speed: Optional[int] = None        # mph
+    wind_speed: Optional[float] = None      # m/s
     wind_direction: Optional[int] = None    # degrees 0-359
-    wind_gust: Optional[int] = None         # mph
+    wind_gust: Optional[float] = None       # m/s
 
-    # Barometer (inHg, sea-level corrected)
+    # Barometer (hPa, sea-level corrected)
     barometer: Optional[float] = None
 
     # Rain
-    rain_rate: Optional[float] = None       # in/hr
-    rain_daily: Optional[float] = None      # inches (since midnight)
-    rain_yearly: Optional[float] = None     # inches (since Jan 1)
+    rain_rate: Optional[float] = None       # mm/hr
+    rain_daily: Optional[float] = None      # mm (since midnight)
+    rain_yearly: Optional[float] = None     # mm (since Jan 1)
 
     # Solar / UV
     solar_radiation: Optional[int] = None   # W/m²
     uv_index: Optional[float] = None        # index
 
     # Soil / Leaf
-    soil_temp: Optional[float] = None       # °F
+    soil_temp: Optional[float] = None       # °C
     soil_moisture: Optional[int] = None     # centibars
     leaf_wetness: Optional[int] = None      # 0-15
 
-    # Evapotranspiration (inches)
+    # Evapotranspiration (mm)
     et_daily: Optional[float] = None
 
     # Vendor-specific fields that don't map to the standard schema
