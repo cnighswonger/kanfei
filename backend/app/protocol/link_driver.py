@@ -989,39 +989,38 @@ class LinkDriver(StationDriver):
             daily_clicks if daily_clicks is not None else reading.rain_total
         )
 
-        # SensorReading is now in SI units (tenths °C, tenths hPa, tenths m/s,
-        # tenths mm) after _to_si() in loop_packet.py. Convert to SensorSnapshot
-        # display floats (°F, inHg, mph, inches) for the broadcast pipeline.
+        # SensorReading is in SI (tenths °C, tenths hPa, tenths m/s, tenths mm)
+        # after _to_si() in loop_packet.py. Divide by 10 to get SI floats.
         return SensorSnapshot(
             inside_temp=(
-                reading.inside_temp / 10.0 * 9 / 5 + 32
+                reading.inside_temp / 10.0
                 if reading.inside_temp is not None else None
             ),
             outside_temp=(
-                reading.outside_temp / 10.0 * 9 / 5 + 32
+                reading.outside_temp / 10.0
                 if reading.outside_temp is not None else None
             ),
             inside_humidity=reading.inside_humidity,
             outside_humidity=reading.outside_humidity,
             wind_speed=(
-                round(reading.wind_speed / 10.0 * 2.23694)
+                reading.wind_speed / 10.0
                 if reading.wind_speed is not None else None
             ),
             wind_direction=reading.wind_direction,
             barometer=(
-                reading.barometer / 10.0 / 33.8639
+                reading.barometer / 10.0
                 if reading.barometer is not None else None
             ),
             rain_daily=(
-                rain_daily_clicks / 10.0 / 25.4
+                rain_daily_clicks / 10.0
                 if rain_daily_clicks is not None else None
             ),
             rain_rate=(
-                reading.rain_rate / 10.0 / 25.4
+                reading.rain_rate / 10.0
                 if reading.rain_rate is not None else None
             ),
             rain_yearly=(
-                yearly_clicks / 10.0 / 25.4
+                yearly_clicks / 10.0
                 if yearly_clicks is not None else None
             ),
             solar_radiation=reading.solar_radiation,
@@ -1030,7 +1029,7 @@ class LinkDriver(StationDriver):
                 if reading.uv_index is not None else None
             ),
             soil_temp=(
-                reading.soil_temp / 10.0 * 9 / 5 + 32
+                reading.soil_temp / 10.0
                 if reading.soil_temp is not None else None
             ),
             leaf_wetness=reading.leaf_wetness,
