@@ -226,13 +226,15 @@ def _get_latest_obs(db: Session) -> dict:
         SensorReadingModel.timestamp >= midnight,
     ).scalar()
 
+    from ..models.sensor_meta import convert
+
     return {
-        "outside_temp_f": r.outside_temp / 10.0 if r.outside_temp is not None else None,
+        "outside_temp_f": convert("outside_temp", r.outside_temp),
         "outside_humidity_pct": r.outside_humidity,
-        "wind_speed_mph": r.wind_speed,
-        "wind_gust_mph": wind_hi,
-        "rain_rate_in_hr": r.rain_rate / 100.0 if r.rain_rate is not None else None,
-        "rain_daily_in": r.rain_total / 100.0 if r.rain_total is not None else None,
+        "wind_speed_mph": convert("wind_speed", r.wind_speed),
+        "wind_gust_mph": convert("wind_speed", wind_hi),
+        "rain_rate_in_hr": convert("rain_rate", r.rain_rate),
+        "rain_daily_in": convert("rain_total", r.rain_total),
     }
 
 
