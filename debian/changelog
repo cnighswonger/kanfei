@@ -1,3 +1,22 @@
+kanfei (0.1.0~beta4) unstable; urgency=low
+
+  * SI unit storage: all sensor data now stored in SI (°C, hPa, m/s, mm).
+    Includes DB migration script (tools/migrate_davis_to_si.py).
+  * Multi-driver support: all 6 hardware drivers recovered, refactored
+    for SI SensorSnapshot, and tested. Ecowitt, Tempest, Ambient Weather,
+    Vantage Pro/Pro2/Vue, WeatherLink IP, WeatherLink Live.
+  * Driver selection UI: Setup Wizard and Settings > Station tab now
+    support all driver types with connection-specific config.
+  * Driver test framework: parametrized JSON fixture tests for all drivers.
+  * SI regression tests: 17 tests verifying identical API output.
+  * Fix spray advisor reading SI values as Davis native.
+  * Fix Vantage archive parser: convert to SI units.
+  * CONTRIBUTING.md with AI-assisted contribution policy.
+  * Issue templates, PR template, AGENTS.md for non-Claude AI tools.
+  * Updated README with backup/restore, driver catalog.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Tue, 25 Mar 2026 00:00:00 +0000
+
 kanfei (0.1.0~beta3) unstable; urgency=low
 
   * Backup and restore: service, REST API, CLI commands, automatic
