@@ -39,5 +39,11 @@ notrack/
 htmlcov/
 .test_cache/
 
+# Playwright E2E
+tests/e2e/fixtures/*.db
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/node_modules/
+
 # API keys
 grok.txt
