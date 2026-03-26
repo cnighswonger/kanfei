@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter
 
-from . import current, history, export, config, station, forecast, astronomy, output, setup, weatherlink, backgrounds, spray, usage, db_admin, logs, backup
+from . import current, history, export, config, station, forecast, astronomy, output, setup, weatherlink, backgrounds, spray, usage, db_admin, logs, backup, public_data
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ api_router.include_router(usage.router)
 api_router.include_router(db_admin.router)
 api_router.include_router(logs.router)
 api_router.include_router(backup.router)
+api_router.include_router(public_data.router)
 
 # Nowcast API — full version requires kanfei-nowcast, lite version is built-in.
 try:
