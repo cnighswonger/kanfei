@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('History page', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/history', { waitUntil: 'networkidle' });
+    await page.goto('/history');
     await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
   });
 
@@ -21,14 +21,23 @@ test.describe('History page', () => {
   test('chart renders with data', async ({ page }) => {
     const sensorSelect = page.locator('main select').first();
     await sensorSelect.selectOption({ label: 'Outdoor Temperature' });
+    // Click time range and wait for the history API response
+    const historyReady = page.waitForResponse(
+      (resp) => resp.url().includes('/api/history') && resp.status() === 200,
+    );
     await page.getByRole('button', { name: '24 Hours' }).click();
+    await historyReady;
     await expect(page.locator('.highcharts-container').first()).toBeVisible();
   });
 
   test('chart SVG has rendered paths', async ({ page }) => {
     const sensorSelect = page.locator('main select').first();
     await sensorSelect.selectOption({ label: 'Outdoor Temperature' });
+    const historyReady = page.waitForResponse(
+      (resp) => resp.url().includes('/api/history') && resp.status() === 200,
+    );
     await page.getByRole('button', { name: '24 Hours' }).click();
+    await historyReady;
     await page.waitForSelector('.highcharts-container svg');
     const paths = page.locator('.highcharts-container svg path');
     const count = await paths.count();
@@ -39,7 +48,6 @@ test.describe('History page', () => {
     const sensorSelect = page.locator('main select').first();
     await sensorSelect.selectOption({ label: 'Outdoor Temperature' });
     await page.getByRole('button', { name: '24 Hours' }).click();
-    await page.waitForLoadState('networkidle');
 
     await sensorSelect.selectOption({ label: 'Indoor Temperature' });
     await expect(sensorSelect).toHaveValue('temperature_inside');

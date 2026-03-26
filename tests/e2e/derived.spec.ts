@@ -3,7 +3,11 @@ import { ANCHOR } from './helpers/values';
 
 test.describe('Derived Conditions', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
+    const currentReady = page.waitForResponse(
+      (resp) => resp.url().includes('/api/current') && resp.status() === 200,
+    );
+    await page.goto('/');
+    await currentReady;
     await expect(page.getByText('Derived Conditions')).toBeVisible();
   });
 
