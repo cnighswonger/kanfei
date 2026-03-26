@@ -17,6 +17,7 @@ router = APIRouter()
 _DEFAULTS: dict[str, object] = {
     "serial_port": settings.serial_port,
     "baud_rate": settings.baud_rate,
+    "serial_timeout": settings.serial_timeout,
     "poll_interval": settings.poll_interval_sec,
     "latitude": settings.latitude,
     "longitude": settings.longitude,

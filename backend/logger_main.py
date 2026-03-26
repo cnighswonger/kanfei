@@ -52,9 +52,10 @@ def _create_driver(driver_type: str, config: dict) -> StationDriver:
     """
     port = str(config.get("serial_port", settings.serial_port))
     baud = int(config.get("baud_rate", settings.baud_rate))
+    timeout = float(config.get("serial_timeout", settings.serial_timeout))
 
     if driver_type == "legacy":
-        return LinkDriver(port=port, baud_rate=baud, timeout=settings.serial_timeout)
+        return LinkDriver(port=port, baud_rate=baud, timeout=timeout)
 
     elif driver_type == "vantage":
         from app.protocol.vantage.driver import VantageDriver
@@ -200,9 +201,10 @@ class LoggerDaemon:
 
             station_type_code = link.station_model.value if link.station_model else 0
 
+        poll_interval = int(config.get("poll_interval", settings.poll_interval_sec))
         self.poller = Poller(
             self.driver,
-            poll_interval=settings.poll_interval_sec,
+            poll_interval=poll_interval,
             station_type_code=station_type_code,
         )
         self.wu_uploader.reload_config()
@@ -220,7 +222,7 @@ class LoggerDaemon:
         self._restore_rain_state()
 
         self.poller_task = asyncio.create_task(self.poller.run())
-        logger.info("Poller started (%ds interval)", settings.poll_interval_sec)
+        logger.info("Poller started (%ds interval)", poll_interval)
 
         self._midnight_task = asyncio.create_task(self._midnight_rain_reset_loop())
 
