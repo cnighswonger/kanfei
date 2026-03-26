@@ -15,9 +15,13 @@ References:
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
+from sqlalchemy import func
+
 from ..models.database import SessionLocal
+from ..models.sensor_reading import SensorReadingModel
 from ..models.station_config import StationConfigModel
 from ..output.aprs import APRSWeatherPacket
 
@@ -213,6 +217,43 @@ class CwopUploader:
                 self._consecutive_errors, self._effective_interval,
             )
 
+    @staticmethod
+    def _get_rain_accumulation(hours: int) -> int:
+        """Query rain accumulation over the last N hours from sensor_readings.
+
+        Returns rain in tenths of mm (SI DB units). Computes the difference
+        between the current rain_total and the oldest rain_total in the window.
+        """
+        db = SessionLocal()
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+            S = SensorReadingModel
+
+            # Current (most recent) rain_total
+            current = (
+                db.query(S.rain_total)
+                .filter(S.rain_total.isnot(None))
+                .order_by(S.timestamp.desc())
+                .first()
+            )
+            if current is None or current[0] is None:
+                return 0
+
+            # Oldest rain_total in the window
+            oldest = (
+                db.query(S.rain_total)
+                .filter(S.timestamp >= cutoff, S.rain_total.isnot(None))
+                .order_by(S.timestamp.asc())
+                .first()
+            )
+            if oldest is None or oldest[0] is None:
+                return 0
+
+            delta = current[0] - oldest[0]
+            return max(0, delta)  # guard against counter reset
+        finally:
+            db.close()
+
     def _build_packet(self, data: dict) -> Optional[str]:
         """Extract sensor values from broadcast data and format APRS packet."""
         temp_f = _extract(data, ("temperature", "outside", "value"))
@@ -227,6 +268,10 @@ class CwopUploader:
 
         # Wind gust: today's peak wind speed from daily extremes
         wind_gust = _extract(data, ("daily_extremes", "wind_speed_hi", "value"))
+
+        # Rain accumulation: query DB for hourly and 24h totals (tenths mm)
+        rain_hour_tenths_mm = self._get_rain_accumulation(1)
+        rain_24h_tenths_mm = self._get_rain_accumulation(24)
 
         # Broadcast data is in display units (°F, mph, inHg, in).
         # Convert to SI for the APRSWeatherPacket (tenths °C, tenths m/s, tenths hPa, tenths mm).
@@ -244,8 +289,8 @@ class CwopUploader:
             wind_speed_tenths_ms=wind_ms_tenths,
             wind_gust_tenths_ms=gust_ms_tenths,
             temp_tenths_c=temp_c_tenths,
-            rain_hour_tenths_mm=0,
-            rain_24h_tenths_mm=0,
+            rain_hour_tenths_mm=rain_hour_tenths_mm,
+            rain_24h_tenths_mm=rain_24h_tenths_mm,
             rain_midnight_tenths_mm=rain_mm_tenths,
             humidity_pct=int(humidity) if humidity is not None else 0,
             pressure_tenths_hpa=baro_hpa_tenths,
