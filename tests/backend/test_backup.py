@@ -3,6 +3,7 @@
 import json
 import sqlite3
 import tarfile
+import time
 from pathlib import Path
 
 import pytest
@@ -235,3 +236,41 @@ class TestGenerateBackupFilename:
         assert name.endswith(".tar.gz")
         # Should contain a date-like pattern
         assert "202" in name
+
+
+class TestSecondsUntilTime:
+
+    def test_future_time_today(self):
+        from app.services.backup import _seconds_until_time
+        from datetime import datetime
+        # Use a time 1 hour from now — should be ~3600 seconds
+        now = datetime.now().astimezone()
+        future = now.replace(second=0, microsecond=0)
+        # Add 1 hour, handle midnight wrap
+        future_hour = (future.hour + 1) % 24
+        target = f"{future_hour:02d}:{future.minute:02d}"
+        result = _seconds_until_time(target)
+        # Should be roughly 3600 seconds (±60 for timing)
+        assert 3500 <= result <= 3700
+
+    def test_past_time_wraps_to_tomorrow(self):
+        from app.services.backup import _seconds_until_time
+        from datetime import datetime
+        # Use a time 1 hour ago — should wrap to tomorrow (~23h from now)
+        now = datetime.now().astimezone()
+        past_hour = (now.hour - 1) % 24
+        target = f"{past_hour:02d}:{now.minute:02d}"
+        result = _seconds_until_time(target)
+        # Should be roughly 23 hours
+        assert 82000 <= result <= 86500
+
+    def test_invalid_format_returns_zero(self):
+        from app.services.backup import _seconds_until_time
+        assert _seconds_until_time("") == 0.0
+        assert _seconds_until_time("bad") == 0.0
+
+    def test_midnight(self):
+        from app.services.backup import _seconds_until_time
+        result = _seconds_until_time("00:00")
+        # Should be between 0 and 86400 seconds
+        assert 0 < result <= 86400

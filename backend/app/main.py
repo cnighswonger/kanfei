@@ -140,8 +140,13 @@ async def lifespan(app: FastAPI):
         )
         interval = int(nc_config.get("backup_interval_hours", 24))
         retention = int(nc_config.get("backup_retention_count", 7))
+        schedule_time = str(nc_config.get("backup_schedule_time", ""))
+        tz_name = str(nc_config.get("station_timezone", ""))
         backup_task = asyncio.create_task(
-            backup_scheduler(settings.db_path, backup_dir, interval, retention)
+            backup_scheduler(
+                settings.db_path, backup_dir, interval, retention,
+                schedule_time=schedule_time, timezone_name=tz_name,
+            )
         )
 
     yield

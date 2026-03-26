@@ -11,7 +11,7 @@ import shutil
 import sqlite3
 import tarfile
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -243,24 +243,69 @@ def generate_backup_filename() -> str:
     return f"kanfei-backup-{ts}.tar.gz"
 
 
+def _seconds_until_time(target_hhmm: str, tz_name: str = "") -> float:
+    """Calculate seconds until the next occurrence of HH:MM.
+
+    Uses station timezone if configured, otherwise local system time.
+    If the target time has already passed today, returns seconds until
+    tomorrow's occurrence.
+    """
+    try:
+        hour, minute = int(target_hhmm[:2]), int(target_hhmm[3:5])
+    except (ValueError, IndexError):
+        return 0.0
+
+    if tz_name:
+        try:
+            from zoneinfo import ZoneInfo
+            now = datetime.now(ZoneInfo(tz_name))
+        except (ImportError, KeyError):
+            now = datetime.now().astimezone()
+    else:
+        now = datetime.now().astimezone()
+
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+
+    return (target - now).total_seconds()
+
+
 async def backup_scheduler(
     db_path: str,
     backup_dir: str,
     interval_hours: int = 24,
     retention_count: int = 7,
+    schedule_time: str = "",
+    timezone_name: str = "",
 ) -> None:
     """Background task — creates backups on a schedule with rotation.
+
+    If schedule_time is set (HH:MM), runs at that time of day.
+    Otherwise, runs on a fixed interval from boot.
 
     Runs until cancelled. Intended to be started as an asyncio task
     in the web app lifespan.
     """
-    logger.info(
-        "Backup scheduler started: every %dh, keep %d, dir=%s",
-        interval_hours, retention_count, backup_dir,
-    )
+    if schedule_time:
+        logger.info(
+            "Backup scheduler started: daily at %s (%s), keep %d, dir=%s",
+            schedule_time, timezone_name or "local", retention_count, backup_dir,
+        )
+    else:
+        logger.info(
+            "Backup scheduler started: every %dh, keep %d, dir=%s",
+            interval_hours, retention_count, backup_dir,
+        )
 
     while True:
-        await asyncio.sleep(interval_hours * 3600)
+        if schedule_time:
+            wait = _seconds_until_time(schedule_time, timezone_name)
+            logger.debug("Backup scheduled in %.0f seconds", wait)
+            await asyncio.sleep(wait)
+        else:
+            await asyncio.sleep(interval_hours * 3600)
+
         try:
             filename = generate_backup_filename()
             output = str(Path(backup_dir) / filename)
@@ -270,7 +315,6 @@ async def backup_scheduler(
                 "Scheduled backup complete: %s (%d bytes, %d rotated)",
                 filename, manifest.get("archive_size_bytes", 0), deleted,
             )
-            # Update last-success config
             _update_backup_status(db_path, success=True, timestamp=manifest["timestamp"])
         except Exception as exc:
             logger.error("Scheduled backup failed: %s", exc)
