@@ -3,9 +3,8 @@ import { DRIVER_COUNT } from './helpers/values';
 
 test.describe('Settings page', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/settings');
-    // Wait for the Settings page to fully render
-    await page.waitForSelector('h2:has-text("Settings")', { timeout: 15_000 });
+    await page.goto('/settings', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   });
 
   /** The driver type dropdown is in the Station tab under "Driver Type" label. */
@@ -21,17 +20,12 @@ test.describe('Settings page', () => {
   test('driver dropdown has 7 options with legacy selected', async ({ page }) => {
     const select = driverSelect(page);
     await expect(select).toBeVisible();
-
-    // Should have 7 driver options
     const options = select.locator('option');
     await expect(options).toHaveCount(DRIVER_COUNT);
-
-    // Legacy should be selected (it's the configured driver)
     await expect(select).toHaveValue('legacy');
   });
 
   test('serial config visible for legacy driver', async ({ page }) => {
-    // With legacy driver, serial port and baud rate should be in the DOM
     const main = page.locator('main');
     await expect(main.getByText('Serial Port').first()).toBeVisible();
     await expect(main.getByText('Baud Rate').first()).toBeVisible();
@@ -39,10 +33,7 @@ test.describe('Settings page', () => {
 
   test('switching to ecowitt shows Gateway IP field', async ({ page }) => {
     await driverSelect(page).selectOption('ecowitt');
-
-    // Gateway IP should appear
     await expect(page.getByText('Gateway IP', { exact: false })).toBeVisible();
-    // Serial fields should be hidden
     await expect(page.locator('main').getByText('Serial Port')).toHaveCount(0);
   });
 
@@ -58,15 +49,12 @@ test.describe('Settings page', () => {
 
   test('switching to weatherlink_ip shows Device IP and TCP Port', async ({ page }) => {
     await driverSelect(page).selectOption('weatherlink_ip');
-    await page.waitForTimeout(300);
     await expect(page.getByText('Device IP Address')).toBeVisible();
     await expect(page.getByText('TCP Port')).toBeVisible();
   });
 
   test('WeatherLink section hidden for ecowitt', async ({ page }) => {
-    // Switch to ecowitt — WeatherLink archive period should disappear
     await driverSelect(page).selectOption('ecowitt');
-    await page.waitForTimeout(300);
     await expect(page.getByText('Archive Period', { exact: false })).toHaveCount(0);
   });
 

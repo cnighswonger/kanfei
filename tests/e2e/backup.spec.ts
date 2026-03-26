@@ -3,11 +3,11 @@ import { API_BASE } from './helpers/values';
 
 test.describe('Backup operations', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/settings');
-    await page.waitForSelector('h2:has-text("Settings")', { timeout: 15_000 });
-    // Navigate to Backup tab
+    await page.goto('/settings', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await page.getByRole('button', { name: 'Backup' }).click();
-    await page.waitForTimeout(500);
+    // Wait for tab content to render
+    await expect(page.getByRole('button', { name: /backup now/i })).toBeVisible();
   });
 
   // Clean up any backups created during tests
@@ -26,42 +26,33 @@ test.describe('Backup operations', () => {
   });
 
   test('create backup and verify it appears in list', async ({ page }) => {
-    // Click the Backup Now button
     const backupBtn = page.getByRole('button', { name: /backup now/i });
-    await expect(backupBtn).toBeVisible();
     await backupBtn.click();
-
-    // Wait for the backup to complete and appear in the list
-    await expect(page.getByText('kanfei-backup-').first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('kanfei-backup-').first()).toBeVisible();
   });
 
   test('backup list shows download button', async ({ page }) => {
-    // Create a backup first via API to ensure there's one to download
+    // Create a backup first via API
     await page.request.post(`${API_BASE}/api/backup`);
-    await page.reload();
-    await page.waitForSelector('h2:has-text("Settings")', { timeout: 15_000 });
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await page.getByRole('button', { name: 'Backup' }).click();
-    await page.waitForTimeout(1000);
 
-    // Should have a download action
     const downloadBtn = page.getByRole('link', { name: /download/i }).or(
       page.getByRole('button', { name: /download/i })
     );
-    await expect(downloadBtn.first()).toBeVisible({ timeout: 10_000 });
+    await expect(downloadBtn.first()).toBeVisible();
   });
 
   test('delete backup removes it from list', async ({ page }) => {
     // Create a backup via API
     await page.request.post(`${API_BASE}/api/backup`);
-    await page.reload();
-    await page.waitForSelector('h2:has-text("Settings")', { timeout: 15_000 });
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await page.getByRole('button', { name: 'Backup' }).click();
-    await page.waitForTimeout(1000);
 
-    // Verify backup exists
-    await expect(page.getByText('kanfei-backup-').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('kanfei-backup-').first()).toBeVisible();
 
-    // Click delete button
     const deleteBtn = page.getByRole('button', { name: /delete/i }).first();
     await expect(deleteBtn).toBeVisible();
     await deleteBtn.click();
