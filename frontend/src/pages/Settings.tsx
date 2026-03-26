@@ -1220,6 +1220,18 @@ function BackupTab({ val, updateField, isMobile }: {
               onChange={(e) => updateField("backup_retention_count", Number(e.target.value))}
             />
           </div>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Scheduled time (optional)</label>
+            <input
+              type="time"
+              style={inputStyle}
+              value={String(val("backup_schedule_time") || "")}
+              onChange={(e) => updateField("backup_schedule_time", e.target.value)}
+            />
+            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
+              HH:MM — run backup at this time daily. Leave blank for interval-from-boot.
+            </span>
+          </div>
         </div>
       </div>
 

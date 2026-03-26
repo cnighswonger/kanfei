@@ -91,6 +91,7 @@ _DEFAULTS: dict[str, object] = {
     "backup_interval_hours": 24,
     "backup_retention_count": 7,
     "backup_directory": "",
+    "backup_schedule_time": "",  # HH:MM for time-of-day scheduling; empty = interval from boot
     "backup_last_success": "",
     "backup_last_error": "",
 }
