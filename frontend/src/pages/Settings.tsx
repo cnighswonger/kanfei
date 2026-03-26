@@ -1556,6 +1556,42 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
           </div>
         )}
       </div>
+
+      {/* Service restart instructions */}
+      <div style={cardStyle}>
+        <h3 style={{
+          margin: "0 0 12px 0",
+          fontSize: "16px",
+          fontFamily: "var(--font-heading)",
+          color: "var(--color-text)",
+        }}>
+          Service Management
+        </h3>
+        <p style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginTop: 0, lineHeight: 1.5 }}>
+          Most settings take effect immediately or on the next cycle. To apply driver or connection changes, use <strong>Save &amp; Reconnect</strong> on the Station tab.
+        </p>
+        <p style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginTop: "8px", lineHeight: 1.5 }}>
+          If a full service restart is needed:
+        </p>
+        <div style={{
+          background: "var(--color-bg-secondary)",
+          borderRadius: "6px",
+          padding: "12px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: "12px",
+          color: "var(--color-text)",
+          marginTop: "8px",
+          lineHeight: 1.6,
+        }}>
+          <div style={{ marginBottom: "8px", color: "var(--color-text-muted)", fontSize: "11px" }}>Windows (services):</div>
+          <div>net stop KanfeiWeb &amp;&amp; net stop KanfeiLogger</div>
+          <div>net start KanfeiLogger &amp;&amp; net start KanfeiWeb</div>
+          <div style={{ marginTop: "12px", marginBottom: "8px", color: "var(--color-text-muted)", fontSize: "11px" }}>Linux (systemd):</div>
+          <div>sudo systemctl restart kanfei-logger kanfei-web</div>
+          <div style={{ marginTop: "12px", marginBottom: "8px", color: "var(--color-text-muted)", fontSize: "11px" }}>Manual (dev mode):</div>
+          <div>Ctrl+C both terminals, then restart</div>
+        </div>
+      </div>
     </>
   );
 }
@@ -2215,7 +2251,7 @@ export default function Settings() {
               <option value="ambient">Ambient Weather (HTTP push)</option>
             </select>
             <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
-              Changing driver type requires a restart of both the web app and logger daemon.
+              Click <strong>Save &amp; Reconnect</strong> after changing to apply the new driver.
             </span>
           </div>
           <div style={fieldGroup}>
