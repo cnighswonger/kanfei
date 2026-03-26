@@ -169,7 +169,7 @@ class WundergroundUploader:
                 params[wu_param] = value
 
         # Hourly rain — not in broadcast, compute from DB
-        rain_hour = self._get_hourly_rain_inches()
+        rain_hour = WundergroundUploader._get_hourly_rain_inches()
         if rain_hour is not None:
             params["rainin"] = rain_hour
 
