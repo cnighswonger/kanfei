@@ -457,6 +457,229 @@ def cmd_restore(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Windows service management (WinSW)
+# ---------------------------------------------------------------------------
+
+SERVICE_LOGGER = "KanfeiLogger"
+SERVICE_WEB = "KanfeiWeb"
+LOG_DIR = ROOT / "logs"
+WINSW_DIR = ROOT / "tools" / "winsw"
+WINSW_URL = "https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-x64.exe"
+
+
+def _get_winsw() -> Path | None:
+    """Get WinSW executable, downloading if needed."""
+    winsw = WINSW_DIR / "WinSW.exe"
+    if winsw.exists():
+        return winsw
+
+    # Download
+    try:
+        import urllib.request
+        heading("Downloading WinSW")
+        step(f"From GitHub: {WINSW_URL}")
+        WINSW_DIR.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(WINSW_URL, str(winsw))
+        ok(f"Downloaded to {winsw}")
+        return winsw
+    except Exception as exc:
+        fail(f"Failed to download WinSW: {exc}")
+        step("Download manually from https://github.com/winsw/winsw/releases")
+        return None
+
+
+def _write_service_xml(
+    service_id: str,
+    display_name: str,
+    description: str,
+    executable: str,
+    arguments: str,
+    working_dir: str,
+    log_name: str,
+    depend_on: str = "",
+) -> Path:
+    """Write a WinSW XML config file and copy the exe alongside it."""
+    svc_dir = WINSW_DIR / service_id
+    svc_dir.mkdir(parents=True, exist_ok=True)
+
+    # WinSW requires the exe and xml to share the same base name
+    svc_exe = svc_dir / f"{service_id}.exe"
+    winsw_src = WINSW_DIR / "WinSW.exe"
+    if not svc_exe.exists() and winsw_src.exists():
+        shutil.copy2(winsw_src, svc_exe)
+
+    depend_xml = f"\n  <depend>{depend_on}</depend>" if depend_on else ""
+
+    xml_path = svc_dir / f"{service_id}.xml"
+    xml_path.write_text(textwrap.dedent(f"""\
+        <service>
+          <id>{service_id}</id>
+          <name>{display_name}</name>
+          <description>{description}</description>
+          <executable>{executable}</executable>
+          <arguments>{arguments}</arguments>
+          <workingdirectory>{working_dir}</workingdirectory>
+          <log mode="roll-by-size">
+            <sizeThreshold>10240</sizeThreshold>
+            <keepFiles>5</keepFiles>
+          </log>
+          <logpath>{LOG_DIR}</logpath>
+          <onfailure action="restart" delay="5 sec"/>
+          <onfailure action="restart" delay="10 sec"/>
+          <onfailure action="restart" delay="30 sec"/>
+          <resetfailure>1 hour</resetfailure>{depend_xml}
+        </service>
+    """))
+    return svc_dir
+
+
+def cmd_install_service(_args: argparse.Namespace) -> int:
+    """Install Kanfei as Windows services using WinSW."""
+    if not IS_WINDOWS:
+        fail("Windows service installation is only available on Windows.")
+        step("On Linux, use systemd: sudo cp kanfei.service /etc/systemd/system/")
+        return 1
+
+    if not VENV_PYTHON.exists():
+        fail("Virtual environment not found. Run: python station.py setup")
+        return 1
+
+    winsw = _get_winsw()
+    if not winsw:
+        return 1
+
+    heading("Installing Kanfei Windows Services")
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Logger service
+    step(f"Installing {SERVICE_LOGGER}...")
+    logger_dir = _write_service_xml(
+        service_id=SERVICE_LOGGER,
+        display_name="Kanfei Weather Logger",
+        description="Kanfei weather station data logger daemon",
+        executable=str(VENV_PYTHON),
+        arguments="logger_main.py",
+        working_dir=str(BACKEND_DIR),
+        log_name="logger",
+    )
+    logger_exe = logger_dir / f"{SERVICE_LOGGER}.exe"
+    result = subprocess.run(
+        [str(logger_exe), "install"],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode == 0 or "already exists" in result.stdout.lower():
+        ok(f"{SERVICE_LOGGER} installed")
+    else:
+        fail(f"{SERVICE_LOGGER}: {result.stdout.strip()} {result.stderr.strip()}")
+        return 1
+
+    # Web service
+    step(f"Installing {SERVICE_WEB}...")
+    web_dir = _write_service_xml(
+        service_id=SERVICE_WEB,
+        display_name="Kanfei Weather Web",
+        description="Kanfei weather station web dashboard",
+        executable=str(VENV_PYTHON),
+        arguments="-m uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info",
+        working_dir=str(BACKEND_DIR),
+        log_name="web",
+        depend_on=SERVICE_LOGGER,
+    )
+    web_exe = web_dir / f"{SERVICE_WEB}.exe"
+    result = subprocess.run(
+        [str(web_exe), "install"],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode == 0 or "already exists" in result.stdout.lower():
+        ok(f"{SERVICE_WEB} installed")
+    else:
+        fail(f"{SERVICE_WEB}: {result.stdout.strip()} {result.stderr.strip()}")
+        return 1
+
+    heading("Services Installed")
+    print(textwrap.dedent(f"""\
+        Services installed (auto-start on boot, auto-restart on crash):
+          {SERVICE_LOGGER}  - data logger daemon
+          {SERVICE_WEB}     - web dashboard (depends on logger)
+
+        Logs: {LOG_DIR}
+
+        Start now:
+          net start {SERVICE_LOGGER}
+          net start {SERVICE_WEB}
+
+        Or reboot to start automatically.
+
+        To manage:
+          services.msc             - Windows Services GUI
+          sc query {SERVICE_LOGGER}
+          sc query {SERVICE_WEB}
+
+        To uninstall:
+          python station.py uninstall-service
+    """))
+    return 0
+
+
+def cmd_uninstall_service(_args: argparse.Namespace) -> int:
+    """Uninstall Kanfei Windows services."""
+    if not IS_WINDOWS:
+        fail("Windows service management is only available on Windows.")
+        return 1
+
+    heading("Uninstalling Kanfei Windows Services")
+
+    for svc in [SERVICE_WEB, SERVICE_LOGGER]:
+        svc_exe = WINSW_DIR / svc / f"{svc}.exe"
+        if svc_exe.exists():
+            step(f"Stopping {svc}...")
+            subprocess.run([str(svc_exe), "stop"], capture_output=True, check=False)
+            step(f"Removing {svc}...")
+            result = subprocess.run(
+                [str(svc_exe), "uninstall"],
+                capture_output=True, text=True, check=False,
+            )
+            if result.returncode == 0:
+                ok(f"{svc} removed")
+            else:
+                warn(f"{svc}: {result.stdout.strip() or 'may not be installed'}")
+        else:
+            # Fallback: sc.exe
+            subprocess.run(["net", "stop", svc], capture_output=True, check=False)
+            subprocess.run(["sc", "delete", svc], capture_output=True, check=False)
+            ok(f"{svc} removed via sc.exe")
+
+    ok("Services uninstalled")
+    return 0
+
+
+def cmd_service_status(_args: argparse.Namespace) -> int:
+    """Check status of Kanfei Windows services."""
+    if not IS_WINDOWS:
+        fail("Windows service management is only available on Windows.")
+        return 1
+
+    heading("Kanfei Service Status")
+
+    for svc in [SERVICE_LOGGER, SERVICE_WEB]:
+        svc_exe = WINSW_DIR / svc / f"{svc}.exe"
+        if svc_exe.exists():
+            result = subprocess.run(
+                [str(svc_exe), "status"],
+                capture_output=True, text=True, check=False,
+            )
+            status = result.stdout.strip()
+            if "Started" in status or "Running" in status:
+                ok(f"{svc}: RUNNING")
+            elif "Stopped" in status:
+                warn(f"{svc}: STOPPED")
+            else:
+                step(f"{svc}: {status or 'Unknown'}")
+        else:
+            step(f"{svc}: Not installed")
+
+
 def cmd_status(_args: argparse.Namespace) -> int:
     """Check installation state."""
     heading("Installation status")
@@ -540,6 +763,10 @@ def main() -> int:
     )
     restore_parser.add_argument("--input", "-i", help="Path to .tar.gz backup archive")
 
+    sub.add_parser("install-service", help="Install as Windows services (requires admin)")
+    sub.add_parser("uninstall-service", help="Remove Kanfei Windows services")
+    sub.add_parser("service-status", help="Check Kanfei Windows service status")
+
     args = parser.parse_args()
 
     commands = {
@@ -551,6 +778,9 @@ def main() -> int:
         "status": cmd_status,
         "backup": cmd_backup,
         "restore": cmd_restore,
+        "install-service": cmd_install_service,
+        "uninstall-service": cmd_uninstall_service,
+        "service-status": cmd_service_status,
     }
 
     if args.command is None:
