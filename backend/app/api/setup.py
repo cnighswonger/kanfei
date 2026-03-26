@@ -172,7 +172,7 @@ async def complete_setup(config: SetupConfig, db: Session = Depends(get_db)):
             "cmd": "connect",
             "port": config.serial_port,
             "baud": config.baud_rate,
-        })
+        }, timeout=60.0)
         reconnect = result.get("data", {}) if result.get("ok") else {
             "success": False, "error": result.get("error", "Unknown error"),
         }
@@ -187,7 +187,7 @@ async def reconnect_endpoint():
     """Reconnect using current DB config."""
     try:
         client = get_ipc_client()
-        result = await client.send_command({"cmd": "reconnect"})
+        result = await client.send_command({"cmd": "reconnect"}, timeout=60.0)
         if result.get("ok"):
             return result["data"]
         return {"success": False, "error": result.get("error", "Unknown error")}
