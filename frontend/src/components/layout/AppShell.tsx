@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import Footer from './Footer';
@@ -26,37 +27,6 @@ export default function AppShell({
   const { enabled } = useWeatherBackground();
   const { nowcastWarning, dismissNowcastWarning } = useWeatherData();
   const isMobile = useIsMobile();
-  const [headerHidden, setHeaderHidden] = useState(false);
-  const scrollYRef = useRef(0);
-
-  // Auto-hide header on mobile when scrolling down; show on scroll up.
-  useEffect(() => {
-    if (!isMobile) {
-      setHeaderHidden(false);
-      return;
-    }
-
-    const mainContent = document.querySelector('.app-main-content');
-    if (!mainContent) return;
-
-    const onScroll = (e: Event) => {
-      const target = e.target as HTMLElement;
-      if (!target || target.scrollTop === undefined) return;
-      const y = target.scrollTop;
-      const prev = scrollYRef.current;
-      scrollYRef.current = y;
-
-      if (y <= 10) {
-        setHeaderHidden(false);
-        return;
-      }
-      if (y - prev > 8) setHeaderHidden(true);
-      else if (prev - y > 8) setHeaderHidden(false);
-    };
-
-    mainContent.addEventListener('scroll', onScroll, true);
-    return () => mainContent.removeEventListener('scroll', onScroll, true);
-  }, [isMobile]);
 
   // Auto-dismiss warning after 30 seconds.
   useEffect(() => {
@@ -83,6 +53,9 @@ export default function AppShell({
     });
   };
 
+  const location = useLocation();
+  const isAbout = location.pathname === '/about';
+  const hideHeader = isAbout && !isMobile;
   const sidebarWidth = sidebarCollapsed ? '56px' : '220px';
 
   return (
@@ -91,7 +64,7 @@ export default function AppShell({
       <div
         style={{
           display: 'grid',
-          gridTemplateRows: '56px 1fr',
+          gridTemplateRows: hideHeader ? '0px 1fr' : '56px 1fr',
           gridTemplateColumns: `${sidebarWidth} 1fr`,
           gridTemplateAreas: `
             "header header"
@@ -105,12 +78,11 @@ export default function AppShell({
         }}
         className="app-shell"
       >
-        <div style={{ gridArea: 'header' }}>
+        <div style={{ gridArea: 'header', overflow: 'hidden' }}>
           <Header
             connected={connected}
             onMenuToggle={() => setSidebarOpen((prev) => !prev)}
             sidebarOpen={sidebarOpen}
-            hidden={isMobile && headerHidden}
           />
         </div>
 
@@ -126,8 +98,7 @@ export default function AppShell({
         <main
           style={{
             gridArea: 'main',
-            marginTop: (isMobile && headerHidden) ? 0 : '56px',
-            transition: isMobile ? 'margin-top 0.3s ease' : undefined,
+            marginTop: isMobile ? '10px' : hideHeader ? '56px' : '5px',
             display: 'flex',
             flexDirection: 'column',
             minHeight: 0,

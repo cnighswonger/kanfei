@@ -216,7 +216,7 @@ export default function DashboardGrid() {
   if (!editMode) {
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-        <div style={{ flexShrink: 0, padding: "24px 24px 0" }}>
+        <div style={{ flexShrink: 0, padding: isMobile ? "4px 12px 0" : "4px 24px 0" }}>
           <h2
             className="dashboard-heading"
             style={{
@@ -239,7 +239,7 @@ export default function DashboardGrid() {
           </h2>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "0 24px 24px" }}>
+        <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: isMobile ? "0 12px 12px" : "0 24px 24px" }}>
         {flags.nowcastEnabled && <NowcastBanner />}
 
         <div ref={gridRef} className="dashboard-grid" style={gridStyle}>
@@ -296,7 +296,7 @@ export default function DashboardGrid() {
   // --- Edit mode: DnD grid ---
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <div style={{ flexShrink: 0, padding: "24px 24px 0" }}>
+      <div style={{ flexShrink: 0, padding: isMobile ? "4px 12px 0" : "4px 24px 0" }}>
         <h2
           style={{
             margin: "0 0 16px 0",
@@ -309,7 +309,7 @@ export default function DashboardGrid() {
         </h2>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "0 24px 24px" }}>
+      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: isMobile ? "0 12px 12px" : "0 24px 24px" }}>
       <NowcastBanner />
 
       {/* Edit toolbar */}

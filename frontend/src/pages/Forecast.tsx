@@ -223,7 +223,7 @@ export default function Forecast() {
       <div
         style={{
           flexShrink: 0,
-          padding: "24px 24px 0",
+          padding: isMobile ? "4px 12px 0" : "4px 24px 0",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
@@ -258,7 +258,7 @@ export default function Forecast() {
         </button>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "0 24px 24px" }}>
+      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: isMobile ? "0 12px 12px" : "0 24px 24px" }}>
       {/* Zambretti local forecast */}
       {local ? (
         <ZambrettiSection

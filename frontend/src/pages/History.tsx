@@ -271,7 +271,7 @@ export default function History() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <div style={{ flexShrink: 0, padding: "24px 24px 0" }}>
+      <div style={{ flexShrink: 0, padding: isMobile ? "4px 12px 0" : "4px 24px 0" }}>
         <h2
           className="dashboard-heading"
           style={{
@@ -285,7 +285,7 @@ export default function History() {
         </h2>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "0 24px 24px" }}>
+      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: isMobile ? "0 12px 12px" : "0 24px 24px" }}>
       {/* Controls card */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <div

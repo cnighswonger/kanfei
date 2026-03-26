@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
 import { useIsMobile } from "../hooks/useIsMobile.ts";
-import { fetchStationStatus } from "../api/client.ts";
-import type { StationStatus } from "../api/types.ts";
+
+// --- About-specific overrides ---
+// The supercell background blends with default muted grays — use a brighter tone.
+const MUTED = "#abb4ca";
 
 // --- Shared styles ---
 
@@ -29,7 +30,7 @@ const bodyText: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  color: "var(--color-text-muted)",
+  color: MUTED,
   fontSize: "12px",
   fontFamily: "var(--font-body)",
   textTransform: "uppercase",
@@ -45,15 +46,6 @@ const valueStyle: React.CSSProperties = {
 };
 
 // --- Helpers ---
-
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  if (days > 0) return `${days}d ${hours}h ${mins}m`;
-  if (hours > 0) return `${hours}h ${mins}m`;
-  return `${mins}m`;
-}
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -93,7 +85,7 @@ function SupportCard({ isMobile }: { isMobile: boolean }) {
         style={{
           ...bodyText,
           fontSize: "13px",
-          color: "var(--color-text-muted)",
+          color: MUTED,
           marginBottom: "16px",
           maxWidth: "380px",
           marginLeft: "auto",
@@ -130,42 +122,43 @@ function SupportCard({ isMobile }: { isMobile: boolean }) {
 
 export default function About() {
   const isMobile = useIsMobile();
-  const [station, setStation] = useState<StationStatus | null>(null);
-
-  useEffect(() => {
-    fetchStationStatus()
-      .then(setStation)
-      .catch(() => {});
-  }, []);
-
   const pad = isMobile ? "12px" : "20px";
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", minHeight: 0, maxWidth: "720px", margin: "0 auto", padding: pad }}>
-      {/* Header */}
-      <h2
-        style={{
-          fontFamily: "var(--font-heading)",
-          fontSize: isMobile ? "22px" : "26px",
-          color: "var(--color-text)",
-          margin: "0 0 4px 0",
-        }}
-      >
-        Kanfei
-      </h2>
-      <p
-        style={{
-          ...bodyText,
-          fontSize: "13px",
-          color: "var(--color-text-muted)",
-          marginBottom: "20px",
-        }}
-      >
-        Weather Station Dashboard & Logger
-      </p>
+    <>
+      {/* Full-page supercell background — replaces the weather background on this view */}
+      <div style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 0,
+        backgroundImage: "url(/about-hero.jpg)",
+        backgroundSize: "cover",
+        backgroundPosition: "center 40%",
+      }} />
 
+      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, maxWidth: "860px", margin: "0 auto", padding: isMobile ? "0 12px 12px" : pad, position: "relative", zIndex: 1 }}>
       {/* Name + Description */}
       <div style={{ ...cardStyle, padding: isMobile ? "14px" : "20px" }}>
+        <h2
+          style={{
+            fontFamily: "var(--font-heading)",
+            fontSize: isMobile ? "22px" : "26px",
+            color: "var(--color-text)",
+            margin: "0 0 4px 0",
+          }}
+        >
+          Kanfei
+        </h2>
+        <p
+          style={{
+            ...bodyText,
+            fontSize: "13px",
+            color: MUTED,
+            marginBottom: "20px",
+          }}
+        >
+          Weather Station Dashboard & Logger
+        </p>
         <div style={{
           display: "flex",
           alignItems: isMobile ? "flex-start" : "center",
@@ -196,7 +189,7 @@ export default function About() {
             <div style={{
               fontSize: "12px",
               fontFamily: "var(--font-body)",
-              color: "var(--color-text-muted)",
+              color: MUTED,
             }}>
               Psalm 104:2{'\u2013'}3 (KJV) {'\u2014'} "Who coverest thyself with light as with a garment: who stretchest out the heavens like a curtain: Who layeth the beams of his chambers in the waters: who maketh the clouds his chariot: who walketh upon the wings of the wind."
             </div>
@@ -211,39 +204,6 @@ export default function About() {
         </p>
       </div>
 
-      {/* Station Info */}
-      {station && (
-        <div style={{ ...cardStyle, padding: isMobile ? "14px" : "20px" }}>
-          <h3 style={sectionTitle}>Station</h3>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-              gap: "4px 24px",
-            }}
-          >
-            <InfoRow label="Model" value={station.type_name || "Unknown"} />
-            <InfoRow
-              label="Status"
-              value={station.connected ? "Connected" : "Disconnected"}
-            />
-            <InfoRow
-              label="Firmware"
-              value={station.link_revision || "Unknown"}
-            />
-            <InfoRow label="Uptime" value={formatUptime(station.uptime_seconds ?? 0)} />
-            <InfoRow
-              label="Archive Records"
-              value={(station.archive_records ?? 0).toLocaleString()}
-            />
-            <InfoRow
-              label="Poll Interval"
-              value={`${station.poll_interval ?? 0}s`}
-            />
-          </div>
-        </div>
-      )}
-
       {/* Software Stack */}
       <div style={{ ...cardStyle, padding: isMobile ? "14px" : "20px" }}>
         <h3 style={sectionTitle}>Software</h3>
@@ -257,42 +217,11 @@ export default function About() {
           <InfoRow label="Frontend" value="React + TypeScript + Vite" />
           <InfoRow label="Backend" value="Python FastAPI" />
           <InfoRow label="Database" value="SQLite (SQLAlchemy)" />
-          <InfoRow label="Protocol" value="Davis serial protocol driver" />
+          <InfoRow label="Protocol" value="Multi-driver (serial, HTTP, UDP)" />
         </div>
       </div>
 
-      {/* Links */}
-      <div style={{ ...cardStyle, padding: isMobile ? "14px" : "20px" }}>
-        <h3 style={sectionTitle}>Links</h3>
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <a
-            href="https://github.com/cnighswonger/kanfei"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              color: "var(--color-accent)",
-              fontSize: "14px",
-              fontFamily: "var(--font-body)",
-              textDecoration: "none",
-            }}
-          >
-            GitHub Repository {'\u2192'}
-          </a>
-          <a
-            href="https://www.davisinstruments.com/pages/weather-702"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              color: "var(--color-accent)",
-              fontSize: "14px",
-              fontFamily: "var(--font-body)",
-              textDecoration: "none",
-            }}
-          >
-            Davis Instruments {'\u2192'}
-          </a>
-        </div>
-      </div>
+
 
       {/* Credits */}
       <div style={{ ...cardStyle, padding: isMobile ? "14px" : "20px" }}>
@@ -307,5 +236,6 @@ export default function About() {
       {/* Support */}
       <SupportCard isMobile={isMobile} />
     </div>
+    </>
   );
 }
