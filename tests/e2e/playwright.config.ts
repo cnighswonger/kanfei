@@ -3,6 +3,7 @@ import path from 'path';
 
 const PORT = 8765;
 const BASE_URL = `http://localhost:${PORT}`;
+const IS_CI = !!process.env.CI;
 
 // Resolve paths relative to project root
 const projectRoot = path.resolve(__dirname, '../..');
@@ -12,16 +13,23 @@ export default defineConfig({
   testDir: '.',
   testMatch: '*.spec.ts',
   fullyParallel: false,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  forbidOnly: IS_CI,
+  retries: IS_CI ? 1 : 0,
   workers: 1,
-  reporter: process.env.CI ? 'github' : 'html',
-  timeout: 30_000,
+  reporter: IS_CI ? 'github' : 'html',
+  timeout: IS_CI ? 60_000 : 30_000,
+
+  expect: {
+    // CI runners (headless Chrome, no GPU) need more time for React hydration
+    timeout: IS_CI ? 15_000 : 5_000,
+  },
 
   use: {
     baseURL: BASE_URL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // Wait for all API fetches to complete before considering the page loaded
+    navigationTimeout: IS_CI ? 30_000 : 15_000,
   },
 
   globalSetup: './global-setup.ts',
@@ -34,8 +42,8 @@ export default defineConfig({
     ].join(' '),
     cwd: path.join(projectRoot, 'backend'),
     url: `${BASE_URL}/api/setup/status`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
+    reuseExistingServer: !IS_CI,
+    timeout: IS_CI ? 60_000 : 30_000,
     env: {
       ...process.env,
       KANFEI_DB_PATH: path.resolve(__dirname, 'fixtures', 'test.db'),

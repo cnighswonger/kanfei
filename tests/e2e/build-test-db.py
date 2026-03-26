@@ -116,7 +116,7 @@ def build_readings(now: datetime) -> list[dict]:
 
         if i == TOTAL_ROWS:
             # Anchor row — use exact values
-            row = dict(ANCHOR, timestamp=ts.isoformat())
+            row = dict(ANCHOR, timestamp=ts.strftime("%Y-%m-%d %H:%M:%S.%f"))
             rows.append(row)
             continue
 
@@ -143,7 +143,7 @@ def build_readings(now: datetime) -> list[dict]:
         feels_like = heat_index if outside_temp > 200 else wind_chill  # warm → HI
 
         row = {
-            "timestamp": ts.isoformat(),
+            "timestamp": ts.strftime("%Y-%m-%d %H:%M:%S.%f"),
             "station_type": 2,
             "inside_temp": inside_temp,
             "outside_temp": outside_temp,

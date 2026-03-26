@@ -3,13 +3,12 @@ import { API_BASE, DRIVER_COUNT } from './helpers/values';
 
 /** Helper: set setup_complete and ensure the page sees the change. */
 async function enterWizard(request: import('@playwright/test').APIRequestContext, page: import('@playwright/test').Page) {
-  // Set config
   await request.put(`${API_BASE}/api/config`, {
     data: [{ key: 'setup_complete', value: 'false' }],
   });
 
-  // Navigate and intercept the setup status API to guarantee the wizard appears.
-  // This avoids any race between the config write and the frontend's fetch.
+  // Intercept the setup status API to guarantee the wizard appears,
+  // avoiding any race between the config write and the frontend's fetch.
   await page.route('**/api/setup/status', async (route) => {
     await route.fulfill({
       status: 200,
@@ -19,9 +18,18 @@ async function enterWizard(request: import('@playwright/test').APIRequestContext
   });
 
   await page.goto('/');
-  await page.waitForSelector('text=Weather Station Setup', { timeout: 15_000 });
-  // Clear the route intercept for subsequent requests
+  await expect(page.getByText('Weather Station Setup')).toBeVisible();
   await page.unroute('**/api/setup/status');
+}
+
+/** Wait for the driver catalog API to populate the dropdown. */
+async function waitForDrivers(page: import('@playwright/test').Page) {
+  const driverSelect = page.locator('select').first();
+  await expect(driverSelect).toBeVisible();
+  await page.waitForFunction(
+    () => document.querySelector('select')!.options.length >= 7,
+  );
+  return driverSelect;
 }
 
 async function restoreSetup(request: import('@playwright/test').APIRequestContext) {
@@ -43,32 +51,20 @@ test.describe('Setup Wizard', () => {
 
   test('driver dropdown in step 1 has 7 options', async ({ request, page }) => {
     await enterWizard(request, page);
-    const driverSelect = page.locator('select').first();
-    await page.waitForFunction(
-      () => document.querySelector('select')!.options.length >= 7,
-      { timeout: 15_000 },
-    );
+    const driverSelect = await waitForDrivers(page);
     await expect(driverSelect.locator('option')).toHaveCount(DRIVER_COUNT);
   });
 
   test('selecting ecowitt shows Gateway IP field', async ({ request, page }) => {
     await enterWizard(request, page);
-    const driverSelect = page.locator('select').first();
-    await page.waitForFunction(
-      () => document.querySelector('select')!.options.length >= 7,
-      { timeout: 15_000 },
-    );
+    const driverSelect = await waitForDrivers(page);
     await driverSelect.selectOption('ecowitt');
     await expect(page.getByText('Gateway IP Address')).toBeVisible();
   });
 
   test('can navigate through all 3 steps', async ({ request, page }) => {
     await enterWizard(request, page);
-    const driverSelect = page.locator('select').first();
-    await page.waitForFunction(
-      () => document.querySelector('select')!.options.length >= 7,
-      { timeout: 15_000 },
-    );
+    const driverSelect = await waitForDrivers(page);
     await driverSelect.selectOption('ecowitt');
     await page.locator('input[type="text"]').first().fill('192.168.1.100');
     await page.getByRole('button', { name: 'Next' }).click();
@@ -82,11 +78,7 @@ test.describe('Setup Wizard', () => {
 
   test('Back button navigates to previous steps', async ({ request, page }) => {
     await enterWizard(request, page);
-    const driverSelect = page.locator('select').first();
-    await page.waitForFunction(
-      () => document.querySelector('select')!.options.length >= 7,
-      { timeout: 15_000 },
-    );
+    const driverSelect = await waitForDrivers(page);
     await driverSelect.selectOption('tempest');
     await page.getByRole('button', { name: 'Next' }).click();
     await expect(page.getByText('Step 2 of 3')).toBeVisible();
@@ -105,11 +97,7 @@ test.describe('Setup Wizard', () => {
 
   test('Finish Setup completes wizard and shows dashboard', async ({ request, page }) => {
     await enterWizard(request, page);
-    const driverSelect = page.locator('select').first();
-    await page.waitForFunction(
-      () => document.querySelector('select')!.options.length >= 7,
-      { timeout: 15_000 },
-    );
+    const driverSelect = await waitForDrivers(page);
     await driverSelect.selectOption('ecowitt');
     await page.locator('input[type="text"]').first().fill('192.168.1.100');
     await page.getByRole('button', { name: 'Next' }).click();
@@ -119,7 +107,7 @@ test.describe('Setup Wizard', () => {
     await page.getByRole('button', { name: 'Next' }).click();
 
     await page.getByRole('button', { name: /finish/i }).click();
-    await expect(page.getByText('Weather Station Setup')).toBeHidden({ timeout: 10_000 });
-    await expect(page.locator('.dashboard-grid')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Weather Station Setup')).toBeHidden();
+    await expect(page.locator('.dashboard-grid')).toBeVisible();
   });
 });

@@ -3,20 +3,16 @@ import { ANCHOR } from './helpers/values';
 
 test.describe('Derived Conditions', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for derived conditions panel to render with data
-    await page.waitForSelector('text=Derived Conditions', { timeout: 15_000 });
+    await page.goto('/', { waitUntil: 'networkidle' });
+    await expect(page.getByText('Derived Conditions')).toBeVisible();
   });
 
   test('panel header shows "Derived Conditions"', async ({ page }) => {
     await expect(page.getByText('Derived Conditions')).toBeVisible();
   });
 
-  // Helper: find a derived condition value by its label
-  // The panel has pairs of label + value divs
   async function assertDerived(page: import('@playwright/test').Page, label: string, expected: string) {
     await expect(page.getByText(label)).toBeVisible();
-    // The value div is a sibling of the label div inside the same container
     const container = page.locator(`text=${label}`).locator('..').locator(`text=${expected}`);
     await expect(container).toBeVisible();
   }

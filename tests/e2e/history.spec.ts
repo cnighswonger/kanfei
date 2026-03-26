@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('History page', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/history');
-    await page.waitForSelector('h2:has-text("History")', { timeout: 15_000 });
+    await page.goto('/history', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
   });
 
   test('page loads with sensor dropdown', async ({ page }) => {
@@ -19,22 +19,17 @@ test.describe('History page', () => {
   });
 
   test('chart renders with data', async ({ page }) => {
-    // Select a sensor that has data in our test DB
     const sensorSelect = page.locator('main select').first();
     await sensorSelect.selectOption({ label: 'Outdoor Temperature' });
-    // Use 24 Hours range to ensure we get data from today
     await page.getByRole('button', { name: '24 Hours' }).click();
-    // Wait for Highcharts to render
-    await page.waitForSelector('.highcharts-container', { timeout: 15_000 });
-    const chart = page.locator('.highcharts-container');
-    await expect(chart.first()).toBeVisible();
+    await expect(page.locator('.highcharts-container').first()).toBeVisible();
   });
 
   test('chart SVG has rendered paths', async ({ page }) => {
     const sensorSelect = page.locator('main select').first();
     await sensorSelect.selectOption({ label: 'Outdoor Temperature' });
     await page.getByRole('button', { name: '24 Hours' }).click();
-    await page.waitForSelector('.highcharts-container svg', { timeout: 15_000 });
+    await page.waitForSelector('.highcharts-container svg');
     const paths = page.locator('.highcharts-container svg path');
     const count = await paths.count();
     expect(count).toBeGreaterThan(0);
@@ -42,14 +37,11 @@ test.describe('History page', () => {
 
   test('switching sensor re-fetches data', async ({ page }) => {
     const sensorSelect = page.locator('main select').first();
-    // Select outdoor temp with 24h range to start
     await sensorSelect.selectOption({ label: 'Outdoor Temperature' });
     await page.getByRole('button', { name: '24 Hours' }).click();
-    await page.waitForTimeout(1500);
+    await page.waitForLoadState('networkidle');
 
-    // Switch to Indoor Temperature (also has data in test DB)
     await sensorSelect.selectOption({ label: 'Indoor Temperature' });
-    // Verify the dropdown value changed (key is temperature_inside)
     await expect(sensorSelect).toHaveValue('temperature_inside');
   });
 
