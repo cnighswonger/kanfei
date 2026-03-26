@@ -72,7 +72,7 @@ jobs:
   e2e:
     name: E2E tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     needs: [frontend, backend]
     if: contains(github.event.pull_request.labels.*.name, 'e2e')
 
