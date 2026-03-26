@@ -45,6 +45,8 @@ tests/e2e/test-results/
 tests/e2e/playwright-report/
 tests/e2e/node_modules/
 
+# Debian build artifacts (source files live on deb branch)
+debian/
+
 # API keys
 grok.txt
-notrack/
