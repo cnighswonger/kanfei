@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Pre-push hook: remind developers on e2e branches to run the E2E suite.
+#
+# Install:
+#   cp scripts/hooks/pre-push .git/hooks/pre-push
+#   chmod +x .git/hooks/pre-push
+#
+# Or configure git to use the hooks directory:
+#   git config core.hooksPath scripts/hooks
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+if [[ "$BRANCH" =~ ^(feature|fix)/e2e/ ]]; then
+  echo ""
+  echo "=================================================="
+  echo "  E2E branch detected: $BRANCH"
+  echo "=================================================="
+  echo ""
+  echo "  Before requesting review, run the E2E suite and"
+  echo "  post the results to your PR:"
+  echo ""
+  echo "    ./scripts/e2e-report.sh"
+  echo ""
+  echo "  Copy the markdown output into a PR comment."
+  echo "=================================================="
+  echo ""
+fi
+
+# Always allow the push — this is a reminder, not a gate
+exit 0

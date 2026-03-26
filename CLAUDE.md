@@ -14,6 +14,7 @@ Self-hosted weather station dashboard and data logger for personal weather stati
 
 - **Main branch**: `origin/main` — primary development target
 - **Feature branches**: `feature/*` — branch from main, open PR, merge via PR, delete branch
+- **E2E branches**: `feature/e2e/*` or `fix/e2e/*` — for changes requiring E2E testing (UI behavior changes). Run `./scripts/e2e-report.sh` and post results to PR before review.
 - **Fix branches**: `fix/*` — for bugfixes
 - **Debian packaging branch**: `deb` — package build files
 - Small changes can go directly to main; larger work should use branches + PRs
