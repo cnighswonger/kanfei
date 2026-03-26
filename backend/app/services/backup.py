@@ -271,6 +271,38 @@ def _seconds_until_time(target_hhmm: str, tz_name: str = "") -> float:
     return (target - now).total_seconds()
 
 
+def _read_backup_config(db_path: str) -> dict:
+    """Read current backup config from station_config (best-effort)."""
+    defaults = {
+        "backup_enabled": False,
+        "backup_interval_hours": 24,
+        "backup_retention_count": 7,
+        "backup_directory": "",
+        "backup_schedule_time": "",
+        "station_timezone": "",
+    }
+    try:
+        conn = sqlite3.connect(db_path)
+        for key in defaults:
+            cur = conn.execute(
+                "SELECT value FROM station_config WHERE key = ?", (key,)
+            )
+            row = cur.fetchone()
+            if row is not None:
+                val = row[0]
+                if val.lower() in ("true", "false"):
+                    defaults[key] = val.lower() == "true"
+                else:
+                    try:
+                        defaults[key] = int(val)
+                    except ValueError:
+                        defaults[key] = val
+        conn.close()
+    except Exception:
+        pass
+    return defaults
+
+
 async def backup_scheduler(
     db_path: str,
     backup_dir: str,
@@ -281,36 +313,49 @@ async def backup_scheduler(
 ) -> None:
     """Background task — creates backups on a schedule with rotation.
 
-    If schedule_time is set (HH:MM), runs at that time of day.
-    Otherwise, runs on a fixed interval from boot.
+    Re-reads config from DB each cycle so changes in the Settings UI
+    take effect without restarting. If schedule_time is set (HH:MM),
+    runs at that time of day. Otherwise, runs on a fixed interval.
 
     Runs until cancelled. Intended to be started as an asyncio task
     in the web app lifespan.
     """
-    if schedule_time:
-        logger.info(
-            "Backup scheduler started: daily at %s (%s), keep %d, dir=%s",
-            schedule_time, timezone_name or "local", retention_count, backup_dir,
-        )
-    else:
-        logger.info(
-            "Backup scheduler started: every %dh, keep %d, dir=%s",
-            interval_hours, retention_count, backup_dir,
-        )
+    logger.info("Backup scheduler started (dir=%s)", backup_dir)
 
     while True:
-        if schedule_time:
-            wait = _seconds_until_time(schedule_time, timezone_name)
-            logger.debug("Backup scheduled in %.0f seconds", wait)
+        # Re-read config each cycle so Settings changes take effect
+        cfg = _read_backup_config(db_path)
+        if not cfg["backup_enabled"]:
+            # Disabled — check again in 60s
+            await asyncio.sleep(60)
+            continue
+
+        cur_schedule = str(cfg.get("backup_schedule_time", ""))
+        cur_interval = int(cfg.get("backup_interval_hours", 24))
+        cur_retention = int(cfg.get("backup_retention_count", 7))
+        cur_tz = str(cfg.get("station_timezone", ""))
+        cur_dir = get_backup_dir(db_path, str(cfg.get("backup_directory", "")))
+
+        if cur_schedule:
+            wait = _seconds_until_time(cur_schedule, cur_tz)
+            logger.debug("Backup scheduled at %s in %.0f seconds", cur_schedule, wait)
             await asyncio.sleep(wait)
         else:
-            await asyncio.sleep(interval_hours * 3600)
+            await asyncio.sleep(cur_interval * 3600)
+
+        # Re-check enabled after sleep (user may have disabled during wait)
+        cfg = _read_backup_config(db_path)
+        if not cfg["backup_enabled"]:
+            continue
+
+        cur_retention = int(cfg.get("backup_retention_count", 7))
+        cur_dir = get_backup_dir(db_path, str(cfg.get("backup_directory", "")))
 
         try:
             filename = generate_backup_filename()
-            output = str(Path(backup_dir) / filename)
+            output = str(Path(cur_dir) / filename)
             manifest = create_backup(db_path, output)
-            deleted = rotate_backups(backup_dir, keep=retention_count)
+            deleted = rotate_backups(cur_dir, keep=cur_retention)
             logger.info(
                 "Scheduled backup complete: %s (%d bytes, %d rotated)",
                 filename, manifest.get("archive_size_bytes", 0), deleted,

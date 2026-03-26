@@ -130,24 +130,17 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("AI nowcast not enabled")
 
-    # Start backup scheduler if enabled
-    backup_task = None
-    if nc_config.get_bool("backup_enabled", False):
-        from .services.backup import backup_scheduler, get_backup_dir
-        backup_dir = get_backup_dir(
-            settings.db_path,
-            nc_config.get("backup_directory", ""),
-        )
-        interval = int(nc_config.get("backup_interval_hours", 24))
-        retention = int(nc_config.get("backup_retention_count", 7))
-        schedule_time = str(nc_config.get("backup_schedule_time", ""))
-        tz_name = str(nc_config.get("station_timezone", ""))
-        backup_task = asyncio.create_task(
-            backup_scheduler(
-                settings.db_path, backup_dir, interval, retention,
-                schedule_time=schedule_time, timezone_name=tz_name,
-            )
-        )
+    # Start backup scheduler — always runs, polls config each cycle.
+    # Handles enable/disable, schedule changes, and interval changes
+    # without requiring a restart.
+    from .services.backup import backup_scheduler, get_backup_dir
+    backup_dir = get_backup_dir(
+        settings.db_path,
+        nc_config.get("backup_directory", ""),
+    )
+    backup_task = asyncio.create_task(
+        backup_scheduler(settings.db_path, backup_dir)
+    )
 
     yield
 
