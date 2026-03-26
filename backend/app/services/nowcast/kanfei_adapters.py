@@ -184,23 +184,24 @@ class KanfeiStorageBackend:
                 .order_by(SensorReadingModel.timestamp.asc())
                 .all()
             )
+            from ...models.sensor_meta import convert
             return [
                 {
                     "timestamp": r.timestamp,
-                    "outside_temp": r.outside_temp,
-                    "inside_temp": r.inside_temp,
+                    "outside_temp": convert("outside_temp", r.outside_temp),
+                    "inside_temp": convert("inside_temp", r.inside_temp),
                     "outside_humidity": r.outside_humidity,
                     "inside_humidity": r.inside_humidity,
-                    "wind_speed": r.wind_speed,
+                    "wind_speed": convert("wind_speed", r.wind_speed),
                     "wind_direction": r.wind_direction,
-                    "barometer": r.barometer,
-                    "rain_total": r.rain_total,
-                    "rain_rate": r.rain_rate,
+                    "barometer": convert("barometer", r.barometer),
+                    "rain_total": convert("rain_total", r.rain_total),
+                    "rain_rate": convert("rain_rate", r.rain_rate),
                     "solar_radiation": r.solar_radiation,
-                    "uv_index": r.uv_index,
-                    "dew_point": r.dew_point,
-                    "heat_index": r.heat_index,
-                    "wind_chill": r.wind_chill,
+                    "uv_index": convert("uv_index", r.uv_index),
+                    "dew_point": convert("dew_point", r.dew_point),
+                    "heat_index": convert("heat_index", r.heat_index),
+                    "wind_chill": convert("wind_chill", r.wind_chill),
                     "pressure_trend": r.pressure_trend,
                 }
                 for r in rows
