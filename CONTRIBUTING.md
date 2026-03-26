@@ -77,14 +77,51 @@ The `kanfei-nowcast` package is a separate proprietary product. Do not reference
 
 Files in `backend/app/services/` that import from `kanfei_nowcast` are thin shims — do not modify them.
 
+## E2E Testing
+
+Changes that affect user-visible frontend behavior require end-to-end testing:
+
+- Dashboard rendering, gauge layout, tile content
+- Settings UI — new tabs, form fields, save/reconnect
+- Navigation, routing, wizard flow
+- WebSocket/data pipeline changes
+- API response shape changes consumed by the frontend
+
+### Workflow
+
+1. Use a branch named `feature/e2e/your-feature` or `fix/e2e/your-fix`
+2. Develop and iterate normally
+3. Before requesting review, run the E2E suite:
+   ```bash
+   ./scripts/e2e-report.sh
+   ```
+4. Paste the markdown output into your PR description or a comment
+5. Reviewer checks E2E results before approving
+
+### Setup (first time)
+
+```bash
+cd frontend && npm run build          # E2E tests run against the built frontend
+cd ../tests/e2e && npm install
+npx playwright install chromium
+```
+
+### When E2E is NOT required
+
+- Backend-only changes (API internals, DB migrations, upload services)
+- Pure CSS/styling tweaks (unless layout-breaking)
+- Documentation, CI config, tooling
+- Driver additions (backend protocol code)
+
 ## Pull Request Process
 
 1. Create a branch: `feature/your-feature` or `fix/your-fix`
 2. Make focused, well-tested changes
 3. Ensure TypeScript compiles and all backend tests pass
-4. Open a PR against `main` with a clear description of what and why
-5. Respond to review feedback
-6. Once approved, the maintainer will merge
+4. For UI changes: use an `e2e` branch and include E2E results (see above)
+5. Open a PR against `main` with a clear description of what and why
+6. Respond to review feedback
+7. Once approved, the maintainer will merge
 
 ## Reporting Bugs
 
