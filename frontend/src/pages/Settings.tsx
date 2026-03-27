@@ -1611,6 +1611,8 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState<"station" | "display" | "services" | "alerts" | "nowcast" | "spray" | "usage" | "database" | "backup" | "system">("station");
   const [telegramTesting, setTelegramTesting] = useState(false);
   const [telegramTestResult, setTelegramTestResult] = useState<string | null>(null);
+  const [discordTesting, setDiscordTesting] = useState(false);
+  const [discordTestResult, setDiscordTestResult] = useState<string | null>(null);
 
   const { flags, refresh: refreshFeatureFlags } = useFeatureFlags();
   const { themeName, setThemeName } = useTheme();
@@ -3101,6 +3103,159 @@ export default function Settings() {
             color: "var(--color-danger)",
           }}>
             Last error: {String(val("bot_telegram_last_error"))}
+          </div>
+        )}
+      </div>
+
+      {/* Discord Bot section */}
+      <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
+        <h3 style={sectionTitle}>Discord Bot</h3>
+        <div style={fieldGroup}>
+          <label style={checkboxLabel}>
+            <input
+              type="checkbox"
+              checked={val("bot_discord_enabled") === true}
+              onChange={(e) => updateField("bot_discord_enabled", e.target.checked)}
+            />
+            Enable Discord bot
+          </label>
+        </div>
+        <div style={{ opacity: val("bot_discord_enabled") === true ? 1 : 0.5, pointerEvents: val("bot_discord_enabled") === true ? "auto" : "none" }}>
+        <div style={gridTwoCol(isMobile)}>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Bot Token</label>
+            <input
+              style={inputStyle}
+              type="password"
+              placeholder="From Discord Developer Portal"
+              value={String(val("bot_discord_token") || "")}
+              onChange={(e) => updateField("bot_discord_token", e.target.value)}
+            />
+          </div>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Guild ID</label>
+            <input
+              style={inputStyle}
+              type="text"
+              placeholder="Target server ID"
+              value={String(val("bot_discord_guild_id") || "")}
+              onChange={(e) => updateField("bot_discord_guild_id", e.target.value)}
+            />
+          </div>
+        </div>
+        <div style={fieldGroup}>
+          <label style={labelStyle}>Channel ID</label>
+          <input
+            style={inputStyle}
+            type="text"
+            placeholder="Notification channel ID"
+            value={String(val("bot_discord_channel_id") || "")}
+            onChange={(e) => updateField("bot_discord_channel_id", e.target.value)}
+          />
+          <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginTop: "4px", display: "block" }}>
+            Comma-separated for multiple channels
+          </span>
+        </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Commands</label>
+          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            {["current", "status", "help"].map((cmd) => {
+              const cmds = String(val("bot_discord_commands") || "").split(",").map((s) => s.trim());
+              return (
+                <label key={cmd} style={checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={cmds.includes(cmd)}
+                    onChange={(e) => {
+                      const updated = e.target.checked
+                        ? [...cmds, cmd]
+                        : cmds.filter((c) => c !== cmd);
+                      updateField("bot_discord_commands", updated.filter(Boolean).join(","));
+                    }}
+                  />
+                  /{cmd}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Notifications</label>
+          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            {[["nowcast", "Nowcast updates"], ["alerts", "Alert thresholds"]].map(([key, label]) => {
+              const notifs = String(val("bot_discord_notifications") || "").split(",").map((s) => s.trim());
+              return (
+                <label key={key} style={checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={notifs.includes(key)}
+                    onChange={(e) => {
+                      const updated = e.target.checked
+                        ? [...notifs, key]
+                        : notifs.filter((n) => n !== key);
+                      updateField("bot_discord_notifications", updated.filter(Boolean).join(","));
+                    }}
+                  />
+                  {label}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <button
+            style={{ ...btnPrimary, opacity: discordTesting ? 0.6 : 1 }}
+            disabled={discordTesting || !val("bot_discord_token") || !val("bot_discord_channel_id")}
+            onClick={async () => {
+              setDiscordTesting(true);
+              setDiscordTestResult(null);
+              try {
+                const resp = await fetch(`${API_BASE}/api/discord/test`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    token: String(val("bot_discord_token") || ""),
+                    channel_id: String(val("bot_discord_channel_id") || "").split(",")[0].trim(),
+                  }),
+                });
+                if (resp.ok) {
+                  setDiscordTestResult("Test message sent successfully!");
+                } else {
+                  const data = await resp.json().catch(() => ({ detail: "Unknown error" }));
+                  setDiscordTestResult(`Error: ${data.detail || resp.statusText}`);
+                }
+              } catch (err) {
+                setDiscordTestResult(`Error: ${err instanceof Error ? err.message : "Network error"}`);
+              } finally {
+                setDiscordTesting(false);
+              }
+            }}
+          >
+            {discordTesting ? "Sending..." : "Send Test Message"}
+          </button>
+          {discordTestResult && (
+            <span style={{
+              fontSize: "13px",
+              fontFamily: "var(--font-body)",
+              color: discordTestResult.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
+            }}>
+              {discordTestResult}
+            </span>
+          )}
+        </div>
+        </div>
+        {val("bot_discord_last_error") && (
+          <div style={{
+            marginTop: "12px",
+            padding: "8px 12px",
+            borderRadius: "6px",
+            fontSize: "13px",
+            fontFamily: "var(--font-body)",
+            background: "rgba(211,47,47,0.1)",
+            border: "1px solid var(--color-danger)",
+            color: "var(--color-danger)",
+          }}>
+            Last error: {String(val("bot_discord_last_error"))}
           </div>
         )}
       </div>
