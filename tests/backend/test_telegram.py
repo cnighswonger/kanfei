@@ -9,15 +9,18 @@ import pytest
 
 from app.services.telegram import (
     TelegramBot,
+    _read_telegram_config,
+)
+from app.services.bot_formatting import (
     format_current_conditions,
     format_alert_triggered,
     format_alert_cleared,
     format_nowcast_update,
     format_help,
-    _read_telegram_config,
-    _cardinal,
-    _get_current_conditions,
+    cardinal,
+    get_current_conditions,
 )
+from app.services.bot_ratelimit import RateLimiter
 
 
 @pytest.fixture
@@ -80,22 +83,22 @@ def fake_db_with_reading(fake_db):
 class TestCardinal:
 
     def test_north(self):
-        assert _cardinal(0) == "N"
+        assert cardinal(0) == "N"
 
     def test_south(self):
-        assert _cardinal(180) == "S"
+        assert cardinal(180) == "S"
 
     def test_east(self):
-        assert _cardinal(90) == "E"
+        assert cardinal(90) == "E"
 
     def test_west(self):
-        assert _cardinal(270) == "W"
+        assert cardinal(270) == "W"
 
     def test_none(self):
-        assert _cardinal(None) == "---"
+        assert cardinal(None) == "---"
 
     def test_northeast(self):
-        assert _cardinal(45) == "NE"
+        assert cardinal(45) == "NE"
 
 
 class TestReadTelegramConfig:
@@ -135,10 +138,10 @@ class TestReadTelegramConfig:
 class TestGetCurrentConditions:
 
     def test_returns_none_when_empty(self, fake_db):
-        assert _get_current_conditions(fake_db) is None
+        assert get_current_conditions(fake_db) is None
 
     def test_returns_latest_reading(self, fake_db_with_reading):
-        reading = _get_current_conditions(fake_db_with_reading)
+        reading = get_current_conditions(fake_db_with_reading)
         assert reading is not None
         assert reading["outside_temp"] == 222
         assert reading["wind_speed"] == 45
@@ -237,41 +240,29 @@ class TestChatIdWhitelist:
 class TestRateLimiting:
 
     def test_first_command_not_limited(self):
-        bot = TelegramBot(
-            token="test", chat_ids=set(), db_path="",
-            enabled_commands={"current"}, dry_run=True,
-        )
-        assert bot._is_rate_limited("123", "current") is False
+        rl = RateLimiter()
+        assert rl.is_limited("123", "current") is False
 
     def test_same_command_repeated_limited(self):
-        bot = TelegramBot(
-            token="test", chat_ids=set(), db_path="",
-            enabled_commands={"current"}, dry_run=True,
-        )
-        bot._is_rate_limited("123", "current")
-        assert bot._is_rate_limited("123", "current") is True
+        rl = RateLimiter()
+        rl.is_limited("123", "current")
+        assert rl.is_limited("123", "current") is True
 
     def test_different_command_allowed_after_debounce(self):
-        bot = TelegramBot(
-            token="test", chat_ids=set(), db_path="",
-            enabled_commands={"current", "status"}, dry_run=True,
-        )
-        bot._is_rate_limited("123", "current")
+        rl = RateLimiter()
+        rl.is_limited("123", "current")
         # Different command within 1s debounce window — blocked
-        assert bot._is_rate_limited("123", "status") is True
+        assert rl.is_limited("123", "status") is True
         # Simulate debounce expiry by backdating the timestamp
-        for key in bot._last_command_time:
-            bot._last_command_time[key] -= 2.0
+        for key in rl._timestamps:
+            rl._timestamps[key] -= 2.0
         # Now a different command should be allowed
-        assert bot._is_rate_limited("123", "status") is False
+        assert rl.is_limited("123", "status") is False
 
     def test_different_chats_independent(self):
-        bot = TelegramBot(
-            token="test", chat_ids=set(), db_path="",
-            enabled_commands={"current"}, dry_run=True,
-        )
-        bot._is_rate_limited("123", "current")
-        assert bot._is_rate_limited("456", "current") is False
+        rl = RateLimiter()
+        rl.is_limited("123", "current")
+        assert rl.is_limited("456", "current") is False
 
 
 class TestHandleCurrentCommand:
