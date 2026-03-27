@@ -1608,7 +1608,7 @@ export default function Settings() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [reconnectMsg, setReconnectMsg] = useState<string | null>(null);
   const [ports, setPorts] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<"station" | "display" | "services" | "alerts" | "nowcast" | "spray" | "usage" | "database" | "backup" | "system">("station");
+  const [activeTab, setActiveTab] = useState<"station" | "display" | "services" | "bots" | "alerts" | "nowcast" | "spray" | "usage" | "database" | "backup" | "system">("station");
   const [telegramTesting, setTelegramTesting] = useState(false);
   const [telegramTestResult, setTelegramTestResult] = useState<string | null>(null);
   const [discordTesting, setDiscordTesting] = useState(false);
@@ -1999,6 +1999,7 @@ export default function Settings() {
           ["station", "Station"],
           ["display", "Display"],
           ["services", "Services"],
+          ["bots", "Bots"],
           ["alerts", "Alerts"],
           ...(flags.nowcastEnabled ? [["nowcast", "Nowcast"] as const] : []),
           ...(flags.sprayEnabled ? [["spray", "Spray"] as const] : []),
@@ -2964,6 +2965,9 @@ export default function Settings() {
         </div>
       </div>
 
+      </>)}
+
+      {activeTab === "bots" && (<>
       {/* Telegram Bot section */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Telegram Bot</h3>
