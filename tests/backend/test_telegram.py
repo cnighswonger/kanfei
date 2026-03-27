@@ -241,23 +241,37 @@ class TestRateLimiting:
             token="test", chat_ids=set(), db_path="",
             enabled_commands={"current"}, dry_run=True,
         )
-        assert bot._is_rate_limited("123") is False
+        assert bot._is_rate_limited("123", "current") is False
 
-    def test_rapid_second_command_limited(self):
+    def test_same_command_repeated_limited(self):
         bot = TelegramBot(
             token="test", chat_ids=set(), db_path="",
             enabled_commands={"current"}, dry_run=True,
         )
-        bot._is_rate_limited("123")  # First call records time
-        assert bot._is_rate_limited("123") is True
+        bot._is_rate_limited("123", "current")
+        assert bot._is_rate_limited("123", "current") is True
+
+    def test_different_command_allowed_after_debounce(self):
+        bot = TelegramBot(
+            token="test", chat_ids=set(), db_path="",
+            enabled_commands={"current", "status"}, dry_run=True,
+        )
+        bot._is_rate_limited("123", "current")
+        # Different command within 1s debounce window — blocked
+        assert bot._is_rate_limited("123", "status") is True
+        # Simulate debounce expiry by backdating the timestamp
+        for key in bot._last_command_time:
+            bot._last_command_time[key] -= 2.0
+        # Now a different command should be allowed
+        assert bot._is_rate_limited("123", "status") is False
 
     def test_different_chats_independent(self):
         bot = TelegramBot(
             token="test", chat_ids=set(), db_path="",
             enabled_commands={"current"}, dry_run=True,
         )
-        bot._is_rate_limited("123")
-        assert bot._is_rate_limited("456") is False
+        bot._is_rate_limited("123", "current")
+        assert bot._is_rate_limited("456", "current") is False
 
 
 class TestHandleCurrentCommand:

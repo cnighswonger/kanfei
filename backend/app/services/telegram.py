@@ -13,8 +13,10 @@ logger = logging.getLogger(__name__)
 # How often the supervisor checks config for enable/disable changes (seconds).
 _SUPERVISOR_POLL = 30
 
-# Rate limit: minimum seconds between command responses per chat.
-_RATE_LIMIT_SECONDS = 5
+# Rate limit: minimum seconds between repeated identical commands per chat.
+_RATE_LIMIT_SAME_CMD = 5
+# Rate limit: minimum seconds between different commands per chat (debounce).
+_RATE_LIMIT_DIFF_CMD = 1
 
 # Telegram message length limit.
 _MAX_MESSAGE_LENGTH = 4096
@@ -246,7 +248,7 @@ class TelegramBot:
         self._enabled_commands = enabled_commands
         self._enabled_notifications = enabled_notifications or {"nowcast", "alerts"}
         self._dry_run = dry_run
-        self._last_command_time: dict[str, float] = {}
+        self._last_command_time: dict[tuple[str, str], float] = {}
         self._app = None
         self._running = False
 
@@ -326,13 +328,26 @@ class TelegramBot:
             return True
         return chat_id in self._chat_ids
 
-    def _is_rate_limited(self, chat_id: str) -> bool:
-        """Check if a chat has exceeded the rate limit."""
+    def _is_rate_limited(self, chat_id: str, command: str = "") -> bool:
+        """Check if a chat has exceeded the rate limit for a command.
+
+        Same command repeated: 5s cooldown (prevents spam).
+        Different command: 1s cooldown (debounce double-taps only).
+        """
         now = time.monotonic()
-        last = self._last_command_time.get(chat_id, 0.0)
-        if now - last < _RATE_LIMIT_SECONDS:
+        key = (chat_id, command)
+
+        # Check same-command cooldown
+        last_same = self._last_command_time.get(key, 0.0)
+        if now - last_same < _RATE_LIMIT_SAME_CMD:
             return True
-        self._last_command_time[chat_id] = now
+
+        # Check cross-command debounce (any recent command from this chat)
+        for (cid, _), ts in self._last_command_time.items():
+            if cid == chat_id and now - ts < _RATE_LIMIT_DIFF_CMD:
+                return True
+
+        self._last_command_time[key] = now
         return False
 
     async def _send_message(self, chat_id: str, text: str,
@@ -361,7 +376,7 @@ class TelegramBot:
             logger.debug("Ignoring /current from unauthorized chat %s", chat_id)
             return
 
-        if self._is_rate_limited(chat_id):
+        if self._is_rate_limited(chat_id, "current"):
             return
 
         reading = _get_current_conditions(self._db_path)
@@ -380,7 +395,7 @@ class TelegramBot:
             logger.debug("Ignoring /status from unauthorized chat %s", chat_id)
             return
 
-        if self._is_rate_limited(chat_id):
+        if self._is_rate_limited(chat_id, "status"):
             return
 
         reading = _get_current_conditions(self._db_path)
@@ -421,7 +436,7 @@ class TelegramBot:
         if not self._is_chat_allowed(chat_id):
             return
 
-        if self._is_rate_limited(chat_id):
+        if self._is_rate_limited(chat_id, "help"):
             return
 
         await self._send_message(chat_id, format_help())
