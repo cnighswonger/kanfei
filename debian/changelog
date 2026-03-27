@@ -1,3 +1,19 @@
+kanfei (0.1.0~beta5) unstable; urgency=low
+
+  * Telegram bot: /current, /status, /help + outbound alert/nowcast notifications
+  * Discord bot: slash commands + outbound notifications (NAT-friendly)
+  * BotManager protocol: shared formatting, rate limiting, adapter pattern
+  * Dedicated Bots tab in Settings UI
+  * About view redesign: supercell storm background, tighter layout
+  * Mobile UX: tighter padding, pinned header across all views
+  * Service management UI with reconnect UX and IPC timeout fix
+  * WU uploader @staticmethod fix
+  * E2E tests moved to local workflow (56 tests)
+  * Integer precision fix for Discord/Telegram snowflake IDs
+  * NAMING_CONVENTIONS.md updated for SI-internal architecture
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Thu, 27 Mar 2026 19:00:00 +0000
+
 kanfei (0.1.0~beta4) unstable; urgency=low
 
   * SI unit storage: all sensor data now stored in SI (°C, hPa, m/s, mm).
