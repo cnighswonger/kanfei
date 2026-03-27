@@ -1114,8 +1114,6 @@ function BackupTab({ val, updateField, isMobile }: {
   const [loading, setLoading] = useState(true);
   const [backingUp, setBackingUp] = useState(false);
   const [backupResult, setBackupResult] = useState<string | null>(null);
-  const [telegramTesting, setTelegramTesting] = useState(false);
-  const [telegramTestResult, setTelegramTestResult] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
   const [restoreConfirm, setRestoreConfirm] = useState("");
@@ -1611,6 +1609,8 @@ export default function Settings() {
   const [reconnectMsg, setReconnectMsg] = useState<string | null>(null);
   const [ports, setPorts] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"station" | "display" | "services" | "alerts" | "nowcast" | "spray" | "usage" | "database" | "backup" | "system">("station");
+  const [telegramTesting, setTelegramTesting] = useState(false);
+  const [telegramTestResult, setTelegramTestResult] = useState<string | null>(null);
 
   const { flags, refresh: refreshFeatureFlags } = useFeatureFlags();
   const { themeName, setThemeName } = useTheme();
