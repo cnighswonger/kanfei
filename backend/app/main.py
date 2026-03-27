@@ -226,9 +226,10 @@ async def lifespan(app: FastAPI):
 
     # Start Telegram bot supervisor — always runs, polls config each cycle.
     # Handles enable/disable and token changes without requiring a restart.
+    # Receives alert events via IPC and nowcast events via the event emitter.
     from .services.telegram import telegram_bot_supervisor
     telegram_task = asyncio.create_task(
-        telegram_bot_supervisor(settings.db_path)
+        telegram_bot_supervisor(settings.db_path, settings.ipc_port, nc_events)
     )
 
     yield
