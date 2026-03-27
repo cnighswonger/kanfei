@@ -113,12 +113,23 @@ _DEFAULTS: dict[str, object] = {
 }
 
 
+_JS_MAX_SAFE_INTEGER = 2**53 - 1
+
+
 def _coerce_value(raw: str) -> object:
-    """Try to coerce a stored string back to bool/int/float."""
+    """Try to coerce a stored string back to bool/int/float.
+
+    Integers exceeding JavaScript's MAX_SAFE_INTEGER (2^53 - 1) are
+    returned as strings to avoid precision loss in JSON serialization.
+    Discord/Telegram IDs are 64-bit snowflakes that exceed this limit.
+    """
     if raw.lower() in ("true", "false"):
         return raw.lower() == "true"
     try:
-        return int(raw)
+        val = int(raw)
+        if abs(val) > _JS_MAX_SAFE_INTEGER:
+            return raw
+        return val
     except ValueError:
         pass
     try:
