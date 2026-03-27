@@ -1609,6 +1609,8 @@ export default function Settings() {
   const [reconnectMsg, setReconnectMsg] = useState<string | null>(null);
   const [ports, setPorts] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"station" | "display" | "services" | "alerts" | "nowcast" | "spray" | "usage" | "database" | "backup" | "system">("station");
+  const [telegramTesting, setTelegramTesting] = useState(false);
+  const [telegramTestResult, setTelegramTestResult] = useState<string | null>(null);
 
   const { flags, refresh: refreshFeatureFlags } = useFeatureFlags();
   const { themeName, setThemeName } = useTheme();
@@ -2958,6 +2960,149 @@ export default function Settings() {
             </select>
           </div>
         </div>
+      </div>
+
+      {/* Telegram Bot section */}
+      <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
+        <h3 style={sectionTitle}>Telegram Bot</h3>
+        <div style={fieldGroup}>
+          <label style={checkboxLabel}>
+            <input
+              type="checkbox"
+              checked={val("bot_telegram_enabled") === true}
+              onChange={(e) => updateField("bot_telegram_enabled", e.target.checked)}
+            />
+            Enable Telegram bot
+          </label>
+        </div>
+        <div style={{ opacity: val("bot_telegram_enabled") === true ? 1 : 0.5, pointerEvents: val("bot_telegram_enabled") === true ? "auto" : "none" }}>
+        <div style={gridTwoCol(isMobile)}>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Bot Token</label>
+            <input
+              style={inputStyle}
+              type="password"
+              placeholder="From @BotFather"
+              value={String(val("bot_telegram_token") || "")}
+              onChange={(e) => updateField("bot_telegram_token", e.target.value)}
+            />
+          </div>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Chat ID</label>
+            <input
+              style={inputStyle}
+              type="text"
+              placeholder="Target chat or group ID"
+              value={String(val("bot_telegram_chat_id") || "")}
+              onChange={(e) => updateField("bot_telegram_chat_id", e.target.value)}
+            />
+            <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginTop: "4px", display: "block" }}>
+              Comma-separated for multiple chats
+            </span>
+          </div>
+        </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Commands</label>
+          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            {["current", "status", "help"].map((cmd) => {
+              const cmds = String(val("bot_telegram_commands") || "").split(",").map((s) => s.trim());
+              return (
+                <label key={cmd} style={checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={cmds.includes(cmd)}
+                    onChange={(e) => {
+                      const updated = e.target.checked
+                        ? [...cmds, cmd]
+                        : cmds.filter((c) => c !== cmd);
+                      updateField("bot_telegram_commands", updated.filter(Boolean).join(","));
+                    }}
+                  />
+                  /{cmd}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Notifications</label>
+          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            {[["nowcast", "Nowcast updates"], ["alerts", "Alert thresholds"]].map(([key, label]) => {
+              const notifs = String(val("bot_telegram_notifications") || "").split(",").map((s) => s.trim());
+              return (
+                <label key={key} style={checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={notifs.includes(key)}
+                    onChange={(e) => {
+                      const updated = e.target.checked
+                        ? [...notifs, key]
+                        : notifs.filter((n) => n !== key);
+                      updateField("bot_telegram_notifications", updated.filter(Boolean).join(","));
+                    }}
+                  />
+                  {label}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <button
+            style={{ ...btnPrimary, opacity: telegramTesting ? 0.6 : 1 }}
+            disabled={telegramTesting || !val("bot_telegram_token") || !val("bot_telegram_chat_id")}
+            onClick={async () => {
+              setTelegramTesting(true);
+              setTelegramTestResult(null);
+              try {
+                const resp = await fetch(`${API_BASE}/api/telegram/test`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    token: String(val("bot_telegram_token") || ""),
+                    chat_id: String(val("bot_telegram_chat_id") || "").split(",")[0].trim(),
+                  }),
+                });
+                if (resp.ok) {
+                  setTelegramTestResult("Test message sent successfully!");
+                } else {
+                  const data = await resp.json().catch(() => ({ detail: "Unknown error" }));
+                  setTelegramTestResult(`Error: ${data.detail || resp.statusText}`);
+                }
+              } catch (err) {
+                setTelegramTestResult(`Error: ${err instanceof Error ? err.message : "Network error"}`);
+              } finally {
+                setTelegramTesting(false);
+              }
+            }}
+          >
+            {telegramTesting ? "Sending..." : "Send Test Message"}
+          </button>
+          {telegramTestResult && (
+            <span style={{
+              fontSize: "13px",
+              fontFamily: "var(--font-body)",
+              color: telegramTestResult.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
+            }}>
+              {telegramTestResult}
+            </span>
+          )}
+        </div>
+        </div>
+        {val("bot_telegram_last_error") && (
+          <div style={{
+            marginTop: "12px",
+            padding: "8px 12px",
+            borderRadius: "6px",
+            fontSize: "13px",
+            fontFamily: "var(--font-body)",
+            background: "rgba(211,47,47,0.1)",
+            border: "1px solid var(--color-danger)",
+            color: "var(--color-danger)",
+          }}>
+            Last error: {String(val("bot_telegram_last_error"))}
+          </div>
+        )}
       </div>
       </>)}
 
