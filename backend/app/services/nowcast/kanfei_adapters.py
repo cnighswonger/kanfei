@@ -498,16 +498,31 @@ class KanfeiStorageBackend:
 
 
 class KanfeiEventEmitter:
-    """Broadcasts events to Kanfei's WebSocket clients."""
+    """Broadcasts events to Kanfei's WebSocket clients and registered listeners."""
 
     def __init__(self, ws_manager: Any) -> None:
         self._ws_manager = ws_manager
+        self._listeners: list[Callable] = []
+
+    def add_listener(self, callback: Callable) -> None:
+        """Register an async callback to receive all emitted events."""
+        self._listeners.append(callback)
+
+    def remove_listener(self, callback: Callable) -> None:
+        """Unregister a previously registered callback."""
+        try:
+            self._listeners.remove(callback)
+        except ValueError:
+            pass
 
     async def emit(self, event_type: str, data: dict) -> None:
+        message = {"type": event_type, "data": data}
         try:
-            await self._ws_manager.broadcast({
-                "type": event_type,
-                "data": data,
-            })
+            await self._ws_manager.broadcast(message)
         except Exception as exc:
             logger.debug("WS broadcast failed (%s): %s", event_type, exc)
+        for listener in self._listeners:
+            try:
+                await listener(message)
+            except Exception as exc:
+                logger.debug("Event listener failed (%s): %s", event_type, exc)

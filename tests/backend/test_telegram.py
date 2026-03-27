@@ -10,6 +10,10 @@ import pytest
 from app.services.telegram import (
     TelegramBot,
     format_current_conditions,
+    format_alert_triggered,
+    format_alert_cleared,
+    format_nowcast_update,
+    format_help,
     _read_telegram_config,
     _cardinal,
     _get_current_conditions,
@@ -101,7 +105,8 @@ class TestReadTelegramConfig:
         assert cfg["bot_telegram_enabled"] is False
         assert cfg["bot_telegram_token"] == ""
         assert cfg["bot_telegram_chat_id"] == ""
-        assert cfg["bot_telegram_commands"] == "current,status"
+        assert cfg["bot_telegram_commands"] == "current,status,help"
+        assert cfg["bot_telegram_notifications"] == "nowcast,alerts"
 
     def test_reads_saved_values(self, fake_db):
         conn = sqlite3.connect(fake_db)
@@ -366,3 +371,266 @@ class TestHandleStatusCommand:
         bot._send_message.assert_called_once()
         text = bot._send_message.call_args[0][1]
         assert "offline" in text
+
+
+class TestHandleHelpCommand:
+
+    @pytest.mark.asyncio
+    async def test_sends_help(self):
+        bot = TelegramBot(
+            token="test", chat_ids=set(), db_path="",
+            enabled_commands={"help"}, dry_run=True,
+        )
+        bot._send_message = AsyncMock()
+
+        update = MagicMock()
+        update.effective_chat.id = 123
+        context = MagicMock()
+
+        await bot._handle_help(update, context)
+
+        bot._send_message.assert_called_once()
+        text = bot._send_message.call_args[0][1]
+        assert "/current" in text
+        assert "/status" in text
+        assert "/help" in text
+
+
+class TestFormatHelp:
+
+    def test_lists_commands(self):
+        text = format_help()
+        assert "/current" in text
+        assert "/status" in text
+        assert "/help" in text
+        assert "Kanfei" in text
+
+
+class TestFormatAlertTriggered:
+
+    def test_basic(self):
+        data = {
+            "id": "alert_1",
+            "label": "High Temperature",
+            "sensor": "outside_temp",
+            "value": 95.5,
+            "threshold": 90.0,
+            "operator": ">=",
+        }
+        text = format_alert_triggered(data)
+        assert "High Temperature" in text
+        assert "95.5" in text
+        assert ">= 90.0" in text
+
+    def test_missing_fields(self):
+        text = format_alert_triggered({})
+        assert "Unknown alert" in text
+
+
+class TestFormatAlertCleared:
+
+    def test_basic(self):
+        data = {"id": "alert_1", "label": "High Temperature"}
+        text = format_alert_cleared(data)
+        assert "cleared" in text
+        assert "High Temperature" in text
+
+
+class TestFormatNowcastUpdate:
+
+    def test_with_summary(self):
+        data = {
+            "summary": "Clear skies expected for the next 2 hours.",
+            "model_used": "claude-haiku-4-5-20251001",
+        }
+        text = format_nowcast_update(data)
+        assert text is not None
+        assert "Clear skies" in text
+        assert "claude-haiku" in text
+
+    def test_with_severe_weather(self):
+        data = {
+            "summary": "Thunderstorms approaching from the southwest.",
+            "severe_weather": {"threat_level": "MODERATE"},
+            "model_used": "claude-sonnet-4-6",
+        }
+        text = format_nowcast_update(data)
+        assert text is not None
+        assert "MODERATE" in text
+
+    def test_empty_summary_returns_none(self):
+        assert format_nowcast_update({}) is None
+        assert format_nowcast_update({"summary": ""}) is None
+
+
+class TestHandleEvent:
+
+    @pytest.mark.asyncio
+    async def test_alert_triggered_sends_notification(self):
+        bot = TelegramBot(
+            token="test", chat_ids={"123"}, db_path="",
+            enabled_commands=set(),
+            enabled_notifications={"alerts"},
+            dry_run=True,
+        )
+        bot.send_notification = AsyncMock()
+
+        msg = {
+            "type": "alert_triggered",
+            "data": {
+                "id": "a1",
+                "label": "Wind Alert",
+                "sensor": "wind_speed",
+                "value": 35,
+                "threshold": 30,
+                "operator": ">=",
+            },
+        }
+        await bot.handle_event(msg)
+
+        bot.send_notification.assert_called_once()
+        text = bot.send_notification.call_args[0][0]
+        assert "Wind Alert" in text
+
+    @pytest.mark.asyncio
+    async def test_alert_triggered_dedup(self):
+        bot = TelegramBot(
+            token="test", chat_ids={"123"}, db_path="",
+            enabled_commands=set(),
+            enabled_notifications={"alerts"},
+            dry_run=True,
+        )
+        bot.send_notification = AsyncMock()
+
+        msg = {
+            "type": "alert_triggered",
+            "data": {"id": "a1", "label": "Wind Alert",
+                     "sensor": "wind_speed", "value": 35,
+                     "threshold": 30, "operator": ">="},
+        }
+        await bot.handle_event(msg)
+        await bot.handle_event(msg)  # duplicate
+
+        assert bot.send_notification.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_alert_cleared_sends_notification(self):
+        bot = TelegramBot(
+            token="test", chat_ids={"123"}, db_path="",
+            enabled_commands=set(),
+            enabled_notifications={"alerts"},
+            dry_run=True,
+        )
+        bot.send_notification = AsyncMock()
+
+        # Trigger first, then clear
+        await bot.handle_event({
+            "type": "alert_triggered",
+            "data": {"id": "a1", "label": "Wind Alert",
+                     "sensor": "wind_speed", "value": 35,
+                     "threshold": 30, "operator": ">="},
+        })
+        bot.send_notification.reset_mock()
+
+        await bot.handle_event({
+            "type": "alert_cleared",
+            "data": {"id": "a1", "label": "Wind Alert"},
+        })
+
+        bot.send_notification.assert_called_once()
+        text = bot.send_notification.call_args[0][0]
+        assert "cleared" in text
+
+    @pytest.mark.asyncio
+    async def test_nowcast_update_sends_notification(self):
+        bot = TelegramBot(
+            token="test", chat_ids={"123"}, db_path="",
+            enabled_commands=set(),
+            enabled_notifications={"nowcast"},
+            dry_run=True,
+        )
+        bot.send_notification = AsyncMock()
+
+        await bot.handle_event({
+            "type": "nowcast_update",
+            "data": {"summary": "Rain expected within 30 minutes."},
+        })
+
+        bot.send_notification.assert_called_once()
+        text = bot.send_notification.call_args[0][0]
+        assert "Rain expected" in text
+
+    @pytest.mark.asyncio
+    async def test_nowcast_disabled_no_notification(self):
+        bot = TelegramBot(
+            token="test", chat_ids={"123"}, db_path="",
+            enabled_commands=set(),
+            enabled_notifications={"alerts"},  # nowcast not enabled
+            dry_run=True,
+        )
+        bot.send_notification = AsyncMock()
+
+        await bot.handle_event({
+            "type": "nowcast_update",
+            "data": {"summary": "Rain expected."},
+        })
+
+        bot.send_notification.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_alerts_disabled_no_notification(self):
+        bot = TelegramBot(
+            token="test", chat_ids={"123"}, db_path="",
+            enabled_commands=set(),
+            enabled_notifications={"nowcast"},  # alerts not enabled
+            dry_run=True,
+        )
+        bot.send_notification = AsyncMock()
+
+        await bot.handle_event({
+            "type": "alert_triggered",
+            "data": {"id": "a1", "label": "Test",
+                     "sensor": "outside_temp", "value": 100,
+                     "threshold": 95, "operator": ">="},
+        })
+
+        bot.send_notification.assert_not_called()
+
+
+class TestSendNotification:
+
+    @pytest.mark.asyncio
+    async def test_sends_to_all_chats(self):
+        bot = TelegramBot(
+            token="test", chat_ids={"111", "222"}, db_path="",
+            enabled_commands=set(), dry_run=True,
+        )
+        bot._send_message = AsyncMock()
+
+        await bot.send_notification("Test message")
+
+        assert bot._send_message.call_count == 2
+        sent_chats = {call[0][0] for call in bot._send_message.call_args_list}
+        assert sent_chats == {"111", "222"}
+
+    @pytest.mark.asyncio
+    async def test_empty_text_skipped(self):
+        bot = TelegramBot(
+            token="test", chat_ids={"123"}, db_path="",
+            enabled_commands=set(), dry_run=True,
+        )
+        bot._send_message = AsyncMock()
+
+        await bot.send_notification("")
+        bot._send_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_chats_skipped(self):
+        bot = TelegramBot(
+            token="test", chat_ids=set(), db_path="",
+            enabled_commands=set(), dry_run=True,
+        )
+        bot._send_message = AsyncMock()
+
+        await bot.send_notification("Test")
+        bot._send_message.assert_not_called()

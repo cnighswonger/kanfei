@@ -1,7 +1,5 @@
-"""Telegram bot integration — long-polling bot for weather queries.
-
-Phase 1a: /current command with chat ID whitelist and rate limiting.
-Future phases will add outbound notifications (nowcast, alerts).
+"""Telegram bot integration — long-polling bot for weather queries
+and outbound notifications for nowcast and alert events.
 """
 
 import asyncio
@@ -42,7 +40,8 @@ def _read_telegram_config(db_path: str) -> dict:
         "bot_telegram_enabled": False,
         "bot_telegram_token": "",
         "bot_telegram_chat_id": "",
-        "bot_telegram_commands": "current,status",
+        "bot_telegram_commands": "current,status,help",
+        "bot_telegram_notifications": "nowcast,alerts",
     }
     try:
         conn = sqlite3.connect(db_path)
@@ -172,6 +171,64 @@ def format_current_conditions(reading: dict) -> str:
     return "\n".join(lines)
 
 
+def format_alert_triggered(data: dict) -> str:
+    """Format an alert_triggered event into a Telegram message."""
+    label = data.get("label", "Unknown alert")
+    sensor = data.get("sensor", "")
+    value = data.get("value", "?")
+    threshold = data.get("threshold", "?")
+    oper = data.get("operator", "")
+    return (
+        f"\u26a0\ufe0f *Alert: {label}*\n\n"
+        f"{sensor} is {value} ({oper} {threshold})"
+    )
+
+
+def format_alert_cleared(data: dict) -> str:
+    """Format an alert_cleared event into a Telegram message."""
+    label = data.get("label", "Unknown alert")
+    return f"\u2705 *Alert cleared: {label}*"
+
+
+def format_nowcast_update(data: dict) -> str | None:
+    """Format a nowcast_update event into a Telegram message.
+
+    Returns None if the nowcast data lacks a summary (e.g. duplicate or empty).
+    """
+    summary = data.get("summary", "")
+    if not summary:
+        return None
+
+    severe = data.get("severe_weather")
+    model = data.get("model_used", "")
+
+    lines = [
+        "\U0001f4a8 *Nowcast Update*",
+        "",
+        summary,
+    ]
+
+    if severe and isinstance(severe, dict):
+        threat = severe.get("threat_level", "")
+        if threat:
+            lines.append(f"\nThreat level: {threat}")
+
+    if model:
+        lines.append(f"\n_{model}_")
+
+    return "\n".join(lines)
+
+
+def format_help() -> str:
+    """Format the /help command response."""
+    return (
+        "\U0001f4cb *Kanfei Weather Bot*\n\n"
+        "/current \u2014 Current weather conditions\n"
+        "/status \u2014 Station connection status\n"
+        "/help \u2014 Show this message"
+    )
+
+
 class TelegramBot:
     """Telegram bot using long polling (getUpdates).
 
@@ -181,11 +238,13 @@ class TelegramBot:
     """
 
     def __init__(self, token: str, chat_ids: set[str], db_path: str,
-                 enabled_commands: set[str], dry_run: bool = False) -> None:
+                 enabled_commands: set[str], enabled_notifications: set[str] | None = None,
+                 dry_run: bool = False) -> None:
         self._token = token
         self._chat_ids = chat_ids
         self._db_path = db_path
         self._enabled_commands = enabled_commands
+        self._enabled_notifications = enabled_notifications or {"nowcast", "alerts"}
         self._dry_run = dry_run
         self._last_command_time: dict[str, float] = {}
         self._app = None
@@ -222,6 +281,9 @@ class TelegramBot:
             self._app.add_handler(CommandHandler("current", self._handle_current))
         if "status" in self._enabled_commands:
             self._app.add_handler(CommandHandler("status", self._handle_status))
+        if "help" in self._enabled_commands:
+            self._app.add_handler(CommandHandler("help", self._handle_help))
+            self._app.add_handler(CommandHandler("start", self._handle_help))
 
         self._running = True
         logger.info(
@@ -352,25 +414,117 @@ class TelegramBot:
         ]
         await self._send_message(chat_id, "\n".join(lines))
 
+    async def _handle_help(self, update, context) -> None:
+        """Handle the /help and /start commands."""
+        chat_id = str(update.effective_chat.id)
 
-async def telegram_bot_supervisor(db_path: str) -> None:
+        if not self._is_chat_allowed(chat_id):
+            return
+
+        if self._is_rate_limited(chat_id):
+            return
+
+        await self._send_message(chat_id, format_help())
+
+    async def send_notification(self, text: str) -> None:
+        """Send a notification to all configured chat IDs."""
+        if not text or not self._chat_ids:
+            return
+        for chat_id in self._chat_ids:
+            await self._send_message(chat_id, text)
+
+    async def handle_event(self, message: dict) -> None:
+        """Process an IPC or emitter event and send notifications if applicable."""
+        event_type = message.get("type", "")
+        data = message.get("data", {})
+
+        if event_type == "alert_triggered" and "alerts" in self._enabled_notifications:
+            # Only notify on newly triggered alerts (first occurrence).
+            # The alert checker sends triggered on every reading while active,
+            # but we only want the initial notification.
+            alert_id = data.get("id", "")
+            if not hasattr(self, "_notified_alerts"):
+                self._notified_alerts: set[str] = set()
+            if alert_id in self._notified_alerts:
+                return
+            self._notified_alerts.add(alert_id)
+            text = format_alert_triggered(data)
+            await self.send_notification(text)
+
+        elif event_type == "alert_cleared" and "alerts" in self._enabled_notifications:
+            alert_id = data.get("id", "")
+            if hasattr(self, "_notified_alerts"):
+                self._notified_alerts.discard(alert_id)
+            text = format_alert_cleared(data)
+            await self.send_notification(text)
+
+        elif event_type == "nowcast_update" and "nowcast" in self._enabled_notifications:
+            text = format_nowcast_update(data)
+            if text:
+                await self.send_notification(text)
+
+
+async def _ipc_event_loop(bot: TelegramBot, ipc_port: int) -> None:
+    """Subscribe to IPC events and route alert notifications to the bot.
+
+    Reconnects automatically if the logger daemon is unavailable.
+    """
+    from ..ipc.client import IPCClient
+
+    while True:
+        try:
+            client = IPCClient(ipc_port)
+            async for msg in client.subscribe():
+                event_type = msg.get("type", "")
+                if event_type in ("alert_triggered", "alert_cleared"):
+                    await bot.handle_event(msg)
+        except asyncio.CancelledError:
+            break
+        except (ConnectionRefusedError, OSError):
+            await asyncio.sleep(5.0)
+        except Exception:
+            logger.debug("IPC event loop error", exc_info=True)
+            await asyncio.sleep(5.0)
+
+
+async def telegram_bot_supervisor(db_path: str, ipc_port: int = 0,
+                                  nc_events=None) -> None:
     """Background supervisor that manages the Telegram bot lifecycle.
 
     Polls config every _SUPERVISOR_POLL seconds and starts, stops, or
     restarts the bot as needed. Follows the same pattern as the nowcast
     supervisor and backup scheduler.
+
+    Args:
+        db_path: Path to the SQLite database.
+        ipc_port: Logger daemon IPC port for alert subscriptions.
+        nc_events: KanfeiEventEmitter instance for nowcast event listener.
     """
     logger.info("Telegram bot supervisor started (poll every %ds)", _SUPERVISOR_POLL)
 
     active_bot: TelegramBot | None = None
     active_task: asyncio.Task | None = None
+    active_ipc_task: asyncio.Task | None = None
     active_token: str = ""
+    listener_registered = False
+
+    def _nowcast_listener(msg: dict):
+        """Async callback registered with KanfeiEventEmitter."""
+        if active_bot is not None:
+            return active_bot.handle_event(msg)
 
     def _stop_current() -> None:
-        nonlocal active_bot, active_task, active_token
+        nonlocal active_bot, active_task, active_ipc_task, active_token
+        nonlocal listener_registered
+        if active_ipc_task is not None:
+            active_ipc_task.cancel()
+            active_ipc_task = None
         if active_task is not None:
             active_task.cancel()
             active_task = None
+        if listener_registered and nc_events is not None:
+            nc_events.remove_listener(_nowcast_listener)
+            listener_registered = False
         active_bot = None
         active_token = ""
 
@@ -381,6 +535,7 @@ async def telegram_bot_supervisor(db_path: str) -> None:
             token = cfg["bot_telegram_token"]
             chat_id_str = cfg["bot_telegram_chat_id"]
             commands_str = cfg["bot_telegram_commands"]
+            notifications_str = cfg["bot_telegram_notifications"]
 
             if not enabled or not token:
                 if active_bot is not None:
@@ -392,6 +547,7 @@ async def telegram_bot_supervisor(db_path: str) -> None:
 
             chat_ids = {c.strip() for c in chat_id_str.split(",") if c.strip()}
             enabled_commands = {c.strip() for c in commands_str.split(",") if c.strip()}
+            enabled_notifications = {c.strip() for c in notifications_str.split(",") if c.strip()}
 
             # Restart if token changed
             if active_bot is not None and token != active_token:
@@ -405,16 +561,29 @@ async def telegram_bot_supervisor(db_path: str) -> None:
                     chat_ids=chat_ids,
                     db_path=db_path,
                     enabled_commands=enabled_commands,
+                    enabled_notifications=enabled_notifications,
                 )
                 active_task = asyncio.create_task(bot.start())
                 active_bot = bot
                 active_token = token
                 _update_telegram_status(db_path)
                 logger.info("Telegram bot started")
+
+                # Start IPC event loop for alert notifications
+                if ipc_port:
+                    active_ipc_task = asyncio.create_task(
+                        _ipc_event_loop(bot, ipc_port)
+                    )
+
+                # Register nowcast event listener
+                if nc_events is not None and not listener_registered:
+                    nc_events.add_listener(_nowcast_listener)
+                    listener_registered = True
             else:
                 # Update mutable config without restart
                 active_bot._chat_ids = chat_ids
                 active_bot._enabled_commands = enabled_commands
+                active_bot._enabled_notifications = enabled_notifications
 
             # Check if the bot task died
             if active_task is not None and active_task.done():

@@ -91,7 +91,7 @@ _DEFAULTS: dict[str, object] = {
     "bot_telegram_enabled": False,
     "bot_telegram_token": "",
     "bot_telegram_chat_id": "",       # comma-separated for multiple chats
-    "bot_telegram_commands": "current,status",
+    "bot_telegram_commands": "current,status,help",
     "bot_telegram_notifications": "nowcast,alerts",
     "bot_telegram_last_error": "",
     # Backup
