@@ -3,10 +3,13 @@ import { API_BASE } from './helpers/values';
 
 test.describe('Backup operations', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/settings', { waitUntil: 'networkidle' });
+    const configReady = page.waitForResponse(
+      (resp) => resp.url().includes('/api/config') && resp.status() === 200,
+    );
+    await page.goto('/settings');
+    await configReady;
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await page.getByRole('button', { name: 'Backup' }).click();
-    // Wait for tab content to render
     await expect(page.getByRole('button', { name: /backup now/i })).toBeVisible();
   });
 
@@ -34,7 +37,11 @@ test.describe('Backup operations', () => {
   test('backup list shows download button', async ({ page }) => {
     // Create a backup first via API
     await page.request.post(`${API_BASE}/api/backup`);
-    await page.reload({ waitUntil: 'networkidle' });
+    const reloadReady = page.waitForResponse(
+      (resp) => resp.url().includes('/api/config') && resp.status() === 200,
+    );
+    await page.reload();
+    await reloadReady;
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await page.getByRole('button', { name: 'Backup' }).click();
 
@@ -47,7 +54,11 @@ test.describe('Backup operations', () => {
   test('delete backup removes it from list', async ({ page }) => {
     // Create a backup via API
     await page.request.post(`${API_BASE}/api/backup`);
-    await page.reload({ waitUntil: 'networkidle' });
+    const reloadReady = page.waitForResponse(
+      (resp) => resp.url().includes('/api/config') && resp.status() === 200,
+    );
+    await page.reload();
+    await reloadReady;
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await page.getByRole('button', { name: 'Backup' }).click();
 

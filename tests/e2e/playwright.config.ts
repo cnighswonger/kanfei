@@ -28,8 +28,6 @@ export default defineConfig({
     baseURL: BASE_URL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    // Wait for all API fetches to complete before considering the page loaded
-    navigationTimeout: IS_CI ? 30_000 : 15_000,
   },
 
   globalSetup: './global-setup.ts',

@@ -3,7 +3,11 @@ import { DRIVER_COUNT } from './helpers/values';
 
 test.describe('Settings page', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/settings', { waitUntil: 'networkidle' });
+    const configReady = page.waitForResponse(
+      (resp) => resp.url().includes('/api/config') && resp.status() === 200,
+    );
+    await page.goto('/settings');
+    await configReady;
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   });
 
