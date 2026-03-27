@@ -2975,6 +2975,7 @@ export default function Settings() {
             Enable Telegram bot
           </label>
         </div>
+        <div style={{ opacity: val("bot_telegram_enabled") === true ? 1 : 0.5, pointerEvents: val("bot_telegram_enabled") === true ? "auto" : "none" }}>
         <div style={gridTwoCol(isMobile)}>
           <div style={fieldGroup}>
             <label style={labelStyle}>Bot Token</label>
@@ -3086,6 +3087,7 @@ export default function Settings() {
               {telegramTestResult}
             </span>
           )}
+        </div>
         </div>
         {val("bot_telegram_last_error") && (
           <div style={{
