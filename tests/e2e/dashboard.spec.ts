@@ -3,12 +3,13 @@ import { ANCHOR, DAILY_EXTREMES } from './helpers/values';
 
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
-    // Wait for the REST /api/current fetch to populate the dashboard
-    await page.waitForFunction(() => {
-      const el = document.querySelector('.dashboard-grid');
-      return el && el.children.length > 0;
-    });
+    const currentReady = page.waitForResponse(
+      (resp) => resp.url().includes('/api/current') && resp.status() === 200,
+    );
+    await page.goto('/');
+    await currentReady;
+    // Wait for React to fully render gauges with data
+    await expect(page.getByText(`${ANCHOR.outsideTemp}°F`).first()).toBeVisible();
   });
 
   test('page loads with dashboard grid', async ({ page }) => {
