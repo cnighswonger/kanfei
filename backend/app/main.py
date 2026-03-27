@@ -232,8 +232,16 @@ async def lifespan(app: FastAPI):
         telegram_bot_supervisor(settings.db_path, settings.ipc_port, nc_events)
     )
 
+    # Start Discord bot supervisor — same pattern as Telegram.
+    from .services.discord_bot import discord_bot_supervisor
+    discord_task = asyncio.create_task(
+        discord_bot_supervisor(settings.db_path, settings.ipc_port, nc_events)
+    )
+
     yield
 
+    if discord_task is not None:
+        discord_task.cancel()
     if telegram_task is not None:
         telegram_task.cancel()
     if backup_task is not None:

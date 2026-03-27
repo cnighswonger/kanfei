@@ -94,6 +94,14 @@ _DEFAULTS: dict[str, object] = {
     "bot_telegram_commands": "current,status,help",
     "bot_telegram_notifications": "nowcast,alerts",
     "bot_telegram_last_error": "",
+    # Discord bot
+    "bot_discord_enabled": False,
+    "bot_discord_token": "",
+    "bot_discord_guild_id": "",       # target server ID
+    "bot_discord_channel_id": "",     # notification channel(s), comma-separated
+    "bot_discord_commands": "current,status,help",
+    "bot_discord_notifications": "nowcast,alerts",
+    "bot_discord_last_error": "",
     # Backup
     "backup_enabled": False,
     "backup_interval_hours": 24,
