@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('History page', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/history', { waitUntil: 'networkidle' });
+    await page.goto('/history');
     await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
   });
 
@@ -39,8 +39,6 @@ test.describe('History page', () => {
     const sensorSelect = page.locator('main select').first();
     await sensorSelect.selectOption({ label: 'Outdoor Temperature' });
     await page.getByRole('button', { name: '24 Hours' }).click();
-    await page.waitForLoadState('networkidle');
-
     await sensorSelect.selectOption({ label: 'Indoor Temperature' });
     await expect(sensorSelect).toHaveValue('temperature_inside');
   });
