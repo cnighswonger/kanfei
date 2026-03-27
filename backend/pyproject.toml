@@ -17,6 +17,7 @@ dependencies = [
     "anthropic>=0.45",
     "numpy>=1.24",             # Radar processing, threat tracking
     "matplotlib>=3.7",         # Radar composite visualizations
+    "python-telegram-bot>=22.0",  # Telegram bot integration (async, getUpdates polling)
 ]
 
 [project.optional-dependencies]

@@ -87,6 +87,13 @@ _DEFAULTS: dict[str, object] = {
     "ui_weather_bg_intensity": 30,
     "ui_weather_bg_transparency": 15,
     "ui_dashboard_layout": "",
+    # Telegram bot
+    "bot_telegram_enabled": False,
+    "bot_telegram_token": "",
+    "bot_telegram_chat_id": "",       # comma-separated for multiple chats
+    "bot_telegram_commands": "current,status",
+    "bot_telegram_notifications": "nowcast,alerts",
+    "bot_telegram_last_error": "",
     # Backup
     "backup_enabled": False,
     "backup_interval_hours": 24,

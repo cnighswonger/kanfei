@@ -224,8 +224,17 @@ async def lifespan(app: FastAPI):
         backup_scheduler(settings.db_path, backup_dir)
     )
 
+    # Start Telegram bot supervisor — always runs, polls config each cycle.
+    # Handles enable/disable and token changes without requiring a restart.
+    from .services.telegram import telegram_bot_supervisor
+    telegram_task = asyncio.create_task(
+        telegram_bot_supervisor(settings.db_path)
+    )
+
     yield
 
+    if telegram_task is not None:
+        telegram_task.cancel()
     if backup_task is not None:
         backup_task.cancel()
     if nowcast_supervisor_task is not None:
