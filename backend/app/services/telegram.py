@@ -5,35 +5,26 @@ and outbound notifications for nowcast and alert events.
 import asyncio
 import logging
 import sqlite3
-import time
 from datetime import datetime, timezone
+
+from .bot_formatting import (
+    format_current_conditions,
+    format_alert_triggered,
+    format_alert_cleared,
+    format_nowcast_update,
+    format_help,
+    format_status,
+    get_current_conditions,
+)
+from .bot_ratelimit import RateLimiter
 
 logger = logging.getLogger(__name__)
 
 # How often the supervisor checks config for enable/disable changes (seconds).
 _SUPERVISOR_POLL = 30
 
-# Rate limit: minimum seconds between repeated identical commands per chat.
-_RATE_LIMIT_SAME_CMD = 5
-# Rate limit: minimum seconds between different commands per chat (debounce).
-_RATE_LIMIT_DIFF_CMD = 1
-
 # Telegram message length limit.
 _MAX_MESSAGE_LENGTH = 4096
-
-# Cardinal direction labels for wind.
-_CARDINAL_DIRECTIONS = [
-    "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-    "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
-]
-
-
-def _cardinal(degrees: int | None) -> str:
-    """Convert wind direction degrees to cardinal abbreviation."""
-    if degrees is None:
-        return "---"
-    idx = round(degrees / 22.5) % 16
-    return _CARDINAL_DIRECTIONS[idx]
 
 
 def _read_telegram_config(db_path: str) -> dict:
@@ -80,157 +71,6 @@ def _update_telegram_status(db_path: str, error: str = "") -> None:
         pass
 
 
-def _get_current_conditions(db_path: str) -> dict | None:
-    """Query the latest sensor reading from the database.
-
-    Returns a dict of raw SI values, or None if no data.
-    """
-    try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cur = conn.execute(
-            "SELECT * FROM sensor_readings ORDER BY timestamp DESC LIMIT 1"
-        )
-        row = cur.fetchone()
-        conn.close()
-        if row is None:
-            return None
-        return dict(row)
-    except Exception:
-        logger.debug("Failed to query current conditions", exc_info=True)
-        return None
-
-
-def format_current_conditions(reading: dict) -> str:
-    """Format a sensor reading dict into a human-readable Telegram message.
-
-    Converts raw SI storage values (tenths) to display units inline.
-    """
-    from ..utils.units import (
-        si_temp_to_display_f,
-        si_pressure_to_display_inhg,
-        si_wind_to_display_mph,
-        si_rain_to_display_in,
-    )
-
-    def _temp(raw: int | None) -> str:
-        if raw is None:
-            return "---"
-        return f"{si_temp_to_display_f(raw)}\u00b0F"
-
-    def _wind(raw: int | None) -> str:
-        if raw is None:
-            return "---"
-        return f"{si_wind_to_display_mph(raw)} mph"
-
-    def _baro(raw: int | None) -> str:
-        if raw is None:
-            return "---"
-        return f"{si_pressure_to_display_inhg(raw)} inHg"
-
-    def _rain(raw: int | None) -> str:
-        if raw is None:
-            return "---"
-        return f'{si_rain_to_display_in(raw)}"'
-
-    def _humidity(raw: int | None) -> str:
-        if raw is None:
-            return "---"
-        return f"{raw}%"
-
-    def _uv(raw: int | None) -> str:
-        if raw is None:
-            return "---"
-        return f"{round(raw / 10, 1)}"
-
-    ts = reading.get("timestamp", "")
-    if ts:
-        try:
-            dt = datetime.fromisoformat(ts)
-            ts = dt.strftime("%I:%M %p").lstrip("0")
-        except (ValueError, TypeError):
-            pass
-
-    wind_dir = reading.get("wind_direction")
-    cardinal = _cardinal(wind_dir)
-    wind_deg = f"{wind_dir}\u00b0" if wind_dir is not None else "---"
-
-    trend = reading.get("pressure_trend", "")
-    trend_str = f" ({trend})" if trend else ""
-
-    lines = [
-        f"\U0001f321 *Current Conditions*  \u2014  {ts}",
-        "",
-        f"Temp: {_temp(reading.get('outside_temp'))}  (Feels: {_temp(reading.get('feels_like'))})",
-        f"Humidity: {_humidity(reading.get('outside_humidity'))}",
-        f"Dew Point: {_temp(reading.get('dew_point'))}",
-        f"Wind: {cardinal} {wind_deg} at {_wind(reading.get('wind_speed'))}",
-        f"Barometer: {_baro(reading.get('barometer'))}{trend_str}",
-        f"Rain Today: {_rain(reading.get('rain_total'))}  (Rate: {_rain(reading.get('rain_rate'))}/hr)",
-        f"UV Index: {_uv(reading.get('uv_index'))}",
-    ]
-
-    return "\n".join(lines)
-
-
-def format_alert_triggered(data: dict) -> str:
-    """Format an alert_triggered event into a Telegram message."""
-    label = data.get("label", "Unknown alert")
-    sensor = data.get("sensor", "")
-    value = data.get("value", "?")
-    threshold = data.get("threshold", "?")
-    oper = data.get("operator", "")
-    return (
-        f"\u26a0\ufe0f *Alert: {label}*\n\n"
-        f"{sensor} is {value} ({oper} {threshold})"
-    )
-
-
-def format_alert_cleared(data: dict) -> str:
-    """Format an alert_cleared event into a Telegram message."""
-    label = data.get("label", "Unknown alert")
-    return f"\u2705 *Alert cleared: {label}*"
-
-
-def format_nowcast_update(data: dict) -> str | None:
-    """Format a nowcast_update event into a Telegram message.
-
-    Returns None if the nowcast data lacks a summary (e.g. duplicate or empty).
-    """
-    summary = data.get("summary", "")
-    if not summary:
-        return None
-
-    severe = data.get("severe_weather")
-    model = data.get("model_used", "")
-
-    lines = [
-        "\U0001f4a8 *Nowcast Update*",
-        "",
-        summary,
-    ]
-
-    if severe and isinstance(severe, dict):
-        threat = severe.get("threat_level", "")
-        if threat:
-            lines.append(f"\nThreat level: {threat}")
-
-    if model:
-        lines.append(f"\n_{model}_")
-
-    return "\n".join(lines)
-
-
-def format_help() -> str:
-    """Format the /help command response."""
-    return (
-        "\U0001f4cb *Kanfei Weather Bot*\n\n"
-        "/current \u2014 Current weather conditions\n"
-        "/status \u2014 Station connection status\n"
-        "/help \u2014 Show this message"
-    )
-
-
 class TelegramBot:
     """Telegram bot using long polling (getUpdates).
 
@@ -248,7 +88,8 @@ class TelegramBot:
         self._enabled_commands = enabled_commands
         self._enabled_notifications = enabled_notifications or {"nowcast", "alerts"}
         self._dry_run = dry_run
-        self._last_command_time: dict[tuple[str, str], float] = {}
+        self._rate_limiter = RateLimiter()
+        self._notified_alerts: set[str] = set()
         self._app = None
         self._running = False
 
@@ -328,28 +169,6 @@ class TelegramBot:
             return True
         return chat_id in self._chat_ids
 
-    def _is_rate_limited(self, chat_id: str, command: str = "") -> bool:
-        """Check if a chat has exceeded the rate limit for a command.
-
-        Same command repeated: 5s cooldown (prevents spam).
-        Different command: 1s cooldown (debounce double-taps only).
-        """
-        now = time.monotonic()
-        key = (chat_id, command)
-
-        # Check same-command cooldown
-        last_same = self._last_command_time.get(key, 0.0)
-        if now - last_same < _RATE_LIMIT_SAME_CMD:
-            return True
-
-        # Check cross-command debounce (any recent command from this chat)
-        for (cid, _), ts in self._last_command_time.items():
-            if cid == chat_id and now - ts < _RATE_LIMIT_DIFF_CMD:
-                return True
-
-        self._last_command_time[key] = now
-        return False
-
     async def _send_message(self, chat_id: str, text: str,
                             parse_mode: str = "Markdown") -> None:
         """Send a message to a chat. Override point for dry-run and testing."""
@@ -376,10 +195,10 @@ class TelegramBot:
             logger.debug("Ignoring /current from unauthorized chat %s", chat_id)
             return
 
-        if self._is_rate_limited(chat_id, "current"):
+        if self._rate_limiter.is_limited(chat_id, "current"):
             return
 
-        reading = _get_current_conditions(self._db_path)
+        reading = get_current_conditions(self._db_path)
         if reading is None:
             await self._send_message(chat_id, "No weather data available.")
             return
@@ -395,39 +214,12 @@ class TelegramBot:
             logger.debug("Ignoring /status from unauthorized chat %s", chat_id)
             return
 
-        if self._is_rate_limited(chat_id, "status"):
+        if self._rate_limiter.is_limited(chat_id, "status"):
             return
 
-        reading = _get_current_conditions(self._db_path)
-        if reading is None:
-            await self._send_message(chat_id, "Station offline \u2014 no data available.")
-            return
-
-        ts = reading.get("timestamp", "")
-        age_str = "unknown"
-        if ts:
-            try:
-                dt = datetime.fromisoformat(ts)
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                age = (datetime.now(timezone.utc) - dt).total_seconds()
-                if age < 60:
-                    age_str = f"{int(age)}s ago"
-                elif age < 3600:
-                    age_str = f"{int(age / 60)}m ago"
-                else:
-                    age_str = f"{age / 3600:.1f}h ago"
-            except (ValueError, TypeError):
-                pass
-
-        status = "online" if reading else "offline"
-        lines = [
-            "\U0001f4e1 *Station Status*",
-            "",
-            f"Status: {status}",
-            f"Last reading: {age_str}",
-        ]
-        await self._send_message(chat_id, "\n".join(lines))
+        reading = get_current_conditions(self._db_path)
+        text = format_status(reading)
+        await self._send_message(chat_id, text)
 
     async def _handle_help(self, update, context) -> None:
         """Handle the /help and /start commands."""
@@ -436,7 +228,7 @@ class TelegramBot:
         if not self._is_chat_allowed(chat_id):
             return
 
-        if self._is_rate_limited(chat_id, "help"):
+        if self._rate_limiter.is_limited(chat_id, "help"):
             return
 
         await self._send_message(chat_id, format_help())
@@ -454,12 +246,7 @@ class TelegramBot:
         data = message.get("data", {})
 
         if event_type == "alert_triggered" and "alerts" in self._enabled_notifications:
-            # Only notify on newly triggered alerts (first occurrence).
-            # The alert checker sends triggered on every reading while active,
-            # but we only want the initial notification.
             alert_id = data.get("id", "")
-            if not hasattr(self, "_notified_alerts"):
-                self._notified_alerts: set[str] = set()
             if alert_id in self._notified_alerts:
                 return
             self._notified_alerts.add(alert_id)
@@ -468,8 +255,7 @@ class TelegramBot:
 
         elif event_type == "alert_cleared" and "alerts" in self._enabled_notifications:
             alert_id = data.get("id", "")
-            if hasattr(self, "_notified_alerts"):
-                self._notified_alerts.discard(alert_id)
+            self._notified_alerts.discard(alert_id)
             text = format_alert_cleared(data)
             await self.send_notification(text)
 
