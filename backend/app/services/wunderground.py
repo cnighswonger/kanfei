@@ -10,9 +10,11 @@ Reference: https://support.weather.com/s/article/PWS-Upload-Protocol
 
 import logging
 import time
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
 import httpx
+from sqlalchemy import func
 
 from ..models.database import SessionLocal
 from ..models.station_config import StationConfigModel
@@ -166,4 +168,47 @@ class WundergroundUploader:
             if value is not None:
                 params[wu_param] = value
 
+        # Hourly rain — not in broadcast, compute from DB
+        rain_hour = WundergroundUploader._get_hourly_rain_inches()
+        if rain_hour is not None:
+            params["rainin"] = rain_hour
+
         return params
+
+    @staticmethod
+    def _get_hourly_rain_inches() -> Optional[float]:
+        """Query rain accumulation over the last hour from sensor_readings.
+
+        Returns rain in inches (WU expected unit). DB stores tenths of mm.
+        """
+        from ..models.sensor_reading import SensorReadingModel
+        db = SessionLocal()
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+            S = SensorReadingModel
+
+            current = (
+                db.query(S.rain_total)
+                .filter(S.rain_total.isnot(None))
+                .order_by(S.timestamp.desc())
+                .first()
+            )
+            if current is None or current[0] is None:
+                return None
+
+            oldest = (
+                db.query(S.rain_total)
+                .filter(S.timestamp >= cutoff, S.rain_total.isnot(None))
+                .order_by(S.timestamp.asc())
+                .first()
+            )
+            if oldest is None or oldest[0] is None:
+                return None
+
+            delta_tenths_mm = current[0] - oldest[0]
+            if delta_tenths_mm < 0:
+                return 0.0  # counter reset
+            # Convert tenths mm → inches
+            return round(delta_tenths_mm / 10.0 / 25.4, 2)
+        finally:
+            db.close()

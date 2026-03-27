@@ -1220,6 +1220,18 @@ function BackupTab({ val, updateField, isMobile }: {
               onChange={(e) => updateField("backup_retention_count", Number(e.target.value))}
             />
           </div>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Scheduled time (optional)</label>
+            <input
+              type="time"
+              style={inputStyle}
+              value={String(val("backup_schedule_time") || "")}
+              onChange={(e) => updateField("backup_schedule_time", e.target.value)}
+            />
+            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
+              HH:MM — run backup at this time daily. Leave blank for interval-from-boot.
+            </span>
+          </div>
         </div>
       </div>
 
@@ -1544,6 +1556,42 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
           </div>
         )}
       </div>
+
+      {/* Service restart instructions */}
+      <div style={cardStyle}>
+        <h3 style={{
+          margin: "0 0 12px 0",
+          fontSize: "16px",
+          fontFamily: "var(--font-heading)",
+          color: "var(--color-text)",
+        }}>
+          Service Management
+        </h3>
+        <p style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginTop: 0, lineHeight: 1.5 }}>
+          Most settings take effect immediately or on the next cycle. To apply driver or connection changes, use <strong>Save &amp; Reconnect</strong> on the Station tab.
+        </p>
+        <p style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginTop: "8px", lineHeight: 1.5 }}>
+          If a full service restart is needed:
+        </p>
+        <div style={{
+          background: "var(--color-bg-secondary)",
+          borderRadius: "6px",
+          padding: "12px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: "12px",
+          color: "var(--color-text)",
+          marginTop: "8px",
+          lineHeight: 1.6,
+        }}>
+          <div style={{ marginBottom: "8px", color: "var(--color-text-muted)", fontSize: "11px" }}>Windows (services):</div>
+          <div>net stop KanfeiWeb &amp;&amp; net stop KanfeiLogger</div>
+          <div>net start KanfeiLogger &amp;&amp; net start KanfeiWeb</div>
+          <div style={{ marginTop: "12px", marginBottom: "8px", color: "var(--color-text-muted)", fontSize: "11px" }}>Linux (systemd):</div>
+          <div>sudo systemctl restart kanfei-logger kanfei-web</div>
+          <div style={{ marginTop: "12px", marginBottom: "8px", color: "var(--color-text-muted)", fontSize: "11px" }}>Manual (dev mode):</div>
+          <div>Ctrl+C both terminals, then restart</div>
+        </div>
+      </div>
     </>
   );
 }
@@ -1560,7 +1608,11 @@ export default function Settings() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [reconnectMsg, setReconnectMsg] = useState<string | null>(null);
   const [ports, setPorts] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<"station" | "display" | "services" | "alerts" | "nowcast" | "spray" | "usage" | "database" | "backup" | "system">("station");
+  const [activeTab, setActiveTab] = useState<"station" | "display" | "services" | "bots" | "alerts" | "nowcast" | "spray" | "usage" | "database" | "backup" | "system">("station");
+  const [telegramTesting, setTelegramTesting] = useState(false);
+  const [telegramTestResult, setTelegramTestResult] = useState<string | null>(null);
+  const [discordTesting, setDiscordTesting] = useState(false);
+  const [discordTestResult, setDiscordTestResult] = useState<string | null>(null);
 
   const { flags, refresh: refreshFeatureFlags } = useFeatureFlags();
   const { themeName, setThemeName } = useTheme();
@@ -1947,6 +1999,7 @@ export default function Settings() {
           ["station", "Station"],
           ["display", "Display"],
           ["services", "Services"],
+          ["bots", "Bots"],
           ["alerts", "Alerts"],
           ...(flags.nowcastEnabled ? [["nowcast", "Nowcast"] as const] : []),
           ...(flags.sprayEnabled ? [["spray", "Spray"] as const] : []),
@@ -2203,7 +2256,7 @@ export default function Settings() {
               <option value="ambient">Ambient Weather (HTTP push)</option>
             </select>
             <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
-              Changing driver type requires a restart of both the web app and logger daemon.
+              Click <strong>Save &amp; Reconnect</strong> after changing to apply the new driver.
             </span>
           </div>
           <div style={fieldGroup}>
@@ -2910,6 +2963,305 @@ export default function Settings() {
             </select>
           </div>
         </div>
+      </div>
+
+      </>)}
+
+      {activeTab === "bots" && (<>
+      {/* Telegram Bot section */}
+      <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
+        <h3 style={sectionTitle}>Telegram Bot</h3>
+        <div style={fieldGroup}>
+          <label style={checkboxLabel}>
+            <input
+              type="checkbox"
+              checked={val("bot_telegram_enabled") === true}
+              onChange={(e) => updateField("bot_telegram_enabled", e.target.checked)}
+            />
+            Enable Telegram bot
+          </label>
+        </div>
+        <div style={{ opacity: val("bot_telegram_enabled") === true ? 1 : 0.5, pointerEvents: val("bot_telegram_enabled") === true ? "auto" : "none" }}>
+        <div style={gridTwoCol(isMobile)}>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Bot Token</label>
+            <input
+              style={inputStyle}
+              type="password"
+              placeholder="From @BotFather"
+              value={String(val("bot_telegram_token") || "")}
+              onChange={(e) => updateField("bot_telegram_token", e.target.value)}
+            />
+          </div>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Chat ID</label>
+            <input
+              style={inputStyle}
+              type="text"
+              placeholder="Target chat or group ID"
+              value={String(val("bot_telegram_chat_id") || "")}
+              onChange={(e) => updateField("bot_telegram_chat_id", e.target.value)}
+            />
+            <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginTop: "4px", display: "block" }}>
+              Comma-separated for multiple chats
+            </span>
+          </div>
+        </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Commands</label>
+          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            {["current", "status", "help"].map((cmd) => {
+              const cmds = String(val("bot_telegram_commands") || "").split(",").map((s) => s.trim());
+              return (
+                <label key={cmd} style={checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={cmds.includes(cmd)}
+                    onChange={(e) => {
+                      const updated = e.target.checked
+                        ? [...cmds, cmd]
+                        : cmds.filter((c) => c !== cmd);
+                      updateField("bot_telegram_commands", updated.filter(Boolean).join(","));
+                    }}
+                  />
+                  /{cmd}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Notifications</label>
+          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            {[["nowcast", "Nowcast updates"], ["alerts", "Alert thresholds"]].map(([key, label]) => {
+              const notifs = String(val("bot_telegram_notifications") || "").split(",").map((s) => s.trim());
+              return (
+                <label key={key} style={checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={notifs.includes(key)}
+                    onChange={(e) => {
+                      const updated = e.target.checked
+                        ? [...notifs, key]
+                        : notifs.filter((n) => n !== key);
+                      updateField("bot_telegram_notifications", updated.filter(Boolean).join(","));
+                    }}
+                  />
+                  {label}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <button
+            style={{ ...btnPrimary, opacity: telegramTesting ? 0.6 : 1 }}
+            disabled={telegramTesting || !val("bot_telegram_token") || !val("bot_telegram_chat_id")}
+            onClick={async () => {
+              setTelegramTesting(true);
+              setTelegramTestResult(null);
+              try {
+                const resp = await fetch(`${API_BASE}/api/telegram/test`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    token: String(val("bot_telegram_token") || ""),
+                    chat_id: String(val("bot_telegram_chat_id") || "").split(",")[0].trim(),
+                  }),
+                });
+                if (resp.ok) {
+                  setTelegramTestResult("Test message sent successfully!");
+                } else {
+                  const data = await resp.json().catch(() => ({ detail: "Unknown error" }));
+                  setTelegramTestResult(`Error: ${data.detail || resp.statusText}`);
+                }
+              } catch (err) {
+                setTelegramTestResult(`Error: ${err instanceof Error ? err.message : "Network error"}`);
+              } finally {
+                setTelegramTesting(false);
+              }
+            }}
+          >
+            {telegramTesting ? "Sending..." : "Send Test Message"}
+          </button>
+          {telegramTestResult && (
+            <span style={{
+              fontSize: "13px",
+              fontFamily: "var(--font-body)",
+              color: telegramTestResult.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
+            }}>
+              {telegramTestResult}
+            </span>
+          )}
+        </div>
+        </div>
+        {val("bot_telegram_last_error") && (
+          <div style={{
+            marginTop: "12px",
+            padding: "8px 12px",
+            borderRadius: "6px",
+            fontSize: "13px",
+            fontFamily: "var(--font-body)",
+            background: "rgba(211,47,47,0.1)",
+            border: "1px solid var(--color-danger)",
+            color: "var(--color-danger)",
+          }}>
+            Last error: {String(val("bot_telegram_last_error"))}
+          </div>
+        )}
+      </div>
+
+      {/* Discord Bot section */}
+      <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
+        <h3 style={sectionTitle}>Discord Bot</h3>
+        <div style={fieldGroup}>
+          <label style={checkboxLabel}>
+            <input
+              type="checkbox"
+              checked={val("bot_discord_enabled") === true}
+              onChange={(e) => updateField("bot_discord_enabled", e.target.checked)}
+            />
+            Enable Discord bot
+          </label>
+        </div>
+        <div style={{ opacity: val("bot_discord_enabled") === true ? 1 : 0.5, pointerEvents: val("bot_discord_enabled") === true ? "auto" : "none" }}>
+        <div style={gridTwoCol(isMobile)}>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Bot Token</label>
+            <input
+              style={inputStyle}
+              type="password"
+              placeholder="From Discord Developer Portal"
+              value={String(val("bot_discord_token") || "")}
+              onChange={(e) => updateField("bot_discord_token", e.target.value)}
+            />
+          </div>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Guild ID</label>
+            <input
+              style={inputStyle}
+              type="text"
+              placeholder="Target server ID"
+              value={String(val("bot_discord_guild_id") || "")}
+              onChange={(e) => updateField("bot_discord_guild_id", e.target.value)}
+            />
+          </div>
+        </div>
+        <div style={fieldGroup}>
+          <label style={labelStyle}>Channel ID</label>
+          <input
+            style={inputStyle}
+            type="text"
+            placeholder="Notification channel ID"
+            value={String(val("bot_discord_channel_id") || "")}
+            onChange={(e) => updateField("bot_discord_channel_id", e.target.value)}
+          />
+          <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginTop: "4px", display: "block" }}>
+            Comma-separated for multiple channels
+          </span>
+        </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Commands</label>
+          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            {["current", "status", "help"].map((cmd) => {
+              const cmds = String(val("bot_discord_commands") || "").split(",").map((s) => s.trim());
+              return (
+                <label key={cmd} style={checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={cmds.includes(cmd)}
+                    onChange={(e) => {
+                      const updated = e.target.checked
+                        ? [...cmds, cmd]
+                        : cmds.filter((c) => c !== cmd);
+                      updateField("bot_discord_commands", updated.filter(Boolean).join(","));
+                    }}
+                  />
+                  /{cmd}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Notifications</label>
+          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            {[["nowcast", "Nowcast updates"], ["alerts", "Alert thresholds"]].map(([key, label]) => {
+              const notifs = String(val("bot_discord_notifications") || "").split(",").map((s) => s.trim());
+              return (
+                <label key={key} style={checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={notifs.includes(key)}
+                    onChange={(e) => {
+                      const updated = e.target.checked
+                        ? [...notifs, key]
+                        : notifs.filter((n) => n !== key);
+                      updateField("bot_discord_notifications", updated.filter(Boolean).join(","));
+                    }}
+                  />
+                  {label}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <button
+            style={{ ...btnPrimary, opacity: discordTesting ? 0.6 : 1 }}
+            disabled={discordTesting || !val("bot_discord_token") || !val("bot_discord_channel_id")}
+            onClick={async () => {
+              setDiscordTesting(true);
+              setDiscordTestResult(null);
+              try {
+                const resp = await fetch(`${API_BASE}/api/discord/test`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    token: String(val("bot_discord_token") || ""),
+                    channel_id: String(val("bot_discord_channel_id") || "").split(",")[0].trim(),
+                  }),
+                });
+                if (resp.ok) {
+                  setDiscordTestResult("Test message sent successfully!");
+                } else {
+                  const data = await resp.json().catch(() => ({ detail: "Unknown error" }));
+                  setDiscordTestResult(`Error: ${data.detail || resp.statusText}`);
+                }
+              } catch (err) {
+                setDiscordTestResult(`Error: ${err instanceof Error ? err.message : "Network error"}`);
+              } finally {
+                setDiscordTesting(false);
+              }
+            }}
+          >
+            {discordTesting ? "Sending..." : "Send Test Message"}
+          </button>
+          {discordTestResult && (
+            <span style={{
+              fontSize: "13px",
+              fontFamily: "var(--font-body)",
+              color: discordTestResult.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
+            }}>
+              {discordTestResult}
+            </span>
+          )}
+        </div>
+        </div>
+        {val("bot_discord_last_error") && (
+          <div style={{
+            marginTop: "12px",
+            padding: "8px 12px",
+            borderRadius: "6px",
+            fontSize: "13px",
+            fontFamily: "var(--font-body)",
+            background: "rgba(211,47,47,0.1)",
+            border: "1px solid var(--color-danger)",
+            color: "var(--color-danger)",
+          }}>
+            Last error: {String(val("bot_discord_last_error"))}
+          </div>
+        )}
       </div>
       </>)}
 

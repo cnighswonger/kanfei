@@ -1,82 +1,105 @@
 # Field Naming Conventions
 
-## Units in Field Names
+## Storage: SI Units
 
-Weather measurement fields include units to avoid ambiguity.
+All sensor data is stored internally in **SI units** as integers (tenths for precision). Drivers convert from their native format to SI at the parse boundary. Everything downstream (poller, calculations, DB) assumes SI.
 
-### Temperature
-- `*_temp_f` - Fahrenheit
-- `*_temp_c` - Celsius (if introduced)
-- Other explicit forms: `dew_point_f`, `heat_index_f`, `wind_chill_f`
+### Internal (DB / SensorSnapshot) field names
 
-### Pressure
-- `*_inHg` / `*_inhg` - Inches of mercury
-- `*_hPa` - Hectopascals (if introduced)
+Field names do **not** include unit suffixes — the unit is always SI.
 
-Examples:
-- `barometer_inHg` (ObservationReading)
-- `pressure_inhg` (NearbyObservation)
+| Field | Unit | Storage |
+|-------|------|---------|
+| `inside_temp`, `outside_temp` | °C | tenths °C (e.g., 241 = 24.1°C) |
+| `dew_point`, `heat_index`, `wind_chill`, `feels_like` | °C | tenths °C |
+| `theta_e` | K | tenths K |
+| `barometer` | hPa | tenths hPa (e.g., 10132 = 1013.2 hPa) |
+| `wind_speed`, `wind_gust` | m/s | tenths m/s |
+| `wind_direction` | degrees | 0–359 |
+| `inside_humidity`, `outside_humidity` | % | 0–100 |
+| `rain_rate` | mm/hr | tenths mm/hr |
+| `rain_total`, `rain_yearly` | mm | tenths mm |
+| `solar_radiation` | W/m² | whole W/m² |
+| `uv_index` | index | tenths |
+| `soil_temp` | °C | °C (float) |
 
-### Humidity
-- `*_pct` - Percent (0-100)
+### SensorSnapshot (driver output)
 
-Examples:
-- `outside_humidity_pct`
-- `humidity_pct`
+`SensorSnapshot` is the canonical dataclass returned by every driver's `poll()` method. Values are SI floats (not tenths) — the poller multiplies by 10 for DB storage.
 
-### Wind
-- `*_mph` - Miles per hour
-- `*_deg` - Degrees (0-359, where 0 is north)
+```python
+# SensorSnapshot fields (SI, whole floats)
+snapshot.outside_temp    # °C
+snapshot.barometer       # hPa
+snapshot.wind_speed      # m/s
+snapshot.rain_rate       # mm/hr
+```
 
-Examples:
-- `wind_speed_mph`
-- `wind_direction_deg`
-- `wind_dir_deg`
+## Display: Conversion at the Boundary
 
-### Precipitation
-- `*_in` - Inches
-- `*_in_hr` - Inches per hour (rate)
+Conversion from SI to display units happens **only** at the API/broadcast boundary, via `sensor_meta.convert()` or the unit converter functions in `utils/units.py`.
 
-Examples:
-- `rain_daily_in`
-- `rain_rate_in_hr`
-- `precip_in`
+| SI (internal) | Imperial (display) | Metric (display) |
+|---------------|-------------------|-------------------|
+| tenths °C | °F | °C |
+| tenths hPa | inHg | hPa |
+| tenths m/s | mph | km/h |
+| tenths mm | in | mm |
 
-### Radiation
-- `*_wm2` - Watts per square meter
+### Where conversion happens
 
-Example:
-- `solar_radiation_wm2`
+- `poller._snapshot_to_dict()` — WebSocket broadcast to frontend
+- `sensor_meta.convert()` — API responses from DB values
+- `public_data.build_public_data()` — public API (includes both imperial and metric)
+- `aprs.py`, `cwop.py`, `wunderground.py` — upload services convert internally
+
+### Where conversion does NOT happen
+
+- DB reads/writes — always SI tenths
+- `calculations.py` — accepts SI tenths, converts internally where needed
+- Driver → SensorSnapshot — driver outputs SI, poller stores directly
 
 ## Inside vs Outside Prefixes
 
-- `outside_*` - External weather exposure
-- `inside_*` - Indoor sensor values
+- `outside_*` — external weather exposure
+- `inside_*` — indoor sensor values
 
 Examples:
-- `outside_temp_f` vs `inside_temp_f`
-- `outside_humidity_pct` vs `inside_humidity_pct`
+- `outside_temp` vs `inside_temp`
+- `outside_humidity` vs `inside_humidity`
+
+## Public Data API
+
+The `PublicWeatherData` schema (used by push export, REST API, MQTT) includes **both** imperial and metric in every field:
+
+```json
+{
+  "current": {
+    "temp_f": 75.2,
+    "temp_c": 24.0,
+    "humidity": 62,
+    "wind_speed_mph": 8,
+    "wind_speed_kmh": 12.9,
+    "pressure_inhg": 30.02,
+    "pressure_hpa": 1016.6
+  }
+}
+```
+
+Public API field names **do** include unit suffixes since consumers need to know what they're getting.
 
 ## Why This Matters
 
 ```python
-# BAD (ambiguous)
-reading.temperature
-reading.pressure
-
-# GOOD (explicit)
-reading.outside_temp_f
+# BAD — ambiguous, assumes display units
+reading.temperature_f
 reading.barometer_inHg
+
+# GOOD — SI internal, no unit suffix needed
+reading.outside_temp      # always °C
+reading.barometer         # always hPa
+
+# Convert at the boundary
+from app.models.sensor_meta import convert
+display_temp = convert("outside_temp", raw_db_value)  # → °F
 ```
-
-## Cross-Structure Mapping Rule
-
-When converting between nearby-station and local-station types, map names intentionally:
-
-| NearbyObservation | ObservationReading |
-|---|---|
-| `temp_f` | `outside_temp_f` |
-| `humidity_pct` | `outside_humidity_pct` |
-| `pressure_inhg` | `barometer_inHg` |
-| `wind_dir_deg` | `wind_direction_deg` |
-| `wind_speed_mph` | `wind_speed_mph` |

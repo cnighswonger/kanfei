@@ -11,7 +11,7 @@ import shutil
 import sqlite3
 import tarfile
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -243,34 +243,123 @@ def generate_backup_filename() -> str:
     return f"kanfei-backup-{ts}.tar.gz"
 
 
+def _seconds_until_time(target_hhmm: str, tz_name: str = "") -> float:
+    """Calculate seconds until the next occurrence of HH:MM.
+
+    Uses station timezone if configured, otherwise local system time.
+    If the target time has already passed today, returns seconds until
+    tomorrow's occurrence.
+    """
+    try:
+        hour, minute = int(target_hhmm[:2]), int(target_hhmm[3:5])
+    except (ValueError, IndexError):
+        return 0.0
+
+    if tz_name:
+        try:
+            from zoneinfo import ZoneInfo
+            now = datetime.now(ZoneInfo(tz_name))
+        except (ImportError, KeyError):
+            now = datetime.now().astimezone()
+    else:
+        now = datetime.now().astimezone()
+
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+
+    return (target - now).total_seconds()
+
+
+def _read_backup_config(db_path: str) -> dict:
+    """Read current backup config from station_config (best-effort)."""
+    defaults = {
+        "backup_enabled": False,
+        "backup_interval_hours": 24,
+        "backup_retention_count": 7,
+        "backup_directory": "",
+        "backup_schedule_time": "",
+        "station_timezone": "",
+    }
+    try:
+        conn = sqlite3.connect(db_path)
+        for key in defaults:
+            cur = conn.execute(
+                "SELECT value FROM station_config WHERE key = ?", (key,)
+            )
+            row = cur.fetchone()
+            if row is not None:
+                val = row[0]
+                if val.lower() in ("true", "false"):
+                    defaults[key] = val.lower() == "true"
+                else:
+                    try:
+                        defaults[key] = int(val)
+                    except ValueError:
+                        defaults[key] = val
+        conn.close()
+    except Exception:
+        pass
+    return defaults
+
+
 async def backup_scheduler(
     db_path: str,
     backup_dir: str,
     interval_hours: int = 24,
     retention_count: int = 7,
+    schedule_time: str = "",
+    timezone_name: str = "",
 ) -> None:
     """Background task — creates backups on a schedule with rotation.
+
+    Re-reads config from DB each cycle so changes in the Settings UI
+    take effect without restarting. If schedule_time is set (HH:MM),
+    runs at that time of day. Otherwise, runs on a fixed interval.
 
     Runs until cancelled. Intended to be started as an asyncio task
     in the web app lifespan.
     """
-    logger.info(
-        "Backup scheduler started: every %dh, keep %d, dir=%s",
-        interval_hours, retention_count, backup_dir,
-    )
+    logger.info("Backup scheduler started (dir=%s)", backup_dir)
 
     while True:
-        await asyncio.sleep(interval_hours * 3600)
+        # Re-read config each cycle so Settings changes take effect
+        cfg = _read_backup_config(db_path)
+        if not cfg["backup_enabled"]:
+            # Disabled — check again in 60s
+            await asyncio.sleep(60)
+            continue
+
+        cur_schedule = str(cfg.get("backup_schedule_time", ""))
+        cur_interval = int(cfg.get("backup_interval_hours", 24))
+        cur_retention = int(cfg.get("backup_retention_count", 7))
+        cur_tz = str(cfg.get("station_timezone", ""))
+        cur_dir = get_backup_dir(db_path, str(cfg.get("backup_directory", "")))
+
+        if cur_schedule:
+            wait = _seconds_until_time(cur_schedule, cur_tz)
+            logger.debug("Backup scheduled at %s in %.0f seconds", cur_schedule, wait)
+            await asyncio.sleep(wait)
+        else:
+            await asyncio.sleep(cur_interval * 3600)
+
+        # Re-check enabled after sleep (user may have disabled during wait)
+        cfg = _read_backup_config(db_path)
+        if not cfg["backup_enabled"]:
+            continue
+
+        cur_retention = int(cfg.get("backup_retention_count", 7))
+        cur_dir = get_backup_dir(db_path, str(cfg.get("backup_directory", "")))
+
         try:
             filename = generate_backup_filename()
-            output = str(Path(backup_dir) / filename)
+            output = str(Path(cur_dir) / filename)
             manifest = create_backup(db_path, output)
-            deleted = rotate_backups(backup_dir, keep=retention_count)
+            deleted = rotate_backups(cur_dir, keep=cur_retention)
             logger.info(
                 "Scheduled backup complete: %s (%d bytes, %d rotated)",
                 filename, manifest.get("archive_size_bytes", 0), deleted,
             )
-            # Update last-success config
             _update_backup_status(db_path, success=True, timestamp=manifest["timestamp"])
         except Exception as exc:
             logger.error("Scheduled backup failed: %s", exc)

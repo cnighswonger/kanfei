@@ -52,6 +52,116 @@ def _unify_uvicorn_log_format() -> None:
             handler.setFormatter(fmt)
 
 
+# How often the nowcast supervisor checks for config changes (seconds).
+_NOWCAST_SUPERVISOR_POLL = 30
+
+
+async def _nowcast_supervisor(
+    nc_config,
+    nc_storage,
+    nc_events,
+) -> None:
+    """Background supervisor that manages the nowcast service lifecycle.
+
+    Polls ``nowcast_enabled`` and ``nowcast_mode`` from the DB every
+    ``_NOWCAST_SUPERVISOR_POLL`` seconds and starts, stops, or restarts
+    the nowcast service as needed — no app restart required.
+    """
+    from .services.nowcast import service_ref
+    from .services.nowcast.remote_client import NowcastRemoteClient
+
+    active_mode: str | None = None   # "remote", "local", or None (stopped)
+    active_task: asyncio.Task | None = None
+
+    def _stop_current() -> None:
+        nonlocal active_task, active_mode
+        if active_task is not None:
+            active_task.cancel()
+            logger.info("Nowcast service stopped (was %s)", active_mode)
+            active_task = None
+        service_ref.nowcast_service = None
+        # Clear kanfei_nowcast.service reference if it was set
+        try:
+            import kanfei_nowcast.service as _svc_mod
+            _svc_mod.nowcast_service = None
+        except ImportError:
+            pass
+        active_mode = None
+
+    def _start_remote() -> None:
+        nonlocal active_task, active_mode
+        nc_service = NowcastRemoteClient(nc_config, nc_storage, nc_events)
+        service_ref.nowcast_service = nc_service
+        active_task = asyncio.create_task(nc_service.start())
+        active_mode = "remote"
+        logger.info(
+            "Nowcast service started: REMOTE (%s)",
+            nc_config.get("nowcast_remote_url"),
+        )
+
+    def _start_local() -> None:
+        nonlocal active_task, active_mode
+        if not _NOWCAST_AVAILABLE:
+            logger.warning(
+                "Nowcast local mode requested but kanfei-nowcast package "
+                "is not installed. Install kanfei-nowcast or switch to "
+                "remote mode in Settings."
+            )
+            return
+        nc_service = create_nowcast_service(nc_config, nc_storage, nc_events)
+        service_ref.nowcast_service = nc_service
+        # Also store in kanfei_nowcast.service for the full API module
+        try:
+            import kanfei_nowcast.service as _svc_mod
+            _svc_mod.nowcast_service = nc_service
+        except ImportError:
+            pass
+        active_task = asyncio.create_task(nc_service.start())
+        active_mode = "local"
+        logger.info("Nowcast service started: LOCAL")
+
+    logger.info("Nowcast supervisor started (poll every %ds)", _NOWCAST_SUPERVISOR_POLL)
+
+    while True:
+        try:
+            enabled = nc_config.get_bool("nowcast_enabled", False)
+            mode = nc_config.get("nowcast_mode", "local")
+
+            if not enabled:
+                # Should be off — stop if running
+                if active_mode is not None:
+                    _stop_current()
+                    logger.info("Nowcast disabled via config")
+            elif mode != active_mode:
+                # Mode changed (or first start) — restart with new mode
+                if active_mode is not None:
+                    _stop_current()
+                if mode == "remote":
+                    _start_remote()
+                else:
+                    _start_local()
+            # else: enabled and same mode — nothing to do
+
+            # If the service task died unexpectedly, restart it
+            if active_task is not None and active_task.done():
+                exc = active_task.exception() if not active_task.cancelled() else None
+                if exc:
+                    logger.error("Nowcast service crashed: %s — restarting", exc)
+                else:
+                    logger.warning("Nowcast service exited unexpectedly — restarting")
+                old_mode = active_mode
+                _stop_current()
+                if enabled:
+                    if old_mode == "remote":
+                        _start_remote()
+                    else:
+                        _start_local()
+        except Exception:
+            logger.exception("Nowcast supervisor tick failed")
+
+        await asyncio.sleep(_NOWCAST_SUPERVISOR_POLL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: database init and IPC client setup."""
@@ -83,8 +193,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.warning("Logger daemon not reachable — running in degraded mode")
 
-    # Construct nowcast service — remote mode is built-in, local requires
-    # the optional kanfei-nowcast package.
+    # Construct nowcast adapters — shared by all nowcast modes.
     from .models.database import SessionLocal
     from .ws.handler import ws_manager
     from .services.nowcast.kanfei_adapters import (
@@ -92,64 +201,53 @@ async def lifespan(app: FastAPI):
         KanfeiStorageBackend,
         KanfeiEventEmitter,
     )
-    from .services.nowcast import service_ref
 
     nc_config = KanfeiConfigProvider(SessionLocal)
     nc_storage = KanfeiStorageBackend(SessionLocal)
     nc_events = KanfeiEventEmitter(ws_manager)
 
-    nowcast_task = None
-    nowcast_mode = nc_config.get("nowcast_mode", "local")
-    nowcast_enabled = nc_config.get_bool("nowcast_enabled", False)
+    # Start nowcast supervisor — always runs, polls config each cycle.
+    # Handles enable/disable and mode changes without requiring a restart.
+    nowcast_supervisor_task = asyncio.create_task(
+        _nowcast_supervisor(nc_config, nc_storage, nc_events)
+    )
 
-    if nowcast_enabled and nowcast_mode == "remote":
-        # Remote mode — built-in client, no kanfei-nowcast needed
-        from .services.nowcast.remote_client import NowcastRemoteClient
-        nc_service = NowcastRemoteClient(nc_config, nc_storage, nc_events)
-        service_ref.nowcast_service = nc_service
-        nowcast_task = asyncio.create_task(nc_service.start())
-        logger.info("Nowcast mode: REMOTE (%s)", nc_config.get("nowcast_remote_url"))
-    elif nowcast_enabled and _NOWCAST_AVAILABLE:
-        # Local mode — kanfei-nowcast package installed
-        nc_service = create_nowcast_service(nc_config, nc_storage, nc_events)
-        service_ref.nowcast_service = nc_service
-        # Also store in kanfei_nowcast.service for the full API module
-        try:
-            import kanfei_nowcast.service as _svc_mod
-            _svc_mod.nowcast_service = nc_service
-        except ImportError:
-            pass
-        nowcast_task = asyncio.create_task(nc_service.start())
-        logger.info("Nowcast mode: LOCAL")
-    elif nowcast_enabled:
-        logger.warning(
-            "Nowcast is enabled (mode=%s) but kanfei-nowcast package is not installed. "
-            "Install kanfei-nowcast for local mode, or switch to remote mode in Settings.",
-            nowcast_mode,
-        )
-    else:
-        logger.info("AI nowcast not enabled")
+    # Start backup scheduler — always runs, polls config each cycle.
+    # Handles enable/disable, schedule changes, and interval changes
+    # without requiring a restart.
+    from .services.backup import backup_scheduler, get_backup_dir
+    backup_dir = get_backup_dir(
+        settings.db_path,
+        nc_config.get("backup_directory", ""),
+    )
+    backup_task = asyncio.create_task(
+        backup_scheduler(settings.db_path, backup_dir)
+    )
 
-    # Start backup scheduler if enabled
-    backup_task = None
-    if nc_config.get_bool("backup_enabled", False):
-        from .services.backup import backup_scheduler, get_backup_dir
-        backup_dir = get_backup_dir(
-            settings.db_path,
-            nc_config.get("backup_directory", ""),
-        )
-        interval = int(nc_config.get("backup_interval_hours", 24))
-        retention = int(nc_config.get("backup_retention_count", 7))
-        backup_task = asyncio.create_task(
-            backup_scheduler(settings.db_path, backup_dir, interval, retention)
-        )
+    # Start Telegram bot supervisor — always runs, polls config each cycle.
+    # Handles enable/disable and token changes without requiring a restart.
+    # Receives alert events via IPC and nowcast events via the event emitter.
+    from .services.telegram import telegram_bot_supervisor
+    telegram_task = asyncio.create_task(
+        telegram_bot_supervisor(settings.db_path, settings.ipc_port, nc_events)
+    )
+
+    # Start Discord bot supervisor — same pattern as Telegram.
+    from .services.discord_bot import discord_bot_supervisor
+    discord_task = asyncio.create_task(
+        discord_bot_supervisor(settings.db_path, settings.ipc_port, nc_events)
+    )
 
     yield
 
+    if discord_task is not None:
+        discord_task.cancel()
+    if telegram_task is not None:
+        telegram_task.cancel()
     if backup_task is not None:
         backup_task.cancel()
-    if nowcast_task is not None:
-        nowcast_task.cancel()
+    if nowcast_supervisor_task is not None:
+        nowcast_supervisor_task.cancel()
     await client.close()
     logger.info("Application shutdown complete")
 

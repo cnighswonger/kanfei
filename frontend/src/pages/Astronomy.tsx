@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useWeatherData } from "../context/WeatherDataContext.tsx";
+import { useIsMobile } from "../hooks/useIsMobile.ts";
 import type { SunData, MoonData } from "../api/types.ts";
 
 // --- Shared styles ---
@@ -531,11 +532,12 @@ function MoonSection({ moon }: { moon: MoonData }) {
 
 export default function Astronomy() {
   const { astronomy } = useWeatherData();
+  const isMobile = useIsMobile();
 
   if (!astronomy) {
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-        <div style={{ flexShrink: 0, padding: "24px 24px 0" }}>
+        <div style={{ flexShrink: 0, padding: isMobile ? "4px 12px 0" : "4px 24px 0" }}>
           <h2
             style={{
               margin: "0 0 16px 0",
@@ -547,7 +549,7 @@ export default function Astronomy() {
             Astronomy
           </h2>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "0 24px 24px" }}>
+        <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: isMobile ? "0 12px 12px" : "0 24px 24px" }}>
         <div style={cardStyle}>
           <div style={emptyState}>
             Astronomy data is not yet available. Ensure the backend is running
@@ -561,7 +563,7 @@ export default function Astronomy() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <div style={{ flexShrink: 0, padding: "24px 24px 0" }}>
+      <div style={{ flexShrink: 0, padding: isMobile ? "4px 12px 0" : "4px 24px 0" }}>
         <h2
           style={{
             margin: "0 0 16px 0",
@@ -574,7 +576,7 @@ export default function Astronomy() {
         </h2>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "0 24px 24px" }}>
+      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: isMobile ? "0 12px 12px" : "0 24px 24px" }}>
       <div
         style={{
           display: "grid",

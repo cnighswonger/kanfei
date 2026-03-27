@@ -17,6 +17,7 @@ router = APIRouter()
 _DEFAULTS: dict[str, object] = {
     "serial_port": settings.serial_port,
     "baud_rate": settings.baud_rate,
+    "serial_timeout": settings.serial_timeout,
     "poll_interval": settings.poll_interval_sec,
     "latitude": settings.latitude,
     "longitude": settings.longitude,
@@ -86,22 +87,49 @@ _DEFAULTS: dict[str, object] = {
     "ui_weather_bg_intensity": 30,
     "ui_weather_bg_transparency": 15,
     "ui_dashboard_layout": "",
+    # Telegram bot
+    "bot_telegram_enabled": False,
+    "bot_telegram_token": "",
+    "bot_telegram_chat_id": "",       # comma-separated for multiple chats
+    "bot_telegram_commands": "current,status,help",
+    "bot_telegram_notifications": "nowcast,alerts",
+    "bot_telegram_last_error": "",
+    # Discord bot
+    "bot_discord_enabled": False,
+    "bot_discord_token": "",
+    "bot_discord_guild_id": "",       # target server ID
+    "bot_discord_channel_id": "",     # notification channel(s), comma-separated
+    "bot_discord_commands": "current,status,help",
+    "bot_discord_notifications": "nowcast,alerts",
+    "bot_discord_last_error": "",
     # Backup
     "backup_enabled": False,
     "backup_interval_hours": 24,
     "backup_retention_count": 7,
     "backup_directory": "",
+    "backup_schedule_time": "",  # HH:MM for time-of-day scheduling; empty = interval from boot
     "backup_last_success": "",
     "backup_last_error": "",
 }
 
 
+_JS_MAX_SAFE_INTEGER = 2**53 - 1
+
+
 def _coerce_value(raw: str) -> object:
-    """Try to coerce a stored string back to bool/int/float."""
+    """Try to coerce a stored string back to bool/int/float.
+
+    Integers exceeding JavaScript's MAX_SAFE_INTEGER (2^53 - 1) are
+    returned as strings to avoid precision loss in JSON serialization.
+    Discord/Telegram IDs are 64-bit snowflakes that exceed this limit.
+    """
     if raw.lower() in ("true", "false"):
         return raw.lower() == "true"
     try:
-        return int(raw)
+        val = int(raw)
+        if abs(val) > _JS_MAX_SAFE_INTEGER:
+            return raw
+        return val
     except ValueError:
         pass
     try:

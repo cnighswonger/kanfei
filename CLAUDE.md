@@ -14,6 +14,7 @@ Self-hosted weather station dashboard and data logger for personal weather stati
 
 - **Main branch**: `origin/main` — primary development target
 - **Feature branches**: `feature/*` — branch from main, open PR, merge via PR, delete branch
+- **E2E branches**: `feature/e2e/*` or `fix/e2e/*` — for changes requiring E2E testing (UI behavior changes). Run `./scripts/e2e-report.sh` and post results to PR before review.
 - **Fix branches**: `fix/*` — for bugfixes
 - **Debian packaging branch**: `deb` — package build files
 - Small changes can go directly to main; larger work should use branches + PRs
@@ -24,6 +25,7 @@ Self-hosted weather station dashboard and data logger for personal weather stati
 - **Do not expose kanfei-nowcast internals** in this public repo — no prompt section names, detection algorithms, or architecture details in issues or code comments. Describe only user-visible symptoms and outcomes.
 - Prefer editing existing files over creating new ones
 - Run `npx tsc --noEmit` before committing frontend changes
+- Vite chunk size warnings ("Some chunks are larger than 500 kB after minification") are **non-blocking** — the build still succeeds. Do not treat these as errors or attempt to fix them unless explicitly asked.
 - Run `py_compile` on modified Python files before committing
 - Run backend tests before committing backend changes
 - localStorage migration keys (`davis-wx-*` in `uiPrefs.ts`) are intentional for backwards compatibility — do not remove
