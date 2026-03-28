@@ -188,7 +188,7 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
           const tickFrac = (t - range.min) / rangeSpan;
           const inner = fracToXY(tickFrac, r - strokeWidth / 2 - 4);
           const outer = fracToXY(tickFrac, r - strokeWidth / 2 - 14);
-          const label = fracToXY(tickFrac, r - strokeWidth / 2 - 24);
+          const labelPt = fracToXY(tickFrac, r - strokeWidth / 2 - 24);
           return (
             <g key={t}>
               <line
@@ -198,7 +198,7 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
                 strokeWidth="1"
               />
               <text
-                x={label.x} y={label.y + 3}
+                x={labelPt.x} y={labelPt.y + 3}
                 fontSize="9"
                 fill="var(--color-text-muted)"
                 fontFamily="var(--font-gauge)"
