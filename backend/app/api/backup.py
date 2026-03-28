@@ -3,11 +3,12 @@
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from ..config import settings
+from .dependencies import require_admin
 from ..services.backup import (
     create_backup,
     restore_backup,
@@ -26,7 +27,7 @@ class RestoreRequest(BaseModel):
 
 
 @router.post("")
-def trigger_backup():
+def trigger_backup(_admin=Depends(require_admin)):
     """Create a backup immediately. Returns manifest."""
     try:
         backup_dir = get_backup_dir(settings.db_path)
@@ -52,14 +53,14 @@ def trigger_backup():
 
 
 @router.get("/list")
-def get_backups():
+def get_backups(_admin=Depends(require_admin)):
     """List existing backups."""
     backup_dir = get_backup_dir(settings.db_path)
     return list_backups(backup_dir)
 
 
 @router.get("/download/{name}")
-def download_backup(name: str):
+def download_backup(name: str, _admin=Depends(require_admin)):
     """Download a backup archive by name."""
     # Sanitize filename — prevent path traversal
     if "/" in name or "\\" in name or ".." in name:
@@ -82,6 +83,7 @@ def download_backup(name: str):
 async def restore_from_upload(
     confirmation: str,
     file: UploadFile = File(...),
+    _admin=Depends(require_admin),
 ):
     """Restore from an uploaded backup archive.
 
@@ -120,7 +122,7 @@ async def restore_from_upload(
 
 
 @router.delete("/{name}")
-def delete_backup(name: str):
+def delete_backup(name: str, _admin=Depends(require_admin)):
     """Delete a backup archive."""
     if "/" in name or "\\" in name or ".." in name:
         raise HTTPException(status_code=400, detail="Invalid filename")

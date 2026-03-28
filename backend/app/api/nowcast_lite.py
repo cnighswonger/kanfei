@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from ..models.database import get_db
 from ..models.station_config import StationConfigModel
+from .dependencies import require_admin
 from ..services.nowcast import service_ref as _svc_ref
 from ..services.alerts_nws import fetch_nws_active_alerts
 
@@ -34,7 +35,7 @@ def get_nowcast():
 
 
 @router.post("/nowcast/generate")
-async def generate_now():
+async def generate_now(_admin=Depends(require_admin)):
     """Trigger an immediate nowcast fetch and return the result."""
     if _svc_ref.nowcast_service is None:
         raise HTTPException(status_code=400, detail="Nowcast service not active")

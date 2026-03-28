@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models.database import get_db
+from .dependencies import require_admin
 from ..models.sensor_reading import SensorReadingModel
 from ..models.archive_record import ArchiveRecordModel
 from ..models.nowcast import NowcastHistory, NowcastVerification, NowcastKnowledge
@@ -105,7 +106,7 @@ class CompactRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.get("/stats")
-def get_stats(db: Session = Depends(get_db)):
+def get_stats(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Row counts and date ranges for all tables, plus database file size."""
     tables = []
     for table_name, info in _TABLE_REGISTRY.items():
@@ -189,6 +190,7 @@ def export_json(
     start: str | None = Query(None),
     end: str | None = Query(None),
     db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
 ):
     """Stream a JSON export of a single table."""
     info = _TABLE_REGISTRY.get(table)
@@ -212,7 +214,7 @@ def export_json(
 # ---------------------------------------------------------------------------
 
 @router.get("/export/backup")
-def export_backup():
+def export_backup(_admin=Depends(require_admin)):
     """Download a consistent SQLite database backup."""
     today = date.today().isoformat()
     filename = f"kanfei_backup_{today}.db"
@@ -253,7 +255,7 @@ def _circular_mean_deg(angles: list[float]) -> int:
 
 
 @router.post("/compact")
-def compact_readings(body: CompactRequest, db: Session = Depends(get_db)):
+def compact_readings(body: CompactRequest, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Compact raw sensor readings into 5-minute averages."""
     if body.confirm != "COMPACT":
         raise HTTPException(400, "Confirmation required: set confirm to 'COMPACT'")
@@ -350,7 +352,7 @@ def compact_readings(body: CompactRequest, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.delete("/purge/{table}")
-def purge_table(table: str, body: PurgeRequest, db: Session = Depends(get_db)):
+def purge_table(table: str, body: PurgeRequest, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Purge records from a table — date-range or full."""
     info = _TABLE_REGISTRY.get(table)
     if not info:
@@ -393,7 +395,7 @@ def purge_table(table: str, body: PurgeRequest, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.delete("/purge-all")
-def purge_all(body: PurgeRequest, db: Session = Depends(get_db)):
+def purge_all(body: PurgeRequest, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Purge ALL data tables. Configuration and products are preserved."""
     if body.confirm != "DELETE DATABASE":
         raise HTTPException(400, 'Confirmation required: set confirm to "DELETE DATABASE"')

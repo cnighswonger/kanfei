@@ -9,8 +9,27 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..models.database import get_db
 from ..models.station_config import StationConfigModel
+from .dependencies import require_admin
 
 router = APIRouter()
+
+# Keys whose values must be masked in GET /config responses.
+_SECRET_KEYS = frozenset({
+    "nowcast_api_key",
+    "nowcast_wu_api_key",
+    "nowcast_fallback_grok_api_key",
+    "nowcast_fallback_openai_api_key",
+    "anthropic_admin_api_key",
+    "bot_telegram_token",
+    "bot_discord_token",
+    "wu_station_key",
+})
+
+
+def _mask_value(value: str) -> str:
+    if not value or len(value) < 8:
+        return "***" if value else ""
+    return value[:4] + "*" * min(len(value) - 4, 20)
 
 # Default config items derived from application settings.
 # These are shown when the DB has no saved value for a key.
@@ -150,22 +169,37 @@ def get_effective_config(db: Session) -> dict[str, object]:
     return {key: saved.get(key, default) for key, default in _DEFAULTS.items()}
 
 
+# Public feature flags — no auth required.
+_PUBLIC_FLAG_KEYS = frozenset({"nowcast_enabled", "spray_enabled"})
+
+
+@router.get("/config/flags")
+def get_feature_flags(db: Session = Depends(get_db)):
+    """Return public feature flags (no authentication required)."""
+    saved = {item.key: _coerce_value(item.value) for item in db.query(StationConfigModel).all()}
+    return {key: saved.get(key, _DEFAULTS.get(key, False)) for key in _PUBLIC_FLAG_KEYS}
+
+
 @router.get("/config")
-def get_config(db: Session = Depends(get_db)):
+def get_config(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Return all configuration key-value pairs, with defaults for unsaved keys."""
     saved = {item.key: item.value for item in db.query(StationConfigModel).all()}
 
     result = []
     for key, default in _DEFAULTS.items():
         if key in saved:
-            result.append({"key": key, "value": _coerce_value(saved[key])})
+            value = _coerce_value(saved[key])
         else:
-            result.append({"key": key, "value": default})
+            value = default
+        # Mask secret values so they are never sent to the frontend in full.
+        if key in _SECRET_KEYS and isinstance(value, str):
+            value = _mask_value(value)
+        result.append({"key": key, "value": value})
     return result
 
 
 @router.put("/config")
-def update_config(updates: list[ConfigUpdate], db: Session = Depends(get_db)):
+def update_config(updates: list[ConfigUpdate], db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Update one or more configuration values."""
     for update in updates:
         # Python's str(True) produces "True" — normalize bools to lowercase

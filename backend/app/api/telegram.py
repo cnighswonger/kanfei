@@ -2,9 +2,11 @@
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+from .dependencies import require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +19,7 @@ class TelegramTestRequest(BaseModel):
 
 
 @router.post("/telegram/test")
-async def send_test_message(req: TelegramTestRequest):
+async def send_test_message(req: TelegramTestRequest, _admin=Depends(require_admin)):
     """Send a test message to verify Telegram bot token and chat ID."""
     if not req.token or not req.chat_id:
         raise HTTPException(status_code=400, detail="Token and chat ID are required")
