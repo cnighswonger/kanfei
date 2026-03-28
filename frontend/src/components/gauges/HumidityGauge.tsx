@@ -82,24 +82,24 @@ function humidityColor(pct: number): string {
 
 export default function HumidityGauge({ value, label, high, low }: HumidityGaugeProps) {
   const cx = 120;
-  const cy = 115;
+  const cy = 120;
   const r = 90;
   const strokeWidth = 14;
-  const startAngle = 180;
-  const endAngle = 360;
-  const sweep = endAngle - startAngle;
 
-  const toRad = (deg: number) => (deg - 90) * (Math.PI / 180);
-
-  const describeArc = (start: number, end: number, radius: number): string => {
-    const startRad = toRad(start);
-    const endRad = toRad(end);
-    const x1 = cx + radius * Math.cos(startRad);
-    const y1 = cy + radius * Math.sin(startRad);
-    const x2 = cx + radius * Math.cos(endRad);
-    const y2 = cy + radius * Math.sin(endRad);
-    const largeArc = end - start >= 180 ? 1 : 0;
-    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
+  // Arc sweeps from left to right across the top (speedometer layout).
+  // In our coordinate system (toRad shifts by -90°), 180° maps to the
+  // bottom of the circle. We want left-to-right top arc, so use
+  // standard SVG arc from (-r, cy) to (+r, cy) sweeping upward.
+  const describeArc = (startFrac: number, endFrac: number, radius: number): string => {
+    // Map fraction 0..1 to angle π..0 (left to right across top)
+    const a1 = Math.PI * (1 - startFrac);
+    const a2 = Math.PI * (1 - endFrac);
+    const x1 = cx + radius * Math.cos(a1);
+    const y1 = cy - radius * Math.sin(a1);
+    const x2 = cx + radius * Math.cos(a2);
+    const y2 = cy - radius * Math.sin(a2);
+    const largeArc = (endFrac - startFrac) >= 0.5 ? 1 : 0;
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 0 ${x2} ${y2}`;
   };
 
   const range = autoRange(value, high, low);
@@ -107,8 +107,13 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
   const frac = value !== null
     ? Math.max(0, Math.min(0.998, (value - range.min) / rangeSpan))
     : 0;
-  const fillAngle = startAngle + frac * sweep;
   const color = value !== null ? humidityColor(value) : 'var(--color-text-muted)';
+
+  // Helper: convert a 0..1 fraction to SVG coordinates on the arc
+  const fracToXY = (f: number, radius: number) => {
+    const angle = Math.PI * (1 - f);  // π (left) to 0 (right)
+    return { x: cx + radius * Math.cos(angle), y: cy - radius * Math.sin(angle) };
+  };
 
   const isMobile = useCompact();
   if (isMobile) {
@@ -156,9 +161,9 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
       )}
 
       <svg width="240" height="145" viewBox="0 0 240 145">
-        {/* Background arc */}
+        {/* Background arc (full semicircle) */}
         <path
-          d={describeArc(startAngle, endAngle, r)}
+          d={describeArc(0, 1, r)}
           fill="none"
           stroke="var(--color-gauge-track)"
           strokeWidth={strokeWidth}
@@ -169,7 +174,7 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
         {/* Colored fill arc */}
         {value !== null && frac > 0.005 && (
           <path
-            d={describeArc(startAngle, fillAngle, r)}
+            d={describeArc(0, frac, r)}
             fill="none"
             stroke={color}
             strokeWidth={strokeWidth}
@@ -181,23 +186,19 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
         {/* Tick marks */}
         {ticks.map((t) => {
           const tickFrac = (t - range.min) / rangeSpan;
-          const angle = startAngle + tickFrac * sweep;
-          const rad = toRad(angle);
-          const innerR = r - strokeWidth / 2 - 4;
-          const outerR = r - strokeWidth / 2 - 14;
+          const inner = fracToXY(tickFrac, r - strokeWidth / 2 - 4);
+          const outer = fracToXY(tickFrac, r - strokeWidth / 2 - 14);
+          const label = fracToXY(tickFrac, r - strokeWidth / 2 - 24);
           return (
             <g key={t}>
               <line
-                x1={cx + innerR * Math.cos(rad)}
-                y1={cy + innerR * Math.sin(rad)}
-                x2={cx + outerR * Math.cos(rad)}
-                y2={cy + outerR * Math.sin(rad)}
+                x1={inner.x} y1={inner.y}
+                x2={outer.x} y2={outer.y}
                 stroke="var(--color-text-muted)"
                 strokeWidth="1"
               />
               <text
-                x={cx + (outerR - 10) * Math.cos(rad)}
-                y={cy + (outerR - 10) * Math.sin(rad) + 3}
+                x={label.x} y={label.y + 3}
                 fontSize="9"
                 fill="var(--color-text-muted)"
                 fontFamily="var(--font-gauge)"
