@@ -1,6 +1,9 @@
 """GET/PUT /api/config - Configuration management."""
 
+import logging
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -113,6 +116,8 @@ _DEFAULTS: dict[str, object] = {
     "bot_telegram_commands": "current,status,help",
     "bot_telegram_notifications": "nowcast,alerts",
     "bot_telegram_last_error": "",
+    "bot_telegram_conditions_enabled": False,
+    "bot_telegram_conditions_interval": 30,   # minutes
     # Discord bot
     "bot_discord_enabled": False,
     "bot_discord_token": "",
@@ -121,6 +126,8 @@ _DEFAULTS: dict[str, object] = {
     "bot_discord_commands": "current,status,help",
     "bot_discord_notifications": "nowcast,alerts",
     "bot_discord_last_error": "",
+    "bot_discord_conditions_enabled": False,
+    "bot_discord_conditions_interval": 30,    # minutes
     # Backup
     "backup_enabled": False,
     "backup_interval_hours": 24,
@@ -201,7 +208,29 @@ def get_config(db: Session = Depends(get_db), _admin=Depends(require_admin)):
 @router.put("/config")
 def update_config(updates: list[ConfigUpdate], db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Update one or more configuration values."""
+    # Pre-read current secret values so we can detect masked round-trips.
+    current_secrets = {}
+    for key in _SECRET_KEYS:
+        row = db.query(StationConfigModel).filter_by(key=key).first()
+        if row:
+            current_secrets[key] = row.value
+
     for update in updates:
+        # Skip masked secret values — the frontend sends back the masked
+        # version from GET /config; writing it would destroy the real secret.
+        if update.key in _SECRET_KEYS:
+            val_str = str(update.value)
+            # Reject if value contains mask characters or matches the mask
+            # of the current DB value.
+            if "****" in val_str:
+                logger.debug("Skipping masked secret %s (contains ****)", update.key)
+                continue
+            current = current_secrets.get(update.key, "")
+            if current and val_str == _mask_value(current):
+                logger.debug("Skipping masked secret %s (matches mask of DB value)", update.key)
+                continue
+            logger.debug("Accepting secret update for %s (len=%d)", update.key, len(val_str))
+
         # Python's str(True) produces "True" — normalize bools to lowercase
         # so downstream checks like `value == "true"` work consistently.
         val = str(update.value).lower() if isinstance(update.value, bool) else str(update.value)

@@ -3132,10 +3132,37 @@ export default function Settings() {
             })}
           </div>
         </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Scheduled Conditions Push</label>
+          <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={val("bot_telegram_conditions_enabled") === true}
+                onChange={(e) => updateField("bot_telegram_conditions_enabled", e.target.checked)}
+              />
+              Push current conditions
+            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)" }}>every</span>
+              <select
+                style={{ ...selectStyle, width: "auto", minWidth: "80px" }}
+                value={String(val("bot_telegram_conditions_interval") || 30)}
+                onChange={(e) => updateField("bot_telegram_conditions_interval", Number(e.target.value))}
+              >
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
+                <option value="240">4 hours</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <button
             style={{ ...btnPrimary, opacity: telegramTesting ? 0.6 : 1 }}
-            disabled={telegramTesting || !val("bot_telegram_token") || !val("bot_telegram_chat_id")}
+            disabled={telegramTesting || !val("bot_telegram_chat_id")}
             onClick={async () => {
               setTelegramTesting(true);
               setTelegramTestResult(null);
@@ -3143,8 +3170,8 @@ export default function Settings() {
                 const resp = await fetch(`${API_BASE}/api/telegram/test`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
                   body: JSON.stringify({
-                    token: String(val("bot_telegram_token") || ""),
                     chat_id: String(val("bot_telegram_chat_id") || "").split(",")[0].trim(),
                   }),
                 });
@@ -3285,10 +3312,37 @@ export default function Settings() {
             })}
           </div>
         </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Scheduled Conditions Push</label>
+          <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={val("bot_discord_conditions_enabled") === true}
+                onChange={(e) => updateField("bot_discord_conditions_enabled", e.target.checked)}
+              />
+              Push current conditions
+            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)" }}>every</span>
+              <select
+                style={{ ...selectStyle, width: "auto", minWidth: "80px" }}
+                value={String(val("bot_discord_conditions_interval") || 30)}
+                onChange={(e) => updateField("bot_discord_conditions_interval", Number(e.target.value))}
+              >
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
+                <option value="240">4 hours</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <button
             style={{ ...btnPrimary, opacity: discordTesting ? 0.6 : 1 }}
-            disabled={discordTesting || !val("bot_discord_token") || !val("bot_discord_channel_id")}
+            disabled={discordTesting || !val("bot_discord_channel_id")}
             onClick={async () => {
               setDiscordTesting(true);
               setDiscordTestResult(null);
@@ -3296,8 +3350,8 @@ export default function Settings() {
                 const resp = await fetch(`${API_BASE}/api/discord/test`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
                   body: JSON.stringify({
-                    token: String(val("bot_discord_token") || ""),
                     channel_id: String(val("bot_discord_channel_id") || "").split(",")[0].trim(),
                   }),
                 });

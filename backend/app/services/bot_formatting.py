@@ -25,6 +25,21 @@ def cardinal(degrees: int | None) -> str:
     return _CARDINAL_DIRECTIONS[idx]
 
 
+def _get_station_timezone() -> str:
+    """Read station_timezone from config (best-effort)."""
+    try:
+        from ..config import settings
+        conn = sqlite3.connect(settings.db_path)
+        cur = conn.execute(
+            "SELECT value FROM station_config WHERE key = 'station_timezone'"
+        )
+        row = cur.fetchone()
+        conn.close()
+        return row[0] if row else ""
+    except Exception:
+        return ""
+
+
 def get_current_conditions(db_path: str) -> dict | None:
     """Query the latest sensor reading from the database.
 
@@ -92,6 +107,17 @@ def format_current_conditions(reading: dict) -> str:
     if ts:
         try:
             dt = datetime.fromisoformat(ts)
+            # Convert UTC to station local time if timezone is configured.
+            tz_name = _get_station_timezone()
+            if tz_name:
+                try:
+                    from zoneinfo import ZoneInfo
+                    local_tz = ZoneInfo(tz_name)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+                    dt = dt.astimezone(local_tz)
+                except Exception:
+                    pass
             ts = dt.strftime("%I:%M %p").lstrip("0")
         except (ValueError, TypeError):
             pass
