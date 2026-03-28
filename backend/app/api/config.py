@@ -206,6 +206,13 @@ def get_config(db: Session = Depends(get_db), _admin=Depends(require_admin)):
 def update_config(updates: list[ConfigUpdate], db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Update one or more configuration values."""
     for update in updates:
+        # Skip masked secret values — the frontend sends back the masked
+        # version from GET /config; writing it would destroy the real secret.
+        if update.key in _SECRET_KEYS:
+            val_str = str(update.value)
+            if "****" in val_str:
+                continue
+
         # Python's str(True) produces "True" — normalize bools to lowercase
         # so downstream checks like `value == "true"` work consistently.
         val = str(update.value).lower() if isinstance(update.value, bool) else str(update.value)
