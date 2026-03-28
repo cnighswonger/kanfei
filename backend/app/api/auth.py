@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,14 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # Session cookie settings.
 _COOKIE_NAME = "knf_session"
 _COOKIE_MAX_AGE = 72 * 3600  # 72 hours
+
+
+def _is_https(request: Request) -> bool:
+    """Detect if the request arrived over HTTPS (direct or via reverse proxy)."""
+    if request.url.scheme == "https":
+        return True
+    # Trust X-Forwarded-Proto from reverse proxy.
+    return request.headers.get("x-forwarded-proto", "").lower() == "https"
 
 
 # ---------------------------------------------------------------------------
@@ -59,35 +67,38 @@ class CreateAdminRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.post("/login")
-async def login(req: LoginRequest, response: Response, db: Session = Depends(_get_db)):
+async def login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(_get_db)):
     """Authenticate and create a session."""
     user = get_user_by_username(db, req.username)
     if user is None or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_session(db, user.id)
+    secure = _is_https(request)
     response.set_cookie(
         key=_COOKIE_NAME,
         value=token,
         max_age=_COOKIE_MAX_AGE,
         httponly=True,
+        secure=secure,
         samesite="lax",
         path="/",
     )
-    logger.info("User %s logged in", user.username)
+    logger.info("User %s logged in (secure=%s)", user.username, secure)
     return {"username": user.username, "is_admin": user.is_admin}
 
 
 @router.post("/logout")
 async def logout(
+    request: Request,
     response: Response,
     db: Session = Depends(_get_db),
     _admin: UserModel = Depends(require_admin),
 ):
-    """Invalidate the current session."""
-    from fastapi import Request
-    # We need the raw request to read the cookie — get it via the response trick.
-    # Actually, require_admin already validated the session. Just delete the cookie.
+    """Invalidate the current session (server-side and cookie)."""
+    token = request.cookies.get(_COOKIE_NAME)
+    if token:
+        revoke_session(db, token)
     response.delete_cookie(_COOKIE_NAME, path="/")
     return {"ok": True}
 

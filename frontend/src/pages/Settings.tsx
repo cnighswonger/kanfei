@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchConfig, updateConfig, fetchSerialPorts, reconnectStation, fetchWeatherLinkConfig, updateWeatherLinkConfig, clearRainDaily, clearRainYearly, forceArchive, fetchLocalUsage, fetchUsageStatus, fetchAnthropicCost, fetchDbStats, purgeTable, purgeAll, compactReadings, getDbBackupUrl, getDbExportUrl, fetchLogs, fetchNowcastPresets, triggerBackup, listBackups, deleteBackup, getBackupDownloadUrl } from "../api/client.ts";
+import { fetchConfig, updateConfig, fetchSerialPorts, reconnectStation, fetchWeatherLinkConfig, updateWeatherLinkConfig, clearRainDaily, clearRainYearly, forceArchive, fetchLocalUsage, fetchUsageStatus, fetchAnthropicCost, fetchDbStats, purgeTable, purgeAll, compactReadings, getDbBackupUrl, getDbExportUrl, fetchLogs, fetchNowcastPresets, triggerBackup, listBackups, deleteBackup, getBackupDownloadUrl, changePassword } from "../api/client.ts";
 import type { NowcastPresetOption } from "../api/client.ts";
 import type { ConfigItem, WeatherLinkConfig, WeatherLinkCalibration, AlertThreshold, LocalUsageResponse, UsageStatus, DbStats, LogEntry } from "../api/types.ts";
 import { useTheme } from "../context/ThemeContext.tsx";
@@ -1412,6 +1412,83 @@ function BackupTab({ val, updateField, isMobile }: {
 
 // --- System Log Tab ---
 
+function ChangePasswordCard() {
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  const mismatch = newPw.length > 0 && confirmPw.length > 0 && newPw !== confirmPw;
+  const canSave = currentPw.length > 0 && newPw.length >= 8 && newPw === confirmPw && !saving;
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    setResult(null);
+    try {
+      await changePassword(currentPw, newPw);
+      setResult("Password changed successfully");
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
+    } catch (err: unknown) {
+      setResult(err instanceof Error && err.message.includes("401")
+        ? "Error: Current password is incorrect"
+        : `Error: ${err instanceof Error ? err.message : "Failed"}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={cardStyle}>
+      <h3 style={sectionTitle}>Change Password</h3>
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxWidth: "380px" }}>
+        <div>
+          <label style={labelStyle}>Current Password</label>
+          <input style={inputStyle} type="password" value={currentPw}
+            onChange={(e) => setCurrentPw(e.target.value)} autoComplete="current-password" />
+        </div>
+        <div>
+          <label style={labelStyle}>New Password</label>
+          <input style={inputStyle} type="password" value={newPw}
+            onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" />
+          <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginTop: "4px", display: "block" }}>
+            At least 8 characters
+          </span>
+        </div>
+        <div>
+          <label style={labelStyle}>Confirm New Password</label>
+          <input style={{
+            ...inputStyle,
+            borderColor: mismatch ? "var(--color-danger)" : "var(--color-border)",
+          }} type="password" value={confirmPw}
+            onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" />
+          {mismatch && (
+            <span style={{ fontSize: "12px", color: "var(--color-danger)", marginTop: "4px", display: "block" }}>
+              Passwords do not match
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <button style={{ ...btnPrimary, opacity: canSave ? 1 : 0.5 }} disabled={!canSave} onClick={handleSubmit}>
+            {saving ? "Saving..." : "Change Password"}
+          </button>
+          {result && (
+            <span style={{
+              fontSize: "13px",
+              fontFamily: "var(--font-body)",
+              color: result.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
+            }}>
+              {result}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SystemTab({ isMobile }: { isMobile: boolean }) {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1556,6 +1633,8 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
           </div>
         )}
       </div>
+
+      <ChangePasswordCard />
 
       {/* Service restart instructions */}
       <div style={cardStyle}>
