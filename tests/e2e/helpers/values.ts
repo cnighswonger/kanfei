@@ -53,5 +53,13 @@ export const DAILY_EXTREMES = {
 /** Number of driver options in the driver selection dropdown. */
 export const DRIVER_COUNT = 7;
 
+/** Test admin credentials — matches build-test-db.py. */
+export const TEST_ADMIN = {
+  username: 'admin',
+  password: 'testpass123',
+  /** Pre-baked session token inserted into the test DB. */
+  sessionToken: 'e2e_test_session_token_fixed_for_determinism',
+} as const;
+
 /** Base URL for API calls within tests. */
 export const API_BASE = 'http://localhost:8765';
