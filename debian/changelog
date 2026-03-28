@@ -1,3 +1,21 @@
+kanfei (0.1.0~beta6) unstable; urgency=medium
+
+  * Authentication: session auth (bcrypt, 72h sliding), API keys (knf_ prefix)
+  * ~50 admin endpoints protected, public weather endpoints unchanged
+  * Setup wizard: 4th step creates admin account on first run
+  * Login page with return-to-origin, logout to dashboard
+  * Secret masking in config API, CORS tightened, OpenAPI docs disabled
+  * Secure cookie flag when behind HTTPS proxy, session revocation on logout
+  * Change password UI in Settings > System
+  * Scheduled conditions push to Telegram/Discord (configurable interval)
+  * Immediate push on re-enable, independent of bot enable/notifications
+  * Fix: History view raw SI values converted to display units
+  * Fix: Bot timestamps in station local time instead of UTC
+  * Fix: Test buttons work after page refresh (token from DB)
+  * Fix: Masked secrets not written back to DB on config save
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Fri, 28 Mar 2026 22:00:00 +0000
+
 kanfei (0.1.0~beta5) unstable; urgency=low
 
   * Telegram bot: /current, /status, /help + outbound alert/nowcast notifications
