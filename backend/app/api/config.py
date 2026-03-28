@@ -113,6 +113,8 @@ _DEFAULTS: dict[str, object] = {
     "bot_telegram_commands": "current,status,help",
     "bot_telegram_notifications": "nowcast,alerts",
     "bot_telegram_last_error": "",
+    "bot_telegram_conditions_enabled": False,
+    "bot_telegram_conditions_interval": 30,   # minutes
     # Discord bot
     "bot_discord_enabled": False,
     "bot_discord_token": "",
@@ -121,6 +123,8 @@ _DEFAULTS: dict[str, object] = {
     "bot_discord_commands": "current,status,help",
     "bot_discord_notifications": "nowcast,alerts",
     "bot_discord_last_error": "",
+    "bot_discord_conditions_enabled": False,
+    "bot_discord_conditions_interval": 30,    # minutes
     # Backup
     "backup_enabled": False,
     "backup_interval_hours": 24,

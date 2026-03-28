@@ -3132,6 +3132,33 @@ export default function Settings() {
             })}
           </div>
         </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Scheduled Conditions Push</label>
+          <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={val("bot_telegram_conditions_enabled") === true}
+                onChange={(e) => updateField("bot_telegram_conditions_enabled", e.target.checked)}
+              />
+              Push current conditions
+            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)" }}>every</span>
+              <select
+                style={{ ...selectStyle, width: "auto", minWidth: "80px" }}
+                value={String(val("bot_telegram_conditions_interval") || 30)}
+                onChange={(e) => updateField("bot_telegram_conditions_interval", Number(e.target.value))}
+              >
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
+                <option value="240">4 hours</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <button
             style={{ ...btnPrimary, opacity: telegramTesting ? 0.6 : 1 }}
@@ -3283,6 +3310,33 @@ export default function Settings() {
                 </label>
               );
             })}
+          </div>
+        </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Scheduled Conditions Push</label>
+          <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={val("bot_discord_conditions_enabled") === true}
+                onChange={(e) => updateField("bot_discord_conditions_enabled", e.target.checked)}
+              />
+              Push current conditions
+            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)" }}>every</span>
+              <select
+                style={{ ...selectStyle, width: "auto", minWidth: "80px" }}
+                value={String(val("bot_discord_conditions_interval") || 30)}
+                onChange={(e) => updateField("bot_discord_conditions_interval", Number(e.target.value))}
+              >
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
+                <option value="240">4 hours</option>
+              </select>
+            </div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>

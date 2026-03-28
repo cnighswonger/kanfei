@@ -35,6 +35,8 @@ def _read_telegram_config(db_path: str) -> dict:
         "bot_telegram_chat_id": "",
         "bot_telegram_commands": "current,status,help",
         "bot_telegram_notifications": "nowcast,alerts",
+        "bot_telegram_conditions_enabled": False,
+        "bot_telegram_conditions_interval": 30,
     }
     try:
         conn = sqlite3.connect(db_path)
@@ -308,6 +310,7 @@ async def telegram_bot_supervisor(db_path: str, ipc_port: int = 0,
     active_ipc_task: asyncio.Task | None = None
     active_token: str = ""
     listener_registered = False
+    last_conditions_push: float = 0.0
 
     def _nowcast_listener(msg: dict):
         """Async callback registered with KanfeiEventEmitter."""
@@ -385,6 +388,23 @@ async def telegram_bot_supervisor(db_path: str, ipc_port: int = 0,
                 active_bot._chat_ids = chat_ids
                 active_bot._enabled_commands = enabled_commands
                 active_bot._enabled_notifications = enabled_notifications
+
+            # Scheduled conditions push
+            conditions_enabled = cfg.get("bot_telegram_conditions_enabled", False)
+            conditions_interval = int(cfg.get("bot_telegram_conditions_interval", 30)) * 60
+            if active_bot is not None and conditions_enabled and conditions_interval > 0:
+                import time
+                now = time.monotonic()
+                if now - last_conditions_push >= conditions_interval:
+                    reading = get_current_conditions(db_path)
+                    if reading:
+                        text = format_current_conditions(reading)
+                        try:
+                            await active_bot.send_notification(text)
+                            last_conditions_push = now
+                            logger.debug("Telegram conditions push sent")
+                        except Exception:
+                            logger.debug("Telegram conditions push failed", exc_info=True)
 
             # Check if the bot task died
             if active_task is not None and active_task.done():
