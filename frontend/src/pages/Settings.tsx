@@ -3162,7 +3162,7 @@ export default function Settings() {
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <button
             style={{ ...btnPrimary, opacity: telegramTesting ? 0.6 : 1 }}
-            disabled={telegramTesting || !val("bot_telegram_token") || !val("bot_telegram_chat_id")}
+            disabled={telegramTesting || !val("bot_telegram_chat_id")}
             onClick={async () => {
               setTelegramTesting(true);
               setTelegramTestResult(null);
@@ -3170,8 +3170,8 @@ export default function Settings() {
                 const resp = await fetch(`${API_BASE}/api/telegram/test`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
                   body: JSON.stringify({
-                    token: String(val("bot_telegram_token") || ""),
                     chat_id: String(val("bot_telegram_chat_id") || "").split(",")[0].trim(),
                   }),
                 });
@@ -3342,7 +3342,7 @@ export default function Settings() {
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <button
             style={{ ...btnPrimary, opacity: discordTesting ? 0.6 : 1 }}
-            disabled={discordTesting || !val("bot_discord_token") || !val("bot_discord_channel_id")}
+            disabled={discordTesting || !val("bot_discord_channel_id")}
             onClick={async () => {
               setDiscordTesting(true);
               setDiscordTestResult(null);
@@ -3350,8 +3350,8 @@ export default function Settings() {
                 const resp = await fetch(`${API_BASE}/api/discord/test`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
                   body: JSON.stringify({
-                    token: String(val("bot_discord_token") || ""),
                     channel_id: String(val("bot_discord_channel_id") || "").split(",")[0].trim(),
                   }),
                 });
