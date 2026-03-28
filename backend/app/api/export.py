@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..models.database import get_db
+from .dependencies import require_admin
 from ..models.sensor_reading import SensorReadingModel
 from ..models.sensor_meta import (
     SENSOR_COLUMNS,
@@ -29,6 +30,7 @@ def export_csv(
     end: str = Query(default=None, description="End time ISO format"),
     resolution: str = Query(default="raw", description="raw, 5m, hourly, or daily"),
     db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
 ):
     """Export historical data as a CSV file download."""
     # Parse time range

@@ -11,6 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..models.database import get_db
+from .dependencies import require_admin
 from ..models.sensor_reading import SensorReadingModel
 from ..models.station_config import StationConfigModel
 from ..models.spray import SprayOutcome, SprayProduct, SpraySchedule
@@ -307,7 +308,7 @@ def _merged_evaluation(
 # ---------------------------------------------------------------------------
 
 @router.get("/products")
-def list_products(db: Session = Depends(get_db)):
+def list_products(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """List all spray products. Seeds presets on first call if table is empty."""
     count = db.query(SprayProduct).count()
     if count == 0:
@@ -321,7 +322,7 @@ def list_products(db: Session = Depends(get_db)):
 
 
 @router.post("/products")
-def create_product(body: ProductCreate, db: Session = Depends(get_db)):
+def create_product(body: ProductCreate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Create a custom spray product."""
     product = SprayProduct(
         name=body.name,
@@ -344,6 +345,7 @@ def create_product(body: ProductCreate, db: Session = Depends(get_db)):
 @router.put("/products/{product_id}")
 def update_product(
     product_id: int, body: ProductUpdate, db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
 ):
     """Update a spray product."""
     product = db.query(SprayProduct).filter_by(id=product_id).first()
@@ -357,7 +359,7 @@ def update_product(
 
 
 @router.delete("/products/{product_id}")
-def delete_product(product_id: int, db: Session = Depends(get_db)):
+def delete_product(product_id: int, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Delete a spray product."""
     product = db.query(SprayProduct).filter_by(id=product_id).first()
     if product is None:
@@ -370,7 +372,7 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/products/reset-presets")
-def reset_presets(db: Session = Depends(get_db)):
+def reset_presets(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Delete existing presets and re-seed defaults."""
     db.query(SprayProduct).filter(SprayProduct.is_preset == 1).delete()
     db.commit()
@@ -388,7 +390,7 @@ def reset_presets(db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.get("/schedules")
-async def list_schedules(db: Session = Depends(get_db)):
+async def list_schedules(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """List spray schedules with product names, newest first.
 
     Active schedules (pending/go/no_go) are re-evaluated on every fetch
@@ -447,7 +449,7 @@ async def list_schedules(db: Session = Depends(get_db)):
 
 
 @router.post("/schedules")
-async def create_schedule(body: ScheduleCreate, db: Session = Depends(get_db)):
+async def create_schedule(body: ScheduleCreate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Create a spray schedule and auto-evaluate against forecast."""
     product = db.query(SprayProduct).filter_by(id=body.product_id).first()
     if product is None:
@@ -487,6 +489,7 @@ async def create_schedule(body: ScheduleCreate, db: Session = Depends(get_db)):
 @router.put("/schedules/{schedule_id}")
 def update_schedule(
     schedule_id: int, body: ScheduleUpdate, db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
 ):
     """Update a spray schedule."""
     schedule = db.query(SpraySchedule).filter_by(id=schedule_id).first()
@@ -501,7 +504,7 @@ def update_schedule(
 
 
 @router.delete("/schedules/{schedule_id}")
-def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
+def delete_schedule(schedule_id: int, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Soft-delete a spray schedule (sets status to 'deleted')."""
     schedule = db.query(SpraySchedule).filter_by(id=schedule_id).first()
     if schedule is None:
@@ -514,6 +517,7 @@ def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
 @router.put("/schedules/{schedule_id}/status")
 def update_schedule_status(
     schedule_id: int, body: StatusUpdate, db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
 ):
     """Mark a schedule as completed, cancelled, or reactivate to pending."""
     if body.status not in ("completed", "cancelled", "pending"):
@@ -532,7 +536,7 @@ def update_schedule_status(
 # ---------------------------------------------------------------------------
 
 @router.post("/evaluate")
-async def quick_check(body: QuickCheckRequest, db: Session = Depends(get_db)):
+async def quick_check(body: QuickCheckRequest, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Evaluate a product against current conditions + forecast (Quick Check)."""
     product = db.query(SprayProduct).filter_by(id=body.product_id).first()
     if product is None:
@@ -563,7 +567,7 @@ async def quick_check(body: QuickCheckRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/schedules/{schedule_id}/evaluate")
-async def evaluate_schedule(schedule_id: int, db: Session = Depends(get_db)):
+async def evaluate_schedule(schedule_id: int, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Re-evaluate a specific schedule against current forecast."""
     schedule = db.query(SpraySchedule).filter_by(id=schedule_id).first()
     if schedule is None:
@@ -603,7 +607,7 @@ async def evaluate_schedule(schedule_id: int, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.get("/conditions")
-async def get_spray_conditions(db: Session = Depends(get_db)):
+async def get_spray_conditions(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Return spray-relevant current conditions summary."""
     obs = _get_latest_obs(db)
     lat, lon, tz = _get_location(db)
@@ -687,6 +691,7 @@ def _outcome_to_dict(o: SprayOutcome, product_name: str = "") -> dict:
 @router.post("/schedules/{schedule_id}/outcome")
 def create_outcome(
     schedule_id: int, body: OutcomeCreate, db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
 ):
     """Log an outcome for a completed spray schedule."""
     schedule = db.query(SpraySchedule).filter_by(id=schedule_id).first()
@@ -714,7 +719,7 @@ def create_outcome(
 
 
 @router.get("/outcomes")
-def list_outcomes(limit: int = 20, db: Session = Depends(get_db)):
+def list_outcomes(limit: int = 20, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """List recent outcomes with product info, newest first."""
     rows = (
         db.query(SprayOutcome, SprayProduct.name)
@@ -728,7 +733,7 @@ def list_outcomes(limit: int = 20, db: Session = Depends(get_db)):
 
 
 @router.get("/products/{product_id}/outcomes")
-def product_outcomes(product_id: int, db: Session = Depends(get_db)):
+def product_outcomes(product_id: int, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """List outcomes for a specific product."""
     product = db.query(SprayProduct).filter_by(id=product_id).first()
     if product is None:
@@ -746,7 +751,7 @@ def product_outcomes(product_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/products/{product_id}/stats")
-def product_stats(product_id: int, db: Session = Depends(get_db)):
+def product_stats(product_id: int, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Aggregated outcome stats for a product."""
     product = db.query(SprayProduct).filter_by(id=product_id).first()
     if product is None:

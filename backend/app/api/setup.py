@@ -22,6 +22,7 @@ from ..models.database import get_db
 from ..models.station_config import StationConfigModel
 from ..protocol.serial_port import list_serial_ports
 from ..ipc.dependencies import get_ipc_client
+from .dependencies import require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -84,7 +85,7 @@ def get_serial_ports():
 
 
 @router.post("/setup/probe")
-async def probe_serial_port(req: ProbeRequest):
+async def probe_serial_port(req: ProbeRequest, _admin=Depends(require_admin)):
     """Test a specific port+baud for a WeatherLink station."""
     if req.baud_rate not in (1200, 2400, 19200):
         return ProbeResult(success=False, error="Baud rate must be 1200, 2400, or 19200")
@@ -110,7 +111,7 @@ async def probe_serial_port(req: ProbeRequest):
 
 
 @router.post("/setup/auto-detect")
-async def auto_detect_station():
+async def auto_detect_station(_admin=Depends(require_admin)):
     """Scan all available ports for a WeatherLink station."""
     try:
         client = get_ipc_client()
@@ -135,7 +136,7 @@ async def auto_detect_station():
 
 
 @router.post("/setup/complete")
-async def complete_setup(config: SetupConfig, db: Session = Depends(get_db)):
+async def complete_setup(config: SetupConfig, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Save all setup config and trigger reconnect."""
     # Save config to DB
     config_dict = config.model_dump()
@@ -183,7 +184,7 @@ async def complete_setup(config: SetupConfig, db: Session = Depends(get_db)):
 
 
 @router.post("/setup/reconnect")
-async def reconnect_endpoint():
+async def reconnect_endpoint(_admin=Depends(require_admin)):
     """Reconnect using current DB config."""
     try:
         client = get_ipc_client()

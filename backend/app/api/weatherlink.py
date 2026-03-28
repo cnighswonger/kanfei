@@ -12,11 +12,12 @@ All operations are proxied to the logger daemon via IPC.
 import asyncio
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
 
 from ..ipc.dependencies import get_ipc_client
+from .dependencies import require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -47,7 +48,7 @@ class WeatherLinkConfigUpdate(BaseModel):
 # --------------- Endpoints ---------------
 
 @router.get("/weatherlink/config")
-async def get_weatherlink_config():
+async def get_weatherlink_config(_admin=Depends(require_admin)):
     """Read current hardware settings from the WeatherLink."""
     try:
         client = get_ipc_client()
@@ -66,7 +67,7 @@ async def get_weatherlink_config():
 
 
 @router.post("/weatherlink/config")
-async def update_weatherlink_config(config: WeatherLinkConfigUpdate):
+async def update_weatherlink_config(config: WeatherLinkConfigUpdate, _admin=Depends(require_admin)):
     """Write settings to the WeatherLink hardware."""
     try:
         client = get_ipc_client()
@@ -103,7 +104,7 @@ async def update_weatherlink_config(config: WeatherLinkConfigUpdate):
 
 
 @router.post("/weatherlink/clear-rain-daily")
-async def clear_rain_daily():
+async def clear_rain_daily(_admin=Depends(require_admin)):
     """Clear the daily rain accumulator."""
     try:
         client = get_ipc_client()
@@ -116,7 +117,7 @@ async def clear_rain_daily():
 
 
 @router.post("/weatherlink/clear-rain-yearly")
-async def clear_rain_yearly():
+async def clear_rain_yearly(_admin=Depends(require_admin)):
     """Clear the yearly rain accumulator."""
     try:
         client = get_ipc_client()
@@ -129,7 +130,7 @@ async def clear_rain_yearly():
 
 
 @router.post("/weatherlink/force-archive")
-async def force_archive():
+async def force_archive(_admin=Depends(require_admin)):
     """Force the WeatherLink to write an archive record now."""
     try:
         client = get_ipc_client()

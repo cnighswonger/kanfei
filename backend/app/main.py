@@ -258,15 +258,23 @@ def create_app() -> FastAPI:
         title="Kanfei Weather Station",
         version="0.1.0",
         lifespan=lifespan,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
     )
 
-    # CORS
+    # CORS — configurable origin allowlist.
+    # Default: empty (same-origin only, since SPA is served by the same uvicorn).
+    # Set KANFEI_CORS_ORIGINS env var for external consumers (e.g., Grafana).
+    import os
+    cors_origins_str = os.environ.get("KANFEI_CORS_ORIGINS", "")
+    cors_origins = [o.strip() for o in cors_origins_str.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_headers=["Authorization", "Content-Type"],
     )
 
     # API routes

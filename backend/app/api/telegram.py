@@ -1,10 +1,14 @@
 """POST /api/telegram/test — Send a test message via the Telegram bot."""
 
 import logging
+import sqlite3
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+from ..config import settings
+from .dependencies import require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -12,14 +16,28 @@ router = APIRouter()
 
 
 class TelegramTestRequest(BaseModel):
-    token: str
     chat_id: str
 
 
+def _get_telegram_token() -> str:
+    """Read the real Telegram token from the DB (not the masked UI value)."""
+    try:
+        conn = sqlite3.connect(settings.db_path)
+        cur = conn.execute(
+            "SELECT value FROM station_config WHERE key = 'bot_telegram_token'"
+        )
+        row = cur.fetchone()
+        conn.close()
+        return row[0] if row else ""
+    except Exception:
+        return ""
+
+
 @router.post("/telegram/test")
-async def send_test_message(req: TelegramTestRequest):
+async def send_test_message(req: TelegramTestRequest, _admin=Depends(require_admin)):
     """Send a test message to verify Telegram bot token and chat ID."""
-    if not req.token or not req.chat_id:
+    token = _get_telegram_token()
+    if not token or not req.chat_id:
         raise HTTPException(status_code=400, detail="Token and chat ID are required")
 
     try:
@@ -31,7 +49,7 @@ async def send_test_message(req: TelegramTestRequest):
         )
 
     try:
-        bot = Bot(token=req.token)
+        bot = Bot(token=token)
         await bot.send_message(
             chat_id=int(req.chat_id),
             text="\u2705 Kanfei weather bot connected successfully!",
@@ -39,8 +57,7 @@ async def send_test_message(req: TelegramTestRequest):
         return {"ok": True, "message": "Test message sent"}
     except Exception as exc:
         detail = str(exc)
-        # Avoid leaking the token in error messages
-        if req.token in detail:
-            detail = detail.replace(req.token, "***")
+        if token in detail:
+            detail = detail.replace(token, "***")
         logger.warning("Telegram test failed: %s", detail)
         raise HTTPException(status_code=400, detail=detail)

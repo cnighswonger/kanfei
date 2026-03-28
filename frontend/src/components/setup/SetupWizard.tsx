@@ -4,11 +4,12 @@
  * location selection, and unit preferences.
  */
 import { useState, useCallback } from "react";
-import { completeSetup } from "../../api/client.ts";
+import { completeSetup, setupAdmin } from "../../api/client.ts";
 import type { SetupConfig } from "../../api/types.ts";
 import StepStation from "./StepStation.tsx";
 import StepLocation from "./StepLocation.tsx";
 import StepPreferences from "./StepPreferences.tsx";
+import StepAccount from "./StepAccount.tsx";
 
 interface SetupWizardProps {
   onComplete: () => void;
@@ -34,9 +35,12 @@ interface WizardState {
   metarEnabled: boolean;
   metarStation: string;
   nwsEnabled: boolean;
+  adminUsername: string;
+  adminPassword: string;
+  adminPasswordConfirm: string;
 }
 
-const STEPS = ["Station", "Location", "Preferences"] as const;
+const STEPS = ["Station", "Location", "Preferences", "Account"] as const;
 
 const overlayStyle: React.CSSProperties = {
   position: "fixed",
@@ -123,6 +127,9 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     metarEnabled: false,
     metarStation: "",
     nwsEnabled: false,
+    adminUsername: "admin",
+    adminPassword: "",
+    adminPasswordConfirm: "",
   });
 
   const handleChange = useCallback(
@@ -146,6 +153,12 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     }
     if (step === 1)
       return state.latitude !== 0 || state.longitude !== 0;
+    if (step === 3)
+      return (
+        state.adminUsername.length >= 3 &&
+        state.adminPassword.length >= 8 &&
+        state.adminPassword === state.adminPasswordConfirm
+      );
     return true;
   };
 
@@ -174,6 +187,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
         nws_enabled: state.nwsEnabled,
       };
       await completeSetup(config);
+      await setupAdmin(state.adminUsername, state.adminPassword);
       onComplete();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -247,6 +261,14 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
               metarEnabled={state.metarEnabled}
               metarStation={state.metarStation}
               nwsEnabled={state.nwsEnabled}
+              onChange={handleChange}
+            />
+          )}
+          {step === 3 && (
+            <StepAccount
+              adminUsername={state.adminUsername}
+              adminPassword={state.adminPassword}
+              adminPasswordConfirm={state.adminPasswordConfirm}
               onChange={handleChange}
             />
           )}

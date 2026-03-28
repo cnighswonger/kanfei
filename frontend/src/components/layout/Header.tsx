@@ -1,5 +1,7 @@
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useWeatherData } from '../../context/WeatherDataContext';
+import { useAuth } from '../../context/AuthContext';
 import { themes } from '../../themes';
 
 // --- Inline SVG weather icons (20x20, currentColor) ---
@@ -102,6 +104,9 @@ interface HeaderProps {
 export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = false }: HeaderProps) {
   const { themeName, setThemeName } = useTheme();
   const { currentConditions, forecast } = useWeatherData();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const extremes = currentConditions?.daily_extremes;
   const hi = extremes?.outside_temp_hi?.value;
   const lo = extremes?.outside_temp_lo?.value;
@@ -257,6 +262,22 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
             </option>
           ))}
         </select>
+
+        <button
+          onClick={user?.authenticated ? logout : () => navigate("/login", { state: { from: location.pathname } })}
+          style={{
+            background: 'none',
+            border: '1px solid var(--color-border)',
+            borderRadius: '6px',
+            padding: '6px 10px',
+            fontSize: '12px',
+            fontFamily: 'var(--font-body)',
+            color: 'var(--color-text-secondary)',
+            cursor: 'pointer',
+          }}
+        >
+          {user?.authenticated ? "Logout" : "Login"}
+        </button>
       </div>
     </header>
   );

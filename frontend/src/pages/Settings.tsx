@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchConfig, updateConfig, fetchSerialPorts, reconnectStation, fetchWeatherLinkConfig, updateWeatherLinkConfig, clearRainDaily, clearRainYearly, forceArchive, fetchLocalUsage, fetchUsageStatus, fetchAnthropicCost, fetchDbStats, purgeTable, purgeAll, compactReadings, getDbBackupUrl, getDbExportUrl, fetchLogs, fetchNowcastPresets, triggerBackup, listBackups, deleteBackup, getBackupDownloadUrl } from "../api/client.ts";
+import { fetchConfig, updateConfig, fetchSerialPorts, reconnectStation, fetchWeatherLinkConfig, updateWeatherLinkConfig, clearRainDaily, clearRainYearly, forceArchive, fetchLocalUsage, fetchUsageStatus, fetchAnthropicCost, fetchDbStats, purgeTable, purgeAll, compactReadings, getDbBackupUrl, getDbExportUrl, fetchLogs, fetchNowcastPresets, triggerBackup, listBackups, deleteBackup, getBackupDownloadUrl, changePassword } from "../api/client.ts";
 import type { NowcastPresetOption } from "../api/client.ts";
 import type { ConfigItem, WeatherLinkConfig, WeatherLinkCalibration, AlertThreshold, LocalUsageResponse, UsageStatus, DbStats, LogEntry } from "../api/types.ts";
 import { useTheme } from "../context/ThemeContext.tsx";
@@ -1412,6 +1412,83 @@ function BackupTab({ val, updateField, isMobile }: {
 
 // --- System Log Tab ---
 
+function ChangePasswordCard() {
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  const mismatch = newPw.length > 0 && confirmPw.length > 0 && newPw !== confirmPw;
+  const canSave = currentPw.length > 0 && newPw.length >= 8 && newPw === confirmPw && !saving;
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    setResult(null);
+    try {
+      await changePassword(currentPw, newPw);
+      setResult("Password changed successfully");
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
+    } catch (err: unknown) {
+      setResult(err instanceof Error && err.message.includes("401")
+        ? "Error: Current password is incorrect"
+        : `Error: ${err instanceof Error ? err.message : "Failed"}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={cardStyle}>
+      <h3 style={sectionTitle}>Change Password</h3>
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxWidth: "380px" }}>
+        <div>
+          <label style={labelStyle}>Current Password</label>
+          <input style={inputStyle} type="password" value={currentPw}
+            onChange={(e) => setCurrentPw(e.target.value)} autoComplete="current-password" />
+        </div>
+        <div>
+          <label style={labelStyle}>New Password</label>
+          <input style={inputStyle} type="password" value={newPw}
+            onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" />
+          <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginTop: "4px", display: "block" }}>
+            At least 8 characters
+          </span>
+        </div>
+        <div>
+          <label style={labelStyle}>Confirm New Password</label>
+          <input style={{
+            ...inputStyle,
+            borderColor: mismatch ? "var(--color-danger)" : "var(--color-border)",
+          }} type="password" value={confirmPw}
+            onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" />
+          {mismatch && (
+            <span style={{ fontSize: "12px", color: "var(--color-danger)", marginTop: "4px", display: "block" }}>
+              Passwords do not match
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <button style={{ ...btnPrimary, opacity: canSave ? 1 : 0.5 }} disabled={!canSave} onClick={handleSubmit}>
+            {saving ? "Saving..." : "Change Password"}
+          </button>
+          {result && (
+            <span style={{
+              fontSize: "13px",
+              fontFamily: "var(--font-body)",
+              color: result.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
+            }}>
+              {result}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SystemTab({ isMobile }: { isMobile: boolean }) {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1556,6 +1633,8 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
           </div>
         )}
       </div>
+
+      <ChangePasswordCard />
 
       {/* Service restart instructions */}
       <div style={cardStyle}>
@@ -3053,10 +3132,37 @@ export default function Settings() {
             })}
           </div>
         </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Scheduled Conditions Push</label>
+          <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={val("bot_telegram_conditions_enabled") === true}
+                onChange={(e) => updateField("bot_telegram_conditions_enabled", e.target.checked)}
+              />
+              Push current conditions
+            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)" }}>every</span>
+              <select
+                style={{ ...selectStyle, width: "auto", minWidth: "80px" }}
+                value={String(val("bot_telegram_conditions_interval") || 30)}
+                onChange={(e) => updateField("bot_telegram_conditions_interval", Number(e.target.value))}
+              >
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
+                <option value="240">4 hours</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <button
             style={{ ...btnPrimary, opacity: telegramTesting ? 0.6 : 1 }}
-            disabled={telegramTesting || !val("bot_telegram_token") || !val("bot_telegram_chat_id")}
+            disabled={telegramTesting || !val("bot_telegram_chat_id")}
             onClick={async () => {
               setTelegramTesting(true);
               setTelegramTestResult(null);
@@ -3064,8 +3170,8 @@ export default function Settings() {
                 const resp = await fetch(`${API_BASE}/api/telegram/test`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
                   body: JSON.stringify({
-                    token: String(val("bot_telegram_token") || ""),
                     chat_id: String(val("bot_telegram_chat_id") || "").split(",")[0].trim(),
                   }),
                 });
@@ -3206,10 +3312,37 @@ export default function Settings() {
             })}
           </div>
         </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Scheduled Conditions Push</label>
+          <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={val("bot_discord_conditions_enabled") === true}
+                onChange={(e) => updateField("bot_discord_conditions_enabled", e.target.checked)}
+              />
+              Push current conditions
+            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)" }}>every</span>
+              <select
+                style={{ ...selectStyle, width: "auto", minWidth: "80px" }}
+                value={String(val("bot_discord_conditions_interval") || 30)}
+                onChange={(e) => updateField("bot_discord_conditions_interval", Number(e.target.value))}
+              >
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
+                <option value="240">4 hours</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <button
             style={{ ...btnPrimary, opacity: discordTesting ? 0.6 : 1 }}
-            disabled={discordTesting || !val("bot_discord_token") || !val("bot_discord_channel_id")}
+            disabled={discordTesting || !val("bot_discord_channel_id")}
             onClick={async () => {
               setDiscordTesting(true);
               setDiscordTestResult(null);
@@ -3217,8 +3350,8 @@ export default function Settings() {
                 const resp = await fetch(`${API_BASE}/api/discord/test`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
                   body: JSON.stringify({
-                    token: String(val("bot_discord_token") || ""),
                     channel_id: String(val("bot_discord_channel_id") || "").split(",")[0].trim(),
                   }),
                 });

@@ -11,6 +11,7 @@ A self-hosted weather station dashboard and data logger with pluggable hardware 
 - **Forecasting**: Zambretti barometric algorithm (local) blended with NWS API data (optional)
 - **Astronomy**: sunrise/sunset arc, twilight times (civil/nautical/astronomical), moon phase with illumination
 - **NWS alerts**: active alert monitoring for your station location
+- **Messaging bots**: Telegram and Discord integrations — query conditions, receive alert and nowcast notifications (outbound-only, NAT/CGNAT compatible)
 - **Data uploads**: Weather Underground PWS and CWOP/APRS-IS for NWS citizen weather data
 - **Backup and restore**: scheduled automatic backups with rotation, CLI commands, REST API, and Settings UI with download/restore
 - **Database admin**: stats, JSON export, sensor data compaction, and tiered purge
@@ -87,6 +88,9 @@ All settings are also editable from the Settings page in the browser, including 
 | `python station.py restore` | Restore from a backup archive |
 | `python station.py status` | Check what's installed and ready |
 | `python station.py clean` | Remove venv, node_modules, and build artifacts |
+| `python station.py install-service` | Install as Windows services (Windows only) |
+| `python station.py uninstall-service` | Remove Windows services (Windows only) |
+| `python station.py service-status` | Check Windows service state (Windows only) |
 
 On Linux/macOS, `make` targets are also available (`make setup`, `make dev`, etc.).
 
@@ -115,7 +119,7 @@ backend/
 │   │   ├── ambient/              # Ambient Weather (HTTP push)
 │   │   └── tempest/              # WeatherFlow Tempest (UDP)
 │   ├── models/          # SQLAlchemy ORM (sensor readings, archive, config, spray)
-│   ├── services/        # Poller, calculations, forecasts, astronomy, spray engine, CWOP, WU upload
+│   ├── services/        # Poller, calculations, forecasts, astronomy, spray engine, CWOP, WU upload, Telegram/Discord bots
 │   ├── api/             # REST endpoints under /api
 │   ├── ws/              # WebSocket handler at /ws/live
 │   ├── ipc/             # IPC server (logger) and client (web app)
@@ -166,6 +170,8 @@ frontend/src/
 | GET | `/api/backup/list` | List existing backups |
 | GET | `/api/backup/download/{name}` | Download a backup archive |
 | POST | `/api/backup/restore` | Restore from uploaded archive |
+| POST | `/api/telegram/test` | Test Telegram bot connection |
+| POST | `/api/discord/test` | Test Discord bot connection |
 | WS | `/ws/live` | Real-time sensor updates |
 
 Additional API endpoints for AI nowcast, usage tracking, and NWS alerts are available when the optional [kanfei-nowcast](https://github.com/cnighswonger/kanfei-nowcast) package is installed.
@@ -237,12 +243,24 @@ sudo systemctl enable --now kanfei
 
 Edit `Environment=` values in the unit file for your hardware/location before enabling it.
 
+### Windows (WinSW service)
+
+```powershell
+python station.py setup
+python station.py install-service      # requires Administrator
+net start KanfeiLogger
+net start KanfeiWeb
+```
+
+Installs two auto-start Windows services (KanfeiLogger and KanfeiWeb) via WinSW. See the [Installation and Deployment](https://github.com/cnighswonger/kanfei/wiki/Installation-and-Deployment) wiki page for details.
+
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | Backend | Python 3.10+, FastAPI, uvicorn |
 | Hardware | pyserial, httpx (async HTTP/TCP/UDP drivers) |
+| Messaging | python-telegram-bot 22.x, discord.py 2.x |
 | Database | SQLAlchemy + SQLite (WAL mode) |
 | Astronomy | astral |
 | NWS client | httpx (async) |
