@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { WeatherBackgroundProvider } from './context/WeatherBackgroundContext';
 import { WeatherDataProvider, useWeatherData } from './context/WeatherDataContext';
 import { AlertProvider } from './context/AlertContext';
 import { FeatureFlagsProvider, useFeatureFlags } from './context/FeatureFlagsContext';
 import { DashboardLayoutProvider } from './dashboard/DashboardLayoutContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import AlertToast from './components/AlertToast';
 import AppShell from './components/layout/AppShell';
 import Dashboard from './pages/Dashboard';
@@ -16,8 +17,18 @@ import Settings from './pages/Settings';
 import Nowcast from './pages/Nowcast';
 import Spray from './pages/Spray';
 import About from './pages/About';
+import Login from './pages/Login';
 import SetupWizard from './components/setup/SetupWizard';
 import { fetchSetupStatus } from './api/client';
+
+/** Guard that redirects to /login if not authenticated, preserving intended destination. */
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { user, loading, loggingOut } = useAuth();
+  const location = useLocation();
+  if (loading || loggingOut) return null;
+  if (!user?.authenticated) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  return <>{children}</>;
+}
 
 function AppContent() {
   const { connected, currentConditions } = useWeatherData();
@@ -27,19 +38,24 @@ function AppContent() {
     : null;
 
   return (
-    <AppShell connected={connected} lastUpdate={lastUpdate}>
-      <AlertToast />
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/forecast" element={<Forecast />} />
-        <Route path="/astronomy" element={<Astronomy />} />
-        <Route path="/nowcast" element={flags.nowcastEnabled ? <Nowcast /> : flagsLoading ? null : <Navigate to="/" replace />} />
-        <Route path="/spray" element={flags.sprayEnabled ? <Spray /> : flagsLoading ? null : <Navigate to="/" replace />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/about" element={<About />} />
-      </Routes>
-    </AppShell>
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="*" element={
+        <AppShell connected={connected} lastUpdate={lastUpdate}>
+          <AlertToast />
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/forecast" element={<Forecast />} />
+            <Route path="/astronomy" element={<Astronomy />} />
+            <Route path="/nowcast" element={flags.nowcastEnabled ? <Nowcast /> : flagsLoading ? null : <Navigate to="/" replace />} />
+            <Route path="/spray" element={flags.sprayEnabled ? <Spray /> : flagsLoading ? null : <Navigate to="/" replace />} />
+            <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+            <Route path="/about" element={<About />} />
+          </Routes>
+        </AppShell>
+      } />
+    </Routes>
   );
 }
 
@@ -100,15 +116,17 @@ function App() {
     <ThemeProvider>
       <WeatherBackgroundProvider>
         <BrowserRouter>
-          <WeatherDataProvider>
-            <FeatureFlagsProvider>
-              <AlertProvider>
-                <DashboardLayoutProvider>
-                  <AppContent />
-                </DashboardLayoutProvider>
-              </AlertProvider>
-            </FeatureFlagsProvider>
-          </WeatherDataProvider>
+          <AuthProvider>
+            <WeatherDataProvider>
+              <FeatureFlagsProvider>
+                <AlertProvider>
+                  <DashboardLayoutProvider>
+                    <AppContent />
+                  </DashboardLayoutProvider>
+                </AlertProvider>
+              </FeatureFlagsProvider>
+            </WeatherDataProvider>
+          </AuthProvider>
         </BrowserRouter>
       </WeatherBackgroundProvider>
     </ThemeProvider>

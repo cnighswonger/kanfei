@@ -16,6 +16,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..models.database import get_db
+from .dependencies import require_admin
 from ..models.station_config import StationConfigModel
 from ..models.nowcast import NowcastHistory
 
@@ -156,7 +157,7 @@ def _model_breakdown(db: Session, start: datetime | None = None, end: datetime |
 
 
 @router.get("/local")
-def get_local_usage(db: Session = Depends(get_db)):
+def get_local_usage(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Aggregate token usage from local nowcast_history."""
     today_start, month_start = _local_boundaries(db)
 
@@ -171,7 +172,7 @@ def get_local_usage(db: Session = Depends(get_db)):
 # --- Usage status ---
 
 @router.get("/status")
-def get_usage_status(db: Session = Depends(get_db)):
+def get_usage_status(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Return which usage tiers are available and budget status."""
     admin_key = _resolve_admin_key(db)
 
@@ -223,7 +224,7 @@ def _period_to_range(period: str, db: Session) -> tuple[str, str]:
 
 
 @router.get("/anthropic")
-async def get_anthropic_usage(period: str = "7d", db: Session = Depends(get_db)):
+async def get_anthropic_usage(period: str = "7d", db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Proxy to Anthropic Usage API for token-level data."""
     admin_key = _resolve_admin_key(db)
     if not admin_key:
@@ -260,7 +261,7 @@ async def get_anthropic_usage(period: str = "7d", db: Session = Depends(get_db))
 
 
 @router.get("/anthropic/cost")
-async def get_anthropic_cost(period: str = "30d", db: Session = Depends(get_db)):
+async def get_anthropic_cost(period: str = "30d", db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Proxy to Anthropic Cost API for USD cost data."""
     admin_key = _resolve_admin_key(db)
     if not admin_key:

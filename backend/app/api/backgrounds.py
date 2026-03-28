@@ -10,7 +10,9 @@ Images served via static mount at /backgrounds/.
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+
+from .dependencies import require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -57,7 +59,7 @@ def list_backgrounds():
 
 
 @router.post("/backgrounds/{scene}")
-async def upload_background(scene: str, file: UploadFile = File(...)):
+async def upload_background(scene: str, file: UploadFile = File(...), _admin=Depends(require_admin)):
     """Upload a custom background image for a scene."""
     if scene not in VALID_SCENES:
         raise HTTPException(status_code=400, detail=f"Invalid scene: {scene}")
@@ -91,7 +93,7 @@ async def upload_background(scene: str, file: UploadFile = File(...)):
 
 
 @router.delete("/backgrounds/{scene}")
-def delete_background(scene: str):
+def delete_background(scene: str, _admin=Depends(require_admin)):
     """Remove custom background image for a scene."""
     if scene not in VALID_SCENES:
         raise HTTPException(status_code=400, detail=f"Invalid scene: {scene}")

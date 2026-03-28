@@ -2,8 +2,10 @@
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from .dependencies import require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +18,7 @@ class DiscordTestRequest(BaseModel):
 
 
 @router.post("/discord/test")
-async def send_test_message(req: DiscordTestRequest):
+async def send_test_message(req: DiscordTestRequest, _admin=Depends(require_admin)):
     """Send a test message to verify Discord bot token and channel ID."""
     if not req.token or not req.channel_id:
         raise HTTPException(status_code=400, detail="Token and channel ID are required")

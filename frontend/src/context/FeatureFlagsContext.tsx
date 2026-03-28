@@ -13,7 +13,7 @@ import {
   useCallback,
 } from "react";
 import type { ReactNode } from "react";
-import { fetchConfig } from "../api/client.ts";
+import { fetchConfig, fetchFeatureFlags } from "../api/client.ts";
 
 export interface FeatureFlags {
   nowcastEnabled: boolean;
@@ -54,10 +54,20 @@ export function FeatureFlagsProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const items = await fetchConfig();
-      setFlags(extractFlags(items));
+      // Use public flags endpoint (no auth required) for initial load.
+      const flagData = await fetchFeatureFlags();
+      setFlags({
+        nowcastEnabled: flagData.nowcast_enabled === true,
+        sprayEnabled: flagData.spray_enabled === true,
+      });
     } catch {
-      // fail-open: keep current flags
+      // Fallback to full config (requires auth) for Settings refresh.
+      try {
+        const items = await fetchConfig();
+        setFlags(extractFlags(items));
+      } catch {
+        // fail-open: keep current flags
+      }
     } finally {
       setLoading(false);
     }

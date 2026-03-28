@@ -26,7 +26,20 @@ class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
-  const response = await fetch(url, init);
+  const response = await fetch(url, {
+    ...init,
+    credentials: "same-origin",
+  });
+
+  if (response.status === 401) {
+    // Only redirect to login if the user was previously authenticated.
+    // Many providers call admin endpoints on mount — 401 is expected
+    // when not logged in and those providers handle failure gracefully.
+    if (document.cookie.includes("knf_session") || sessionStorage.getItem("knf_was_authed")) {
+      window.dispatchEvent(new CustomEvent("kanfei:auth-required"));
+    }
+    throw new ApiError(401, "Authentication required");
+  }
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
@@ -69,6 +82,10 @@ export function fetchStationStatus(): Promise<StationStatus> {
 
 export function fetchConfig(): Promise<ConfigItem[]> {
   return request<ConfigItem[]>("/api/config");
+}
+
+export function fetchFeatureFlags(): Promise<Record<string, boolean>> {
+  return request<Record<string, boolean>>("/api/config/flags");
 }
 
 export function updateConfig(items: ConfigItem[]): Promise<ConfigItem[]> {
@@ -355,6 +372,54 @@ export function fetchProductOutcomes(productId: number): Promise<SprayOutcome[]>
 
 export function fetchProductStats(productId: number): Promise<SprayProductStats> {
   return request<SprayProductStats>(`/api/spray/products/${productId}/stats`);
+}
+
+// --- Auth ---
+
+export interface AuthUser {
+  username: string;
+  is_admin: boolean;
+  authenticated: boolean;
+  setup_required?: boolean;
+}
+
+export async function login(username: string, password: string): Promise<AuthUser> {
+  return request<AuthUser>("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${API_BASE}/api/auth/logout`, {
+    method: "POST",
+    credentials: "same-origin",
+  });
+}
+
+export async function fetchCurrentUser(): Promise<AuthUser | null> {
+  try {
+    return await request<AuthUser>("/api/auth/me");
+  } catch {
+    return null;
+  }
+}
+
+export async function setupAdmin(username: string, password: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("/api/auth/setup-admin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("/api/auth/change-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
 }
 
 // --- Usage & Cost Tracking ---

@@ -8,9 +8,10 @@ import asyncio
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from ..ipc.dependencies import get_ipc_client
+from .dependencies import require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -106,7 +107,7 @@ async def get_station():
 
 
 @router.post("/station/sync-time")
-async def sync_station_time():
+async def sync_station_time(_admin=Depends(require_admin)):
     """Sync station clock to computer time."""
     try:
         client = get_ipc_client()
