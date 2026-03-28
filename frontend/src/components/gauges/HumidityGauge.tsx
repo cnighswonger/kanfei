@@ -91,15 +91,17 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
   // bottom of the circle. We want left-to-right top arc, so use
   // standard SVG arc from (-r, cy) to (+r, cy) sweeping upward.
   const describeArc = (startFrac: number, endFrac: number, radius: number): string => {
-    // Map fraction 0..1 to angle π..0 (left to right across top)
+    // Map fraction 0..1 to angle π..0 (left to right across top).
+    // Fraction 0 = left endpoint, 1 = right endpoint.
     const a1 = Math.PI * (1 - startFrac);
     const a2 = Math.PI * (1 - endFrac);
     const x1 = cx + radius * Math.cos(a1);
     const y1 = cy - radius * Math.sin(a1);
     const x2 = cx + radius * Math.cos(a2);
     const y2 = cy - radius * Math.sin(a2);
-    const largeArc = (endFrac - startFrac) >= 0.5 ? 1 : 0;
-    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 0 ${x2} ${y2}`;
+    const largeArc = (endFrac - startFrac) > 0.5 ? 1 : 0;
+    // sweep-flag=1 → clockwise (upward through the top of the circle)
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
   };
 
   const range = autoRange(value, high, low);
