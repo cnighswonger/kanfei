@@ -21,11 +21,15 @@ Usage:
 
 import os
 import random
+import secrets
 import shutil
 import sqlite3
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+# bcrypt for password hashing — matches backend's auth service
+import bcrypt
 
 # ---------------------------------------------------------------------------
 # Anchor reading — exact raw SI values.
@@ -63,6 +67,12 @@ HIGH_TEMP_RAW = 272  # 27.2°C → 81.0°F → H 81°
 LOW_TEMP_RAW = 200   # 20.0°C → 68.0°F → L 68°
 
 TOTAL_ROWS = 120
+
+# Test admin account — matches helpers/values.ts TEST_ADMIN
+TEST_ADMIN_USERNAME = "admin"
+TEST_ADMIN_PASSWORD = "testpass123"
+# Pre-baked session token — injected as a cookie in tests
+TEST_SESSION_TOKEN = "e2e_test_session_token_fixed_for_determinism"
 
 # ---------------------------------------------------------------------------
 # station_config key-value pairs
@@ -343,6 +353,34 @@ def create_db(db_path: str) -> None:
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            is_admin INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            token TEXT UNIQUE NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            expires_at DATETIME NOT NULL,
+            last_active_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS api_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            prefix TEXT NOT NULL,
+            key_hash TEXT NOT NULL,
+            label TEXT DEFAULT '',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_used_at DATETIME,
+            revoked INTEGER NOT NULL DEFAULT 0
+        );
+
         CREATE TABLE IF NOT EXISTS forecasts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp DATETIME,
@@ -382,6 +420,24 @@ def create_db(db_path: str) -> None:
         values = [row.get(col) for col in columns]
         conn.execute(sql, values)
 
+    # Create test admin user with bcrypt-hashed password
+    password_hash = bcrypt.hashpw(
+        TEST_ADMIN_PASSWORD.encode(), bcrypt.gensalt()
+    ).decode()
+    conn.execute(
+        "INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)",
+        (TEST_ADMIN_USERNAME, password_hash),
+    )
+
+    # Pre-create a session so tests can inject the cookie directly
+    # without going through the login flow each time
+    far_future = (now + timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute(
+        "INSERT INTO sessions (user_id, token, expires_at, last_active_at) "
+        "VALUES (1, ?, ?, ?)",
+        (TEST_SESSION_TOKEN, far_future, now.strftime("%Y-%m-%d %H:%M:%S")),
+    )
+
     conn.commit()
 
     # Verify
@@ -389,12 +445,15 @@ def create_db(db_path: str) -> None:
     count = cursor.fetchone()[0]
     cursor = conn.execute("SELECT COUNT(*) FROM station_config")
     config_count = cursor.fetchone()[0]
+    cursor = conn.execute("SELECT COUNT(*) FROM users")
+    user_count = cursor.fetchone()[0]
 
     conn.close()
 
     print(f"Created {db_path}")
     print(f"  sensor_readings: {count} rows")
     print(f"  station_config:  {config_count} rows")
+    print(f"  users:           {user_count} rows")
 
 
 def main():

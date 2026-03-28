@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { DRIVER_COUNT } from './helpers/values';
+import { injectAuthCookie } from './helpers/auth';
 
 test.describe('Settings page', () => {
   test.beforeEach(async ({ page }) => {
+    await injectAuthCookie(page);
     const configReady = page.waitForResponse(
       (resp) => resp.url().includes('/api/config') && resp.status() === 200,
     );
@@ -11,7 +13,6 @@ test.describe('Settings page', () => {
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   });
 
-  /** The driver type dropdown is in the Station tab under "Driver Type" label. */
   function driverSelect(page: import('@playwright/test').Page) {
     return page.locator('main select').first();
   }
