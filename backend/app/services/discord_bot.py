@@ -338,6 +338,7 @@ async def discord_bot_supervisor(db_path: str, ipc_port: int = 0,
     active_token: str = ""
     listener_registered = False
     last_conditions_push: float = 0.0
+    conditions_was_enabled = False
 
     def _nowcast_listener(msg: dict):
         """Async callback registered with KanfeiEventEmitter."""
@@ -421,6 +422,9 @@ async def discord_bot_supervisor(db_path: str, ipc_port: int = 0,
             # Scheduled conditions push
             conditions_enabled = cfg.get("bot_discord_conditions_enabled", False)
             conditions_interval = int(cfg.get("bot_discord_conditions_interval", 30)) * 60
+            if conditions_enabled and not conditions_was_enabled:
+                last_conditions_push = 0.0  # Reset timer on re-enable → immediate push
+            conditions_was_enabled = conditions_enabled
             if active_bot is not None and conditions_enabled and conditions_interval > 0:
                 import time
                 now = time.monotonic()
