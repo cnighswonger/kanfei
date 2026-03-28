@@ -11,10 +11,10 @@ from ..models.sensor_reading import SensorReadingModel
 from ..models.sensor_meta import (
     SENSOR_COLUMNS,
     SENSOR_UNITS,
-    SENSOR_DIVISORS,
     SENSOR_ALIASES,
     SENSOR_BOUNDS,
     SENSOR_SPIKE_THRESHOLDS,
+    convert,
 )
 
 router = APIRouter()
@@ -48,7 +48,6 @@ def get_history(
         start_dt = end_dt - timedelta(hours=24)
 
     column = SENSOR_COLUMNS[sensor]
-    divisor = SENSOR_DIVISORS.get(sensor, 1)
     bounds = SENSOR_BOUNDS.get(sensor)
     spike_threshold = SENSOR_SPIKE_THRESHOLDS.get(sensor)
 
@@ -80,13 +79,13 @@ def get_history(
         data = [
             {
                 "timestamp": r[0].isoformat() + "Z",
-                "value": round(r[1] / divisor, 2) if r[1] is not None else None,
+                "value": convert(sensor, r[1]),
             }
             for r in results
         ]
     else:
         # For hourly/daily, return averages (bad values excluded)
-        data = _aggregate(db, column, start_dt, end_dt, resolution, divisor,
+        data = _aggregate(db, sensor, column, start_dt, end_dt, resolution,
                           bounds, spike_threshold)
 
     # Compute summary stats from the returned points
@@ -125,7 +124,7 @@ def get_history(
     }
 
 
-def _aggregate(db, column, start_dt, end_dt, resolution, divisor=1,
+def _aggregate(db, sensor, column, start_dt, end_dt, resolution,
                bounds=None, spike_threshold=None):
     """Aggregate readings by 5-minute, hourly, or daily buckets.
 
@@ -198,9 +197,9 @@ def _aggregate(db, column, start_dt, end_dt, resolution, divisor=1,
     return [
         {
             "timestamp": r[0] + "Z",
-            "value": round(r[1] / divisor, 2) if r[1] is not None else None,
-            "min": round(r[2] / divisor, 2) if r[2] is not None else None,
-            "max": round(r[3] / divisor, 2) if r[3] is not None else None,
+            "value": convert(sensor, r[1]),
+            "min": convert(sensor, r[2]),
+            "max": convert(sensor, r[3]),
         }
         for r in results
     ]
