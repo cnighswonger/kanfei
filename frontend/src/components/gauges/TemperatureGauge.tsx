@@ -215,13 +215,13 @@ export default function TemperatureGauge({
                 y1={y}
                 x2={tubeX + tubeW / 2 + 12}
                 y2={y}
-                stroke="var(--color-text-muted)"
+                stroke="var(--color-text-secondary)"
                 strokeWidth="1"
               />
               <text
                 x={tubeX + tubeW / 2 + 16}
                 y={y + 3}
-                fontSize="9"
+                fontSize="10"
                 fill="var(--color-text-secondary)"
                 fontFamily="var(--font-gauge)"
               >

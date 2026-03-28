@@ -159,8 +159,8 @@ export default function BarometerDial({ value, unit, trend, high, low }: Baromet
               {tick.major && (
                 <text
                   x={labelPos.x} y={labelPos.y + 3}
-                  fontSize="8"
-                  fill="var(--color-text-muted)"
+                  fontSize="9"
+                  fill="var(--color-text-secondary)"
                   fontFamily="var(--font-gauge)"
                   textAnchor="middle"
                 >

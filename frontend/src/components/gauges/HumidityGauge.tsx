@@ -194,13 +194,13 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
               <line
                 x1={inner.x} y1={inner.y}
                 x2={outer.x} y2={outer.y}
-                stroke="var(--color-text-muted)"
-                strokeWidth="1"
+                stroke="var(--color-text-secondary)"
+                strokeWidth="1.5"
               />
               <text
                 x={labelPt.x} y={labelPt.y + 3}
-                fontSize="9"
-                fill="var(--color-text-muted)"
+                fontSize="10"
+                fill="var(--color-text-secondary)"
                 fontFamily="var(--font-gauge)"
                 textAnchor="middle"
               >
