@@ -56,6 +56,7 @@ def _get_daily_extremes(db: Session) -> dict | None:
             func.max(S.barometer), func.min(S.barometer),
             func.max(S.outside_humidity), func.min(S.outside_humidity),
             func.max(S.rain_rate),
+            func.max(S.inside_humidity), func.min(S.inside_humidity),
         )
         .filter(S.timestamp >= midnight)
         .first()
@@ -75,6 +76,8 @@ def _get_daily_extremes(db: Session) -> dict | None:
         "humidity_hi": _val("outside_humidity", row[7]),
         "humidity_lo": _val("outside_humidity", row[8]),
         "rain_rate_hi": _val("rain_rate", row[9]),
+        "inside_humidity_hi": _val("inside_humidity", row[10]),
+        "inside_humidity_lo": _val("inside_humidity", row[11]),
     }
 
 
