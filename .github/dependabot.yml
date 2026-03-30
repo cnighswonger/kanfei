@@ -68,6 +68,13 @@ updates:
           - "eslint"
           - "eslint-plugin-*"
           - "@eslint/*"
+    ignore:
+      # TypeScript 6.x incompatible with typescript-eslint (2026-03-30)
+      - dependency-name: "typescript"
+        versions: [">=6.0.0"]
+      # ESLint 10.x requires full lint toolchain upgrade (2026-03-30)
+      - dependency-name: "eslint"
+        versions: [">=10.0.0"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
