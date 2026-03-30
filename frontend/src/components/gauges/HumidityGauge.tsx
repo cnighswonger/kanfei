@@ -108,7 +108,7 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
   const range = autoRange(value, high, low);
   const rangeSpan = range.max - range.min;
   const frac = value !== null
-    ? Math.max(0, Math.min(0.998, (value - range.min) / rangeSpan))
+    ? Math.max(0, Math.min(1, (value - range.min) / rangeSpan))
     : 0;
   const color = value !== null ? humidityColor(value) : 'var(--color-text-muted)';
 
@@ -175,7 +175,7 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
         />
 
         {/* Colored fill arc */}
-        {value !== null && frac > 0.005 && (
+        {value !== null && frac > 0 && (
           <path
             d={describeArc(0, frac, r)}
             fill="none"
