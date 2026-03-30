@@ -90,6 +90,8 @@ export default function TileRenderer({ tileId }: TileRendererProps) {
         <HumidityGauge
           value={cc?.humidity?.inside?.value ?? null}
           label="Inside"
+          high={cc?.daily_extremes?.inside_humidity_hi?.value ?? null}
+          low={cc?.daily_extremes?.inside_humidity_lo?.value ?? null}
         />
       );
 

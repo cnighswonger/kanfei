@@ -61,6 +61,8 @@ export interface DailyExtremes {
   barometer_lo: ValueWithUnit | null;
   humidity_hi: ValueWithUnit | null;
   humidity_lo: ValueWithUnit | null;
+  inside_humidity_hi: ValueWithUnit | null;
+  inside_humidity_lo: ValueWithUnit | null;
   rain_rate_hi: ValueWithUnit | null;
 }
 
