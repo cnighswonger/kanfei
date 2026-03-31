@@ -10,7 +10,6 @@ import {
   Popup,
   GeoJSON,
   // Polyline,  // re-enable for isobars
-  Tooltip,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { useTheme } from "../context/ThemeContext.tsx";
@@ -93,16 +92,8 @@ function precipColor(inches: number): string {
   return `rgba(59,130,246,${alpha.toFixed(2)})`;
 }
 
-function formatValue(station: NearbyStation, mode: DisplayMode): string {
-  switch (mode) {
-    case "temp":
-      return station.temp_f != null ? `${Math.round(station.temp_f)}°` : "--";
-    case "wind":
-      return station.wind_mph != null ? `${Math.round(station.wind_mph)}` : "--";
-    case "precip":
-      return station.precip_in != null ? `${station.precip_in.toFixed(2)}"` : "--";
-  }
-}
+// TODO: re-enable with canvas-rendered labels
+// function formatValue(station: NearbyStation, mode: DisplayMode): string { ... }
 
 function markerColor(station: NearbyStation, mode: DisplayMode): string {
   switch (mode) {
@@ -165,27 +156,6 @@ function ThemeAwareTiles() {
 // ---------------------------------------------------------------------------
 // Tooltip style injection
 // ---------------------------------------------------------------------------
-
-function TooltipStyles() {
-  return (
-    <style>{`
-      .station-label {
-        background: none !important;
-        border: none !important;
-        box-shadow: none !important;
-        font-size: 11px;
-        font-weight: 600;
-        font-family: var(--font-gauge);
-        color: var(--color-text);
-        padding: 0 !important;
-        white-space: nowrap;
-      }
-      .station-label::before {
-        display: none !important;
-      }
-    `}</style>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Control panel
@@ -457,7 +427,6 @@ export default function MapView() {
 
   return (
     <div style={containerStyle}>
-      <TooltipStyles />
 
       <MapContainer
         center={[home.lat, home.lon]}
@@ -488,13 +457,10 @@ export default function MapView() {
               )}
             </div>
           </Popup>
-          <Tooltip direction="right" className="station-label">
-            {home.name}
-          </Tooltip>
         </CircleMarker>
 
-        {/* Nearby station markers */}
-        {stations.map((s) => (
+        {/* Nearby station markers (capped at 100 nearest) */}
+        {stations.slice(0, 100).map((s) => (
           <CircleMarker
             key={s.id}
             center={[s.lat, s.lon]}
@@ -530,9 +496,6 @@ export default function MapView() {
                 )}
               </div>
             </Popup>
-            <Tooltip direction="right" className="station-label">
-              {formatValue(s, displayMode)}
-            </Tooltip>
           </CircleMarker>
         ))}
 
