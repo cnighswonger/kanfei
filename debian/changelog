@@ -1,3 +1,18 @@
+kanfei (0.1.0~beta7) unstable; urgency=low
+
+  * Humidity gauge: arc geometry rewritten, proper semicircular sweep
+  * Humidity gauge: auto-range caps at 60% span for readability
+  * Humidity gauge: full arc (100%) renders correctly
+  * Humidity sensor: values > 100% accepted (Davis ±4% tolerance above 90%)
+  * Humidity sensor: raw values stored, display clamped to 0-100%
+  * Inside humidity daily hi/lo added to extremes and gauge
+  * Deduplicated daily extremes query into shared module
+  * Gauge contrast improved across all gauges (tick marks, labels)
+  * E2E suite adapted for auth layer (61 tests, all passing)
+  * TypeScript 6.x and ESLint 10.x ignored in dependabot
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Mon, 31 Mar 2026 02:00:00 +0000
+
 kanfei (0.1.0~beta6) unstable; urgency=medium
 
   * Authentication: session auth (bcrypt, 72h sliding), API keys (knf_ prefix)
