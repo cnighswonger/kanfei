@@ -25,7 +25,7 @@ interface NearbyStation {
   name: string;
   lat: number;
   lon: number;
-  distance_mi: number;
+  distance_mi: number | null;
   source: string;
   temp_f: number | null;
   wind_mph: number | null;
@@ -649,7 +649,7 @@ export default function MapView() {
               <div style={{ fontSize: 12, maxWidth: 220 }}>
                 <strong>{s.name}</strong>
                 <div style={{ color: "#888", fontSize: 11 }}>
-                  {s.source} &middot; {s.distance_mi.toFixed(1)} mi
+                  {s.source}{s.distance_mi != null ? ` \u00B7 ${s.distance_mi.toFixed(1)} mi` : ""}
                 </div>
                 {s.temp_f != null && <div>Temp: {Math.round(s.temp_f)}°F</div>}
                 {s.wind_mph != null && (
