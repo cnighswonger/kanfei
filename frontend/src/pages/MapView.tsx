@@ -2,14 +2,14 @@
  * MapView — full-page interactive weather map with nearby stations,
  * isobar contours, and NWS alert polygons.
  */
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   MapContainer,
   TileLayer,
   CircleMarker,
   Popup,
   GeoJSON,
-  Polyline,
+  // Polyline,  // re-enable for isobars
   Tooltip,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -119,92 +119,11 @@ function markerColor(station: NearbyStation, mode: DisplayMode): string {
 // IDW interpolation + marching squares
 // ---------------------------------------------------------------------------
 
-function idwInterpolate(
-  points: { lat: number; lon: number; value: number }[],
-  targetLat: number,
-  targetLon: number,
-  power: number = 2,
-): number {
-  let weightSum = 0;
-  let valueSum = 0;
-  for (const p of points) {
-    const d = Math.sqrt((p.lat - targetLat) ** 2 + (p.lon - targetLon) ** 2);
-    if (d < 0.001) return p.value;
-    const w = 1 / d ** power;
-    weightSum += w;
-    valueSum += w * p.value;
-  }
-  return valueSum / weightSum;
-}
+// TODO: re-enable IDW interpolation for isobars
+// function idwInterpolate(...) { ... }
 
-function extractContours(
-  grid: number[][],
-  rows: number,
-  cols: number,
-  latMin: number,
-  latMax: number,
-  lonMin: number,
-  lonMax: number,
-  level: number,
-): [number, number][][] {
-  const segments: [number, number][][] = [];
-  const dLat = (latMax - latMin) / (rows - 1);
-  const dLon = (lonMax - lonMin) / (cols - 1);
-
-  for (let r = 0; r < rows - 1; r++) {
-    for (let c = 0; c < cols - 1; c++) {
-      const tl = grid[r][c];
-      const tr = grid[r][c + 1];
-      const bl = grid[r + 1][c];
-      const br = grid[r + 1][c + 1];
-
-      const latT = latMin + r * dLat;
-      const latB = latMin + (r + 1) * dLat;
-      const lonL = lonMin + c * dLon;
-      const lonR = lonMin + (c + 1) * dLon;
-
-      const code =
-        (tl >= level ? 8 : 0) |
-        (tr >= level ? 4 : 0) |
-        (br >= level ? 2 : 0) |
-        (bl >= level ? 1 : 0);
-
-      if (code === 0 || code === 15) continue;
-
-      const lerp = (v1: number, v2: number, p1: number, p2: number) => {
-        const t = (level - v1) / (v2 - v1);
-        return p1 + t * (p2 - p1);
-      };
-
-      const top: [number, number] = [latT, lerp(tl, tr, lonL, lonR)];
-      const right: [number, number] = [lerp(tr, br, latT, latB), lonR];
-      const bottom: [number, number] = [latB, lerp(bl, br, lonL, lonR)];
-      const left: [number, number] = [lerp(tl, bl, latT, latB), lonL];
-
-      const cases: Record<number, [number, number][][]> = {
-        1: [[left, bottom]],
-        2: [[bottom, right]],
-        3: [[left, right]],
-        4: [[top, right]],
-        5: [[top, right], [left, bottom]],
-        6: [[top, bottom]],
-        7: [[top, left]],
-        8: [[top, left]],
-        9: [[top, bottom]],
-        10: [[top, left], [bottom, right]],
-        11: [[top, right]],
-        12: [[left, right]],
-        13: [[bottom, right]],
-        14: [[left, bottom]],
-      };
-
-      const segs = cases[code];
-      if (segs) segments.push(...segs);
-    }
-  }
-
-  return segments;
-}
+// TODO: re-enable marching squares for isobars
+// function extractContours(...) { ... }
 
 // ---------------------------------------------------------------------------
 // Mobile hook
@@ -417,7 +336,7 @@ const spinnerStyle: React.CSSProperties = {
 };
 
 export default function MapView() {
-  const { themeName } = useTheme();
+  // const { themeName } = useTheme();  // re-enable for isobars
   const isMobile = useIsMobile();
 
   // --- state ---
@@ -517,66 +436,7 @@ export default function MapView() {
     };
   }, [home, fetchStations, fetchAlerts]);
 
-  // --- isobars ---
-  const isobars = useMemo(() => {
-    if (!home) return [];
-
-    const pressurePoints: { lat: number; lon: number; value: number }[] = stations
-      .filter((s) => s.pressure_hpa != null)
-      .map((s) => ({ lat: s.lat, lon: s.lon, value: s.pressure_hpa! }));
-
-    if (home.pressure_hpa != null) {
-      pressurePoints.push({
-        lat: home.lat,
-        lon: home.lon,
-        value: home.pressure_hpa,
-      });
-    }
-
-    if (pressurePoints.length < 5) return [];
-
-    const GRID = 50;
-    const latMin = home.lat - 1.5;
-    const latMax = home.lat + 1.5;
-    const lonMin = home.lon - 2;
-    const lonMax = home.lon + 2;
-
-    const grid: number[][] = [];
-    for (let r = 0; r < GRID; r++) {
-      const row: number[] = [];
-      const lat = latMin + (r / (GRID - 1)) * (latMax - latMin);
-      for (let c = 0; c < GRID; c++) {
-        const lon = lonMin + (c / (GRID - 1)) * (lonMax - lonMin);
-        row.push(idwInterpolate(pressurePoints, lat, lon));
-      }
-      grid.push(row);
-    }
-
-    const allValues = pressurePoints.map((p) => p.value);
-    const minP = Math.min(...allValues);
-    const maxP = Math.max(...allValues);
-    const startLevel = Math.floor(minP / 4) * 4;
-    const endLevel = Math.ceil(maxP / 4) * 4;
-
-    const contours: { level: number; segments: [number, number][][] }[] = [];
-    for (let level = startLevel; level <= endLevel; level += 4) {
-      const segments = extractContours(
-        grid,
-        GRID,
-        GRID,
-        latMin,
-        latMax,
-        lonMin,
-        lonMax,
-        level,
-      );
-      if (segments.length > 0) {
-        contours.push({ level, segments });
-      }
-    }
-
-    return contours;
-  }, [stations, home]);
+  // --- isobars (TODO: re-enable with performance optimization) ---
 
   // --- render ---
 
@@ -592,8 +452,8 @@ export default function MapView() {
     );
   }
 
-  const isobarColor =
-    themeName === "dark" ? "rgba(200,200,200,0.3)" : "rgba(100,100,100,0.3)";
+  // const isobarColor =
+  //   themeName === "dark" ? "rgba(200,200,200,0.3)" : "rgba(100,100,100,0.3)";
 
   return (
     <div style={containerStyle}>
@@ -628,7 +488,7 @@ export default function MapView() {
               )}
             </div>
           </Popup>
-          <Tooltip permanent direction="right" className="station-label">
+          <Tooltip direction="right" className="station-label">
             {home.name}
           </Tooltip>
         </CircleMarker>
@@ -670,26 +530,13 @@ export default function MapView() {
                 )}
               </div>
             </Popup>
-            <Tooltip permanent direction="right" className="station-label">
+            <Tooltip direction="right" className="station-label">
               {formatValue(s, displayMode)}
             </Tooltip>
           </CircleMarker>
         ))}
 
-        {/* Isobar contours */}
-        {isobars.map((iso) =>
-          iso.segments.map((seg, i) => (
-            <Polyline
-              key={`iso-${iso.level}-${i}`}
-              positions={seg}
-              pathOptions={{
-                color: isobarColor,
-                weight: 1,
-                dashArray: "4 4",
-              }}
-            />
-          )),
-        )}
+        {/* Isobar contours — disabled pending performance optimization */}
 
         {/* NWS alert polygons */}
         {showAlerts &&
