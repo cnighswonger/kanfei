@@ -5,14 +5,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   MapContainer,
+  TileLayer,
   CircleMarker,
   Popup,
   GeoJSON,
   Polyline,
   Tooltip,
-  useMap,
 } from "react-leaflet";
-import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useTheme } from "../context/ThemeContext.tsx";
 import { API_BASE } from "../utils/constants.ts";
@@ -226,30 +225,22 @@ function useIsMobile() {
 // ---------------------------------------------------------------------------
 
 function ThemeAwareTiles() {
-  const map = useMap();
   const { themeName } = useTheme();
+  const url =
+    themeName === "dark"
+      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+      : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
 
-  useEffect(() => {
-    const url =
-      themeName === "dark"
-        ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-
-    const layer = L.tileLayer(url, {
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-      subdomains: "abcd",
-      maxZoom: 19,
-    });
-
-    layer.addTo(map);
-
-    return () => {
-      map.removeLayer(layer);
-    };
-  }, [themeName, map]);
-
-  return null;
+  // Key forces react-leaflet to unmount/remount the TileLayer on theme change
+  return (
+    <TileLayer
+      key={themeName}
+      url={url}
+      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
+      subdomains="abcd"
+      maxZoom={19}
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
