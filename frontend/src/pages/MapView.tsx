@@ -379,16 +379,16 @@ export default function MapView() {
     }
   }, []);
 
-  // --- initial load ---
+  // --- initial load (show map as soon as home station is ready) ---
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const hs = await fetchHome();
       if (cancelled) return;
-      if (hs) {
-        await Promise.all([fetchStations(), fetchAlerts()]);
-        if (!cancelled) setLoading(false);
-      }
+      if (hs) setLoading(false);
+      // Fetch stations and alerts in background — map renders immediately
+      fetchStations();
+      fetchAlerts();
     })();
     return () => {
       cancelled = true;
