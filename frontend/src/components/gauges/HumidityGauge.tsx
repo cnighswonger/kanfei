@@ -113,10 +113,13 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
     const y1 = cy - radius * Math.sin(a1);
     const x2 = cx + radius * Math.cos(a2);
     const y2 = cy - radius * Math.sin(a2);
-    // For points on the upper semicircle, CW (sweep=1) short path always
-    // goes through the top. large-arc is always 0 — the top path is never
-    // the long way around for a semicircular gauge.
-    return `M ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2}`;
+    // CW (sweep=1) short path goes through the top for partial arcs.
+    // At exactly frac=1.0 (full semicircle), start and end are at the
+    // same y-level — CW short path goes through the bottom, so we
+    // need large-arc=1 to force the top path.
+    const span = endFrac - startFrac;
+    const largeArc = span >= 0.999 ? 1 : 0;
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
   };
 
   const range = autoRange(value, high, low);
