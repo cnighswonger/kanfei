@@ -404,6 +404,7 @@ const containerStyle: React.CSSProperties = {
   flex: 1,
   position: "relative",
   overflow: "hidden",
+  zIndex: 1,
 };
 
 const spinnerStyle: React.CSSProperties = {
