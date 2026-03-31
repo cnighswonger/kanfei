@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { API_BASE } from './helpers/values';
+import { injectAuthCookie } from './helpers/auth';
 
 test.describe('Backup operations', () => {
   test.beforeEach(async ({ page }) => {
+    await injectAuthCookie(page);
     const configReady = page.waitForResponse(
       (resp) => resp.url().includes('/api/config') && resp.status() === 200,
     );
@@ -13,7 +15,6 @@ test.describe('Backup operations', () => {
     await expect(page.getByRole('button', { name: /backup now/i })).toBeVisible();
   });
 
-  // Clean up any backups created during tests
   test.afterAll(async ({ request }) => {
     const res = await request.get(`${API_BASE}/api/backup/list`);
     if (res.ok()) {
@@ -35,16 +36,17 @@ test.describe('Backup operations', () => {
   });
 
   test('backup list shows download button', async ({ page }) => {
-    // Create a backup first via API
     await page.request.post(`${API_BASE}/api/backup`);
-    const reloadReady = page.waitForResponse(
+    await injectAuthCookie(page);
+    const configReady = page.waitForResponse(
       (resp) => resp.url().includes('/api/config') && resp.status() === 200,
     );
-    await page.reload();
-    await reloadReady;
+    await page.goto('/settings');
+    await configReady;
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await page.getByRole('button', { name: 'Backup' }).click();
 
+    await expect(page.getByText('kanfei-backup-').first()).toBeVisible();
     const downloadBtn = page.getByRole('link', { name: /download/i }).or(
       page.getByRole('button', { name: /download/i })
     );
@@ -52,13 +54,13 @@ test.describe('Backup operations', () => {
   });
 
   test('delete backup removes it from list', async ({ page }) => {
-    // Create a backup via API
     await page.request.post(`${API_BASE}/api/backup`);
-    const reloadReady = page.waitForResponse(
+    await injectAuthCookie(page);
+    const configReady = page.waitForResponse(
       (resp) => resp.url().includes('/api/config') && resp.status() === 200,
     );
-    await page.reload();
-    await reloadReady;
+    await page.goto('/settings');
+    await configReady;
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await page.getByRole('button', { name: 'Backup' }).click();
 
@@ -68,7 +70,6 @@ test.describe('Backup operations', () => {
     await expect(deleteBtn).toBeVisible();
     await deleteBtn.click();
 
-    // Wait for deletion to process
     await page.waitForTimeout(2000);
   });
 });

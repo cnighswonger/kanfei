@@ -19,35 +19,49 @@ function autoRange(
   high: number | null | undefined,
   low: number | null | undefined,
 ): { min: number; max: number } {
-  const pts = [value, high ?? null, low ?? null].filter(
-    (v): v is number => v != null && Number.isFinite(v),
-  );
-  if (pts.length === 0) return { min: 0, max: 100 };
+  if (value == null) return { min: 0, max: 100 };
 
-  const dataMin = Math.min(...pts);
-  const dataMax = Math.max(...pts);
-  const PAD = 10;
   const MIN_SPAN = 30;
-  const TICK = 10;
+  const MAX_SPAN = 60;
+  const TICK = 5;
+  const PAD = 10;
 
-  let lo = Math.floor((dataMin - PAD) / TICK) * TICK;
-  let hi = Math.ceil((dataMax + PAD) / TICK) * TICK;
+  // Start centered on the current value with padding.
+  let lo = value - PAD;
+  let hi = value + PAD;
+
+  // Expand to include hi/lo if present, but cap total span.
+  if (low != null && Number.isFinite(low)) lo = Math.min(lo, low - 5);
+  if (high != null && Number.isFinite(high)) hi = Math.max(hi, high + 5);
+
+  // Cap span — don't let extreme daily hi/lo blow out the gauge.
+  const span = hi - lo;
+  if (span > MAX_SPAN) {
+    const center = value;
+    lo = center - MAX_SPAN / 2;
+    hi = center + MAX_SPAN / 2;
+    // Shift to include current value with padding
+    if (value - lo < PAD) { lo = value - PAD; hi = lo + MAX_SPAN; }
+    if (hi - value < PAD) { hi = value + PAD; lo = hi - MAX_SPAN; }
+  }
+
+  // Snap to tick boundaries
+  lo = Math.floor(lo / TICK) * TICK;
+  hi = Math.ceil(hi / TICK) * TICK;
 
   // Ensure minimum span
-  const span = hi - lo;
-  if (span < MIN_SPAN) {
+  if (hi - lo < MIN_SPAN) {
     const center = (lo + hi) / 2;
     lo = Math.floor((center - MIN_SPAN / 2) / TICK) * TICK;
     hi = Math.ceil((center + MIN_SPAN / 2) / TICK) * TICK;
   }
 
-  // Clamp to physical limits (0-100%), then re-expand the other end
-  // to maintain MIN_SPAN (avoids squished scale near 0% or 100%)
+  // Clamp to physical limits, re-expand the other end
   lo = Math.max(0, lo);
   hi = Math.min(100, hi);
   if (hi - lo < MIN_SPAN) {
-    if (lo === 0) hi = Math.min(100, MIN_SPAN);
-    else if (hi === 100) lo = Math.max(0, 100 - MIN_SPAN);
+    if (lo === 0) hi = Math.min(100, lo + MIN_SPAN);
+    else if (hi === 100) lo = Math.max(0, hi - MIN_SPAN);
   }
 
   return { min: lo, max: hi };
@@ -99,15 +113,19 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
     const y1 = cy - radius * Math.sin(a1);
     const x2 = cx + radius * Math.cos(a2);
     const y2 = cy - radius * Math.sin(a2);
-    const largeArc = (endFrac - startFrac) > 0.5 ? 1 : 0;
-    // sweep-flag=1 → clockwise (upward through the top of the circle)
+    // CW (sweep=1) short path goes through the top for partial arcs.
+    // At exactly frac=1.0 (full semicircle), start and end are at the
+    // same y-level — CW short path goes through the bottom, so we
+    // need large-arc=1 to force the top path.
+    const span = endFrac - startFrac;
+    const largeArc = span >= 0.999 ? 1 : 0;
     return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
   };
 
   const range = autoRange(value, high, low);
   const rangeSpan = range.max - range.min;
   const frac = value !== null
-    ? Math.max(0, Math.min(0.998, (value - range.min) / rangeSpan))
+    ? Math.max(0, Math.min(1, (value - range.min) / rangeSpan))
     : 0;
   const color = value !== null ? humidityColor(value) : 'var(--color-text-muted)';
 
@@ -174,7 +192,7 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
         />
 
         {/* Colored fill arc */}
-        {value !== null && frac > 0.005 && (
+        {value !== null && frac > 0 && (
           <path
             d={describeArc(0, frac, r)}
             fill="none"

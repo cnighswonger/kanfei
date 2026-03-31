@@ -107,8 +107,8 @@ SENSOR_BOUNDS: dict[str, tuple[int, int]] = {
     "wind_chill": (-733, 656),         # -73.3 to 65.6 °C (tenths °C)
     "feels_like": (-733, 850),
     "theta_e": (2000, 4500),           # 200 to 450 K    (tenths K)
-    "inside_humidity": (1, 100),
-    "outside_humidity": (1, 100),
+    "inside_humidity": (1, 104),       # sensor tolerance: ±4% above 90% RH
+    "outside_humidity": (1, 104),
     "wind_speed": (0, 894),            # 0 to 89.4 m/s ≈ 200 mph (tenths m/s)
     "wind_direction": (0, 360),
     "barometer": (8466, 11863),        # 846.6 to 1186.3 hPa (tenths hPa)

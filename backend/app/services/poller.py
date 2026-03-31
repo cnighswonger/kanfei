@@ -14,6 +14,8 @@ from typing import Any, Callable, Coroutine, Optional
 
 from sqlalchemy import func
 
+from .daily_extremes import get_daily_extremes
+
 from ..protocol.base import StationDriver, SensorSnapshot
 from ..services.calculations import (
     heat_index,
@@ -331,47 +333,8 @@ class Poller:
 
     @staticmethod
     def _get_daily_extremes(db) -> Optional[dict]:
-        """Query today's high/low extremes from sensor_readings."""
-        # Use system-local midnight so the day boundary matches the user's timezone
-        now = datetime.now().astimezone()
-        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-
-        S = SensorReadingModel
-        row = (
-            db.query(
-                func.max(S.outside_temp), func.min(S.outside_temp),
-                func.max(S.inside_temp), func.min(S.inside_temp),
-                func.max(S.wind_speed),
-                func.max(S.barometer), func.min(S.barometer),
-                func.max(S.outside_humidity), func.min(S.outside_humidity),
-                func.max(S.rain_rate),
-            )
-            .filter(S.timestamp >= midnight)
-            .first()
-        )
-
-        if row is None or row[0] is None:
-            return None
-
-        from ..models.sensor_meta import convert, SENSOR_UNITS
-
-        def _val(column, raw):
-            if raw is None:
-                return None
-            return {"value": convert(column, raw), "unit": SENSOR_UNITS.get(column, "")}
-
-        return {
-            "outside_temp_hi": _val("outside_temp", row[0]),
-            "outside_temp_lo": _val("outside_temp", row[1]),
-            "inside_temp_hi": _val("inside_temp", row[2]),
-            "inside_temp_lo": _val("inside_temp", row[3]),
-            "wind_speed_hi": _val("wind_speed", row[4]),
-            "barometer_hi": _val("barometer", row[5]),
-            "barometer_lo": _val("barometer", row[6]),
-            "humidity_hi": _val("outside_humidity", row[7]),
-            "humidity_lo": _val("outside_humidity", row[8]),
-            "rain_rate_hi": _val("rain_rate", row[9]),
-        }
+        """Delegate to shared implementation."""
+        return get_daily_extremes(db)
 
     @staticmethod
     def _cardinal(degrees: Optional[int]) -> Optional[str]:
@@ -434,8 +397,8 @@ class Poller:
                 "outside": {"value": _temp_f(snapshot.outside_temp), "unit": "F"},
             },
             "humidity": {
-                "inside": {"value": snapshot.inside_humidity, "unit": "%"},
-                "outside": {"value": snapshot.outside_humidity, "unit": "%"},
+                "inside": {"value": min(snapshot.inside_humidity, 100) if snapshot.inside_humidity is not None else None, "unit": "%"},
+                "outside": {"value": min(snapshot.outside_humidity, 100) if snapshot.outside_humidity is not None else None, "unit": "%"},
             },
             "wind": {
                 "speed": {"value": _wind(snapshot.wind_speed), "unit": "mph"},

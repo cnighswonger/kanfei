@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { injectAuthCookie } from './helpers/auth';
 
 test.describe('Discord Bot settings', () => {
   test.beforeEach(async ({ page }) => {
+    await injectAuthCookie(page);
     const configReady = page.waitForResponse(
       (resp) => resp.url().includes('/api/config') && resp.status() === 200,
     );
