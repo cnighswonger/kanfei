@@ -118,12 +118,13 @@ def _valid_temp_3nib(value: int) -> Optional[int]:
 def _valid_humidity(value: int) -> Optional[int]:
     """Return humidity if valid, None if sentinel.
 
-    Davis sensors can report slightly over 100% due to sensor tolerance.
-    Clamp to 100 rather than rejecting — the reading is still meaningful.
+    Davis sensors can report values slightly outside 0-100% due to
+    sensor tolerance (±4% above 90% RH per spec). Raw values are
+    preserved for diagnostics; display clamping happens at the API layer.
     """
     if value == INVALID_HUMIDITY:
         return None
-    return min(value, 100)
+    return value
 
 
 def _valid_wind_dir(value: int) -> Optional[int]:

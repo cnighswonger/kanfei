@@ -42,6 +42,14 @@ def _val(column: str, raw: int | None) -> dict | None:
     return {"value": convert(column, raw), "unit": SENSOR_UNITS.get(column, "")}
 
 
+def _clamp_humidity(val: dict | None) -> dict | None:
+    """Clamp humidity display to 0-100%. Raw values may exceed 100% due to sensor tolerance."""
+    if val is None or val["value"] is None:
+        return val
+    val["value"] = max(0, min(100, val["value"]))
+    return val
+
+
 def _get_daily_extremes(db: Session) -> dict | None:
     """Delegate to shared implementation."""
     return get_daily_extremes(db)
@@ -72,8 +80,8 @@ def get_current(db: Session = Depends(get_db)):
             "outside": _val("outside_temp", reading.outside_temp),
         },
         "humidity": {
-            "inside": _val("inside_humidity", reading.inside_humidity),
-            "outside": _val("outside_humidity", reading.outside_humidity),
+            "inside": _clamp_humidity(_val("inside_humidity", reading.inside_humidity)),
+            "outside": _clamp_humidity(_val("outside_humidity", reading.outside_humidity)),
         },
         "wind": {
             "speed": _val("wind_speed", reading.wind_speed),

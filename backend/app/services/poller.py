@@ -397,8 +397,8 @@ class Poller:
                 "outside": {"value": _temp_f(snapshot.outside_temp), "unit": "F"},
             },
             "humidity": {
-                "inside": {"value": snapshot.inside_humidity, "unit": "%"},
-                "outside": {"value": snapshot.outside_humidity, "unit": "%"},
+                "inside": {"value": min(snapshot.inside_humidity, 100) if snapshot.inside_humidity is not None else None, "unit": "%"},
+                "outside": {"value": min(snapshot.outside_humidity, 100) if snapshot.outside_humidity is not None else None, "unit": "%"},
             },
             "wind": {
                 "speed": {"value": _wind(snapshot.wind_speed), "unit": "mph"},

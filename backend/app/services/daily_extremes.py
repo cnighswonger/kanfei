@@ -16,6 +16,14 @@ def _val(column: str, raw) -> Optional[dict]:
     return {"value": convert(column, raw), "unit": SENSOR_UNITS.get(column, "")}
 
 
+def _clamp_hum(val: Optional[dict]) -> Optional[dict]:
+    """Clamp humidity display to 0-100%."""
+    if val is None or val["value"] is None:
+        return val
+    val["value"] = max(0, min(100, val["value"]))
+    return val
+
+
 def get_daily_extremes(db: Session) -> Optional[dict]:
     """Query today's high/low extremes from sensor_readings.
 
@@ -50,9 +58,9 @@ def get_daily_extremes(db: Session) -> Optional[dict]:
         "wind_speed_hi": _val("wind_speed", row[4]),
         "barometer_hi": _val("barometer", row[5]),
         "barometer_lo": _val("barometer", row[6]),
-        "humidity_hi": _val("outside_humidity", row[7]),
-        "humidity_lo": _val("outside_humidity", row[8]),
+        "humidity_hi": _clamp_hum(_val("outside_humidity", row[7])),
+        "humidity_lo": _clamp_hum(_val("outside_humidity", row[8])),
         "rain_rate_hi": _val("rain_rate", row[9]),
-        "inside_humidity_hi": _val("inside_humidity", row[10]),
-        "inside_humidity_lo": _val("inside_humidity", row[11]),
+        "inside_humidity_hi": _clamp_hum(_val("inside_humidity", row[10])),
+        "inside_humidity_lo": _clamp_hum(_val("inside_humidity", row[11])),
     }
