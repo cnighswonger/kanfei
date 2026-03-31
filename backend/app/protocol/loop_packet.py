@@ -119,7 +119,7 @@ def _valid_humidity(value: int) -> Optional[int]:
     """Return humidity if valid (0-100), None otherwise."""
     if value == INVALID_HUMIDITY or value > 100:
         import logging
-        logging.getLogger(__name__).debug(
+        logging.getLogger(__name__).warning(
             "Rejected humidity byte: %d (0x%02X)", value, value)
         return None
     return value
