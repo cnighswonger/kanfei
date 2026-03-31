@@ -118,6 +118,9 @@ def _valid_temp_3nib(value: int) -> Optional[int]:
 def _valid_humidity(value: int) -> Optional[int]:
     """Return humidity if valid (0-100), None otherwise."""
     if value == INVALID_HUMIDITY or value > 100:
+        import logging
+        logging.getLogger(__name__).debug(
+            "Rejected humidity byte: %d (0x%02X)", value, value)
         return None
     return value
 
