@@ -18,6 +18,7 @@ import { fetchConfig, fetchFeatureFlags } from "../api/client.ts";
 export interface FeatureFlags {
   nowcastEnabled: boolean;
   sprayEnabled: boolean;
+  mapEnabled: boolean;
 }
 
 interface FeatureFlagsContextValue {
@@ -28,11 +29,12 @@ interface FeatureFlagsContextValue {
 
 const FeatureFlagsContext = createContext<FeatureFlagsContextValue | null>(null);
 
-const DEFAULTS: FeatureFlags = { nowcastEnabled: false, sprayEnabled: false };
+const DEFAULTS: FeatureFlags = { nowcastEnabled: false, sprayEnabled: false, mapEnabled: false };
 
 const FLAG_KEYS: Record<string, keyof FeatureFlags> = {
   nowcast_enabled: "nowcastEnabled",
   spray_enabled: "sprayEnabled",
+  map_enabled: "mapEnabled",
 };
 
 function extractFlags(
@@ -59,6 +61,7 @@ export function FeatureFlagsProvider({ children }: { children: ReactNode }) {
       setFlags({
         nowcastEnabled: flagData.nowcast_enabled === true,
         sprayEnabled: flagData.spray_enabled === true,
+        mapEnabled: flagData.map_enabled === true,
       });
     } catch {
       // Fallback to full config (requires auth) for Settings refresh.

@@ -87,6 +87,7 @@ _DEFAULTS: dict[str, object] = {
     "nowcast_fallback_openai_api_key": "",
     "nowcast_fallback_openai_model": "gpt-4o-mini",
     "spray_enabled": False,
+    "map_enabled": False,
     "spray_ai_enabled": False,
     "anthropic_admin_api_key": "",
     "usage_budget_monthly_usd": 0,
@@ -177,7 +178,7 @@ def get_effective_config(db: Session) -> dict[str, object]:
 
 
 # Public feature flags — no auth required.
-_PUBLIC_FLAG_KEYS = frozenset({"nowcast_enabled", "spray_enabled"})
+_PUBLIC_FLAG_KEYS = frozenset({"nowcast_enabled", "spray_enabled", "map_enabled"})
 
 
 @router.get("/config/flags")

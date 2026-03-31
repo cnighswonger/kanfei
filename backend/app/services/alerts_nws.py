@@ -50,6 +50,7 @@ class NWSAlert:
     alert_id: str       # Unique ID for change detection
     message_type: str   # "Alert", "Update", "Cancel"
     response: str       # "Shelter", "Evacuate", "Monitor", etc.
+    geometry: dict | None = None  # GeoJSON geometry (polygon) for map rendering
 
 
 @dataclass
@@ -110,6 +111,7 @@ def _parse_alert(feature: dict) -> Optional[NWSAlert]:
         alert_id=props.get("id", ""),
         message_type=props.get("messageType", "Alert"),
         response=props.get("response", "None"),
+        geometry=feature.get("geometry"),
     )
 
 
