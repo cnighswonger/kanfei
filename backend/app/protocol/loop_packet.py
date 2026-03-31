@@ -116,13 +116,14 @@ def _valid_temp_3nib(value: int) -> Optional[int]:
 
 
 def _valid_humidity(value: int) -> Optional[int]:
-    """Return humidity if valid (0-100), None otherwise."""
-    if value == INVALID_HUMIDITY or value > 100:
-        import logging
-        logging.getLogger(__name__).warning(
-            "Rejected humidity byte: %d (0x%02X)", value, value)
+    """Return humidity if valid, None if sentinel.
+
+    Davis sensors can report slightly over 100% due to sensor tolerance.
+    Clamp to 100 rather than rejecting — the reading is still meaningful.
+    """
+    if value == INVALID_HUMIDITY:
         return None
-    return value
+    return min(value, 100)
 
 
 def _valid_wind_dir(value: int) -> Optional[int]:
