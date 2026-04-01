@@ -508,12 +508,15 @@ export default function MapView() {
           const icon = L.divIcon({
             className: "",
             html: `<div style="
-              font-size:12px;font-weight:700;font-family:var(--font-gauge);
-              color:${color};text-shadow:0 0 3px rgba(0,0,0,0.8),0 0 6px rgba(0,0,0,0.4);
+              font-size:11px;font-weight:700;font-family:var(--font-gauge);
+              color:#fff;background:${color};
+              padding:1px 5px;border-radius:4px;
               white-space:nowrap;pointer-events:auto;
+              box-shadow:0 1px 3px rgba(0,0,0,0.4);
+              line-height:16px;text-align:center;
             ">${label}</div>`,
-            iconSize: [40, 16],
-            iconAnchor: [20, 8],
+            iconSize: [40, 18],
+            iconAnchor: [20, 9],
           });
           return (
             <Marker key={s.id} position={[s.lat, s.lon]} icon={icon}>
