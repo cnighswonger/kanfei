@@ -414,9 +414,14 @@ async def get_isobars(db: Session = Depends(get_db)):
     if cached and time.time() < cached.expires_at:
         return cached.data
 
-    # Get station data from the existing cached nearby-stations
-    station_key = _cache_key(lat, lon, 75)
-    station_cache = _station_cache.get(station_key)
+    # Get station data from the existing cached nearby-stations.
+    # Try common radii (frontend default is 50) — use whichever cache hit exists.
+    station_cache = None
+    for r in (50, 75, 100):
+        sc = _station_cache.get(_cache_key(lat, lon, r))
+        if sc and time.time() < sc.expires_at:
+            station_cache = sc
+            break
     if not station_cache:
         return {"contours": [], "interval_hpa": 4}
 

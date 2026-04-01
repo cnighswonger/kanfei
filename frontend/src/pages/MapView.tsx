@@ -348,6 +348,8 @@ const spinnerStyle: React.CSSProperties = {
 
 export default function MapView() {
   const isMobile = useIsMobile();
+  const { themeName } = useTheme();
+  const isDark = themeName === "dark";
 
   // --- state ---
   const [home, setHome] = useState<HomeStation | null>(null);
@@ -455,11 +457,13 @@ export default function MapView() {
     if (!home) return;
     const stationInterval = setInterval(fetchStations, 5 * 60 * 1000);
     const alertInterval = setInterval(fetchAlerts, 2 * 60 * 1000);
+    const isobarInterval = setInterval(fetchIsobars, 5 * 60 * 1000);
     return () => {
       clearInterval(stationInterval);
       clearInterval(alertInterval);
+      clearInterval(isobarInterval);
     };
-  }, [home, fetchStations, fetchAlerts]);
+  }, [home, fetchStations, fetchAlerts, fetchIsobars]);
 
 
   // --- render ---
@@ -585,9 +589,9 @@ export default function MapView() {
               key={`iso-${iso.level}-${i}`}
               positions={seg as [number, number][]}
               pathOptions={{
-                color: "rgba(180,180,180,0.5)",
-                weight: 1,
-                dashArray: "6 4",
+                color: isDark ? "rgba(200,220,255,0.6)" : "rgba(60,80,120,0.5)",
+                weight: 1.5,
+                dashArray: "8 5",
               }}
             />
           ))
