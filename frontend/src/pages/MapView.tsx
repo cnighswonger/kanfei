@@ -81,18 +81,37 @@ function severityColor(severity: string): string {
 }
 
 function tempColor(f: number): string {
-  const clamped = Math.max(40, Math.min(100, f));
-  const t = (clamped - 40) / 60; // 0 = blue, 1 = red
-  const r = Math.round(50 + 205 * t);
-  const b = Math.round(220 - 180 * t);
-  const g = Math.round(t < 0.5 ? 80 + 160 * (t * 2) : 240 - 200 * ((t - 0.5) * 2));
-  return `rgb(${r},${g},${b})`;
+  // Vivid blue → green → yellow → orange → red gradient
+  const t = Math.max(0, Math.min(1, (f - 30) / 70)); // 30°F=0, 100°F=1
+  if (t < 0.25) {
+    // Blue → Cyan
+    const s = t / 0.25;
+    return `rgb(${Math.round(30 + 20 * s)},${Math.round(100 + 155 * s)},${Math.round(255 - 20 * s)})`;
+  } else if (t < 0.45) {
+    // Cyan → Green-Yellow
+    const s = (t - 0.25) / 0.2;
+    return `rgb(${Math.round(50 + 150 * s)},${Math.round(200 + 30 * s)},${Math.round(60 - 40 * s)})`;
+  } else if (t < 0.65) {
+    // Yellow → Orange
+    const s = (t - 0.45) / 0.2;
+    return `rgb(${Math.round(240 + 15 * s)},${Math.round(190 - 70 * s)},${Math.round(20)})`;
+  } else {
+    // Orange → Red
+    const s = (t - 0.65) / 0.35;
+    return `rgb(${Math.round(255 - 30 * s)},${Math.round(120 - 90 * s)},${Math.round(20 + 10 * s)})`;
+  }
 }
 
 function precipColor(inches: number): string {
-  const t = Math.min(1, inches / 2);
-  const alpha = 0.3 + 0.7 * t;
-  return `rgba(59,130,246,${alpha.toFixed(2)})`;
+  const t = Math.min(1, inches / 1);
+  return `rgb(${Math.round(30 + 30 * t)},${Math.round(140 + 60 * t)},${Math.round(220 + 35 * t)})`;
+}
+
+function windColor(mph: number): string {
+  const t = Math.max(0, Math.min(1, mph / 30)); // 0mph=calm, 30mph=strong
+  if (t < 0.3) return `rgb(100,${Math.round(180 + 50 * (t / 0.3))},100)`; // green
+  if (t < 0.6) { const s = (t - 0.3) / 0.3; return `rgb(${Math.round(100 + 155 * s)},${Math.round(230 - 40 * s)},${Math.round(50)})`;} // yellow-orange
+  const s = (t - 0.6) / 0.4; return `rgb(${Math.round(255 - 20 * s)},${Math.round(80 - 50 * s)},${Math.round(30)})`;  // red
 }
 
 function formatValue(station: NearbyStation, mode: DisplayMode): string {
@@ -112,7 +131,7 @@ function markerColor(station: NearbyStation, mode: DisplayMode): string {
     case "temp":
       return station.temp_f != null ? tempColor(station.temp_f) : "#9ca3af";
     case "wind":
-      return "#9ca3af";
+      return station.wind_mph != null ? windColor(station.wind_mph) : "#9ca3af";
     case "precip":
       return station.precip_in != null ? precipColor(station.precip_in) : "#9ca3af";
   }

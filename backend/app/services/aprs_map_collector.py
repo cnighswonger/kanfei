@@ -33,7 +33,8 @@ APRS_IS_SERVERS = [
 CONNECT_TIMEOUT = 15.0
 READ_TIMEOUT = 120.0
 MILES_TO_KM = 1.60934
-OBS_MAX_AGE = 1800  # 30 minutes
+OBS_MAX_AGE = 1800  # 30 minutes — prune from live feed
+CACHE_MAX_AGE = 7200  # 2 hours — keep on disk across restarts
 BACKOFF_INITIAL = 5.0
 BACKOFF_MAX = 300.0
 PRUNE_INTERVAL = 60
@@ -84,12 +85,16 @@ def _save_cache() -> None:
 
 
 def _load_cache() -> int:
-    """Load persisted observations from disk. Returns count loaded."""
+    """Load persisted observations from disk. Returns count loaded.
+
+    Uses CACHE_MAX_AGE (2h) not OBS_MAX_AGE (30m) so stations that
+    disappeared briefly are still available after restart.
+    """
     import json
     try:
         with open(_CACHE_FILE) as f:
             data = json.load(f)
-        cutoff = time.time() - OBS_MAX_AGE
+        cutoff = time.time() - CACHE_MAX_AGE
         loaded = 0
         for d in data:
             if d.get("timestamp", 0) < cutoff:
@@ -342,10 +347,13 @@ async def start(lat: float, lon: float, radius_miles: int,
 
 
 async def stop_collector() -> None:
-    """Stop the background listener and persist cache."""
+    """Stop the background listener and persist cache.
+
+    Does NOT clear observations — they remain available for the map
+    endpoint and will be saved/reloaded on next restart.
+    """
     global _task, _stop_event
 
-    # Save before clearing
     if _observations:
         _save_cache()
 
@@ -359,7 +367,6 @@ async def stop_collector() -> None:
             pass
         _task = None
     _stop_event = None
-    _observations.clear()
 
 
 def is_running() -> bool:
