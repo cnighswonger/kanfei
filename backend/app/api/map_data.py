@@ -261,8 +261,7 @@ async def get_nearby_stations(
         expires_at=time.time() + _STATION_CACHE_TTL,
     )
 
-    logger.info("Map: %d stations within %d mi (queried %d networks)",
-                len(stations), radius_mi, len(networks))
+    logger.info("Map: %d stations within %d mi", len(stations), radius_mi)
 
     return result
 
