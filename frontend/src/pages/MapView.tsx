@@ -154,8 +154,8 @@ const TILE_TOPO_ATTR = '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>
 function BaseLayers() {
   const { themeName } = useTheme();
   const defaultMap = themeName === "dark"
-    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+    ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
 
   return (
     <LayersControl position="topright">
@@ -450,7 +450,6 @@ export default function MapView() {
   return (
     <div style={containerStyle}>
       <style>{`
-        .leaflet-tile-pane { filter: sepia(30%) saturate(80%) brightness(95%); }
         .leaflet-control-layers {
           background: var(--color-bg-card) !important;
           border: 1px solid var(--color-border) !important;
