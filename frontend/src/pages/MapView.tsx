@@ -450,6 +450,7 @@ export default function MapView() {
   return (
     <div style={containerStyle}>
       <style>{`
+        .leaflet-tile-pane { filter: sepia(15%) saturate(90%) brightness(98%); }
         .leaflet-control-layers {
           background: var(--color-bg-card) !important;
           border: 1px solid var(--color-border) !important;
@@ -510,13 +511,13 @@ export default function MapView() {
             html: `<div style="
               font-size:11px;font-weight:700;font-family:var(--font-gauge);
               color:#fff;background:${color};
-              padding:1px 5px;border-radius:4px;
+              padding:1px 3px;border-radius:3px;display:inline-block;
               white-space:nowrap;pointer-events:auto;
               box-shadow:0 1px 3px rgba(0,0,0,0.4);
               line-height:16px;text-align:center;
             ">${label}</div>`,
-            iconSize: [40, 18],
-            iconAnchor: [20, 9],
+            iconSize: [0, 0],
+            iconAnchor: [0, 8],
           });
           return (
             <Marker key={s.id} position={[s.lat, s.lon]} icon={icon}>
