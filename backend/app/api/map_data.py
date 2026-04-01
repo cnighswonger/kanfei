@@ -110,13 +110,16 @@ async def get_nearby_stations(
     if cached and time.time() < cached.expires_at:
         return cached.data
 
-    # Determine which state networks to query
+    # Determine which state networks to query (ASOS + COOP for density)
     state = _state_from_latlon(lat, lon)
-    networks = [_STATE_NETWORKS.get(state, "NC_ASOS")]
-    for neighbor in _STATE_NEIGHBORS.get(state, []):
-        net = _STATE_NETWORKS.get(neighbor)
-        if net:
-            networks.append(net)
+    states = [state] + _STATE_NEIGHBORS.get(state, [])
+    networks = []
+    for st in states:
+        asos = _STATE_NETWORKS.get(st)
+        if asos:
+            networks.append(asos)
+            # Also add COOP network for the same state
+            networks.append(asos.replace("_ASOS", "_COOP"))
 
     # Fetch from IEM — query each network
     all_raw: list[dict] = []
