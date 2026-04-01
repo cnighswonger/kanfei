@@ -244,8 +244,39 @@ async def get_nearby_stations(
     # Try kanfei-nowcast first (has APRS/CWOP + WU + IEM)
     stations = await _fetch_via_nowcast(lat, lon, radius_mi, cfg)
     if not stations:
-        # Fallback to direct IEM query
+        # Fallback to direct IEM query + native APRS collector
         stations = await _fetch_via_iem_direct(lat, lon, radius_mi)
+
+    # Merge native APRS map collector observations (if running)
+    try:
+        from ..services.aprs_map_collector import get_nearby, is_running
+        if is_running():
+            aprs_obs = get_nearby(lat, lon, radius_mi, max_stations=100)
+            existing_ids = {s["id"] for s in stations}
+            for obs in aprs_obs:
+                if obs.callsign not in existing_ids:
+                    pressure_hpa = round(obs.pressure_inhg * 33.8639, 1) if obs.pressure_inhg else None
+                    stations.append({
+                        "id": obs.callsign,
+                        "name": obs.callsign,
+                        "lat": obs.latitude,
+                        "lon": obs.longitude,
+                        "distance_mi": round(_haversine_mi(lat, lon, obs.latitude, obs.longitude), 1),
+                        "source": "CWOP",
+                        "temp_f": obs.temp_f,
+                        "wind_mph": round(obs.wind_speed_mph) if obs.wind_speed_mph is not None else None,
+                        "wind_dir": obs.wind_dir_deg,
+                        "wind_gust_mph": round(obs.wind_gust_mph) if obs.wind_gust_mph is not None else None,
+                        "pressure_hpa": pressure_hpa,
+                        "pressure_inhg": obs.pressure_inhg,
+                        "precip_in": obs.precip_in,
+                        "updated": datetime.fromtimestamp(obs.timestamp, tz=timezone.utc).isoformat(),
+                    })
+            if aprs_obs:
+                stations.sort(key=lambda s: s["distance_mi"])
+                logger.info("Map: merged %d APRS/CWOP stations", len(aprs_obs))
+    except Exception:
+        pass  # Collector not available — no CWOP data
 
     result = {
         "stations": stations,
