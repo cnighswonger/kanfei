@@ -316,3 +316,184 @@ async def get_map_alerts(db: Session = Depends(get_db)):
 
     alerts = [asdict(a) for a in result.alerts]
     return {"alerts": alerts, "count": len(alerts)}
+
+
+# ---------------------------------------------------------------------------
+# Isobar contour computation
+# ---------------------------------------------------------------------------
+
+def _idw_interpolate(
+    points: list[tuple[float, float, float]],  # (lat, lon, pressure_hpa)
+    lat: float, lon: float, power: float = 2.0,
+) -> float:
+    """Inverse distance weighting interpolation."""
+    w_sum = 0.0
+    v_sum = 0.0
+    for plat, plon, pval in points:
+        d = math.sqrt((plat - lat) ** 2 + (plon - lon) ** 2)
+        if d < 0.001:
+            return pval
+        w = 1.0 / d ** power
+        w_sum += w
+        v_sum += w * pval
+    return v_sum / w_sum
+
+
+def _marching_squares(
+    grid: list[list[float]], rows: int, cols: int,
+    lat_min: float, lat_max: float, lon_min: float, lon_max: float,
+    level: float,
+) -> list[list[list[float]]]:
+    """Extract contour line segments at a given pressure level."""
+    segments: list[list[list[float]]] = []
+    d_lat = (lat_max - lat_min) / (rows - 1)
+    d_lon = (lon_max - lon_min) / (cols - 1)
+
+    for r in range(rows - 1):
+        for c in range(cols - 1):
+            tl, tr = grid[r][c], grid[r][c + 1]
+            bl, br = grid[r + 1][c], grid[r + 1][c + 1]
+            lat_t = lat_min + r * d_lat
+            lat_b = lat_min + (r + 1) * d_lat
+            lon_l = lon_min + c * d_lon
+            lon_r = lon_min + (c + 1) * d_lon
+
+            code = ((1 if tl >= level else 0) << 3 |
+                    (1 if tr >= level else 0) << 2 |
+                    (1 if br >= level else 0) << 1 |
+                    (1 if bl >= level else 0))
+
+            if code == 0 or code == 15:
+                continue
+
+            def lerp(v1, v2, p1, p2):
+                t = (level - v1) / (v2 - v1) if v2 != v1 else 0.5
+                return p1 + t * (p2 - p1)
+
+            top = [lat_t, lerp(tl, tr, lon_l, lon_r)]
+            right = [lerp(tr, br, lat_t, lat_b), lon_r]
+            bottom = [lat_b, lerp(bl, br, lon_l, lon_r)]
+            left = [lerp(tl, bl, lat_t, lat_b), lon_l]
+
+            cases = {
+                1: [[left, bottom]], 2: [[bottom, right]], 3: [[left, right]],
+                4: [[top, right]], 5: [[top, right], [left, bottom]],
+                6: [[top, bottom]], 7: [[top, left]], 8: [[top, left]],
+                9: [[top, bottom]], 10: [[top, left], [bottom, right]],
+                11: [[top, right]], 12: [[left, right]],
+                13: [[bottom, right]], 14: [[left, bottom]],
+            }
+            segs = cases.get(code)
+            if segs:
+                segments.extend(segs)
+
+    return segments
+
+
+_isobar_cache: dict[str, _StationCache] = {}
+_ISOBAR_CACHE_TTL = 300  # 5 minutes
+
+
+@router.get("/isobars")
+async def get_isobars(db: Session = Depends(get_db)):
+    """Compute isobar contour lines from nearby station pressure data.
+
+    Returns GeoJSON-style line segments at standard pressure intervals.
+    Server-side computation, cached for 5 minutes.
+    """
+    cfg = get_effective_config(db)
+    lat = float(cfg.get("latitude", 0))
+    lon = float(cfg.get("longitude", 0))
+
+    if lat == 0 and lon == 0:
+        return {"contours": [], "interval_hpa": 4}
+
+    # Check cache
+    cache_key = f"iso:{round(lat, 2)}:{round(lon, 2)}"
+    cached = _isobar_cache.get(cache_key)
+    if cached and time.time() < cached.expires_at:
+        return cached.data
+
+    # Get station data from the existing cached nearby-stations
+    station_key = _cache_key(lat, lon, 75)
+    station_cache = _station_cache.get(station_key)
+    if not station_cache:
+        return {"contours": [], "interval_hpa": 4}
+
+    stations = station_cache.data.get("stations", [])
+
+    # Collect pressure points
+    pressure_points: list[tuple[float, float, float]] = []
+    for s in stations:
+        p = s.get("pressure_hpa")
+        if p is not None and s.get("lat") is not None:
+            pressure_points.append((s["lat"], s["lon"], p))
+
+    # Add home station barometer if available
+    try:
+        from ..models.database import SessionLocal
+        from ..models.sensor_reading import SensorReadingModel
+        from ..models.sensor_meta import convert
+        _db = SessionLocal()
+        row = _db.query(SensorReadingModel.barometer).order_by(
+            SensorReadingModel.timestamp.desc()
+        ).first()
+        _db.close()
+        if row and row[0] is not None:
+            baro_display = convert("barometer", row[0])  # inHg
+            if baro_display:
+                baro_hpa = baro_display * 33.8639
+                pressure_points.append((lat, lon, baro_hpa))
+    except Exception:
+        pass
+
+    if len(pressure_points) < 5:
+        return {"contours": [], "interval_hpa": 4}
+
+    # Build interpolation grid
+    GRID = 30
+    pad = 1.2
+    lat_min, lat_max = lat - pad, lat + pad
+    lon_min, lon_max = lon - pad * 1.3, lon + pad * 1.3
+
+    grid: list[list[float]] = []
+    for r in range(GRID):
+        row: list[float] = []
+        g_lat = lat_min + (r / (GRID - 1)) * (lat_max - lat_min)
+        for c in range(GRID):
+            g_lon = lon_min + (c / (GRID - 1)) * (lon_max - lon_min)
+            row.append(_idw_interpolate(pressure_points, g_lat, g_lon))
+        grid.append(row)
+
+    # Extract contours at 4 hPa intervals
+    all_p = [p for _, _, p in pressure_points]
+    start_level = math.floor(min(all_p) / 4) * 4
+    end_level = math.ceil(max(all_p) / 4) * 4
+
+    contours = []
+    for level in range(start_level, end_level + 1, 4):
+        segments = _marching_squares(
+            grid, GRID, GRID, lat_min, lat_max, lon_min, lon_max, float(level),
+        )
+        if segments:
+            contours.append({
+                "level": level,
+                "label": str(level),
+                "segments": segments,
+            })
+
+    result = {
+        "contours": contours,
+        "interval_hpa": 4,
+        "station_count": len(pressure_points),
+    }
+
+    _isobar_cache[cache_key] = _StationCache(
+        data=result,
+        expires_at=time.time() + _ISOBAR_CACHE_TTL,
+    )
+
+    logger.info("Map: computed %d isobar contours from %d pressure points",
+                len(contours), len(pressure_points))
+
+    return result

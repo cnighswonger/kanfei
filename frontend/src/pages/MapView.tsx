@@ -11,7 +11,7 @@ import {
   Popup,
   GeoJSON,
   LayersControl,
-  // Polyline,  // re-enable for isobars
+  Polyline,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -141,11 +141,6 @@ function markerColor(station: NearbyStation, mode: DisplayMode): string {
 // IDW interpolation + marching squares
 // ---------------------------------------------------------------------------
 
-// TODO: re-enable IDW interpolation for isobars
-// function idwInterpolate(...) { ... }
-
-// TODO: re-enable marching squares for isobars
-// function extractContours(...) { ... }
 
 // ---------------------------------------------------------------------------
 // Mobile hook
@@ -213,6 +208,8 @@ interface ControlPanelProps {
   setDisplayMode: (m: DisplayMode) => void;
   showAlerts: boolean;
   setShowAlerts: (v: boolean) => void;
+  showIsobars: boolean;
+  setShowIsobars: (v: boolean) => void;
   alertCount: number;
   isMobile: boolean;
 }
@@ -222,6 +219,8 @@ function ControlPanel({
   setDisplayMode,
   showAlerts,
   setShowAlerts,
+  showIsobars,
+  setShowIsobars,
   alertCount,
   isMobile,
 }: ControlPanelProps) {
@@ -304,13 +303,14 @@ function ControlPanel({
         ))}
       </div>
       <label style={alertRow}>
-        <input
-          type="checkbox"
-          checked={showAlerts}
-          onChange={(e) => setShowAlerts(e.target.checked)}
-          style={{ margin: 0 }}
-        />
+        <input type="checkbox" checked={showAlerts}
+          onChange={(e) => setShowAlerts(e.target.checked)} style={{ margin: 0 }} />
         Alerts{alertCount > 0 ? ` (${alertCount})` : ""}
+      </label>
+      <label style={alertRow}>
+        <input type="checkbox" checked={showIsobars}
+          onChange={(e) => setShowIsobars(e.target.checked)} style={{ margin: 0 }} />
+        Isobars
       </label>
     </div>
   );
@@ -347,15 +347,16 @@ const spinnerStyle: React.CSSProperties = {
 };
 
 export default function MapView() {
-  // const { themeName } = useTheme();  // re-enable for isobars
   const isMobile = useIsMobile();
 
   // --- state ---
   const [home, setHome] = useState<HomeStation | null>(null);
   const [stations, setStations] = useState<NearbyStation[]>([]);
   const [alerts, setAlerts] = useState<MapAlert[]>([]);
+  const [isobars, setIsobars] = useState<{ level: number; segments: number[][][] }[]>([]);
   const [displayMode, setDisplayMode] = useState<DisplayMode>("temp");
   const [showAlerts, setShowAlerts] = useState(true);
+  const [showIsobars, setShowIsobars] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -420,6 +421,17 @@ export default function MapView() {
     }
   }, []);
 
+  const fetchIsobars = useCallback(async () => {
+    try {
+      const data = await apiFetch<{ contours: { level: number; segments: number[][][] }[] }>(
+        "/api/map/isobars",
+      );
+      setIsobars(data.contours);
+    } catch {
+      // Non-critical
+    }
+  }, []);
+
   // --- initial load (show map as soon as home station is ready) ---
   useEffect(() => {
     let cancelled = false;
@@ -427,14 +439,16 @@ export default function MapView() {
       const hs = await fetchHome();
       if (cancelled) return;
       if (hs) setLoading(false);
-      // Fetch stations and alerts in background — map renders immediately
+      // Fetch stations, alerts, isobars in background
       fetchStations();
       fetchAlerts();
+      // Delay isobars slightly so stations cache is populated first
+      setTimeout(fetchIsobars, 3000);
     })();
     return () => {
       cancelled = true;
     };
-  }, [fetchHome, fetchStations, fetchAlerts]);
+  }, [fetchHome, fetchStations, fetchAlerts, fetchIsobars]);
 
   // --- auto-refresh ---
   useEffect(() => {
@@ -447,7 +461,6 @@ export default function MapView() {
     };
   }, [home, fetchStations, fetchAlerts]);
 
-  // --- isobars (TODO: re-enable with performance optimization) ---
 
   // --- render ---
 
@@ -463,8 +476,6 @@ export default function MapView() {
     );
   }
 
-  // const isobarColor =
-  //   themeName === "dark" ? "rgba(200,200,200,0.3)" : "rgba(100,100,100,0.3)";
 
   return (
     <div style={containerStyle}>
@@ -567,7 +578,20 @@ export default function MapView() {
           );
         })}
 
-        {/* Isobar contours — disabled pending performance optimization */}
+        {/* Isobar contours (server-computed) */}
+        {showIsobars && isobars.map((iso) =>
+          iso.segments.map((seg, i) => (
+            <Polyline
+              key={`iso-${iso.level}-${i}`}
+              positions={seg as [number, number][]}
+              pathOptions={{
+                color: "rgba(180,180,180,0.5)",
+                weight: 1,
+                dashArray: "6 4",
+              }}
+            />
+          ))
+        )}
 
         {/* NWS alert polygons */}
         {showAlerts &&
@@ -600,6 +624,8 @@ export default function MapView() {
         setDisplayMode={setDisplayMode}
         showAlerts={showAlerts}
         setShowAlerts={setShowAlerts}
+        showIsobars={showIsobars}
+        setShowIsobars={setShowIsobars}
         alertCount={alerts.length}
         isMobile={isMobile}
       />
