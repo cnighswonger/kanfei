@@ -7,11 +7,13 @@ import {
   MapContainer,
   TileLayer,
   CircleMarker,
+  Marker,
   Popup,
   GeoJSON,
   LayersControl,
   // Polyline,  // re-enable for isobars
 } from "react-leaflet";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useTheme } from "../context/ThemeContext.tsx";
 import { API_BASE } from "../utils/constants.ts";
@@ -93,8 +95,17 @@ function precipColor(inches: number): string {
   return `rgba(59,130,246,${alpha.toFixed(2)})`;
 }
 
-// TODO: re-enable with canvas-rendered labels
-// function formatValue(station: NearbyStation, mode: DisplayMode): string { ... }
+function formatValue(station: NearbyStation, mode: DisplayMode): string {
+  switch (mode) {
+    case "temp":
+      return station.temp_f != null ? `${Math.round(station.temp_f)}°` : "";
+    case "wind":
+      return station.wind_mph != null ? `${Math.round(station.wind_mph)}` : "";
+    case "precip":
+      return station.precip_in != null && station.precip_in > 0
+        ? `${station.precip_in.toFixed(1)}"` : "";
+  }
+}
 
 function markerColor(station: NearbyStation, mode: DisplayMode): string {
   switch (mode) {
@@ -489,45 +500,50 @@ export default function MapView() {
           </Popup>
         </CircleMarker>
 
-        {/* Nearby station markers (capped at 100 nearest) */}
-        {stations.slice(0, 100).map((s) => (
-          <CircleMarker
-            key={s.id}
-            center={[s.lat, s.lon]}
-            radius={5}
-            pathOptions={{
-              color: markerColor(s, displayMode),
-              weight: 1,
-              fillColor: markerColor(s, displayMode),
-              fillOpacity: 0.8,
-            }}
-          >
-            <Popup>
-              <div style={{ fontSize: 12, maxWidth: 220 }}>
-                <strong>{s.name}</strong>
-                <div style={{ color: "#888", fontSize: 11 }}>
-                  {s.source}{s.distance_mi != null ? ` \u00B7 ${s.distance_mi.toFixed(1)} mi` : ""}
+        {/* Nearby station labels (capped at 100 nearest) */}
+        {stations.slice(0, 100).map((s) => {
+          const label = formatValue(s, displayMode);
+          if (!label) return null;
+          const color = markerColor(s, displayMode);
+          const icon = L.divIcon({
+            className: "",
+            html: `<div style="
+              font-size:12px;font-weight:700;font-family:var(--font-gauge);
+              color:${color};text-shadow:0 0 3px rgba(0,0,0,0.8),0 0 6px rgba(0,0,0,0.4);
+              white-space:nowrap;pointer-events:auto;
+            ">${label}</div>`,
+            iconSize: [40, 16],
+            iconAnchor: [20, 8],
+          });
+          return (
+            <Marker key={s.id} position={[s.lat, s.lon]} icon={icon}>
+              <Popup>
+                <div style={{ fontSize: 12, maxWidth: 220 }}>
+                  <strong>{s.name}</strong>
+                  <div style={{ color: "#888", fontSize: 11 }}>
+                    {s.source}{s.distance_mi != null ? ` \u00B7 ${s.distance_mi.toFixed(1)} mi` : ""}
+                  </div>
+                  {s.temp_f != null && <div>Temp: {Math.round(s.temp_f)}°F</div>}
+                  {s.wind_mph != null && (
+                    <div>
+                      Wind: {Math.round(s.wind_mph)} mph
+                      {s.wind_gust_mph != null && ` (G${Math.round(s.wind_gust_mph)})`}
+                    </div>
+                  )}
+                  {s.pressure_inhg != null && (
+                    <div>Pressure: {s.pressure_inhg.toFixed(2)} inHg</div>
+                  )}
+                  {s.precip_in != null && <div>Precip: {s.precip_in.toFixed(2)}"</div>}
+                  {s.updated && (
+                    <div style={{ color: "#888", fontSize: 10, marginTop: 2 }}>
+                      Updated: {new Date(s.updated).toLocaleTimeString()}
+                    </div>
+                  )}
                 </div>
-                {s.temp_f != null && <div>Temp: {Math.round(s.temp_f)}°F</div>}
-                {s.wind_mph != null && (
-                  <div>
-                    Wind: {Math.round(s.wind_mph)} mph
-                    {s.wind_gust_mph != null && ` (G${Math.round(s.wind_gust_mph)})`}
-                  </div>
-                )}
-                {s.pressure_inhg != null && (
-                  <div>Pressure: {s.pressure_inhg.toFixed(2)} inHg</div>
-                )}
-                {s.precip_in != null && <div>Precip: {s.precip_in.toFixed(2)}"</div>}
-                {s.updated && (
-                  <div style={{ color: "#888", fontSize: 10, marginTop: 2 }}>
-                    Updated: {new Date(s.updated).toLocaleTimeString()}
-                  </div>
-                )}
-              </div>
-            </Popup>
-          </CircleMarker>
-        ))}
+              </Popup>
+            </Marker>
+          );
+        })}
 
         {/* Isobar contours — disabled pending performance optimization */}
 
