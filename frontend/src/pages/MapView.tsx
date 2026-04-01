@@ -9,6 +9,7 @@ import {
   CircleMarker,
   Popup,
   GeoJSON,
+  LayersControl,
   // Polyline,  // re-enable for isobars
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -134,22 +135,32 @@ function useIsMobile() {
 // Theme-aware tile layer
 // ---------------------------------------------------------------------------
 
-function ThemeAwareTiles() {
-  const { themeName } = useTheme();
-  const url =
-    themeName === "dark"
-      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-      : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+const TILE_CARTO_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
+const TILE_OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const TILE_ESRI_ATTR = 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics';
+const TILE_TOPO_ATTR = '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> &copy; OSM';
 
-  // Key forces react-leaflet to unmount/remount the TileLayer on theme change
+function BaseLayers() {
+  const { themeName } = useTheme();
+  const defaultMap = themeName === "dark"
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+
   return (
-    <TileLayer
-      key={themeName}
-      url={url}
-      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
-      subdomains="abcd"
-      maxZoom={19}
-    />
+    <LayersControl position="topright">
+      <LayersControl.BaseLayer checked name="Map">
+        <TileLayer key={`map-${themeName}`} url={defaultMap} attribution={TILE_CARTO_ATTR} subdomains="abcd" maxZoom={19} />
+      </LayersControl.BaseLayer>
+      <LayersControl.BaseLayer name="Roads">
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution={TILE_OSM_ATTR} maxZoom={19} />
+      </LayersControl.BaseLayer>
+      <LayersControl.BaseLayer name="Satellite">
+        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution={TILE_ESRI_ATTR} maxZoom={19} />
+      </LayersControl.BaseLayer>
+      <LayersControl.BaseLayer name="Terrain">
+        <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution={TILE_TOPO_ATTR} maxZoom={17} />
+      </LayersControl.BaseLayer>
+    </LayersControl>
   );
 }
 
@@ -427,6 +438,25 @@ export default function MapView() {
 
   return (
     <div style={containerStyle}>
+      <style>{`
+        .leaflet-control-layers {
+          background: var(--color-bg-card) !important;
+          border: 1px solid var(--color-border) !important;
+          border-radius: 8px !important;
+          color: var(--color-text) !important;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+        }
+        .leaflet-control-layers label { color: var(--color-text) !important; }
+        .leaflet-control-layers-separator { border-color: var(--color-border) !important; }
+        .leaflet-popup-content-wrapper {
+          background: var(--color-bg-card) !important;
+          color: var(--color-text) !important;
+          border: 1px solid var(--color-border) !important;
+          border-radius: 8px !important;
+        }
+        .leaflet-popup-tip { background: var(--color-bg-card) !important; }
+        .leaflet-popup-close-button { color: var(--color-text-muted) !important; }
+      `}</style>
 
       <MapContainer
         center={[home.lat, home.lon]}
@@ -434,7 +464,7 @@ export default function MapView() {
         style={{ height: "100%", width: "100%" }}
         zoomControl={!isMobile}
       >
-        <ThemeAwareTiles />
+        <BaseLayers />
 
         {/* Home station marker */}
         <CircleMarker
