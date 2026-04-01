@@ -214,7 +214,7 @@ function ControlPanel({
     : {
         position: "absolute",
         top: 12,
-        right: 12,
+        left: 60,
         zIndex: 1000,
         background: "var(--color-bg-card)",
         border: "1px solid var(--color-border)",

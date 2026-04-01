@@ -57,6 +57,56 @@ class APRSObservation:
     precip_in: Optional[float] = None
 
 
+# --- Cache persistence ---
+
+_CACHE_FILE = ".aprs_map_cache.json"
+
+
+def _save_cache() -> None:
+    """Persist observations to disk for fast restart."""
+    import json
+    try:
+        data = []
+        for obs in _observations.values():
+            data.append({
+                "callsign": obs.callsign, "latitude": obs.latitude,
+                "longitude": obs.longitude, "timestamp": obs.timestamp,
+                "temp_f": obs.temp_f, "humidity_pct": obs.humidity_pct,
+                "wind_speed_mph": obs.wind_speed_mph, "wind_dir_deg": obs.wind_dir_deg,
+                "wind_gust_mph": obs.wind_gust_mph, "pressure_inhg": obs.pressure_inhg,
+                "precip_in": obs.precip_in,
+            })
+        with open(_CACHE_FILE, "w") as f:
+            json.dump(data, f)
+        logger.debug("APRS map cache saved: %d observations", len(data))
+    except Exception:
+        logger.debug("APRS map cache save failed", exc_info=True)
+
+
+def _load_cache() -> int:
+    """Load persisted observations from disk. Returns count loaded."""
+    import json
+    try:
+        with open(_CACHE_FILE) as f:
+            data = json.load(f)
+        cutoff = time.time() - OBS_MAX_AGE
+        loaded = 0
+        for d in data:
+            if d.get("timestamp", 0) < cutoff:
+                continue
+            obs = APRSObservation(**d)
+            _observations[obs.callsign] = obs
+            loaded += 1
+        if loaded:
+            logger.info("APRS map cache loaded: %d observations from disk", loaded)
+        return loaded
+    except FileNotFoundError:
+        return 0
+    except Exception:
+        logger.debug("APRS map cache load failed", exc_info=True)
+        return 0
+
+
 # --- Module state ---
 
 _observations: dict[str, APRSObservation] = {}
@@ -276,6 +326,9 @@ async def start(lat: float, lon: float, radius_miles: int,
 
     await stop_collector()
 
+    # Load cached observations from previous run
+    _load_cache()
+
     radius_km = int(math.ceil(radius_miles * MILES_TO_KM))
     own_call = own_callsign.strip().upper()
 
@@ -284,13 +337,17 @@ async def start(lat: float, lon: float, radius_miles: int,
         _listen_loop(lat, lon, radius_km, own_call, _stop_event),
         name="aprs-map-collector",
     )
-    logger.info("APRS map collector started (%.4f, %.4f, %d mi / %d km)",
-                lat, lon, radius_miles, radius_km)
+    logger.info("APRS map collector started (%.4f, %.4f, %d mi / %d km, cached=%d)",
+                lat, lon, radius_miles, radius_km, len(_observations))
 
 
 async def stop_collector() -> None:
-    """Stop the background listener and clear observations."""
+    """Stop the background listener and persist cache."""
     global _task, _stop_event
+
+    # Save before clearing
+    if _observations:
+        _save_cache()
 
     if _stop_event is not None:
         _stop_event.set()
