@@ -154,8 +154,8 @@ const TILE_TOPO_ATTR = '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>
 function BaseLayers() {
   const { themeName } = useTheme();
   const defaultMap = themeName === "dark"
-    ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+    ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+    : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
 
   return (
     <LayersControl position="topright">
