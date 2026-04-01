@@ -90,27 +90,70 @@ def _cache_key(lat: float, lon: float, radius: int) -> str:
     return f"{round(lat, 2)}:{round(lon, 2)}:{radius}"
 
 
-@router.get("/nearby-stations")
-async def get_nearby_stations(
-    radius_mi: int = Query(default=50, ge=10, le=150),
-    db: Session = Depends(get_db),
-):
-    """Return nearby weather station observations from IEM."""
-    cfg = get_effective_config(db)
-    lat = float(cfg.get("latitude", 0))
-    lon = float(cfg.get("longitude", 0))
+async def _fetch_via_nowcast(
+    lat: float, lon: float, radius_mi: int, cfg: dict,
+) -> list[dict]:
+    """Try kanfei-nowcast nearby_stations for IEM + APRS + WU data."""
+    try:
+        from kanfei_nowcast.data_feeds.nearby_stations import fetch_nearby_stations
+    except ImportError:
+        return []
 
-    if lat == 0 and lon == 0:
-        return {"stations": [], "home_lat": 0, "home_lon": 0,
-                "radius_mi": radius_mi, "fetched_at": ""}
+    wu_key = str(cfg.get("nowcast_wu_api_key", ""))
+    iem_enabled = cfg.get("nowcast_nearby_iem_enabled", True)
+    wu_enabled = cfg.get("nowcast_nearby_wu_enabled", False) and bool(wu_key)
+    aprs_enabled = cfg.get("nowcast_nearby_aprs_enabled", False)
+    max_iem = int(cfg.get("nowcast_nearby_max_iem", 50))
+    max_wu = int(cfg.get("nowcast_nearby_max_wu", 10))
+    max_aprs = int(cfg.get("nowcast_nearby_max_aprs", 50))
 
-    # Check cache
-    key = _cache_key(lat, lon, radius_mi)
-    cached = _station_cache.get(key)
-    if cached and time.time() < cached.expires_at:
-        return cached.data
+    try:
+        result = await fetch_nearby_stations(
+            lat, lon,
+            radius_miles=radius_mi,
+            max_iem=max_iem,
+            max_wu=max_wu,
+            wu_api_key=wu_key,
+            iem_enabled=iem_enabled,
+            wu_enabled=wu_enabled,
+            aprs_enabled=aprs_enabled,
+            max_aprs=max_aprs,
+        )
+    except Exception:
+        logger.warning("kanfei-nowcast nearby_stations fetch failed", exc_info=True)
+        return []
 
-    # Determine which state networks to query (ASOS + COOP for density)
+    stations = []
+    for obs in result.stations:
+        pressure_inhg = obs.pressure_inhg
+        pressure_hpa = round(pressure_inhg * 33.8639, 1) if pressure_inhg else None
+
+        stations.append({
+            "id": obs.station_id,
+            "name": obs.station_name,
+            "lat": obs.latitude,
+            "lon": obs.longitude,
+            "distance_mi": obs.distance_miles,
+            "source": obs.source,
+            "temp_f": obs.temp_f,
+            "wind_mph": round(obs.wind_speed_mph) if obs.wind_speed_mph is not None else None,
+            "wind_dir": obs.wind_dir_deg,
+            "wind_gust_mph": round(obs.wind_gust_mph) if obs.wind_gust_mph is not None else None,
+            "pressure_hpa": pressure_hpa,
+            "pressure_inhg": round(pressure_inhg, 2) if pressure_inhg else None,
+            "precip_in": obs.precip_in,
+            "updated": obs.timestamp,
+        })
+
+    logger.info("Map: %d stations via kanfei-nowcast (iem=%d, wu=%d, aprs=%d)",
+                len(stations), result.iem_count, result.wu_count, result.aprs_count)
+    return stations
+
+
+async def _fetch_via_iem_direct(
+    lat: float, lon: float, radius_mi: int,
+) -> list[dict]:
+    """Fallback: query IEM ASOS+COOP directly when kanfei-nowcast is not installed."""
     state = _state_from_latlon(lat, lon)
     states = [state] + _STATE_NEIGHBORS.get(state, [])
     networks = []
@@ -118,10 +161,8 @@ async def get_nearby_stations(
         asos = _STATE_NETWORKS.get(st)
         if asos:
             networks.append(asos)
-            # Also add COOP network for the same state
             networks.append(asos.replace("_ASOS", "_COOP"))
 
-    # Fetch from IEM — query each network
     all_raw: list[dict] = []
     try:
         async with httpx.AsyncClient(timeout=15) as client:
@@ -136,7 +177,6 @@ async def get_nearby_stations(
     except Exception:
         logger.warning("IEM nearby stations fetch failed", exc_info=True)
 
-    # Filter by distance and convert
     stations = []
     for s in all_raw:
         slat = s.get("lat")
@@ -172,8 +212,40 @@ async def get_nearby_stations(
             "updated": s.get("local_valid"),
         })
 
-    # Sort by distance
     stations.sort(key=lambda s: s["distance_mi"])
+    logger.info("Map: %d stations via IEM direct (%d networks)", len(stations), len(networks))
+    return stations
+
+
+@router.get("/nearby-stations")
+async def get_nearby_stations(
+    radius_mi: int = Query(default=50, ge=10, le=150),
+    db: Session = Depends(get_db),
+):
+    """Return nearby weather station observations.
+
+    Uses kanfei-nowcast (IEM + APRS + WU) if installed, falls back to
+    direct IEM ASOS+COOP queries otherwise.
+    """
+    cfg = get_effective_config(db)
+    lat = float(cfg.get("latitude", 0))
+    lon = float(cfg.get("longitude", 0))
+
+    if lat == 0 and lon == 0:
+        return {"stations": [], "home_lat": 0, "home_lon": 0,
+                "radius_mi": radius_mi, "fetched_at": ""}
+
+    # Check cache
+    key = _cache_key(lat, lon, radius_mi)
+    cached = _station_cache.get(key)
+    if cached and time.time() < cached.expires_at:
+        return cached.data
+
+    # Try kanfei-nowcast first (has APRS/CWOP + WU + IEM)
+    stations = await _fetch_via_nowcast(lat, lon, radius_mi, cfg)
+    if not stations:
+        # Fallback to direct IEM query
+        stations = await _fetch_via_iem_direct(lat, lon, radius_mi)
 
     result = {
         "stations": stations,
