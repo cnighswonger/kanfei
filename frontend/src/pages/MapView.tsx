@@ -450,7 +450,7 @@ export default function MapView() {
   return (
     <div style={containerStyle}>
       <style>{`
-        .leaflet-tile-pane { filter: sepia(15%) saturate(90%) brightness(98%); }
+        .leaflet-tile-pane { filter: sepia(30%) saturate(80%) brightness(95%); }
         .leaflet-control-layers {
           background: var(--color-bg-card) !important;
           border: 1px solid var(--color-border) !important;
