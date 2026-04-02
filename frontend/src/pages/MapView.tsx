@@ -582,39 +582,42 @@ export default function MapView() {
         })}
 
         {/* Isobar contours (server-computed) */}
-        {showIsobars && isobars.map((iso) => (
-          <React.Fragment key={`iso-group-${iso.level}`}>
-            {iso.segments.map((seg, i) => {
-              const midPt = seg.length >= 3
-                ? seg[Math.floor(seg.length / 2)]
-                : null;
-              return (
-                <React.Fragment key={`iso-${iso.level}-${i}`}>
-                  <Polyline
-                    positions={seg as [number, number][]}
-                    pathOptions={{
-                      color: isDark ? "rgba(200,220,255,0.6)" : "rgba(30,50,140,0.75)",
-                      weight: isDark ? 1.5 : 2,
-                      dashArray: "8 5",
-                    }}
-                  />
-                  {midPt && (
-                    <Marker
-                      position={midPt as [number, number]}
-                      interactive={false}
-                      icon={L.divIcon({
-                        className: "",
-                        html: `<span style="font-size:10px;font-weight:600;color:${isDark ? "rgba(200,220,255,0.9)" : "rgba(20,40,120,0.9)"};background:${isDark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.8)"};padding:0 3px;border-radius:2px;white-space:nowrap">${iso.level}</span>`,
-                        iconSize: [0, 0],
-                        iconAnchor: [0, 6],
-                      })}
-                    />
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </React.Fragment>
-        ))}
+        {showIsobars && isobars.map((iso) => {
+          // Place one label per level — pick a segment near the center of the set
+          const labelIdx = Math.floor(iso.segments.length / 2);
+          const labelSeg = iso.segments[labelIdx];
+          const labelPt = labelSeg
+            ? labelSeg[Math.floor(labelSeg.length / 2)]
+            : null;
+
+          return (
+            <React.Fragment key={`iso-group-${iso.level}`}>
+              {iso.segments.map((seg, i) => (
+                <Polyline
+                  key={`iso-${iso.level}-${i}`}
+                  positions={seg as [number, number][]}
+                  pathOptions={{
+                    color: isDark ? "rgba(200,220,255,0.6)" : "rgba(30,50,140,0.75)",
+                    weight: isDark ? 1.5 : 2,
+                    dashArray: "8 5",
+                  }}
+                />
+              ))}
+              {labelPt && (
+                <Marker
+                  position={labelPt as [number, number]}
+                  interactive={false}
+                  icon={L.divIcon({
+                    className: "",
+                    html: `<span style="font-size:10px;font-weight:600;color:${isDark ? "rgba(200,220,255,0.9)" : "rgba(20,40,120,0.9)"};background:${isDark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.8)"};padding:0 3px;border-radius:2px;white-space:nowrap">${iso.level}</span>`,
+                    iconSize: [0, 0],
+                    iconAnchor: [0, 6],
+                  })}
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
 
         {/* NWS alert polygons */}
         {showAlerts &&
