@@ -173,10 +173,10 @@ function BaseLayers() {
 
   return (
     <LayersControl position="topright">
-      <LayersControl.BaseLayer checked name="Map">
+      <LayersControl.BaseLayer name="Map">
         <TileLayer key={`map-${themeName}`} url={defaultMap} attribution={TILE_CARTO_ATTR} subdomains="abcd" maxZoom={19} />
       </LayersControl.BaseLayer>
-      <LayersControl.BaseLayer name="Roads">
+      <LayersControl.BaseLayer checked name="Roads">
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution={TILE_OSM_ATTR} maxZoom={19} />
       </LayersControl.BaseLayer>
       <LayersControl.BaseLayer name="Satellite">

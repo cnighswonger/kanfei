@@ -472,6 +472,7 @@ async def get_isobars(db: Session = Depends(get_db)):
 
     # Extract contours at 1 hPa intervals
     # TODO: make configurable via map_isobar_interval setting
+    # TODO: add Map section to Settings UI with isobar interval + default tile layer controls
     INTERVAL = 1
     all_p = [p for _, _, p in pressure_points]
     start_level = math.floor(min(all_p) / INTERVAL) * INTERVAL
