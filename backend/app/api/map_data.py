@@ -470,8 +470,9 @@ async def get_isobars(db: Session = Depends(get_db)):
             row.append(_idw_interpolate(pressure_points, g_lat, g_lon))
         grid.append(row)
 
-    # Extract contours at 2 hPa intervals for dense coverage
-    INTERVAL = 2
+    # Extract contours at 1 hPa intervals
+    # TODO: make configurable via map_isobar_interval setting
+    INTERVAL = 1
     all_p = [p for _, _, p in pressure_points]
     start_level = math.floor(min(all_p) / INTERVAL) * INTERVAL
     end_level = math.ceil(max(all_p) / INTERVAL) * INTERVAL
