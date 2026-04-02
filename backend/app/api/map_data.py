@@ -523,11 +523,16 @@ async def get_isobars(db: Session = Depends(get_db)):
     if len(pressure_points) < 5:
         return {"contours": [], "interval_hpa": 4}
 
-    # Build interpolation grid
-    GRID = 50
-    pad = 1.2
-    lat_min, lat_max = lat - pad, lat + pad
-    lon_min, lon_max = lon - pad * 1.3, lon + pad * 1.3
+    # Build interpolation grid — derive bounds from actual station positions.
+    # Scale grid resolution with area to keep contour quality consistent.
+    GRID = min(80, max(40, len(pressure_points) * 2))
+    all_lats = [p[0] for p in pressure_points]
+    all_lons = [p[1] for p in pressure_points]
+    margin = 0.2  # small margin beyond outermost stations
+    lat_min = min(all_lats) - margin
+    lat_max = max(all_lats) + margin
+    lon_min = min(all_lons) - margin
+    lon_max = max(all_lons) + margin
 
     grid: list[list[float]] = []
     for r in range(GRID):
