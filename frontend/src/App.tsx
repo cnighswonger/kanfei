@@ -16,6 +16,7 @@ import Astronomy from './pages/Astronomy';
 import Settings from './pages/Settings';
 import Nowcast from './pages/Nowcast';
 import Spray from './pages/Spray';
+import MapView from './pages/MapView';
 import About from './pages/About';
 import Login from './pages/Login';
 import SetupWizard from './components/setup/SetupWizard';
@@ -48,6 +49,7 @@ function AppContent() {
             <Route path="/history" element={<History />} />
             <Route path="/forecast" element={<Forecast />} />
             <Route path="/astronomy" element={<Astronomy />} />
+            <Route path="/map" element={flags.mapEnabled ? <MapView /> : flagsLoading ? null : <Navigate to="/" replace />} />
             <Route path="/nowcast" element={flags.nowcastEnabled ? <Nowcast /> : flagsLoading ? null : <Navigate to="/" replace />} />
             <Route path="/spray" element={flags.sprayEnabled ? <Spray /> : flagsLoading ? null : <Navigate to="/" replace />} />
             <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
