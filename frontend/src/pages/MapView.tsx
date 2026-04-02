@@ -599,8 +599,8 @@ export default function MapView() {
                   key={`iso-${iso.level}-${i}`}
                   positions={seg as [number, number][]}
                   pathOptions={{
-                    color: isDark ? "rgba(200,220,255,0.6)" : "rgba(60,80,120,0.5)",
-                    weight: 1.5,
+                    color: isDark ? "rgba(200,220,255,0.6)" : "rgba(30,50,140,0.75)",
+                    weight: isDark ? 1.5 : 2,
                     dashArray: "8 5",
                   }}
                 />
@@ -612,7 +612,7 @@ export default function MapView() {
                   interactive={false}
                   icon={L.divIcon({
                     className: "",
-                    html: `<span style="font-size:10px;font-weight:600;color:${isDark ? "rgba(200,220,255,0.8)" : "rgba(40,60,100,0.8)"};background:${isDark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.7)"};padding:0 3px;border-radius:2px;white-space:nowrap">${iso.level} hPa</span>`,
+                    html: `<span style="font-size:10px;font-weight:600;color:${isDark ? "rgba(200,220,255,0.9)" : "rgba(20,40,120,0.9)"};background:${isDark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.8)"};padding:0 3px;border-radius:2px;white-space:nowrap">${iso.level} hPa</span>`,
                     iconSize: [0, 0],
                     iconAnchor: [0, 6],
                   })}
