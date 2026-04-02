@@ -454,13 +454,14 @@ export default function MapView() {
   // --- auto-refresh ---
   useEffect(() => {
     if (!home) return;
-    const stationInterval = setInterval(fetchStations, 5 * 60 * 1000);
+    const stationInterval = setInterval(async () => {
+      await fetchStations();
+      fetchIsobars();  // isobars depend on station cache — refresh right after
+    }, 5 * 60 * 1000);
     const alertInterval = setInterval(fetchAlerts, 2 * 60 * 1000);
-    const isobarInterval = setInterval(fetchIsobars, 5 * 60 * 1000);
     return () => {
       clearInterval(stationInterval);
       clearInterval(alertInterval);
-      clearInterval(isobarInterval);
     };
   }, [home, fetchStations, fetchAlerts, fetchIsobars]);
 
