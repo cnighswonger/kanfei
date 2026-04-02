@@ -41,6 +41,8 @@ logging.basicConfig(
 )
 # Suppress noisy websockets library tracebacks on client disconnect (Windows semaphore timeout)
 logging.getLogger("websockets").setLevel(logging.WARNING)
+# httpx logs full request URLs at INFO — Telegram bot token is embedded in the URL path.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
