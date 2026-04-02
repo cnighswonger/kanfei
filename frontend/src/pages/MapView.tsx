@@ -593,12 +593,25 @@ export default function MapView() {
 
           return (
             <React.Fragment key={`iso-group-${iso.level}`}>
+              {/* Halo outline for contrast on any background */}
+              {iso.segments.map((seg, i) => (
+                <Polyline
+                  key={`iso-halo-${iso.level}-${i}`}
+                  positions={seg as [number, number][]}
+                  pathOptions={{
+                    color: isDark ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.7)",
+                    weight: isDark ? 4 : 5,
+                    dashArray: "8 5",
+                    lineCap: "round",
+                  }}
+                />
+              ))}
               {iso.segments.map((seg, i) => (
                 <Polyline
                   key={`iso-${iso.level}-${i}`}
                   positions={seg as [number, number][]}
                   pathOptions={{
-                    color: isDark ? "rgba(200,220,255,0.6)" : "rgba(30,50,140,0.75)",
+                    color: isDark ? "rgba(180,210,255,0.8)" : "rgba(20,40,140,0.85)",
                     weight: isDark ? 1.5 : 2,
                     dashArray: "8 5",
                   }}
@@ -610,7 +623,7 @@ export default function MapView() {
                   interactive={false}
                   icon={L.divIcon({
                     className: "",
-                    html: `<span style="font-size:10px;font-weight:600;color:${isDark ? "rgba(200,220,255,0.9)" : "rgba(20,40,120,0.9)"};background:${isDark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.8)"};padding:0 3px;border-radius:2px;white-space:nowrap">${iso.label}</span>`,
+                    html: `<span style="font-size:10px;font-weight:600;color:${isDark ? "#c8dcff" : "#14287a"};background:${isDark ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.85)"};padding:1px 4px;border-radius:2px;white-space:nowrap;text-shadow:${isDark ? "0 0 3px rgba(0,0,0,0.8)" : "0 0 3px rgba(255,255,255,0.9)"}">${iso.label}</span>`,
                     iconSize: [0, 0],
                     iconAnchor: [0, 6],
                   })}
