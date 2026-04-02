@@ -2,7 +2,7 @@
  * MapView — full-page interactive weather map with nearby stations,
  * isobar contours, and NWS alert polygons.
  */
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -12,6 +12,7 @@ import {
   GeoJSON,
   LayersControl,
   Polyline,
+  useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -154,6 +155,26 @@ function useIsMobile() {
     return () => window.removeEventListener("resize", h);
   }, []);
   return m;
+}
+
+// ---------------------------------------------------------------------------
+// Zoom-to-radius mapping for dynamic station density
+// ---------------------------------------------------------------------------
+
+function radiusForZoom(zoom: number): { radius: number; maxStations: number } {
+  if (zoom <= 8) return { radius: 150, maxStations: 40 };
+  if (zoom <= 10) return { radius: 75, maxStations: 60 };
+  if (zoom <= 12) return { radius: 50, maxStations: 100 };
+  return { radius: 30, maxStations: 200 };
+}
+
+function ZoomHandler({ onZoomEnd }: { onZoomEnd: (zoom: number) => void }) {
+  useMapEvents({
+    zoomend(e) {
+      onZoomEnd(e.target.getZoom());
+    },
+  });
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -361,6 +382,8 @@ export default function MapView() {
   const [showIsobars, setShowIsobars] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(9);
+  const zoomTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   // --- data fetchers ---
   const fetchHome = useCallback(async () => {
@@ -403,16 +426,19 @@ export default function MapView() {
     }
   }, []);
 
-  const fetchStations = useCallback(async () => {
+  const fetchStations = useCallback(async (radius?: number, maxStations?: number) => {
+    const { radius: r, maxStations: ms } = radiusForZoom(zoom);
+    const rad = radius ?? r;
+    const max = maxStations ?? ms;
     try {
       const data = await apiFetch<{ stations: NearbyStation[] }>(
-        "/api/map/nearby-stations?radius_mi=50",
+        `/api/map/nearby-stations?radius_mi=${rad}&max_stations=${max}`,
       );
       setStations(data.stations);
     } catch {
       // Non-critical — keep existing data
     }
-  }, []);
+  }, [zoom]);
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -450,6 +476,17 @@ export default function MapView() {
       cancelled = true;
     };
   }, [fetchHome, fetchStations, fetchAlerts, fetchIsobars]);
+
+  // --- zoom change handler (debounced) ---
+  const handleZoomEnd = useCallback((newZoom: number) => {
+    setZoom(newZoom);
+    clearTimeout(zoomTimerRef.current);
+    zoomTimerRef.current = setTimeout(async () => {
+      const { radius, maxStations } = radiusForZoom(newZoom);
+      await fetchStations(radius, maxStations);
+      fetchIsobars();
+    }, 500);
+  }, [fetchStations, fetchIsobars]);
 
   // --- auto-refresh ---
   useEffect(() => {
@@ -507,10 +544,12 @@ export default function MapView() {
         center={[home.lat, home.lon]}
         zoom={9}
         minZoom={7}
+        preferCanvas={true}
         style={{ height: "100%", width: "100%" }}
         zoomControl={!isMobile}
       >
         <BaseLayers />
+        <ZoomHandler onZoomEnd={handleZoomEnd} />
 
         {/* Home station marker */}
         <CircleMarker
@@ -536,7 +575,7 @@ export default function MapView() {
         </CircleMarker>
 
         {/* Nearby station labels (capped at 100 nearest) */}
-        {stations.slice(0, 100).map((s) => {
+        {stations.map((s) => {
           const label = formatValue(s, displayMode);
           if (!label) return null;
           const color = markerColor(s, displayMode);

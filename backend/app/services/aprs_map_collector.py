@@ -383,7 +383,7 @@ def _haversine_mi(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 def get_nearby(lat: float, lon: float, radius_miles: int,
-               max_stations: int = 100) -> list[APRSObservation]:
+               max_stations: int = 500) -> list[APRSObservation]:
     """Return current observations filtered by distance, nearest-first."""
     _prune_stale()
     results: list[tuple[float, APRSObservation]] = []

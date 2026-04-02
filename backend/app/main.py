@@ -254,7 +254,7 @@ async def lifespan(app: FastAPI):
             lon = float(_cfg.get("longitude", 0))
             callsign = str(_cfg.get("cwop_callsign", ""))
             if lat and lon:
-                await start_aprs_map(lat, lon, radius_miles=75, own_callsign=callsign)
+                await start_aprs_map(lat, lon, radius_miles=150, own_callsign=callsign)
                 aprs_map_started = True
     except Exception:
         logger.debug("APRS map collector startup skipped", exc_info=True)

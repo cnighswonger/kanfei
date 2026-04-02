@@ -217,9 +217,62 @@ async def _fetch_via_iem_direct(
     return stations
 
 
+def _thin_stations(
+    stations: list[dict], lat: float, lon: float, max_stations: int,
+) -> list[dict]:
+    """Spatially thin stations to an evenly-distributed subset.
+
+    Divides the area into a grid and picks the best station per cell
+    (most complete data, then nearest). Produces a Windy-style
+    representative view at lower zoom levels.
+    """
+    if len(stations) <= max_stations:
+        return stations
+
+    grid_size = math.ceil(math.sqrt(max_stations))
+
+    lats = [s["lat"] for s in stations if s.get("lat") is not None]
+    lons = [s["lon"] for s in stations if s.get("lon") is not None]
+    if not lats or not lons:
+        return stations[:max_stations]
+
+    lat_min, lat_max = min(lats), max(lats)
+    lon_min, lon_max = min(lons), max(lons)
+    # Avoid zero-range edge cases
+    lat_range = max(lat_max - lat_min, 0.01)
+    lon_range = max(lon_max - lon_min, 0.01)
+
+    def _completeness(s: dict) -> int:
+        """Count non-null data fields — prefer stations with more readings."""
+        return sum(1 for k in ("temp_f", "wind_mph", "pressure_hpa", "precip_in")
+                   if s.get(k) is not None)
+
+    # Bin stations into grid cells
+    cells: dict[tuple[int, int], list[dict]] = {}
+    for s in stations:
+        if s.get("lat") is None or s.get("lon") is None:
+            continue
+        r = min(int((s["lat"] - lat_min) / lat_range * grid_size), grid_size - 1)
+        c = min(int((s["lon"] - lon_min) / lon_range * grid_size), grid_size - 1)
+        cells.setdefault((r, c), []).append(s)
+
+    # Pick best station per cell
+    thinned: list[dict] = []
+    for cell_stations in cells.values():
+        best = max(cell_stations, key=lambda s: (
+            _completeness(s),
+            -(s.get("distance_mi") or 9999),
+        ))
+        thinned.append(best)
+
+    thinned.sort(key=lambda s: s.get("distance_mi") or 9999)
+    return thinned[:max_stations]
+
+
 @router.get("/nearby-stations")
 async def get_nearby_stations(
-    radius_mi: int = Query(default=50, ge=10, le=150),
+    radius_mi: int = Query(default=50, ge=10, le=200),
+    max_stations: int = Query(default=100, ge=10, le=500),
     db: Session = Depends(get_db),
 ):
     """Return nearby weather station observations.
@@ -235,11 +288,13 @@ async def get_nearby_stations(
         return {"stations": [], "home_lat": 0, "home_lon": 0,
                 "radius_mi": radius_mi, "fetched_at": ""}
 
-    # Check cache
+    # Check cache — keyed by radius only (all stations cached, thinned at response time)
     key = _cache_key(lat, lon, radius_mi)
     cached = _station_cache.get(key)
     if cached and time.time() < cached.expires_at:
-        return cached.data
+        all_stations = cached.data["stations"]
+        thinned = _thin_stations(all_stations, lat, lon, max_stations)
+        return {**cached.data, "stations": thinned, "total_stations": len(all_stations)}
 
     # Try kanfei-nowcast first (has APRS/CWOP + WU + IEM)
     stations = await _fetch_via_nowcast(lat, lon, radius_mi, cfg)
@@ -251,7 +306,7 @@ async def get_nearby_stations(
     try:
         from ..services.aprs_map_collector import get_nearby, is_running
         if is_running():
-            aprs_obs = get_nearby(lat, lon, radius_mi, max_stations=100)
+            aprs_obs = get_nearby(lat, lon, radius_mi, max_stations=500)
             existing_ids = {s["id"] for s in stations}
             for obs in aprs_obs:
                 if obs.callsign not in existing_ids:
@@ -278,6 +333,7 @@ async def get_nearby_stations(
     except Exception:
         pass  # Collector not available — no CWOP data
 
+    # Cache ALL stations (isobars need the full set); thin at response time
     result = {
         "stations": stations,
         "home_lat": lat,
@@ -286,7 +342,6 @@ async def get_nearby_stations(
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # Cache the result
     _station_cache[key] = _StationCache(
         data=result,
         expires_at=time.time() + _STATION_CACHE_TTL,
@@ -294,7 +349,9 @@ async def get_nearby_stations(
 
     logger.info("Map: %d stations within %d mi", len(stations), radius_mi)
 
-    return result
+    thinned = _thin_stations(stations, lat, lon, max_stations)
+
+    return {**result, "stations": thinned, "total_stations": len(stations)}
 
 
 @router.get("/alerts")
@@ -414,18 +471,21 @@ async def get_isobars(db: Session = Depends(get_db)):
     if cached and time.time() < cached.expires_at:
         return cached.data
 
-    # Get station data from the existing cached nearby-stations.
-    # Try common radii (frontend default is 50) — use whichever cache hit exists.
-    station_cache = None
-    for r in (50, 75, 100):
-        sc = _station_cache.get(_cache_key(lat, lon, r))
-        if sc and time.time() < sc.expires_at:
-            station_cache = sc
-            break
-    if not station_cache:
-        return {"contours": [], "interval_hpa": 4}
+    # Get station data from any cached nearby-stations radius.
+    # Use the cache with the most stations (largest radius) for best coverage.
+    lat_lon_prefix = f"{round(lat, 2)}:{round(lon, 2)}:"
+    best_cache = None
+    best_count = 0
+    for cache_key_k, sc in _station_cache.items():
+        if cache_key_k.startswith(lat_lon_prefix) and time.time() < sc.expires_at:
+            count = len(sc.data.get("stations", []))
+            if count > best_count:
+                best_cache = sc
+                best_count = count
+    if not best_cache:
+        return {"contours": [], "interval_hpa": 1}
 
-    stations = station_cache.data.get("stations", [])
+    stations = best_cache.data.get("stations", [])
 
     # Collect pressure points
     pressure_points: list[tuple[float, float, float]] = []
