@@ -188,7 +188,7 @@ const TILE_TOPO_ATTR = '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>
 
 const TILE_IEM_ATTR = 'Radar: <a href="https://mesonet.agron.iastate.edu/">IEM</a>';
 
-function BaseLayers({ defaultLayer }: { defaultLayer: string }) {
+function BaseLayers({ defaultLayer, radarTs }: { defaultLayer: string; radarTs: number }) {
   const { themeName } = useTheme();
   const defaultMap = themeName === "dark"
     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -210,7 +210,8 @@ function BaseLayers({ defaultLayer }: { defaultLayer: string }) {
       </LayersControl.BaseLayer>
       <LayersControl.Overlay name="Radar">
         <TileLayer
-          url="https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q/{z}/{x}/{y}.png"
+          key={`radar-${radarTs}`}
+          url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q/{z}/{x}/{y}.png?_=${radarTs}`}
           attribution={TILE_IEM_ATTR}
           opacity={0.6}
           maxZoom={19}
@@ -396,6 +397,7 @@ export default function MapView() {
   const zoomTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [mapMaxRadius, setMapMaxRadius] = useState(450);
   const [mapDefaultLayer, setMapDefaultLayer] = useState("Roads");
+  const [radarTs, setRadarTs] = useState(() => Math.floor(Date.now() / 300000));
 
   // --- data fetchers ---
   const fetchHome = useCallback(async () => {
@@ -520,9 +522,14 @@ export default function MapView() {
       fetchIsobars();  // isobars depend on station cache — refresh right after
     }, 5 * 60 * 1000);
     const alertInterval = setInterval(fetchAlerts, 2 * 60 * 1000);
+    // Radar tiles: bump cache-buster every 5 min to force re-fetch
+    const radarInterval = setInterval(() => {
+      setRadarTs(Math.floor(Date.now() / 300000));
+    }, 5 * 60 * 1000);
     return () => {
       clearInterval(stationInterval);
       clearInterval(alertInterval);
+      clearInterval(radarInterval);
     };
   }, [home, fetchStations, fetchAlerts, fetchIsobars]);
 
@@ -572,7 +579,7 @@ export default function MapView() {
         style={{ height: "100%", width: "100%" }}
         zoomControl={!isMobile}
       >
-        <BaseLayers defaultLayer={mapDefaultLayer} />
+        <BaseLayers defaultLayer={mapDefaultLayer} radarTs={radarTs} />
         <ZoomHandler onZoomEnd={handleZoomEnd} />
 
         {/* Home station marker */}
