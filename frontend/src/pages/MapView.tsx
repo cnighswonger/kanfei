@@ -506,6 +506,7 @@ export default function MapView() {
       <MapContainer
         center={[home.lat, home.lon]}
         zoom={9}
+        minZoom={7}
         style={{ height: "100%", width: "100%" }}
         zoomControl={!isMobile}
       >
