@@ -186,6 +186,8 @@ const TILE_OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">
 const TILE_ESRI_ATTR = 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics';
 const TILE_TOPO_ATTR = '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> &copy; OSM';
 
+const TILE_IEM_ATTR = 'Radar: <a href="https://mesonet.agron.iastate.edu/">IEM</a>';
+
 function BaseLayers({ defaultLayer }: { defaultLayer: string }) {
   const { themeName } = useTheme();
   const defaultMap = themeName === "dark"
@@ -206,6 +208,14 @@ function BaseLayers({ defaultLayer }: { defaultLayer: string }) {
       <LayersControl.BaseLayer checked={defaultLayer === "Terrain"} name="Terrain">
         <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution={TILE_TOPO_ATTR} maxZoom={17} />
       </LayersControl.BaseLayer>
+      <LayersControl.Overlay name="Radar">
+        <TileLayer
+          url="https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q/{z}/{x}/{y}.png"
+          attribution={TILE_IEM_ATTR}
+          opacity={0.6}
+          maxZoom={19}
+        />
+      </LayersControl.Overlay>
     </LayersControl>
   );
 }
