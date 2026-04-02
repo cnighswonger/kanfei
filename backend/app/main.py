@@ -41,6 +41,8 @@ logging.basicConfig(
 )
 # Suppress noisy websockets library tracebacks on client disconnect (Windows semaphore timeout)
 logging.getLogger("websockets").setLevel(logging.WARNING)
+# httpx logs full request URLs at INFO — Telegram bot token is embedded in the URL path.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -238,8 +240,29 @@ async def lifespan(app: FastAPI):
         discord_bot_supervisor(settings.db_path, settings.ipc_port, nc_events)
     )
 
+    # Start APRS map collector if map is enabled (hot-reloads via config check).
+    from .services.aprs_map_collector import start as start_aprs_map, stop_collector as stop_aprs_map
+    aprs_map_started = False
+    try:
+        from .api.config import get_effective_config
+        from .models.database import SessionLocal
+        _db = SessionLocal()
+        _cfg = get_effective_config(_db)
+        _db.close()
+        if _cfg.get("map_enabled"):
+            lat = float(_cfg.get("latitude", 0))
+            lon = float(_cfg.get("longitude", 0))
+            callsign = str(_cfg.get("cwop_callsign", ""))
+            if lat and lon:
+                await start_aprs_map(lat, lon, radius_miles=200, own_callsign=callsign)
+                aprs_map_started = True
+    except Exception:
+        logger.debug("APRS map collector startup skipped", exc_info=True)
+
     yield
 
+    if aprs_map_started:
+        await stop_aprs_map()
     if discord_task is not None:
         discord_task.cancel()
     if telegram_task is not None:

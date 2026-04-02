@@ -608,3 +608,30 @@ export interface LogEntry {
   logger: string;
   message: string;
 }
+
+// --- Map View ---
+
+export interface NearbyStation {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  distance_mi: number;
+  source: string;
+  temp_f: number | null;
+  wind_mph: number | null;
+  wind_dir: number | null;
+  wind_gust_mph: number | null;
+  pressure_hpa: number | null;
+  pressure_inhg: number | null;
+  precip_in: number | null;
+  updated: string | null;
+}
+
+export interface NearbyStationsResponse {
+  stations: NearbyStation[];
+  home_lat: number;
+  home_lon: number;
+  radius_mi: number;
+  fetched_at: string;
+}
