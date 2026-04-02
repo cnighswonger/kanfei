@@ -456,7 +456,7 @@ async def get_isobars(db: Session = Depends(get_db)):
         return {"contours": [], "interval_hpa": 4}
 
     # Build interpolation grid
-    GRID = 30
+    GRID = 50
     pad = 1.2
     lat_min, lat_max = lat - pad, lat + pad
     lon_min, lon_max = lon - pad * 1.3, lon + pad * 1.3
@@ -470,15 +470,16 @@ async def get_isobars(db: Session = Depends(get_db)):
             row.append(_idw_interpolate(pressure_points, g_lat, g_lon))
         grid.append(row)
 
-    # Extract contours at 4 hPa intervals
+    # Extract contours at 2 hPa intervals for dense coverage
+    INTERVAL = 2
     all_p = [p for _, _, p in pressure_points]
-    start_level = math.floor(min(all_p) / 4) * 4
-    end_level = math.ceil(max(all_p) / 4) * 4
+    start_level = math.floor(min(all_p) / INTERVAL) * INTERVAL
+    end_level = math.ceil(max(all_p) / INTERVAL) * INTERVAL
 
     pressure_unit = cfg.get("pressure_unit", "inHg")
 
     contours = []
-    for level in range(start_level, end_level + 1, 4):
+    for level in range(start_level, end_level + 1, INTERVAL):
         segments = _marching_squares(
             grid, GRID, GRID, lat_min, lat_max, lon_min, lon_max, float(level),
         )
@@ -496,7 +497,7 @@ async def get_isobars(db: Session = Depends(get_db)):
     result = {
         "contours": contours,
         "pressure_unit": pressure_unit,
-        "interval_hpa": 4,
+        "interval_hpa": INTERVAL,
         "station_count": len(pressure_points),
     }
 
