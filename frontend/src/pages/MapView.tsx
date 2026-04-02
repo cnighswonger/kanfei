@@ -625,10 +625,11 @@ export default function MapView() {
 
         {/* Isobar contours (server-computed) */}
         {showIsobars && isobars.map((iso) => {
-          // Place one label per level — pick a segment near the center of the set
+          // Label every 2nd hPa level to avoid crowding; skip small contours
+          const showLabel = iso.level % 2 === 0 && iso.segments.length >= 10;
           const labelIdx = Math.floor(iso.segments.length / 2);
           const labelSeg = iso.segments[labelIdx];
-          const labelPt = labelSeg
+          const labelPt = showLabel && labelSeg
             ? labelSeg[Math.floor(labelSeg.length / 2)]
             : null;
 
