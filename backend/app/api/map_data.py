@@ -44,13 +44,21 @@ _STATE_NETWORKS = {
 }
 
 # State adjacency — query neighbors to cover stations near borders.
+# At 250mi radius, NC reaches into WV, KY, MD, and deep into GA/TN.
 _STATE_NEIGHBORS: dict[str, list[str]] = {
-    "NC": ["SC", "VA", "TN", "GA"],
-    "SC": ["NC", "GA"],
-    "VA": ["NC", "WV", "KY", "TN", "MD", "DC"],
+    "NC": ["SC", "VA", "TN", "GA", "WV", "KY", "MD", "DC"],
+    "SC": ["NC", "GA", "VA"],
+    "VA": ["NC", "WV", "KY", "TN", "MD", "DC", "PA"],
     "TN": ["NC", "VA", "KY", "GA", "AL", "MS", "AR", "MO"],
     "GA": ["NC", "SC", "TN", "AL", "FL"],
-    # Add more as needed — for now cover the southeast
+    "WV": ["VA", "KY", "OH", "PA", "MD"],
+    "KY": ["TN", "VA", "WV", "OH", "IN", "IL", "MO"],
+    "MD": ["VA", "WV", "PA", "DC", "DE"],
+    "AL": ["TN", "GA", "MS", "FL"],
+    "FL": ["GA", "AL"],
+    "MS": ["TN", "AL", "AR", "LA"],
+    "PA": ["MD", "WV", "VA", "OH", "NY", "NJ", "DE"],
+    "OH": ["KY", "WV", "PA", "IN", "MI"],
 }
 
 
