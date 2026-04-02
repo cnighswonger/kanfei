@@ -473,12 +473,6 @@ async def get_isobars(db: Session = Depends(get_db)):
     if lat == 0 and lon == 0:
         return {"contours": [], "interval_hpa": 4}
 
-    # Check cache
-    cache_key = f"iso:{round(lat, 2)}:{round(lon, 2)}"
-    cached = _isobar_cache.get(cache_key)
-    if cached and time.time() < cached.expires_at:
-        return cached.data
-
     # Get station data from any cached nearby-stations radius.
     # Use the cache with the most stations (largest radius) for best coverage.
     lat_lon_prefix = f"{round(lat, 2)}:{round(lon, 2)}:"
@@ -492,6 +486,12 @@ async def get_isobars(db: Session = Depends(get_db)):
                 best_count = count
     if not best_cache:
         return {"contours": [], "interval_hpa": 1}
+
+    # Check isobar cache — keyed by station count so it invalidates on zoom change
+    cache_key = f"iso:{round(lat, 2)}:{round(lon, 2)}:{best_count}"
+    cached = _isobar_cache.get(cache_key)
+    if cached and time.time() < cached.expires_at:
+        return cached.data
 
     stations = best_cache.data.get("stations", [])
 
