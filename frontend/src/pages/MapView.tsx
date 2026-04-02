@@ -383,7 +383,7 @@ export default function MapView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(9);
-  const zoomTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const zoomTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // --- data fetchers ---
   const fetchHome = useCallback(async () => {
