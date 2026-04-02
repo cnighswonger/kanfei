@@ -161,12 +161,11 @@ function useIsMobile() {
 // Zoom-to-radius mapping for dynamic station density
 // ---------------------------------------------------------------------------
 
-function radiusForZoom(zoom: number): { radius: number; maxStations: number } {
-  // TODO: make max radius user-configurable in Map Settings
-  if (zoom <= 8) return { radius: 450, maxStations: 80 };
-  if (zoom <= 10) return { radius: 150, maxStations: 80 };
-  if (zoom <= 12) return { radius: 50, maxStations: 120 };
-  return { radius: 30, maxStations: 200 };
+function radiusForZoom(zoom: number, maxRadius: number): { radius: number; maxStations: number } {
+  if (zoom <= 8) return { radius: maxRadius, maxStations: 80 };
+  if (zoom <= 10) return { radius: Math.min(150, maxRadius), maxStations: 80 };
+  if (zoom <= 12) return { radius: Math.min(50, maxRadius), maxStations: 120 };
+  return { radius: Math.min(30, maxRadius), maxStations: 200 };
 }
 
 function ZoomHandler({ onZoomEnd }: { onZoomEnd: (zoom: number) => void }) {
@@ -187,7 +186,7 @@ const TILE_OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">
 const TILE_ESRI_ATTR = 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics';
 const TILE_TOPO_ATTR = '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> &copy; OSM';
 
-function BaseLayers() {
+function BaseLayers({ defaultLayer }: { defaultLayer: string }) {
   const { themeName } = useTheme();
   const defaultMap = themeName === "dark"
     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -195,16 +194,16 @@ function BaseLayers() {
 
   return (
     <LayersControl position="topright">
-      <LayersControl.BaseLayer name="Map">
+      <LayersControl.BaseLayer checked={defaultLayer === "Map"} name="Map">
         <TileLayer key={`map-${themeName}`} url={defaultMap} attribution={TILE_CARTO_ATTR} subdomains="abcd" maxZoom={19} />
       </LayersControl.BaseLayer>
-      <LayersControl.BaseLayer checked name="Roads">
+      <LayersControl.BaseLayer checked={defaultLayer === "Roads"} name="Roads">
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution={TILE_OSM_ATTR} maxZoom={19} />
       </LayersControl.BaseLayer>
-      <LayersControl.BaseLayer name="Satellite">
+      <LayersControl.BaseLayer checked={defaultLayer === "Satellite"} name="Satellite">
         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution={TILE_ESRI_ATTR} maxZoom={19} />
       </LayersControl.BaseLayer>
-      <LayersControl.BaseLayer name="Terrain">
+      <LayersControl.BaseLayer checked={defaultLayer === "Terrain"} name="Terrain">
         <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution={TILE_TOPO_ATTR} maxZoom={17} />
       </LayersControl.BaseLayer>
     </LayersControl>
@@ -385,6 +384,8 @@ export default function MapView() {
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(9);
   const zoomTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [mapMaxRadius, setMapMaxRadius] = useState(450);
+  const [mapDefaultLayer, setMapDefaultLayer] = useState("Roads");
 
   // --- data fetchers ---
   const fetchHome = useCallback(async () => {
@@ -428,7 +429,7 @@ export default function MapView() {
   }, []);
 
   const fetchStations = useCallback(async (radius?: number, maxStations?: number) => {
-    const { radius: r, maxStations: ms } = radiusForZoom(zoom);
+    const { radius: r, maxStations: ms } = radiusForZoom(zoom, mapMaxRadius);
     const rad = radius ?? r;
     const max = maxStations ?? ms;
     try {
@@ -439,7 +440,7 @@ export default function MapView() {
     } catch {
       // Non-critical — keep existing data
     }
-  }, [zoom]);
+  }, [zoom, mapMaxRadius]);
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -465,6 +466,18 @@ export default function MapView() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Fetch map settings from config
+      try {
+        const cfgItems = await apiFetch<{ key: string; value: string | number | boolean }[]>("/api/config");
+        if (!cancelled) {
+          for (const item of cfgItems) {
+            if (item.key === "map_max_radius") setMapMaxRadius(Number(item.value) || 450);
+            if (item.key === "map_default_layer") setMapDefaultLayer(String(item.value) || "Roads");
+          }
+        }
+      } catch {
+        // Non-critical — use defaults
+      }
       const hs = await fetchHome();
       if (cancelled) return;
       if (hs) setLoading(false);
@@ -483,7 +496,7 @@ export default function MapView() {
     setZoom(newZoom);
     clearTimeout(zoomTimerRef.current);
     zoomTimerRef.current = setTimeout(async () => {
-      const { radius, maxStations } = radiusForZoom(newZoom);
+      const { radius, maxStations } = radiusForZoom(newZoom, mapMaxRadius);
       await fetchStations(radius, maxStations);
       fetchIsobars();
     }, 500);
@@ -549,7 +562,7 @@ export default function MapView() {
         style={{ height: "100%", width: "100%" }}
         zoomControl={!isMobile}
       >
-        <BaseLayers />
+        <BaseLayers defaultLayer={mapDefaultLayer} />
         <ZoomHandler onZoomEnd={handleZoomEnd} />
 
         {/* Home station marker */}
