@@ -1,3 +1,19 @@
+kanfei (0.1.0~beta8) unstable; urgency=low
+
+  * Interactive weather map view (enable via map_enabled setting)
+  * Nearby stations from IEM ASOS+COOP + native APRS/CWOP collector
+  * Windy-style colored pill badges with Temp/Wind/Precip display modes
+  * Server-side spatial thinning for even station distribution at all zoom levels
+  * Zoom-based dynamic loading (30-450mi radius depending on zoom level)
+  * Pressure isobar contours (IDW interpolation + marching squares)
+  * Isobar labels honor user pressure unit preference (inHg/hPa)
+  * NWS alert polygon overlays color-coded by severity
+  * Layer selector: Roads, Map (theme-aware), Satellite, Terrain
+  * APRS-IS background listener with 2-hour TTL and disk persistence
+  * Fix: httpx INFO logging suppressed to prevent bot token leakage
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 02 Apr 2026 14:00:00 +0000
+
 kanfei (0.1.0~beta7) unstable; urgency=low
 
   * Humidity gauge: arc geometry rewritten, proper semicircular sweep
