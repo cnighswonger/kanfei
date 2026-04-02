@@ -475,20 +475,27 @@ async def get_isobars(db: Session = Depends(get_db)):
     start_level = math.floor(min(all_p) / 4) * 4
     end_level = math.ceil(max(all_p) / 4) * 4
 
+    pressure_unit = cfg.get("pressure_unit", "inHg")
+
     contours = []
     for level in range(start_level, end_level + 1, 4):
         segments = _marching_squares(
             grid, GRID, GRID, lat_min, lat_max, lon_min, lon_max, float(level),
         )
         if segments:
+            if pressure_unit == "inHg":
+                label = f"{level / 33.8639:.2f}"
+            else:
+                label = str(level)
             contours.append({
                 "level": level,
-                "label": str(level),
+                "label": label,
                 "segments": segments,
             })
 
     result = {
         "contours": contours,
+        "pressure_unit": pressure_unit,
         "interval_hpa": 4,
         "station_count": len(pressure_points),
     }

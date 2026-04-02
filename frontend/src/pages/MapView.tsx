@@ -355,7 +355,7 @@ export default function MapView() {
   const [home, setHome] = useState<HomeStation | null>(null);
   const [stations, setStations] = useState<NearbyStation[]>([]);
   const [alerts, setAlerts] = useState<MapAlert[]>([]);
-  const [isobars, setIsobars] = useState<{ level: number; segments: number[][][] }[]>([]);
+  const [isobars, setIsobars] = useState<{ level: number; label: string; segments: number[][][] }[]>([]);
   const [displayMode, setDisplayMode] = useState<DisplayMode>("temp");
   const [showAlerts, setShowAlerts] = useState(true);
   const [showIsobars, setShowIsobars] = useState(true);
@@ -425,7 +425,7 @@ export default function MapView() {
 
   const fetchIsobars = useCallback(async () => {
     try {
-      const data = await apiFetch<{ contours: { level: number; segments: number[][][] }[] }>(
+      const data = await apiFetch<{ contours: { level: number; label: string; segments: number[][][] }[] }>(
         "/api/map/isobars",
       );
       setIsobars(data.contours);
@@ -610,7 +610,7 @@ export default function MapView() {
                   interactive={false}
                   icon={L.divIcon({
                     className: "",
-                    html: `<span style="font-size:10px;font-weight:600;color:${isDark ? "rgba(200,220,255,0.9)" : "rgba(20,40,120,0.9)"};background:${isDark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.8)"};padding:0 3px;border-radius:2px;white-space:nowrap">${iso.level}</span>`,
+                    html: `<span style="font-size:10px;font-weight:600;color:${isDark ? "rgba(200,220,255,0.9)" : "rgba(20,40,120,0.9)"};background:${isDark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.8)"};padding:0 3px;border-radius:2px;white-space:nowrap">${iso.label}</span>`,
                     iconSize: [0, 0],
                     iconAnchor: [0, 6],
                   })}
