@@ -2,7 +2,7 @@
  * MapView — full-page interactive weather map with nearby stations,
  * isobar contours, and NWS alert polygons.
  */
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -582,19 +582,45 @@ export default function MapView() {
         })}
 
         {/* Isobar contours (server-computed) */}
-        {showIsobars && isobars.map((iso) =>
-          iso.segments.map((seg, i) => (
-            <Polyline
-              key={`iso-${iso.level}-${i}`}
-              positions={seg as [number, number][]}
-              pathOptions={{
-                color: isDark ? "rgba(200,220,255,0.6)" : "rgba(60,80,120,0.5)",
-                weight: 1.5,
-                dashArray: "8 5",
-              }}
-            />
-          ))
-        )}
+        {showIsobars && isobars.map((iso) => {
+          // Find the longest segment to place the label on
+          let longestIdx = 0;
+          let longestLen = 0;
+          iso.segments.forEach((seg, i) => {
+            if (seg.length > longestLen) { longestLen = seg.length; longestIdx = i; }
+          });
+          const labelSeg = iso.segments[longestIdx];
+          const midPt = labelSeg?.[Math.floor(labelSeg.length / 2)];
+
+          return (
+            <React.Fragment key={`iso-group-${iso.level}`}>
+              {iso.segments.map((seg, i) => (
+                <Polyline
+                  key={`iso-${iso.level}-${i}`}
+                  positions={seg as [number, number][]}
+                  pathOptions={{
+                    color: isDark ? "rgba(200,220,255,0.6)" : "rgba(60,80,120,0.5)",
+                    weight: 1.5,
+                    dashArray: "8 5",
+                  }}
+                />
+              ))}
+              {midPt && (
+                <Marker
+                  key={`iso-label-${iso.level}`}
+                  position={midPt as [number, number]}
+                  interactive={false}
+                  icon={L.divIcon({
+                    className: "",
+                    html: `<span style="font-size:10px;font-weight:600;color:${isDark ? "rgba(200,220,255,0.8)" : "rgba(40,60,100,0.8)"};background:${isDark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.7)"};padding:0 3px;border-radius:2px;white-space:nowrap">${iso.level} hPa</span>`,
+                    iconSize: [0, 0],
+                    iconAnchor: [0, 6],
+                  })}
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
 
         {/* NWS alert polygons */}
         {showAlerts &&
