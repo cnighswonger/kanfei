@@ -279,7 +279,7 @@ def _thin_stations(
 
 @router.get("/nearby-stations")
 async def get_nearby_stations(
-    radius_mi: int = Query(default=50, ge=10, le=200),
+    radius_mi: int = Query(default=50, ge=10, le=500),
     max_stations: int = Query(default=100, ge=10, le=500),
     db: Session = Depends(get_db),
 ):

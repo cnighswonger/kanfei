@@ -162,8 +162,9 @@ function useIsMobile() {
 // ---------------------------------------------------------------------------
 
 function radiusForZoom(zoom: number): { radius: number; maxStations: number } {
-  if (zoom <= 8) return { radius: 200, maxStations: 80 };
-  if (zoom <= 10) return { radius: 100, maxStations: 80 };
+  // TODO: make max radius user-configurable in Map Settings
+  if (zoom <= 8) return { radius: 450, maxStations: 80 };
+  if (zoom <= 10) return { radius: 150, maxStations: 80 };
   if (zoom <= 12) return { radius: 50, maxStations: 120 };
   return { radius: 30, maxStations: 200 };
 }
