@@ -441,11 +441,10 @@ export default function MapView() {
       const hs = await fetchHome();
       if (cancelled) return;
       if (hs) setLoading(false);
-      // Fetch stations, alerts, isobars in background
-      fetchStations();
+      // Fetch stations, alerts in background; isobars after stations are cached
       fetchAlerts();
-      // Delay isobars slightly so stations cache is populated first
-      setTimeout(fetchIsobars, 3000);
+      await fetchStations();
+      fetchIsobars();
     })();
     return () => {
       cancelled = true;
