@@ -3005,6 +3005,69 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Map section */}
+      <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
+        <h3 style={sectionTitle}>Map</h3>
+        <div style={fieldGroup}>
+          <label style={checkboxLabel}>
+            <input
+              type="checkbox"
+              checked={val("map_enabled") === true}
+              onChange={(e) => updateField("map_enabled", e.target.checked)}
+            />
+            Enable Interactive Map
+          </label>
+          <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px", fontFamily: "var(--font-body)" }}>
+            Full-page weather map showing nearby stations, pressure isobars, and NWS alert polygons.
+          </span>
+        </div>
+        <div style={{ opacity: val("map_enabled") === true ? 1 : 0.5, pointerEvents: val("map_enabled") === true ? "auto" : "none" }}>
+          <div style={gridTwoCol(isMobile)}>
+            <div style={fieldGroup}>
+              <label style={labelStyle}>Default Tile Layer</label>
+              <select
+                style={selectStyle}
+                value={String(val("map_default_layer") || "Roads")}
+                onChange={(e) => updateField("map_default_layer", e.target.value)}
+              >
+                <option value="Roads">Roads (OpenStreetMap)</option>
+                <option value="Map">Map (theme-aware)</option>
+                <option value="Satellite">Satellite (ESRI)</option>
+                <option value="Terrain">Terrain (OpenTopoMap)</option>
+              </select>
+            </div>
+            <div style={fieldGroup}>
+              <label style={labelStyle}>Isobar Interval</label>
+              <select
+                style={selectStyle}
+                value={String(val("map_isobar_interval") || "1")}
+                onChange={(e) => updateField("map_isobar_interval", parseInt(e.target.value))}
+              >
+                <option value="1">1 hPa (dense)</option>
+                <option value="2">2 hPa</option>
+                <option value="4">4 hPa (sparse)</option>
+              </select>
+            </div>
+            <div style={fieldGroup}>
+              <label style={labelStyle}>Max Station Radius</label>
+              <select
+                style={selectStyle}
+                value={String(val("map_max_radius") || "450")}
+                onChange={(e) => updateField("map_max_radius", parseInt(e.target.value))}
+              >
+                <option value="100">100 miles</option>
+                <option value="200">200 miles</option>
+                <option value="300">300 miles</option>
+                <option value="450">450 miles</option>
+              </select>
+              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
+                Maximum radius at full zoom-out. Larger values show more stations but take longer to load.
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* CWOP / APRS section */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>CWOP / APRS</h3>
