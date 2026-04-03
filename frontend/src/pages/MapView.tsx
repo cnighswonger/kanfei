@@ -11,6 +11,7 @@ import {
   Popup,
   GeoJSON,
   LayersControl,
+  LayerGroup,
   Polyline,
   useMapEvents,
 } from "react-leaflet";
@@ -209,24 +210,38 @@ const RADAR_FRAMES = [
   { offset: 0,   layer: "nexrad-n0q" },
 ];
 
+/** Single radar frame tile layer — manages its own ref for reliable opacity/URL updates */
+function RadarFrame({ layer, radarTs, active, opacity }: { layer: string; radarTs: number; active: boolean; opacity: number }) {
+  const ref = useRef<L.TileLayer>(null);
+  const effectiveOpacity = active ? opacity : 0;
+
+  useEffect(() => {
+    if (ref.current) ref.current.setOpacity(effectiveOpacity);
+  }, [effectiveOpacity]);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.setUrl(
+        `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${layer}/{z}/{x}/{y}.png?_=${radarTs}`,
+      );
+    }
+  }, [radarTs, layer]);
+
+  return (
+    <TileLayer
+      ref={ref}
+      url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${layer}/{z}/{x}/{y}.png?_=${radarTs}`}
+      opacity={effectiveOpacity}
+      maxZoom={19}
+    />
+  );
+}
+
 function BaseLayers({ defaultLayer, radarTs, radarOpacity, radarFrame }: { defaultLayer: string; radarTs: number; radarOpacity: number; radarFrame: number }) {
   const { themeName } = useTheme();
   const defaultMap = themeName === "dark"
     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
     : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
-
-  const radarRef = useRef<L.TileLayer>(null);
-
-  const radarLayer = RADAR_FRAMES[radarFrame].layer;
-
-  // Force radar tile refresh when radarTs or radarFrame changes
-  useEffect(() => {
-    if (radarRef.current) {
-      radarRef.current.setUrl(
-        `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${radarLayer}/{z}/{x}/{y}.png?_=${radarTs}`,
-      );
-    }
-  }, [radarTs, radarLayer]);
 
   return (
     <LayersControl position="topright">
@@ -243,13 +258,17 @@ function BaseLayers({ defaultLayer, radarTs, radarOpacity, radarFrame }: { defau
         <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution={TILE_TOPO_ATTR} maxZoom={17} />
       </LayersControl.BaseLayer>
       <LayersControl.Overlay checked name="Radar">
-        <TileLayer
-          ref={radarRef}
-          url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${radarLayer}/{z}/{x}/{y}.png?_=${radarTs}`}
-          attribution={TILE_IEM_ATTR}
-          opacity={radarOpacity}
-          maxZoom={19}
-        />
+        <LayerGroup attribution={TILE_IEM_ATTR}>
+          {RADAR_FRAMES.map((frame, i) => (
+            <RadarFrame
+              key={frame.layer}
+              layer={frame.layer}
+              radarTs={radarTs}
+              active={i === radarFrame}
+              opacity={radarOpacity}
+            />
+          ))}
+        </LayerGroup>
       </LayersControl.Overlay>
     </LayersControl>
   );
