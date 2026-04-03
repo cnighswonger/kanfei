@@ -194,7 +194,22 @@ const TILE_TOPO_ATTR = '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>
 
 const TILE_IEM_ATTR = 'Radar: <a href="https://mesonet.agron.iastate.edu/">IEM</a>';
 
-function BaseLayers({ defaultLayer, radarTs, radarOpacity }: { defaultLayer: string; radarTs: number; radarOpacity: number }) {
+const RADAR_FRAMES = [
+  { offset: -55, layer: "nexrad-n0q-m55m" },
+  { offset: -50, layer: "nexrad-n0q-m50m" },
+  { offset: -45, layer: "nexrad-n0q-m45m" },
+  { offset: -40, layer: "nexrad-n0q-m40m" },
+  { offset: -35, layer: "nexrad-n0q-m35m" },
+  { offset: -30, layer: "nexrad-n0q-m30m" },
+  { offset: -25, layer: "nexrad-n0q-m25m" },
+  { offset: -20, layer: "nexrad-n0q-m20m" },
+  { offset: -15, layer: "nexrad-n0q-m15m" },
+  { offset: -10, layer: "nexrad-n0q-m10m" },
+  { offset: -5,  layer: "nexrad-n0q-m05m" },
+  { offset: 0,   layer: "nexrad-n0q" },
+];
+
+function BaseLayers({ defaultLayer, radarTs, radarOpacity, radarFrame }: { defaultLayer: string; radarTs: number; radarOpacity: number; radarFrame: number }) {
   const { themeName } = useTheme();
   const defaultMap = themeName === "dark"
     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -202,14 +217,16 @@ function BaseLayers({ defaultLayer, radarTs, radarOpacity }: { defaultLayer: str
 
   const radarRef = useRef<L.TileLayer>(null);
 
-  // Force radar tile refresh when radarTs changes (every 5 min)
+  const radarLayer = RADAR_FRAMES[radarFrame].layer;
+
+  // Force radar tile refresh when radarTs or radarFrame changes
   useEffect(() => {
     if (radarRef.current) {
       radarRef.current.setUrl(
-        `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q/{z}/{x}/{y}.png?_=${radarTs}`,
+        `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${radarLayer}/{z}/{x}/{y}.png?_=${radarTs}`,
       );
     }
-  }, [radarTs]);
+  }, [radarTs, radarLayer]);
 
   return (
     <LayersControl position="topright">
@@ -228,7 +245,7 @@ function BaseLayers({ defaultLayer, radarTs, radarOpacity }: { defaultLayer: str
       <LayersControl.Overlay checked name="Radar">
         <TileLayer
           ref={radarRef}
-          url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q/{z}/{x}/{y}.png?_=${radarTs}`}
+          url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${radarLayer}/{z}/{x}/{y}.png?_=${radarTs}`}
           attribution={TILE_IEM_ATTR}
           opacity={radarOpacity}
           maxZoom={19}
@@ -366,6 +383,79 @@ function ControlPanel({
 }
 
 // ---------------------------------------------------------------------------
+// Radar animation timeline
+// ---------------------------------------------------------------------------
+
+interface RadarTimelineProps {
+  radarFrame: number;
+  setRadarFrame: (f: number) => void;
+  radarPlaying: boolean;
+  setRadarPlaying: (v: boolean) => void;
+  isMobile: boolean;
+}
+
+function RadarTimeline({ radarFrame, setRadarFrame, radarPlaying, setRadarPlaying, isMobile }: RadarTimelineProps) {
+  const frame = RADAR_FRAMES[radarFrame];
+  const timeLabel = frame.offset === 0 ? "Now" : `${frame.offset} min`;
+
+  return (
+    <div style={{
+      position: "absolute",
+      bottom: isMobile ? 60 : 24,
+      left: "50%",
+      transform: "translateX(-50%)",
+      zIndex: 1000,
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      background: "var(--color-bg-card)",
+      border: "1px solid var(--color-border)",
+      borderRadius: 8,
+      padding: "6px 12px",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+      whiteSpace: "nowrap",
+    }}>
+      <button
+        onClick={() => setRadarPlaying(!radarPlaying)}
+        style={{
+          border: "none",
+          background: "none",
+          cursor: "pointer",
+          fontSize: 16,
+          padding: "0 2px",
+          color: "var(--color-text)",
+          lineHeight: 1,
+        }}
+        title={radarPlaying ? "Pause" : "Play"}
+      >
+        {radarPlaying ? "\u23F8" : "\u25B6"}
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={RADAR_FRAMES.length - 1}
+        step={1}
+        value={radarFrame}
+        onChange={(e) => {
+          setRadarPlaying(false);
+          setRadarFrame(Number(e.target.value));
+        }}
+        style={{ width: isMobile ? 140 : 200, cursor: "pointer", margin: 0 }}
+      />
+      <span style={{
+        fontSize: 11,
+        fontWeight: 600,
+        color: "var(--color-text-muted)",
+        minWidth: 48,
+        textAlign: "right",
+      }}>
+        {timeLabel}
+      </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Inline fetch helpers
 // ---------------------------------------------------------------------------
 
@@ -417,6 +507,8 @@ export default function MapView() {
   const [radarTs, setRadarTs] = useState(() => Math.floor(Date.now() / 300000));
   const [radarOpacity, setRadarOpacity] = useState(0.6);
   const [radarVisible, setRadarVisible] = useState(true);
+  const [radarFrame, setRadarFrame] = useState(RADAR_FRAMES.length - 1);
+  const [radarPlaying, setRadarPlaying] = useState(false);
 
   // --- data fetchers ---
   const fetchHome = useCallback(async () => {
@@ -552,6 +644,15 @@ export default function MapView() {
     };
   }, [home, fetchStations, fetchAlerts, fetchIsobars]);
 
+  // --- radar animation loop ---
+  useEffect(() => {
+    if (!radarPlaying) return;
+    const id = setInterval(() => {
+      setRadarFrame((f) => (f + 1) % RADAR_FRAMES.length);
+    }, 500);
+    return () => clearInterval(id);
+  }, [radarPlaying]);
+
 
   // --- render ---
 
@@ -598,7 +699,7 @@ export default function MapView() {
         style={{ height: "100%", width: "100%" }}
         zoomControl={!isMobile}
       >
-        <BaseLayers defaultLayer={mapDefaultLayer} radarTs={radarTs} radarOpacity={radarOpacity} />
+        <BaseLayers defaultLayer={mapDefaultLayer} radarTs={radarTs} radarOpacity={radarOpacity} radarFrame={radarFrame} />
         <ZoomHandler onZoomEnd={handleZoomEnd} onRadarToggle={setRadarVisible} />
 
         {/* Home station marker */}
@@ -802,6 +903,17 @@ export default function MapView() {
           {Math.round(radarOpacity * 100)}%
         </span>
       </div>}
+
+      {/* Radar animation timeline — hidden when radar layer unchecked */}
+      {radarVisible && (
+        <RadarTimeline
+          radarFrame={radarFrame}
+          setRadarFrame={setRadarFrame}
+          radarPlaying={radarPlaying}
+          setRadarPlaying={setRadarPlaying}
+          isMobile={isMobile}
+        />
+      )}
     </div>
   );
 }
