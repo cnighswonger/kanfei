@@ -208,7 +208,7 @@ function BaseLayers({ defaultLayer, radarTs }: { defaultLayer: string; radarTs: 
       <LayersControl.BaseLayer checked={defaultLayer === "Terrain"} name="Terrain">
         <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution={TILE_TOPO_ATTR} maxZoom={17} />
       </LayersControl.BaseLayer>
-      <LayersControl.Overlay name="Radar">
+      <LayersControl.Overlay checked name="Radar">
         <TileLayer
           key={`radar-${radarTs}`}
           url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q/{z}/{x}/{y}.png?_=${radarTs}`}
