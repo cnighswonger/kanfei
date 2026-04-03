@@ -255,8 +255,6 @@ interface ControlPanelProps {
   setShowIsobars: (v: boolean) => void;
   alertCount: number;
   isMobile: boolean;
-  radarOpacity: number;
-  setRadarOpacity: (v: number) => void;
 }
 
 function ControlPanel({
@@ -268,8 +266,6 @@ function ControlPanel({
   setShowIsobars,
   alertCount,
   isMobile,
-  radarOpacity,
-  setRadarOpacity,
 }: ControlPanelProps) {
   const panelStyle: React.CSSProperties = isMobile
     ? {
@@ -358,12 +354,6 @@ function ControlPanel({
         <input type="checkbox" checked={showIsobars}
           onChange={(e) => setShowIsobars(e.target.checked)} style={{ margin: 0 }} />
         Isobars
-      </label>
-      <label style={alertRow}>
-        Radar
-        <input type="range" min={0} max={1} step={0.05} value={radarOpacity}
-          onChange={(e) => setRadarOpacity(Number(e.target.value))}
-          style={{ width: isMobile ? 60 : 80, margin: 0, cursor: "pointer" }} />
       </label>
     </div>
   );
@@ -762,9 +752,49 @@ export default function MapView() {
         setShowIsobars={setShowIsobars}
         alertCount={alerts.length}
         isMobile={isMobile}
-        radarOpacity={radarOpacity}
-        setRadarOpacity={setRadarOpacity}
       />
+
+      {/* Vertical radar opacity slider */}
+      <div style={{
+        position: "absolute",
+        right: 12,
+        top: isMobile ? "auto" : "50%",
+        bottom: isMobile ? 80 : "auto",
+        transform: isMobile ? "none" : "translateY(-50%)",
+        zIndex: 1000,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 4,
+        background: "var(--color-bg-card)",
+        border: "1px solid var(--color-border)",
+        borderRadius: 8,
+        padding: "8px 6px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+      }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-muted)", whiteSpace: "nowrap" }}>
+          Radar
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={radarOpacity}
+          onChange={(e) => setRadarOpacity(Number(e.target.value))}
+          style={{
+            writingMode: "vertical-lr",
+            direction: "rtl",
+            height: 120,
+            width: 20,
+            margin: 0,
+            cursor: "pointer",
+          }}
+        />
+        <span style={{ fontSize: 9, color: "var(--color-text-muted)" }}>
+          {Math.round(radarOpacity * 100)}%
+        </span>
+      </div>
     </div>
   );
 }
