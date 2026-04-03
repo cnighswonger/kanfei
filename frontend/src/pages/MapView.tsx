@@ -194,6 +194,17 @@ function BaseLayers({ defaultLayer, radarTs }: { defaultLayer: string; radarTs: 
     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
     : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
 
+  const radarRef = useRef<L.TileLayer>(null);
+
+  // Force radar tile refresh when radarTs changes (every 5 min)
+  useEffect(() => {
+    if (radarRef.current) {
+      radarRef.current.setUrl(
+        `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q/{z}/{x}/{y}.png?_=${radarTs}`,
+      );
+    }
+  }, [radarTs]);
+
   return (
     <LayersControl position="topright">
       <LayersControl.BaseLayer checked={defaultLayer === "Map"} name="Map">
@@ -210,7 +221,7 @@ function BaseLayers({ defaultLayer, radarTs }: { defaultLayer: string; radarTs: 
       </LayersControl.BaseLayer>
       <LayersControl.Overlay checked name="Radar">
         <TileLayer
-          key={`radar-${radarTs}`}
+          ref={radarRef}
           url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q/{z}/{x}/{y}.png?_=${radarTs}`}
           attribution={TILE_IEM_ATTR}
           opacity={0.6}
