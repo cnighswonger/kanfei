@@ -188,7 +188,7 @@ const TILE_TOPO_ATTR = '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>
 
 const TILE_IEM_ATTR = 'Radar: <a href="https://mesonet.agron.iastate.edu/">IEM</a>';
 
-function BaseLayers({ defaultLayer, radarTs }: { defaultLayer: string; radarTs: number }) {
+function BaseLayers({ defaultLayer, radarTs, radarOpacity }: { defaultLayer: string; radarTs: number; radarOpacity: number }) {
   const { themeName } = useTheme();
   const defaultMap = themeName === "dark"
     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -224,7 +224,7 @@ function BaseLayers({ defaultLayer, radarTs }: { defaultLayer: string; radarTs: 
           ref={radarRef}
           url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q/{z}/{x}/{y}.png?_=${radarTs}`}
           attribution={TILE_IEM_ATTR}
-          opacity={0.6}
+          opacity={radarOpacity}
           maxZoom={19}
         />
       </LayersControl.Overlay>
@@ -255,6 +255,8 @@ interface ControlPanelProps {
   setShowIsobars: (v: boolean) => void;
   alertCount: number;
   isMobile: boolean;
+  radarOpacity: number;
+  setRadarOpacity: (v: number) => void;
 }
 
 function ControlPanel({
@@ -266,6 +268,8 @@ function ControlPanel({
   setShowIsobars,
   alertCount,
   isMobile,
+  radarOpacity,
+  setRadarOpacity,
 }: ControlPanelProps) {
   const panelStyle: React.CSSProperties = isMobile
     ? {
@@ -355,6 +359,12 @@ function ControlPanel({
           onChange={(e) => setShowIsobars(e.target.checked)} style={{ margin: 0 }} />
         Isobars
       </label>
+      <label style={alertRow}>
+        Radar
+        <input type="range" min={0} max={1} step={0.05} value={radarOpacity}
+          onChange={(e) => setRadarOpacity(Number(e.target.value))}
+          style={{ width: isMobile ? 60 : 80, margin: 0, cursor: "pointer" }} />
+      </label>
     </div>
   );
 }
@@ -409,6 +419,7 @@ export default function MapView() {
   const [mapMaxRadius, setMapMaxRadius] = useState(450);
   const [mapDefaultLayer, setMapDefaultLayer] = useState("Roads");
   const [radarTs, setRadarTs] = useState(() => Math.floor(Date.now() / 300000));
+  const [radarOpacity, setRadarOpacity] = useState(0.6);
 
   // --- data fetchers ---
   const fetchHome = useCallback(async () => {
@@ -590,7 +601,7 @@ export default function MapView() {
         style={{ height: "100%", width: "100%" }}
         zoomControl={!isMobile}
       >
-        <BaseLayers defaultLayer={mapDefaultLayer} radarTs={radarTs} />
+        <BaseLayers defaultLayer={mapDefaultLayer} radarTs={radarTs} radarOpacity={radarOpacity} />
         <ZoomHandler onZoomEnd={handleZoomEnd} />
 
         {/* Home station marker */}
@@ -751,6 +762,8 @@ export default function MapView() {
         setShowIsobars={setShowIsobars}
         alertCount={alerts.length}
         isMobile={isMobile}
+        radarOpacity={radarOpacity}
+        setRadarOpacity={setRadarOpacity}
       />
     </div>
   );
