@@ -168,10 +168,16 @@ function radiusForZoom(zoom: number, maxRadius: number): { radius: number; maxSt
   return { radius: Math.min(30, maxRadius), maxStations: 200 };
 }
 
-function ZoomHandler({ onZoomEnd }: { onZoomEnd: (zoom: number) => void }) {
+function ZoomHandler({ onZoomEnd, onRadarToggle }: { onZoomEnd: (zoom: number) => void; onRadarToggle?: (visible: boolean) => void }) {
   useMapEvents({
     zoomend(e) {
       onZoomEnd(e.target.getZoom());
+    },
+    overlayadd(e) {
+      if (e.name === "Radar" && onRadarToggle) onRadarToggle(true);
+    },
+    overlayremove(e) {
+      if (e.name === "Radar" && onRadarToggle) onRadarToggle(false);
     },
   });
   return null;
@@ -410,6 +416,7 @@ export default function MapView() {
   const [mapDefaultLayer, setMapDefaultLayer] = useState("Roads");
   const [radarTs, setRadarTs] = useState(() => Math.floor(Date.now() / 300000));
   const [radarOpacity, setRadarOpacity] = useState(0.6);
+  const [radarVisible, setRadarVisible] = useState(true);
 
   // --- data fetchers ---
   const fetchHome = useCallback(async () => {
@@ -592,7 +599,7 @@ export default function MapView() {
         zoomControl={!isMobile}
       >
         <BaseLayers defaultLayer={mapDefaultLayer} radarTs={radarTs} radarOpacity={radarOpacity} />
-        <ZoomHandler onZoomEnd={handleZoomEnd} />
+        <ZoomHandler onZoomEnd={handleZoomEnd} onRadarToggle={setRadarVisible} />
 
         {/* Home station marker */}
         <CircleMarker
@@ -754,8 +761,8 @@ export default function MapView() {
         isMobile={isMobile}
       />
 
-      {/* Vertical radar opacity slider */}
-      <div style={{
+      {/* Vertical radar opacity slider — hidden when radar layer unchecked */}
+      {radarVisible && <div style={{
         position: "absolute",
         right: 12,
         top: isMobile ? "auto" : "50%",
@@ -794,7 +801,7 @@ export default function MapView() {
         <span style={{ fontSize: 9, color: "var(--color-text-muted)" }}>
           {Math.round(radarOpacity * 100)}%
         </span>
-      </div>
+      </div>}
     </div>
   );
 }
