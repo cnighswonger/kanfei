@@ -20,6 +20,7 @@ const navItems: NavItem[] = [
   { to: '/forecast', label: 'Forecast', icon: '\u2601' },
   { to: '/astronomy', label: 'Astronomy', icon: '\u263D' },
   { to: '/map', label: 'Map', icon: '\u29BF' },
+  { to: '/pressure', label: 'Pressure', icon: '\u2225' },
   { to: '/nowcast', label: 'Nowcast', icon: '\u26C5' },
   { to: '/spray', label: 'Spray', icon: '\u2618' },
   { to: '/settings', label: 'Settings', icon: '\u2699' },
@@ -30,6 +31,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
 
   const visibleNavItems = navItems.filter((item) => {
     if (item.to === '/map') return flags.mapEnabled;
+    if (item.to === '/pressure') return flags.mapEnabled;
     if (item.to === '/nowcast') return flags.nowcastEnabled;
     if (item.to === '/spray') return flags.sprayEnabled;
     return true;
