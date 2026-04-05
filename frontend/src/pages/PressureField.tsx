@@ -417,6 +417,133 @@ function StateBoundaryLines({ data, isDark }: { data: PressureGridData; isDark: 
 }
 
 // ---------------------------------------------------------------------------
+// Radar overlay — IEM NEXRAD tiles draped on the pressure surface
+// ---------------------------------------------------------------------------
+
+const RADAR_TILE_ZOOM = 6;
+const TILE_PX = 256;
+
+function lon2tileF(lon: number, z: number): number {
+  return (lon + 180) / 360 * Math.pow(2, z);
+}
+
+function lat2tileF(lat: number, z: number): number {
+  const r = lat * Math.PI / 180;
+  return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z);
+}
+
+function RadarOverlay({ data, opacity, radarTs }: {
+  data: PressureGridData; opacity: number; radarTs: number;
+}) {
+  const { rows, cols, lat_min, lat_max, lon_min, lon_max,
+          pressure_min, pressure_max, grid } = data;
+  const sceneWidth = 10;
+  const sceneDepth = 10 * (rows / cols);
+  const heightScale = 8;
+  const pRange = pressure_max - pressure_min || 1;
+
+  const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null);
+
+  // Tile range (stable across renders for the same grid bounds)
+  const tiles = useMemo(() => {
+    const z = RADAR_TILE_ZOOM;
+    const txMin = Math.floor(lon2tileF(lon_min, z));
+    const txMax = Math.floor(lon2tileF(lon_max, z));
+    const tyMin = Math.floor(lat2tileF(lat_max, z)); // north = smaller Y
+    const tyMax = Math.floor(lat2tileF(lat_min, z));
+    return { txMin, txMax, tyMin, tyMax, nx: txMax - txMin + 1, ny: tyMax - tyMin + 1 };
+  }, [lon_min, lon_max, lat_min, lat_max]);
+
+  // Fetch tiles → composite → CanvasTexture
+  useEffect(() => {
+    let cancelled = false;
+    const { txMin, txMax, tyMin, tyMax, nx, ny } = tiles;
+    const z = RADAR_TILE_ZOOM;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = nx * TILE_PX;
+    canvas.height = ny * TILE_PX;
+    const ctx = canvas.getContext("2d")!;
+
+    const promises: Promise<void>[] = [];
+    for (let ty = tyMin; ty <= tyMax; ty++) {
+      for (let tx = txMin; tx <= txMax; tx++) {
+        const px = (tx - txMin) * TILE_PX;
+        const py = (ty - tyMin) * TILE_PX;
+        const url = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q/${z}/${tx}/${ty}.png?_=${radarTs}`;
+        promises.push(new Promise<void>((resolve) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => { if (!cancelled) ctx.drawImage(img, px, py); resolve(); };
+          img.onerror = () => resolve();
+          img.src = url;
+        }));
+      }
+    }
+
+    Promise.all(promises).then(() => {
+      if (cancelled) return;
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      setTexture((prev) => { prev?.dispose(); return tex; });
+    });
+
+    return () => { cancelled = true; };
+  }, [tiles, radarTs]);
+
+  // Build geometry with pressure-surface height + custom UVs for tile mapping
+  const geometry = useMemo(() => {
+    const { txMin, tyMin, nx, ny } = tiles;
+    const z = RADAR_TILE_ZOOM;
+
+    const geo = new THREE.PlaneGeometry(sceneWidth, sceneDepth, cols - 1, rows - 1);
+    geo.rotateX(-Math.PI / 2);
+
+    const pos = geo.attributes.position;
+    const uv = geo.attributes.uv;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
+
+        // Height from pressure grid (tiny offset above pressure surface)
+        const p = grid[r][c];
+        const t = (p - pressure_min) / pRange;
+        pos.setY(idx, t * heightScale + 0.01);
+
+        // Geo position of this vertex
+        const lon = lon_min + (c / (cols - 1)) * (lon_max - lon_min);
+        const lat = lat_min + (r / (rows - 1)) * (lat_max - lat_min);
+
+        // Map to fractional tile coords → canvas UV
+        const fracX = lon2tileF(lon, z);
+        const fracY = lat2tileF(lat, z);
+        const u_val = (fracX - txMin) / nx;
+        const v_val = 1 - (fracY - tyMin) / ny; // flip: canvas Y↓, texture V↑
+        uv.setXY(idx, u_val, v_val);
+      }
+    }
+    geo.computeVertexNormals();
+    return geo;
+  }, [data, tiles]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!texture) return null;
+
+  return (
+    <mesh geometry={geometry}>
+      <meshBasicMaterial
+        map={texture}
+        transparent
+        opacity={opacity}
+        side={THREE.DoubleSide}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Station markers — small spheres at actual measurement locations
 // ---------------------------------------------------------------------------
 
@@ -700,10 +827,11 @@ function CameraControls({ rotating, zoom }: { rotating: boolean; zoom: number })
 // Scene wrapper
 // ---------------------------------------------------------------------------
 
-function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom }: {
+function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs }: {
   data: PressureGridData; isDark: boolean;
   selected: StationMarker | null; onSelect: (s: StationMarker | null) => void;
   rotating: boolean; zoom: number;
+  radarVisible: boolean; radarOpacity: number; radarTs: number;
 }) {
   return (
     <Canvas
@@ -718,6 +846,7 @@ function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom }
       <group scale={[-1, 1, 1]}>
         <PressureSurface data={data} />
         <SideWalls data={data} />
+        {radarVisible && <RadarOverlay data={data} opacity={radarOpacity} radarTs={radarTs} />}
         <StateBoundaryLines data={data} isDark={isDark} />
         <StationMarkers data={data} selected={selected} onSelect={onSelect} />
         <GroundLabels data={data} />
@@ -864,6 +993,15 @@ export default function PressureField() {
   const [selectedStation, setSelectedStation] = useState<StationMarker | null>(null);
   const [rotating, setRotating] = useState(true);
   const [zoom, setZoom] = useState(50);
+  const [radarVisible, setRadarVisible] = useState(true);
+  const [radarOpacity, setRadarOpacity] = useState(0.6);
+  const [radarTs, setRadarTs] = useState(() => Math.floor(Date.now() / 300000));
+
+  // Refresh radar tile cache-buster every 5 minutes
+  useEffect(() => {
+    const id = setInterval(() => setRadarTs(Math.floor(Date.now() / 300000)), 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -912,7 +1050,7 @@ export default function PressureField() {
 
   return (
     <div style={containerStyle}>
-      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} />
+      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} />
       <InfoPanel data={data} isDark={isDark} />
       {/* Scene controls */}
       <div style={{
@@ -958,6 +1096,28 @@ export default function PressureField() {
             style={{ width: 100, accentColor: "var(--color-accent)" }}
           />
         </label>
+        <span style={{ width: 1, height: 18, background: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)" }} />
+        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={radarVisible}
+            onChange={(e) => setRadarVisible(e.target.checked)}
+            style={{ accentColor: "var(--color-accent)" }}
+          />
+          Radar
+        </label>
+        {radarVisible && (
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(radarOpacity * 100)}
+              onChange={(e) => setRadarOpacity(Number(e.target.value) / 100)}
+              style={{ width: 60, accentColor: "var(--color-accent)" }}
+            />
+          </label>
+        )}
       </div>
       {selectedStation && (
         <StationDetailPanel
