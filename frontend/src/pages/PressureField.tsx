@@ -1007,12 +1007,12 @@ function CameraControls({ rotating, zoom }: { rotating: boolean; zoom: number })
 // Scene wrapper
 // ---------------------------------------------------------------------------
 
-function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs, flowVisible }: {
+function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs, flowVisible, statesVisible, stationsVisible }: {
   data: PressureGridData; isDark: boolean;
   selected: StationMarker | null; onSelect: (s: StationMarker | null) => void;
   rotating: boolean; zoom: number;
   radarVisible: boolean; radarOpacity: number; radarTs: number;
-  flowVisible: boolean;
+  flowVisible: boolean; statesVisible: boolean; stationsVisible: boolean;
 }) {
   return (
     <Canvas
@@ -1029,8 +1029,8 @@ function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, 
         <SideWalls data={data} />
         {radarVisible && <RadarOverlay data={data} opacity={radarOpacity} radarTs={radarTs} />}
         {flowVisible && <GradientFlowLines data={data} />}
-        <StateBoundaryLines data={data} isDark={isDark} />
-        <StationMarkers data={data} selected={selected} onSelect={onSelect} />
+        {statesVisible && <StateBoundaryLines data={data} isDark={isDark} />}
+        {stationsVisible && <StationMarkers data={data} selected={selected} onSelect={onSelect} />}
         <GroundLabels data={data} />
         <CardinalLabels data={data} />
         <PressureScale data={data} pressureUnit={data.pressure_unit || "hPa"} />
@@ -1179,6 +1179,8 @@ export default function PressureField() {
   const [radarOpacity, setRadarOpacity] = useState(0.6);
   const [radarTs, setRadarTs] = useState(() => Math.floor(Date.now() / 300000));
   const [flowVisible, setFlowVisible] = useState(false);
+  const [statesVisible, setStatesVisible] = useState(true);
+  const [stationsVisible, setStationsVisible] = useState(true);
 
   // Refresh radar tile cache-buster every 5 minutes
   useEffect(() => {
@@ -1233,7 +1235,7 @@ export default function PressureField() {
 
   return (
     <div style={containerStyle}>
-      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} flowVisible={flowVisible} />
+      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} flowVisible={flowVisible} statesVisible={statesVisible} stationsVisible={stationsVisible} />
       <InfoPanel data={data} isDark={isDark} />
       {/* Scene controls */}
       <div style={{
@@ -1310,6 +1312,24 @@ export default function PressureField() {
             style={{ accentColor: "var(--color-accent)" }}
           />
           Flow
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={statesVisible}
+            onChange={(e) => setStatesVisible(e.target.checked)}
+            style={{ accentColor: "var(--color-accent)" }}
+          />
+          States
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={stationsVisible}
+            onChange={(e) => setStationsVisible(e.target.checked)}
+            style={{ accentColor: "var(--color-accent)" }}
+          />
+          Stations
         </label>
       </div>
       {selectedStation && (
