@@ -549,13 +549,20 @@ _PRESSURE_OBS_MAX_AGE = 7200  # 2 hours
 
 
 def _parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
-    """Best-effort parse of station timestamp strings."""
+    """Best-effort parse of station timestamp strings.
+
+    Returns a timezone-aware datetime, or ``None`` if the timestamp is
+    missing, unparseable, or naive (no tzinfo).  IEM ``local_valid``
+    values are in the station's local timezone without offset info, so
+    we cannot safely compare them against UTC — returning None lets
+    those stations pass through the staleness filter.
+    """
     if not ts:
         return None
     try:
         dt = datetime.fromisoformat(ts)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            return None  # ambiguous local time — skip staleness check
         return dt
     except (ValueError, TypeError):
         return None
