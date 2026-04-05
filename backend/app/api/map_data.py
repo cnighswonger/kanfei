@@ -551,19 +551,15 @@ _PRESSURE_OBS_MAX_AGE = 7200  # 2 hours
 def _parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
     """Best-effort parse of station timestamp strings.
 
-    Returns a timezone-aware datetime, or ``None`` if the timestamp is
-    missing, unparseable, or naive (no tzinfo).  IEM ``local_valid``
-    values are in the station's local timezone without offset info, so
-    we cannot safely compare them against UTC — returning None lets
-    those stations pass through the staleness filter.
+    Returns a naive datetime (tzinfo stripped if present) so that all
+    timestamps can be compared on the same footing.  IEM ``local_valid``
+    values are naive local-time strings; nowcast/APRS may include offsets.
     """
     if not ts:
         return None
     try:
         dt = datetime.fromisoformat(ts)
-        if dt.tzinfo is None:
-            return None  # ambiguous local time — skip staleness check
-        return dt
+        return dt.replace(tzinfo=None)
     except (ValueError, TypeError):
         return None
 
@@ -573,25 +569,40 @@ def _collect_pressure_points(
 ) -> list[tuple[float, float, float]]:
     """Collect pressure points from station list + home barometer.
 
-    Stations with an ``updated`` timestamp older than
-    ``_PRESSURE_OBS_MAX_AGE`` seconds are silently dropped so that
-    stale reporters do not distort the interpolated pressure field.
+    Staleness is detected by comparing each station's timestamp to the
+    **median** of all station timestamps.  This is timezone-agnostic:
+    IEM ``local_valid`` values are naive strings in the station's
+    local timezone, but all stations in a regional query share roughly
+    the same zone, so relative comparison is reliable.
     """
-    now = datetime.now(timezone.utc)
-    pressure_points: list[tuple[float, float, float]] = []
-    stale_count = 0
+    # First pass: gather candidates with parsed timestamps
+    candidates: list[tuple[float, float, float, Optional[datetime]]] = []
     for s in stations:
         p = s.get("pressure_hpa")
         if p is None or s.get("lat") is None:
             continue
         ts = _parse_timestamp(s.get("updated"))
-        if ts is not None and (now - ts).total_seconds() > _PRESSURE_OBS_MAX_AGE:
-            stale_count += 1
-            continue
-        pressure_points.append((s["lat"], s["lon"], p))
+        candidates.append((s["lat"], s["lon"], p, ts))
+
+    # Compute median timestamp from stations that have one
+    timestamps = sorted(ts for *_, ts in candidates if ts is not None)
+    median_ts: Optional[datetime] = None
+    if timestamps:
+        median_ts = timestamps[len(timestamps) // 2]
+
+    # Second pass: filter stale stations
+    pressure_points: list[tuple[float, float, float]] = []
+    stale_count = 0
+    for lat_s, lon_s, p, ts in candidates:
+        if ts is not None and median_ts is not None:
+            age = abs((median_ts - ts).total_seconds())
+            if age > _PRESSURE_OBS_MAX_AGE:
+                stale_count += 1
+                continue
+        pressure_points.append((lat_s, lon_s, p))
 
     if stale_count:
-        logger.info("Map: dropped %d stale station(s) (max age %ds)",
+        logger.info("Map: dropped %d stale station(s) (>%ds from median)",
                      stale_count, _PRESSURE_OBS_MAX_AGE)
 
     # Add home station barometer if available
@@ -606,14 +617,6 @@ def _collect_pressure_points(
         ).first()
         _db.close()
         if row and row[0] is not None:
-            home_ts = row[1]
-            if home_ts is not None:
-                if home_ts.tzinfo is None:
-                    home_ts = home_ts.replace(tzinfo=timezone.utc)
-                if (now - home_ts).total_seconds() > _PRESSURE_OBS_MAX_AGE:
-                    logger.info("Map: dropped stale home barometer (age %ds)",
-                                int((now - home_ts).total_seconds()))
-                    return pressure_points
             baro_display = convert("barometer", row[0])  # inHg
             if baro_display:
                 baro_hpa = baro_display * 33.8639
