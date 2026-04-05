@@ -382,13 +382,14 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
     }
     if (maxGradMag < 1e-8) maxGradMag = 1;
 
-    // --- Hue from pressure: warm (high) → cool (low) ---
-    // Uses the same pressureColor ramp as the surface but shifted for contrast
+    // --- Cyan (low pressure) → Magenta (high pressure), brightness from gradient ---
     const flowColor = (pressureT: number, gradMag: number): [number, number, number] => {
-      // Hue: blue (low, t≈0) → red (high, t≈1)
-      const [r, g, b] = pressureColor(pressureT);
-      // Brightness: scale by gradient magnitude (0.3 floor so weak lines stay visible)
-      const bright = 0.3 + 0.7 * Math.min(gradMag / maxGradMag, 1);
+      // Lerp hue: cyan [0, 1, 1] → magenta [1, 0, 1]
+      const r = pressureT;
+      const g = 1 - pressureT;
+      const b = 1;
+      // Brightness: scale by gradient magnitude (0.35 floor so weak lines stay visible)
+      const bright = 0.35 + 0.65 * Math.min(gradMag / maxGradMag, 1);
       return [r * bright, g * bright, b * bright];
     };
 
