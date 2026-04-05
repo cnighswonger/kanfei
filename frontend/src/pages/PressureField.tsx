@@ -293,7 +293,7 @@ const FLOW_STEPS = 60;
 /** Step size as a fraction of grid cells. */
 const FLOW_DT = 0.8;
 
-function GradientFlowLines({ data, isDark }: { data: PressureGridData; isDark: boolean }) {
+function GradientFlowLines({ data }: { data: PressureGridData }) {
   const { grid, rows, cols, pressure_min, pressure_max } = data;
   const sceneWidth = 10;
   const sceneDepth = 10 * (rows / cols);
@@ -360,6 +360,38 @@ function GradientFlowLines({ data, isDark }: { data: PressureGridData; isDark: b
       return new THREE.Vector3(x, y, z);
     };
 
+    // --- Bilinear sample of pressure at fractional grid position ---
+    const samplePressure = (fr: number, fc: number): number => {
+      const r0 = Math.min(Math.max(Math.floor(fr), 0), rows - 2);
+      const c0 = Math.min(Math.max(Math.floor(fc), 0), cols - 2);
+      const dr = Math.min(Math.max(fr - r0, 0), 1);
+      const dc = Math.min(Math.max(fc - c0, 0), 1);
+      return grid[r0][c0] * (1 - dr) * (1 - dc)
+           + grid[r0][c0 + 1] * (1 - dr) * dc
+           + grid[r0 + 1][c0] * dr * (1 - dc)
+           + grid[r0 + 1][c0 + 1] * dr * dc;
+    };
+
+    // --- Compute max gradient magnitude for brightness normalization ---
+    let maxGradMag = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const m = Math.sqrt(gradC[r][c] ** 2 + gradR[r][c] ** 2);
+        if (m > maxGradMag) maxGradMag = m;
+      }
+    }
+    if (maxGradMag < 1e-8) maxGradMag = 1;
+
+    // --- Hue from pressure: warm (high) → cool (low) ---
+    // Uses the same pressureColor ramp as the surface but shifted for contrast
+    const flowColor = (pressureT: number, gradMag: number): [number, number, number] => {
+      // Hue: blue (low, t≈0) → red (high, t≈1)
+      const [r, g, b] = pressureColor(pressureT);
+      // Brightness: scale by gradient magnitude (0.3 floor so weak lines stay visible)
+      const bright = 0.3 + 0.7 * Math.min(gradMag / maxGradMag, 1);
+      return [r * bright, g * bright, b * bright];
+    };
+
     // --- Seed streamlines on a jittered grid ---
     const segments: THREE.BufferGeometry[] = [];
     const seedSpacing = Math.sqrt((rows * cols) / FLOW_SEED_COUNT);
@@ -367,11 +399,20 @@ function GradientFlowLines({ data, isDark }: { data: PressureGridData; isDark: b
       for (let sc = seedSpacing / 2; sc < cols - 1; sc += seedSpacing) {
         // RK4 integration along negative gradient (high → low pressure)
         const points: THREE.Vector3[] = [];
+        const colors: number[] = [];
         let cr = sr, cc = sc;
         for (let step = 0; step < FLOW_STEPS; step++) {
           const pt = toScene(cr, cc);
           if (!pt) break;
           points.push(pt);
+
+          // Color this vertex: hue from local pressure, brightness from gradient magnitude
+          const pHere = samplePressure(cr, cc);
+          const pT = (pHere - pressure_min) / pRange;
+          const g = sampleGrad(cr, cc);
+          const gradMag = g ? Math.sqrt(g[0] ** 2 + g[1] ** 2) : 0;
+          const [vr, vg, vb] = flowColor(pT, gradMag);
+          colors.push(vr, vg, vb);
 
           // RK4
           const k1 = sampleGrad(cr, cc);
@@ -393,7 +434,9 @@ function GradientFlowLines({ data, isDark }: { data: PressureGridData; isDark: b
           cc -= (dcc / mag) * FLOW_DT;
         }
         if (points.length > 2) {
-          segments.push(new THREE.BufferGeometry().setFromPoints(points));
+          const geo = new THREE.BufferGeometry().setFromPoints(points);
+          geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+          segments.push(geo);
         }
       }
     }
@@ -402,11 +445,11 @@ function GradientFlowLines({ data, isDark }: { data: PressureGridData; isDark: b
 
   const material = useMemo(
     () => new THREE.LineBasicMaterial({
-      color: isDark ? "#88ccff" : "#2266aa",
-      opacity: 0.35,
+      vertexColors: true,
+      opacity: 0.55,
       transparent: true,
     }),
-    [isDark],
+    [],
   );
 
   return (
@@ -984,7 +1027,7 @@ function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, 
         <PressureSurface data={data} />
         <SideWalls data={data} />
         {radarVisible && <RadarOverlay data={data} opacity={radarOpacity} radarTs={radarTs} />}
-        {flowVisible && <GradientFlowLines data={data} isDark={isDark} />}
+        {flowVisible && <GradientFlowLines data={data} />}
         <StateBoundaryLines data={data} isDark={isDark} />
         <StationMarkers data={data} selected={selected} onSelect={onSelect} />
         <GroundLabels data={data} />
