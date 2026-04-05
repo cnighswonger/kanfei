@@ -283,6 +283,142 @@ function SideWalls({ data }: { data: PressureGridData }) {
 }
 
 // ---------------------------------------------------------------------------
+// Gradient flow lines — streamlines of the pressure gradient field
+// ---------------------------------------------------------------------------
+
+/** Number of streamlines seeded across the grid. */
+const FLOW_SEED_COUNT = 200;
+/** Integration steps per streamline (RK4). */
+const FLOW_STEPS = 60;
+/** Step size as a fraction of grid cells. */
+const FLOW_DT = 0.8;
+
+function GradientFlowLines({ data, isDark }: { data: PressureGridData; isDark: boolean }) {
+  const { grid, rows, cols, pressure_min, pressure_max } = data;
+  const sceneWidth = 10;
+  const sceneDepth = 10 * (rows / cols);
+  const halfW = sceneWidth / 2;
+  const halfD = sceneDepth / 2;
+  const pRange = pressure_max - pressure_min || 1;
+  const heightScale = 8;
+
+  const lineSegments = useMemo(() => {
+    // --- Compute gradient field (central finite differences) ---
+    // gradX[r][c] = dP/dc, gradZ[r][c] = dP/dr (grid-space)
+    const gradC: number[][] = [];
+    const gradR: number[][] = [];
+    for (let r = 0; r < rows; r++) {
+      gradC[r] = [];
+      gradR[r] = [];
+      for (let c = 0; c < cols; c++) {
+        const dc = c > 0 && c < cols - 1
+          ? (grid[r][c + 1] - grid[r][c - 1]) / 2
+          : c === 0 ? grid[r][1] - grid[r][0] : grid[r][c] - grid[r][c - 1];
+        const dr = r > 0 && r < rows - 1
+          ? (grid[r + 1][c] - grid[r - 1][c]) / 2
+          : r === 0 ? grid[1][c] - grid[0][c] : grid[r][c] - grid[r - 1][c];
+        gradC[r][c] = dc;
+        gradR[r][c] = dr;
+      }
+    }
+
+    // --- Bilinear sample of gradient at fractional grid position ---
+    const sampleGrad = (fr: number, fc: number): [number, number] | null => {
+      if (fr < 0 || fr > rows - 1 || fc < 0 || fc > cols - 1) return null;
+      const r0 = Math.min(Math.floor(fr), rows - 2);
+      const c0 = Math.min(Math.floor(fc), cols - 2);
+      const dr = fr - r0;
+      const dc = fc - c0;
+      const gc = gradC[r0][c0] * (1 - dr) * (1 - dc)
+               + gradC[r0][c0 + 1] * (1 - dr) * dc
+               + gradC[r0 + 1][c0] * dr * (1 - dc)
+               + gradC[r0 + 1][c0 + 1] * dr * dc;
+      const gr = gradR[r0][c0] * (1 - dr) * (1 - dc)
+               + gradR[r0][c0 + 1] * (1 - dr) * dc
+               + gradR[r0 + 1][c0] * dr * (1 - dc)
+               + gradR[r0 + 1][c0 + 1] * dr * dc;
+      return [gc, gr];
+    };
+
+    // --- Grid position → scene XYZ (same as StateBoundaryLines toScene) ---
+    const toScene = (fr: number, fc: number): THREE.Vector3 | null => {
+      if (fr < 0 || fr > rows - 1 || fc < 0 || fc > cols - 1) return null;
+      const xNorm = fc / (cols - 1);
+      const zNorm = fr / (rows - 1);
+      const x = -halfW + xNorm * sceneWidth;
+      const z = -halfD + zNorm * sceneDepth;
+      // Bilinear height sample
+      const r0 = Math.min(Math.floor(fr), rows - 2);
+      const c0 = Math.min(Math.floor(fc), cols - 2);
+      const dr = fr - r0;
+      const dc = fc - c0;
+      const p = grid[r0][c0] * (1 - dr) * (1 - dc)
+              + grid[r0][c0 + 1] * (1 - dr) * dc
+              + grid[r0 + 1][c0] * dr * (1 - dc)
+              + grid[r0 + 1][c0 + 1] * dr * dc;
+      const y = ((p - pressure_min) / pRange) * heightScale + 0.03;
+      return new THREE.Vector3(x, y, z);
+    };
+
+    // --- Seed streamlines on a jittered grid ---
+    const segments: THREE.BufferGeometry[] = [];
+    const seedSpacing = Math.sqrt((rows * cols) / FLOW_SEED_COUNT);
+    for (let sr = seedSpacing / 2; sr < rows - 1; sr += seedSpacing) {
+      for (let sc = seedSpacing / 2; sc < cols - 1; sc += seedSpacing) {
+        // RK4 integration along negative gradient (high → low pressure)
+        const points: THREE.Vector3[] = [];
+        let cr = sr, cc = sc;
+        for (let step = 0; step < FLOW_STEPS; step++) {
+          const pt = toScene(cr, cc);
+          if (!pt) break;
+          points.push(pt);
+
+          // RK4
+          const k1 = sampleGrad(cr, cc);
+          if (!k1) break;
+          const k2 = sampleGrad(cr - k1[1] * FLOW_DT * 0.5, cc - k1[0] * FLOW_DT * 0.5);
+          if (!k2) break;
+          const k3 = sampleGrad(cr - k2[1] * FLOW_DT * 0.5, cc - k2[0] * FLOW_DT * 0.5);
+          if (!k3) break;
+          const k4 = sampleGrad(cr - k3[1] * FLOW_DT, cc - k3[0] * FLOW_DT);
+          if (!k4) break;
+
+          const drc = (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]) / 6;
+          const dcc = (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]) / 6;
+          const mag = Math.sqrt(drc * drc + dcc * dcc);
+          if (mag < 1e-6) break; // stagnation point
+
+          // Normalize and step (negative gradient = toward low pressure)
+          cr -= (drc / mag) * FLOW_DT;
+          cc -= (dcc / mag) * FLOW_DT;
+        }
+        if (points.length > 2) {
+          segments.push(new THREE.BufferGeometry().setFromPoints(points));
+        }
+      }
+    }
+    return segments;
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const material = useMemo(
+    () => new THREE.LineBasicMaterial({
+      color: isDark ? "#88ccff" : "#2266aa",
+      opacity: 0.35,
+      transparent: true,
+    }),
+    [isDark],
+  );
+
+  return (
+    <>
+      {lineSegments.map((geo, i) => (
+        <primitive key={i} object={new THREE.Line(geo, material)} />
+      ))}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // State boundary lines — GeoJSON outlines drawn on the pressure surface
 // ---------------------------------------------------------------------------
 
@@ -827,11 +963,12 @@ function CameraControls({ rotating, zoom }: { rotating: boolean; zoom: number })
 // Scene wrapper
 // ---------------------------------------------------------------------------
 
-function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs }: {
+function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs, flowVisible }: {
   data: PressureGridData; isDark: boolean;
   selected: StationMarker | null; onSelect: (s: StationMarker | null) => void;
   rotating: boolean; zoom: number;
   radarVisible: boolean; radarOpacity: number; radarTs: number;
+  flowVisible: boolean;
 }) {
   return (
     <Canvas
@@ -847,6 +984,7 @@ function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, 
         <PressureSurface data={data} />
         <SideWalls data={data} />
         {radarVisible && <RadarOverlay data={data} opacity={radarOpacity} radarTs={radarTs} />}
+        {flowVisible && <GradientFlowLines data={data} isDark={isDark} />}
         <StateBoundaryLines data={data} isDark={isDark} />
         <StationMarkers data={data} selected={selected} onSelect={onSelect} />
         <GroundLabels data={data} />
@@ -996,6 +1134,7 @@ export default function PressureField() {
   const [radarVisible, setRadarVisible] = useState(true);
   const [radarOpacity, setRadarOpacity] = useState(0.6);
   const [radarTs, setRadarTs] = useState(() => Math.floor(Date.now() / 300000));
+  const [flowVisible, setFlowVisible] = useState(false);
 
   // Refresh radar tile cache-buster every 5 minutes
   useEffect(() => {
@@ -1050,7 +1189,7 @@ export default function PressureField() {
 
   return (
     <div style={containerStyle}>
-      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} />
+      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} flowVisible={flowVisible} />
       <InfoPanel data={data} isDark={isDark} />
       {/* Scene controls */}
       <div style={{
@@ -1118,6 +1257,16 @@ export default function PressureField() {
             />
           </label>
         )}
+        <span style={{ width: 1, height: 18, background: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)" }} />
+        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={flowVisible}
+            onChange={(e) => setFlowVisible(e.target.checked)}
+            style={{ accentColor: "var(--color-accent)" }}
+          />
+          Flow
+        </label>
       </div>
       {selectedStation && (
         <StationDetailPanel
