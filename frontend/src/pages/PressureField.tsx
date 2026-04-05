@@ -382,14 +382,14 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
     }
     if (maxGradMag < 1e-8) maxGradMag = 1;
 
-    // --- Cyan (low pressure) → Magenta (high pressure), brightness from gradient ---
+    // --- Yellow (low pressure) → Fuchsia (high pressure), brightness from gradient ---
     const flowColor = (pressureT: number, gradMag: number): [number, number, number] => {
-      // Lerp hue: cyan [0, 1, 1] → magenta [1, 0, 1]
-      const r = pressureT;
+      // Lerp: yellow [1, 1, 0] → fuchsia [1, 0, 0.8]
+      const r = 1;
       const g = 1 - pressureT;
-      const b = 1;
-      // Brightness: scale by gradient magnitude (0.35 floor so weak lines stay visible)
-      const bright = 0.35 + 0.65 * Math.min(gradMag / maxGradMag, 1);
+      const b = pressureT * 0.8;
+      // Brightness: scale by gradient magnitude (0.4 floor so weak lines stay visible)
+      const bright = 0.4 + 0.6 * Math.min(gradMag / maxGradMag, 1);
       return [r * bright, g * bright, b * bright];
     };
 
@@ -447,7 +447,7 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
   const material = useMemo(
     () => new THREE.LineBasicMaterial({
       vertexColors: true,
-      opacity: 0.55,
+      opacity: 0.7,
       transparent: true,
     }),
     [],
