@@ -440,7 +440,7 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
     [],
   );
 
-  const arrowGeo = useMemo(() => new THREE.ConeGeometry(0.04, 0.12, 6), []);
+  const arrowGeo = useMemo(() => new THREE.ConeGeometry(0.025, 0.07, 6), []);
   const arrowMat = useMemo(
     () => new THREE.MeshBasicMaterial({ color: "#ff1493", transparent: true, opacity: 0.85 }),
     [],
