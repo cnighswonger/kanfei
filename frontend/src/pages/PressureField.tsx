@@ -1101,7 +1101,9 @@ function PressureScale({ data, pressureUnit }: { data: PressureGridData; pressur
 // Camera controls — orbit + optional auto-rotation + external zoom
 // ---------------------------------------------------------------------------
 
-function CameraControls({ rotating, zoom }: { rotating: boolean; zoom: number }) {
+function CameraControls({ rotating, zoom, onBearing }: {
+  rotating: boolean; zoom: number; onBearing?: (deg: number) => void;
+}) {
   const controlsRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   useFrame((state) => {
     if (!controlsRef.current) return;
@@ -1118,15 +1120,90 @@ function CameraControls({ rotating, zoom }: { rotating: boolean; zoom: number })
     cam.position.copy(target).addScaledVector(dir, newDist);
 
     controlsRef.current.update();
+
+    // Report camera bearing (azimuth from north) for compass rose.
+    // Scene has scale={[-1,1,1]} so X is mirrored — negate dx.
+    if (onBearing) {
+      const dx = cam.position.x - target.x;
+      const dz = cam.position.z - target.z;
+      const bearing = (Math.atan2(-dx, dz) * 180 / Math.PI + 360) % 360;
+      onBearing(bearing);
+    }
   });
   return <OrbitControls ref={controlsRef} enableDamping dampingFactor={0.1} target={[0, 2, 0]} />;
+}
+
+// ---------------------------------------------------------------------------
+// Compass rose — fixed HUD overlay showing camera bearing relative to north
+// ---------------------------------------------------------------------------
+
+function CompassRose({ bearing, isDark }: { bearing: number; isDark: boolean }) {
+  const size = 64;
+  const mid = size / 2;
+  const r = size / 2 - 6; // radius for cardinal labels
+
+  const cardinals: { label: string; angle: number; primary: boolean }[] = [
+    { label: "N", angle: 0, primary: true },
+    { label: "E", angle: 90, primary: false },
+    { label: "S", angle: 180, primary: false },
+    { label: "W", angle: 270, primary: false },
+  ];
+
+  return (
+    <div style={{
+      position: "absolute",
+      top: 72,
+      right: 12,
+      zIndex: 10,
+      width: size,
+      height: size,
+      pointerEvents: "none",
+    }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {/* Outer ring */}
+        <circle cx={mid} cy={mid} r={mid - 4} fill={isDark ? "rgba(20,20,40,0.75)" : "rgba(255,255,255,0.8)"}
+          stroke={isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)"} strokeWidth={1} />
+        {/* Rotating group — spins opposite to camera bearing */}
+        <g transform={`rotate(${-bearing}, ${mid}, ${mid})`}>
+          {/* North pointer (red triangle) */}
+          <polygon
+            points={`${mid},${mid - r + 2} ${mid - 4},${mid} ${mid + 4},${mid}`}
+            fill="#e74c3c"
+          />
+          {/* South pointer (subtle) */}
+          <polygon
+            points={`${mid},${mid + r - 2} ${mid - 4},${mid} ${mid + 4},${mid}`}
+            fill={isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)"}
+          />
+          {/* Cardinal labels */}
+          {cardinals.map((c) => {
+            const rad = (c.angle * Math.PI) / 180;
+            const lx = mid + (r - 1) * Math.sin(rad);
+            const ly = mid - (r - 1) * Math.cos(rad);
+            return (
+              <text key={c.label} x={lx} y={ly}
+                textAnchor="middle" dominantBaseline="central"
+                fontSize={c.primary ? 11 : 9}
+                fontWeight={c.primary ? 700 : 500}
+                fill={c.primary ? "#e74c3c" : (isDark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.45)")}
+              >
+                {c.label}
+              </text>
+            );
+          })}
+        </g>
+        {/* Fixed center dot */}
+        <circle cx={mid} cy={mid} r={2} fill={isDark ? "#ccc" : "#555"} />
+      </svg>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Scene wrapper
 // ---------------------------------------------------------------------------
 
-function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs, flowVisible, coriolisEnabled, statesVisible, stationsVisible, tempVisible, tempOpacity }: {
+function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs, flowVisible, coriolisEnabled, statesVisible, stationsVisible, tempVisible, tempOpacity, onBearing }: {
   data: PressureGridData; isDark: boolean;
   selected: StationMarker | null; onSelect: (s: StationMarker | null) => void;
   rotating: boolean; zoom: number;
@@ -1134,6 +1211,7 @@ function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, 
   flowVisible: boolean; coriolisEnabled: boolean;
   statesVisible: boolean; stationsVisible: boolean;
   tempVisible: boolean; tempOpacity: number;
+  onBearing?: (deg: number) => void;
 }) {
   return (
     <Canvas
@@ -1157,7 +1235,7 @@ function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, 
         <CardinalLabels data={data} />
         <PressureScale data={data} pressureUnit={data.pressure_unit || "hPa"} />
       </group>
-      <CameraControls rotating={rotating} zoom={zoom} />
+      <CameraControls rotating={rotating} zoom={zoom} onBearing={onBearing} />
     </Canvas>
   );
 }
@@ -1472,6 +1550,21 @@ export default function PressureField() {
   const [tempVisible, setTempVisible] = useState(false);
   const [tempOpacity, setTempOpacity] = useState(0.6);
   const [layersOpen, setLayersOpen] = useState(false);
+  const [bearing, setBearing] = useState(0);
+  const bearingRef = useRef(0);
+  // Throttle bearing updates to avoid re-rendering every frame
+  const handleBearing = useMemo(() => {
+    let rafId = 0;
+    return (deg: number) => {
+      bearingRef.current = deg;
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          setBearing(bearingRef.current);
+          rafId = 0;
+        });
+      }
+    };
+  }, []);
 
   // Refresh radar tile cache-buster every 5 minutes
   useEffect(() => {
@@ -1526,7 +1619,8 @@ export default function PressureField() {
 
   return (
     <div style={containerStyle}>
-      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} flowVisible={flowVisible} coriolisEnabled={coriolisEnabled} statesVisible={statesVisible} stationsVisible={stationsVisible} tempVisible={tempVisible} tempOpacity={tempOpacity} />
+      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} flowVisible={flowVisible} coriolisEnabled={coriolisEnabled} statesVisible={statesVisible} stationsVisible={stationsVisible} tempVisible={tempVisible} tempOpacity={tempOpacity} onBearing={handleBearing} />
+      <CompassRose bearing={bearing} isDark={isDark} />
       <InfoPanel data={data} isDark={isDark} />
       {/* Temperature color scale — only when temp layer active */}
       {tempVisible && (() => {
