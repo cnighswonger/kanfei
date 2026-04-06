@@ -531,7 +531,6 @@ function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: 
 
     // --- Vorticity = ∂gradR/∂c - ∂gradC/∂r (curl of gradient) ---
     const vort: number[][] = [];
-    let maxAbs = 0;
     for (let r = 0; r < rows; r++) {
       vort[r] = [];
       for (let c = 0; c < cols; c++) {
@@ -542,11 +541,20 @@ function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: 
           ? (gradC[r + 1][c] - gradC[r - 1][c]) / 2
           : r === 0 ? gradC[1][c] - gradC[0][c] : gradC[r][c] - gradC[r - 1][c];
         vort[r][c] = dGradR_dc - dGradC_dr;
-        const a = Math.abs(vort[r][c]);
-        if (a > maxAbs) maxAbs = a;
       }
     }
-    if (maxAbs < 1e-10) maxAbs = 1;
+
+    // Use p95 of |vorticity| for normalization so edge/station artifacts
+    // don't compress the entire color range into invisible near-zero.
+    const allAbs: number[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        allAbs.push(Math.abs(vort[r][c]));
+      }
+    }
+    allAbs.sort((a, b) => a - b);
+    const p95 = allAbs[Math.floor(allAbs.length * 0.95)] || 1;
+    const normScale = Math.max(p95, 1e-10);
 
     // --- Build draped mesh with vertex colors ---
     // Near-zero vorticity fades toward a neutral grey so only significant
@@ -565,12 +573,15 @@ function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: 
         pos.setY(idx, y);
 
         // Normalize vorticity to [0, 1] range centered at 0.5
-        const t = 0.5 + (vort[r][c] / maxAbs) * 0.5;
+        // Clamp so values beyond p95 saturate instead of overflowing
+        const raw = vort[r][c] / normScale;
+        const clamped = Math.max(-1, Math.min(1, raw));
+        const t = 0.5 + clamped * 0.5;
         const [cr, cg, cb] = vorticityColor(t);
 
         // Blend toward neutral grey where vorticity is weak
-        const intensity = Math.abs(vort[r][c]) / maxAbs;
-        const blend = Math.pow(intensity, 1.5); // power curve: only strong vorticity shows
+        const intensity = Math.min(Math.abs(raw), 1);
+        const blend = Math.pow(intensity, 0.8); // gentler curve with p95 normalization
         const neutral = 0.35; // dark neutral
         colors[idx * 3] = neutral + (cr - neutral) * blend;
         colors[idx * 3 + 1] = neutral + (cg - neutral) * blend;
