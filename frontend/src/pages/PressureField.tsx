@@ -481,6 +481,163 @@ function GradientFlowLines({ data, coriolis }: { data: PressureGridData; corioli
 // Temperature overlay — IDW-interpolated station temps draped on the surface
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Vorticity overlay — curl of observed wind field (∂v/∂x - ∂u/∂y)
+// ---------------------------------------------------------------------------
+
+/**
+ * Map signed vorticity to a diverging color ramp.
+ * t ∈ [0, 1] where 0 = max anticyclonic, 0.5 = zero, 1 = max cyclonic.
+ * Anticyclonic (t < 0.5): warm red/orange
+ * Cyclonic    (t > 0.5): cool cyan/blue
+ */
+function vorticityColor(t: number): [number, number, number] {
+  const tc = Math.max(0, Math.min(1, t));
+  if (tc < 0.5) {
+    // Anticyclonic: red (0) → orange (0.25) → pale (0.5)
+    const s = tc / 0.5; // 0→1
+    return [1.0 - 0.3 * s, 0.25 + 0.55 * s, 0.15 + 0.65 * s];
+  } else {
+    // Cyclonic: pale (0.5) → cyan (0.75) → blue (1)
+    const s = (tc - 0.5) / 0.5; // 0→1
+    return [0.7 - 0.55 * s, 0.8 - 0.15 * s, 0.8 + 0.2 * s];
+  }
+}
+
+function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: number }) {
+  const { grid, rows, cols, pressure_min, pressure_max, stations,
+          lat_min, lat_max, lon_min, lon_max } = data;
+  const sceneWidth = 10;
+  const sceneDepth = 10 * (rows / cols);
+  const pRange = (pressure_max - pressure_min) || 1;
+  const heightScale = 8;
+
+  const geometry = useMemo(() => {
+    // --- IDW-interpolate u/v wind components onto the grid ---
+    // Filter to stations with both speed and direction
+    const windStations = stations.filter(
+      (s) => s.wind_mph != null && s.wind_dir != null && s.wind_mph >= 0
+    );
+    if (windStations.length < 3) return null;
+
+    // Decompose met-convention wind (dir = FROM, CW from N) to u/v
+    // u = east component, v = north component
+    const stationUV = windStations.map((s) => {
+      const dirRad = (s.wind_dir! * Math.PI) / 180;
+      // Wind FROM dir means the flow is opposite to the direction
+      return {
+        lat: s.lat, lon: s.lon,
+        u: -s.wind_mph! * Math.sin(dirRad),
+        v: -s.wind_mph! * Math.cos(dirRad),
+      };
+    });
+
+    // IDW interpolation of u and v onto the grid
+    const uGrid: number[][] = [];
+    const vGrid: number[][] = [];
+    for (let r = 0; r < rows; r++) {
+      uGrid[r] = [];
+      vGrid[r] = [];
+      const lat = lat_min + (r / (rows - 1)) * (lat_max - lat_min);
+      for (let c = 0; c < cols; c++) {
+        const lon = lon_min + (c / (cols - 1)) * (lon_max - lon_min);
+        let wSum = 0, uSum = 0, vSum = 0;
+        for (const s of stationUV) {
+          const dlat = s.lat - lat;
+          const dlon = s.lon - lon;
+          const d2 = dlat * dlat + dlon * dlon;
+          if (d2 < 1e-10) {
+            // Coincident with station — use its value directly
+            wSum = 1; uSum = s.u; vSum = s.v;
+            break;
+          }
+          const w = 1 / d2; // power=2
+          wSum += w;
+          uSum += w * s.u;
+          vSum += w * s.v;
+        }
+        uGrid[r][c] = wSum > 0 ? uSum / wSum : 0;
+        vGrid[r][c] = wSum > 0 ? vSum / wSum : 0;
+      }
+    }
+
+    // --- Vorticity = ∂v/∂x - ∂u/∂y (curl of wind field) ---
+    // In grid space: ∂v/∂c - ∂u/∂r (c ~ x/lon, r ~ y/lat)
+    const vort: number[][] = [];
+    for (let r = 0; r < rows; r++) {
+      vort[r] = [];
+      for (let c = 0; c < cols; c++) {
+        const dv_dc = c > 0 && c < cols - 1
+          ? (vGrid[r][c + 1] - vGrid[r][c - 1]) / 2
+          : c === 0 ? vGrid[r][1] - vGrid[r][0] : vGrid[r][c] - vGrid[r][c - 1];
+        const du_dr = r > 0 && r < rows - 1
+          ? (uGrid[r + 1][c] - uGrid[r - 1][c]) / 2
+          : r === 0 ? uGrid[1][c] - uGrid[0][c] : uGrid[r][c] - uGrid[r - 1][c];
+        vort[r][c] = dv_dc - du_dr;
+      }
+    }
+
+    // p95 normalization so edge artifacts don't wash out the interior
+    const allAbs: number[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        allAbs.push(Math.abs(vort[r][c]));
+      }
+    }
+    allAbs.sort((a, b) => a - b);
+    const p95 = allAbs[Math.floor(allAbs.length * 0.95)] || 1;
+    const normScale = Math.max(p95, 1e-10);
+
+    // --- Build draped mesh with vertex colors ---
+    const geo = new THREE.PlaneGeometry(sceneWidth, sceneDepth, cols - 1, rows - 1);
+    geo.rotateX(-Math.PI / 2);
+
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
+        const p = grid[r][c];
+        const y = ((p - pressure_min) / pRange) * heightScale + 0.05;
+        pos.setY(idx, y);
+
+        const raw = vort[r][c] / normScale;
+        const clamped = Math.max(-1, Math.min(1, raw));
+        const t = 0.5 + clamped * 0.5;
+        const [cr, cg, cb] = vorticityColor(t);
+
+        // Blend toward neutral grey where vorticity is weak
+        const intensity = Math.min(Math.abs(raw), 1);
+        const blend = Math.pow(intensity, 0.8);
+        const neutral = 0.35;
+        colors[idx * 3] = neutral + (cr - neutral) * blend;
+        colors[idx * 3 + 1] = neutral + (cg - neutral) * blend;
+        colors[idx * 3 + 2] = neutral + (cb - neutral) * blend;
+      }
+    }
+    pos.needsUpdate = true;
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+    return geo;
+  }, [grid, rows, cols, pressure_min, pressure_max, pRange, heightScale,
+      stations, lat_min, lat_max, lon_min, lon_max]);
+
+  if (!geometry) return null;
+
+  return (
+    <mesh geometry={geometry}>
+      <meshBasicMaterial
+        vertexColors
+        transparent
+        opacity={opacity}
+        side={THREE.DoubleSide}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
 function tempColor(t: number): [number, number, number] {
   // Vivid blue (cold, t=0) → purple (mid) → vivid red (hot, t=1)
   // Sigmoid contrast stretch so small deltas produce visible color shifts
@@ -1222,7 +1379,7 @@ function CompassRose({ bearing, isDark }: { bearing: number; isDark: boolean }) 
 // Scene wrapper
 // ---------------------------------------------------------------------------
 
-function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs, flowVisible, coriolisEnabled, statesVisible, stationsVisible, tempVisible, tempOpacity, onBearing }: {
+function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs, flowVisible, coriolisEnabled, statesVisible, stationsVisible, tempVisible, tempOpacity, vorticityVisible, vorticityOpacity, onBearing }: {
   data: PressureGridData; isDark: boolean;
   selected: StationMarker | null; onSelect: (s: StationMarker | null) => void;
   rotating: boolean; zoom: number;
@@ -1230,6 +1387,7 @@ function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, 
   flowVisible: boolean; coriolisEnabled: boolean;
   statesVisible: boolean; stationsVisible: boolean;
   tempVisible: boolean; tempOpacity: number;
+  vorticityVisible: boolean; vorticityOpacity: number;
   onBearing?: (deg: number) => void;
 }) {
   return (
@@ -1246,6 +1404,7 @@ function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, 
         <PressureSurface data={data} />
         <SideWalls data={data} />
         {tempVisible && <TemperatureOverlay data={data} opacity={tempOpacity} />}
+        {vorticityVisible && <VorticityOverlay data={data} opacity={vorticityOpacity} />}
         {radarVisible && <RadarOverlay data={data} opacity={radarOpacity} radarTs={radarTs} />}
         {flowVisible && <GradientFlowLines data={data} coriolis={coriolisEnabled} />}
         {statesVisible && <StateBoundaryLines data={data} isDark={isDark} />}
@@ -1357,6 +1516,53 @@ function TempScale({ tMin, tMax, isDark, tempUnit }: {
 }
 
 // ---------------------------------------------------------------------------
+// Vorticity color scale — shown when vorticity layer is active
+// ---------------------------------------------------------------------------
+
+function VorticityScale({ isDark, offsetTop }: { isDark: boolean; offsetTop: number }) {
+  // Build CSS gradient matching vorticityColor ramp
+  const stops: string[] = [];
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    const [r, g, b] = vorticityColor(t);
+    stops.push(`rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`);
+  }
+
+  const panelStyle: React.CSSProperties = {
+    position: "absolute",
+    top: offsetTop,
+    left: 12,
+    zIndex: 10,
+    background: isDark ? "rgba(20, 20, 40, 0.85)" : "rgba(255, 255, 255, 0.9)",
+    border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+    borderRadius: 8,
+    padding: "8px 12px",
+    color: isDark ? "#ccc" : "#333",
+    fontSize: 11,
+    lineHeight: 1.5,
+    backdropFilter: "blur(8px)",
+    maxWidth: 180,
+  };
+
+  return (
+    <div style={panelStyle}>
+      <div style={{ fontWeight: 600, marginBottom: 3, fontSize: 11 }}>Vorticity</div>
+      <div style={{ fontSize: 10, color: isDark ? "#888" : "#999" }}>Anticyclonic → Cyclonic</div>
+      <div style={{
+        height: 8,
+        borderRadius: 3,
+        background: `linear-gradient(to right, ${stops.join(", ")})`,
+        margin: "3px 0",
+      }} />
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: isDark ? "#888" : "#999" }}>
+        <span>-</span>
+        <span>+</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Layers popover panel
 // ---------------------------------------------------------------------------
 
@@ -1368,6 +1574,8 @@ function LayersPanel({ isDark, ...props }: {
   coriolisEnabled: boolean; setCoriolisEnabled: (v: boolean) => void;
   tempVisible: boolean; setTempVisible: (v: boolean) => void;
   tempOpacity: number; setTempOpacity: (v: number) => void;
+  vorticityVisible: boolean; setVorticityVisible: (v: boolean) => void;
+  vorticityOpacity: number; setVorticityOpacity: (v: number) => void;
   statesVisible: boolean; setStatesVisible: (v: boolean) => void;
   stationsVisible: boolean; setStationsVisible: (v: boolean) => void;
 }) {
@@ -1438,6 +1646,20 @@ function LayersPanel({ isDark, ...props }: {
           Coriolis
         </label>
       )}
+
+      {/* Vorticity */}
+      <label style={rowStyle}>
+        <input type="checkbox" checked={props.vorticityVisible}
+          onChange={(e) => props.setVorticityVisible(e.target.checked)}
+          style={{ accentColor: "var(--color-accent)" }} />
+        Vorticity
+        {props.vorticityVisible && (
+          <input type="range" min={0} max={100}
+            value={Math.round(props.vorticityOpacity * 100)}
+            onChange={(e) => props.setVorticityOpacity(Number(e.target.value) / 100)}
+            style={sliderStyle} />
+        )}
+      </label>
 
       {/* Temp */}
       <label style={rowStyle}>
@@ -1568,6 +1790,8 @@ export default function PressureField() {
   const [coriolisEnabled, setCoriolisEnabled] = useState(false);
   const [tempVisible, setTempVisible] = useState(false);
   const [tempOpacity, setTempOpacity] = useState(0.6);
+  const [vorticityVisible, setVorticityVisible] = useState(false);
+  const [vorticityOpacity, setVorticityOpacity] = useState(0.7);
   const [layersOpen, setLayersOpen] = useState(false);
   const [bearing, setBearing] = useState(0);
   const bearingRef = useRef(0);
@@ -1638,7 +1862,7 @@ export default function PressureField() {
 
   return (
     <div style={containerStyle}>
-      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} flowVisible={flowVisible} coriolisEnabled={coriolisEnabled} statesVisible={statesVisible} stationsVisible={stationsVisible} tempVisible={tempVisible} tempOpacity={tempOpacity} onBearing={handleBearing} />
+      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} flowVisible={flowVisible} coriolisEnabled={coriolisEnabled} statesVisible={statesVisible} stationsVisible={stationsVisible} tempVisible={tempVisible} tempOpacity={tempOpacity} vorticityVisible={vorticityVisible} vorticityOpacity={vorticityOpacity} onBearing={handleBearing} />
       <CompassRose bearing={bearing} isDark={isDark} />
       <InfoPanel data={data} isDark={isDark} />
       {/* Temperature color scale — only when temp layer active */}
@@ -1647,6 +1871,7 @@ export default function PressureField() {
         if (temps.length < 2) return null;
         return <TempScale tMin={Math.min(...temps)} tMax={Math.max(...temps)} isDark={isDark} tempUnit={data.temp_unit || "F"} />;
       })()}
+      {vorticityVisible && <VorticityScale isDark={isDark} offsetTop={tempVisible ? 230 : 160} />}
       {/* Minimal scene controls */}
       <div style={{
         position: "absolute",
@@ -1731,6 +1956,8 @@ export default function PressureField() {
           coriolisEnabled={coriolisEnabled} setCoriolisEnabled={setCoriolisEnabled}
           tempVisible={tempVisible} setTempVisible={setTempVisible}
           tempOpacity={tempOpacity} setTempOpacity={setTempOpacity}
+          vorticityVisible={vorticityVisible} setVorticityVisible={setVorticityVisible}
+          vorticityOpacity={vorticityOpacity} setVorticityOpacity={setVorticityOpacity}
           statesVisible={statesVisible} setStatesVisible={setStatesVisible}
           stationsVisible={stationsVisible} setStationsVisible={setStationsVisible}
         />
