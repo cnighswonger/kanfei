@@ -483,12 +483,13 @@ function GradientFlowLines({ data, coriolis }: { data: PressureGridData; corioli
 
 function tempColor(t: number): [number, number, number] {
   // Vivid blue (cold, t=0) → purple (mid) → vivid red (hot, t=1)
-  // No white midpoint — every value gets a distinct saturated color
+  // Sigmoid contrast stretch so small deltas produce visible color shifts
   const tc = Math.max(0, Math.min(1, t));
+  const s = 1 / (1 + Math.exp(-12 * (tc - 0.5))); // steep sigmoid, centered at 0.5
   return [
-    0.1 + tc * 0.9,          // R: 0.1 → 1.0
-    0.15 * (1 - (2 * tc - 1) ** 2), // G: low everywhere, slight bump at mid
-    1.0 - tc * 0.9,          // B: 1.0 → 0.1
+    0.1 + s * 0.9,           // R: 0.1 → 1.0
+    0.15 * (1 - (2 * s - 1) ** 2), // G: low everywhere, slight bump at mid
+    1.0 - s * 0.9,           // B: 1.0 → 0.1
   ];
 }
 
