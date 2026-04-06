@@ -1138,9 +1138,10 @@ function CameraControls({ rotating, zoom, onBearing }: {
 // ---------------------------------------------------------------------------
 
 function CompassRose({ bearing, isDark }: { bearing: number; isDark: boolean }) {
-  const size = 64;
+  const size = 88;
   const mid = size / 2;
-  const r = size / 2 - 6; // radius for cardinal labels
+  const ptrLen = 18; // pointer length from center
+  const labelR = mid - 8; // radius for cardinal labels
 
   const cardinals: { label: string; angle: number; primary: boolean }[] = [
     { label: "N", angle: 0, primary: true },
@@ -1161,31 +1162,47 @@ function CompassRose({ bearing, isDark }: { bearing: number; isDark: boolean }) 
     }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         {/* Outer ring */}
-        <circle cx={mid} cy={mid} r={mid - 4} fill={isDark ? "rgba(20,20,40,0.75)" : "rgba(255,255,255,0.8)"}
-          stroke={isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)"} strokeWidth={1} />
+        <circle cx={mid} cy={mid} r={mid - 3}
+          fill={isDark ? "rgba(15,15,30,0.85)" : "rgba(255,255,255,0.88)"}
+          stroke={isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)"} strokeWidth={1.5} />
+        {/* Tick marks at 30° increments */}
+        {Array.from({ length: 12 }, (_, i) => {
+          const a = (i * 30 - bearing) * Math.PI / 180;
+          const isMajor = i % 3 === 0;
+          const r1 = mid - (isMajor ? 16 : 12);
+          const r2 = mid - 5;
+          return (
+            <line key={i}
+              x1={mid + r1 * Math.sin(a)} y1={mid - r1 * Math.cos(a)}
+              x2={mid + r2 * Math.sin(a)} y2={mid - r2 * Math.cos(a)}
+              stroke={isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"}
+              strokeWidth={isMajor ? 1.5 : 0.75}
+            />
+          );
+        })}
         {/* Rotating group — spins opposite to camera bearing */}
         <g transform={`rotate(${-bearing}, ${mid}, ${mid})`}>
-          {/* North pointer (red triangle) */}
+          {/* North pointer (red) */}
           <polygon
-            points={`${mid},${mid - r + 2} ${mid - 4},${mid} ${mid + 4},${mid}`}
+            points={`${mid},${mid - ptrLen} ${mid - 5},${mid} ${mid + 5},${mid}`}
             fill="#e74c3c"
           />
           {/* South pointer (subtle) */}
           <polygon
-            points={`${mid},${mid + r - 2} ${mid - 4},${mid} ${mid + 4},${mid}`}
-            fill={isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)"}
+            points={`${mid},${mid + ptrLen} ${mid - 5},${mid} ${mid + 5},${mid}`}
+            fill={isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)"}
           />
           {/* Cardinal labels */}
           {cardinals.map((c) => {
             const rad = (c.angle * Math.PI) / 180;
-            const lx = mid + (r - 1) * Math.sin(rad);
-            const ly = mid - (r - 1) * Math.cos(rad);
+            const lx = mid + labelR * Math.sin(rad);
+            const ly = mid - labelR * Math.cos(rad);
             return (
               <text key={c.label} x={lx} y={ly}
                 textAnchor="middle" dominantBaseline="central"
-                fontSize={c.primary ? 11 : 9}
-                fontWeight={c.primary ? 700 : 500}
-                fill={c.primary ? "#e74c3c" : (isDark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.45)")}
+                fontSize={c.primary ? 13 : 11}
+                fontWeight={c.primary ? 700 : 600}
+                fill={c.primary ? "#e74c3c" : (isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.5)")}
               >
                 {c.label}
               </text>
@@ -1193,7 +1210,7 @@ function CompassRose({ bearing, isDark }: { bearing: number; isDark: boolean }) 
           })}
         </g>
         {/* Fixed center dot */}
-        <circle cx={mid} cy={mid} r={2} fill={isDark ? "#ccc" : "#555"} />
+        <circle cx={mid} cy={mid} r={2.5} fill={isDark ? "#ddd" : "#444"} />
       </svg>
     </div>
   );
