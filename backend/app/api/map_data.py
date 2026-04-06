@@ -217,7 +217,7 @@ async def _fetch_via_iem_direct(
             "pressure_hpa": pressure_hpa,
             "pressure_inhg": pressure_inhg,
             "precip_in": s.get("phour"),
-            "updated": s.get("local_valid"),
+            "updated": s.get("utc_valid"),
         })
 
     stations.sort(key=lambda s: s["distance_mi"])
@@ -551,15 +551,17 @@ _PRESSURE_OBS_MAX_AGE = 7200  # 2 hours
 def _parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
     """Best-effort parse of station timestamp strings.
 
-    Returns a naive datetime (tzinfo stripped if present) so that all
-    timestamps can be compared on the same footing.  IEM ``local_valid``
-    values are naive local-time strings; nowcast/APRS may include offsets.
+    Returns a **UTC naive** datetime so that all timestamps can be compared
+    on the same footing.  IEM ``utc_valid`` values are naive UTC strings;
+    APRS timestamps include a UTC offset which is converted then stripped.
     """
     if not ts:
         return None
     try:
         dt = datetime.fromisoformat(ts)
-        return dt.replace(tzinfo=None)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
     except (ValueError, TypeError):
         return None
 
@@ -570,10 +572,9 @@ def _collect_pressure_points(
     """Collect pressure points from station list + home barometer.
 
     Staleness is detected by comparing each station's timestamp to the
-    **median** of all station timestamps.  This is timezone-agnostic:
-    IEM ``local_valid`` values are naive strings in the station's
-    local timezone, but all stations in a regional query share roughly
-    the same zone, so relative comparison is reliable.
+    **median** of all station timestamps.  All timestamps are normalised
+    to naive-UTC by ``_parse_timestamp`` (IEM ``utc_valid`` is already
+    UTC; APRS offsets are converted), so comparison is timezone-safe.
     """
     # First pass: gather candidates with parsed timestamps
     candidates: list[tuple[float, float, float, Optional[datetime]]] = []
