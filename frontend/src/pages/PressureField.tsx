@@ -299,7 +299,7 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
   const sceneDepth = 10 * (rows / cols);
   const halfW = sceneWidth / 2;
   const halfD = sceneDepth / 2;
-  const pRange = pressure_max - pressure_min || 1;
+  const pRange = (pressure_max - pressure_min) || 1;
   const heightScale = 8;
 
   const lineSegments = useMemo(() => {
@@ -360,18 +360,6 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
       return new THREE.Vector3(x, y, z);
     };
 
-    // --- Bilinear sample of pressure at fractional grid position ---
-    const samplePressure = (fr: number, fc: number): number => {
-      const r0 = Math.min(Math.max(Math.floor(fr), 0), rows - 2);
-      const c0 = Math.min(Math.max(Math.floor(fc), 0), cols - 2);
-      const dr = Math.min(Math.max(fr - r0, 0), 1);
-      const dc = Math.min(Math.max(fc - c0, 0), 1);
-      return grid[r0][c0] * (1 - dr) * (1 - dc)
-           + grid[r0][c0 + 1] * (1 - dr) * dc
-           + grid[r0 + 1][c0] * dr * (1 - dc)
-           + grid[r0 + 1][c0 + 1] * dr * dc;
-    };
-
     // --- Compute max gradient magnitude for brightness normalization ---
     let maxGradMag = 0;
     for (let r = 0; r < rows; r++) {
@@ -382,17 +370,6 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
     }
     if (maxGradMag < 1e-8) maxGradMag = 1;
 
-    // --- White (low pressure) → Hot pink (high pressure), brightness from gradient ---
-    const flowColor = (pressureT: number, gradMag: number): [number, number, number] => {
-      // Lerp: white [1, 1, 1] → hot pink [1, 0.2, 0.6]
-      const r = 1;
-      const g = 1 - pressureT * 0.8;
-      const b = 1 - pressureT * 0.4;
-      // Brightness: scale by gradient magnitude (0.4 floor so weak lines stay visible)
-      const bright = 0.4 + 0.6 * Math.min(gradMag / maxGradMag, 1);
-      return [r * bright, g * bright, b * bright];
-    };
-
     // --- Seed streamlines on a jittered grid ---
     const segments: THREE.BufferGeometry[] = [];
     const seedSpacing = Math.sqrt((rows * cols) / FLOW_SEED_COUNT);
@@ -400,20 +377,15 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
       for (let sc = seedSpacing / 2; sc < cols - 1; sc += seedSpacing) {
         // RK4 integration along negative gradient (high → low pressure)
         const points: THREE.Vector3[] = [];
-        const colors: number[] = [];
+        const mags: number[] = [];
         let cr = sr, cc = sc;
         for (let step = 0; step < FLOW_STEPS; step++) {
           const pt = toScene(cr, cc);
           if (!pt) break;
           points.push(pt);
 
-          // Color this vertex: hue from local pressure, brightness from gradient magnitude
-          const pHere = samplePressure(cr, cc);
-          const pT = (pHere - pressure_min) / pRange;
           const g = sampleGrad(cr, cc);
-          const gradMag = g ? Math.sqrt(g[0] ** 2 + g[1] ** 2) : 0;
-          const [vr, vg, vb] = flowColor(pT, gradMag);
-          colors.push(vr, vg, vb);
+          mags.push(g ? Math.sqrt(g[0] ** 2 + g[1] ** 2) : 0);
 
           // RK4
           const k1 = sampleGrad(cr, cc);
@@ -435,6 +407,19 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
           cc -= (dcc / mag) * FLOW_DT;
         }
         if (points.length > 2) {
+          // Color by position along line: white (origin) → hot pink (terminus)
+          // Brightness modulated by gradient magnitude
+          const colors: number[] = [];
+          const n = points.length - 1;
+          for (let i = 0; i < points.length; i++) {
+            const t = i / n; // 0 = origin, 1 = terminus
+            // Lerp: white [1, 1, 1] → hot pink [1, 0.1, 0.5]
+            const rv = 1;
+            const gv = 1 - t * 0.9;
+            const bv = 1 - t * 0.5;
+            const bright = 0.4 + 0.6 * Math.min(mags[i] / maxGradMag, 1);
+            colors.push(rv * bright, gv * bright, bv * bright);
+          }
           const geo = new THREE.BufferGeometry().setFromPoints(points);
           geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
           segments.push(geo);
