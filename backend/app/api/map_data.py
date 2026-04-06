@@ -217,7 +217,7 @@ async def _fetch_via_iem_direct(
             "pressure_hpa": pressure_hpa,
             "pressure_inhg": pressure_inhg,
             "precip_in": s.get("phour"),
-            "updated": s.get("local_valid"),
+            "updated": s.get("utc_valid"),
         })
 
     stations.sort(key=lambda s: s["distance_mi"])
@@ -542,15 +542,90 @@ async def _ensure_station_cache(
     return _station_cache[key]
 
 
+# Max age (seconds) for station observations used in pressure grid.
+# Stations whose "updated" timestamp is older than this are excluded.
+# TODO: expose as user-configurable setting (e.g. "pressure_grid_max_age")
+_PRESSURE_OBS_MAX_AGE = 7200  # 2 hours
+
+
+def _parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
+    """Best-effort parse of station timestamp strings.
+
+    Returns a **UTC naive** datetime so that all timestamps can be compared
+    on the same footing.  IEM ``utc_valid`` values are naive UTC strings;
+    APRS timestamps include a UTC offset which is converted then stripped.
+    """
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+    except (ValueError, TypeError):
+        return None
+
+
 def _collect_pressure_points(
     stations: list[dict], db: Session, lat: float, lon: float,
 ) -> list[tuple[float, float, float]]:
-    """Collect pressure points from station list + home barometer."""
-    pressure_points: list[tuple[float, float, float]] = []
+    """Collect pressure points from station list + home barometer.
+
+    Staleness is detected by comparing each station's timestamp to the
+    **median** of all station timestamps.  All timestamps are normalised
+    to naive-UTC by ``_parse_timestamp`` (IEM ``utc_valid`` is already
+    UTC; APRS offsets are converted), so comparison is timezone-safe.
+    """
+    # First pass: gather candidates with parsed timestamps
+    candidates: list[tuple[float, float, float, Optional[datetime]]] = []
     for s in stations:
         p = s.get("pressure_hpa")
-        if p is not None and s.get("lat") is not None:
-            pressure_points.append((s["lat"], s["lon"], p))
+        if p is None or s.get("lat") is None:
+            continue
+        ts = _parse_timestamp(s.get("updated"))
+        candidates.append((s["lat"], s["lon"], p, ts))
+
+    # Compute median timestamp from stations that have one
+    timestamps = sorted(ts for *_, ts in candidates if ts is not None)
+    median_ts: Optional[datetime] = None
+    if timestamps:
+        median_ts = timestamps[len(timestamps) // 2]
+
+    # Second pass: filter stale stations
+    fresh: list[tuple[float, float, float]] = []
+    stale_count = 0
+    for lat_s, lon_s, p, ts in candidates:
+        if ts is not None and median_ts is not None:
+            age = abs((median_ts - ts).total_seconds())
+            if age > _PRESSURE_OBS_MAX_AGE:
+                stale_count += 1
+                continue
+        fresh.append((lat_s, lon_s, p))
+
+    if stale_count:
+        logger.info("Map: dropped %d stale station(s) (>%ds from median)",
+                     stale_count, _PRESSURE_OBS_MAX_AGE)
+
+    # Third pass: drop pressure outliers.
+    # Real SLP across a 250mi radius varies at most ~15 hPa even in
+    # strong frontal zones.  Stations >20 hPa from the regional median
+    # are reporting uncorrected station pressure or bad altimeter data.
+    _PRESSURE_OUTLIER_THRESHOLD = 20.0  # hPa
+    pressure_points: list[tuple[float, float, float]] = []
+    if fresh:
+        pressures = sorted(p for *_, p in fresh)
+        median_p = pressures[len(pressures) // 2]
+        outlier_count = 0
+        for lat_s, lon_s, p in fresh:
+            if abs(p - median_p) > _PRESSURE_OUTLIER_THRESHOLD:
+                outlier_count += 1
+                continue
+            pressure_points.append((lat_s, lon_s, p))
+        if outlier_count:
+            logger.info("Map: dropped %d pressure outlier(s) (>%.0f hPa from median %.1f)",
+                         outlier_count, _PRESSURE_OUTLIER_THRESHOLD, median_p)
+    else:
+        pressure_points = fresh
 
     # Add home station barometer if available
     try:
@@ -558,7 +633,8 @@ def _collect_pressure_points(
         from ..models.sensor_reading import SensorReadingModel
         from ..models.sensor_meta import convert
         _db = SessionLocal()
-        row = _db.query(SensorReadingModel.barometer).order_by(
+        row = _db.query(SensorReadingModel.barometer,
+                        SensorReadingModel.timestamp).order_by(
             SensorReadingModel.timestamp.desc()
         ).first()
         _db.close()
