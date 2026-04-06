@@ -482,49 +482,22 @@ function GradientFlowLines({ data, coriolis }: { data: PressureGridData; corioli
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Vorticity overlay — curl of observed wind field (∂v/∂x - ∂u/∂y)
+// Shared wind grid — IDW-interpolated u/v from station observations
 // ---------------------------------------------------------------------------
 
-/**
- * Map signed vorticity to a diverging color ramp.
- * t ∈ [0, 1] where 0 = max anticyclonic, 0.5 = zero, 1 = max cyclonic.
- * Anticyclonic (t < 0.5): warm red/orange
- * Cyclonic    (t > 0.5): cool cyan/blue
- */
-function vorticityColor(t: number): [number, number, number] {
-  const tc = Math.max(0, Math.min(1, t));
-  if (tc < 0.5) {
-    // Anticyclonic: red (0) → orange (0.25) → pale (0.5)
-    const s = tc / 0.5; // 0→1
-    return [1.0 - 0.3 * s, 0.25 + 0.55 * s, 0.15 + 0.65 * s];
-  } else {
-    // Cyclonic: pale (0.5) → cyan (0.75) → blue (1)
-    const s = (tc - 0.5) / 0.5; // 0→1
-    return [0.7 - 0.55 * s, 0.8 - 0.15 * s, 0.8 + 0.2 * s];
-  }
-}
+/** IDW-interpolate observed wind vectors onto the pressure grid. */
+function useWindGrid(data: PressureGridData): { uGrid: number[][]; vGrid: number[][] } | null {
+  const { rows, cols, stations, lat_min, lat_max, lon_min, lon_max } = data;
 
-function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: number }) {
-  const { grid, rows, cols, pressure_min, pressure_max, stations,
-          lat_min, lat_max, lon_min, lon_max } = data;
-  const sceneWidth = 10;
-  const sceneDepth = 10 * (rows / cols);
-  const pRange = (pressure_max - pressure_min) || 1;
-  const heightScale = 8;
-
-  const geometry = useMemo(() => {
-    // --- IDW-interpolate u/v wind components onto the grid ---
-    // Filter to stations with both speed and direction
+  return useMemo(() => {
     const windStations = stations.filter(
       (s) => s.wind_mph != null && s.wind_dir != null && s.wind_mph >= 0
     );
     if (windStations.length < 3) return null;
 
     // Decompose met-convention wind (dir = FROM, CW from N) to u/v
-    // u = east component, v = north component
     const stationUV = windStations.map((s) => {
       const dirRad = (s.wind_dir! * Math.PI) / 180;
-      // Wind FROM dir means the flow is opposite to the direction
       return {
         lat: s.lat, lon: s.lon,
         u: -s.wind_mph! * Math.sin(dirRad),
@@ -532,7 +505,6 @@ function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: 
       };
     });
 
-    // IDW interpolation of u and v onto the grid
     const uGrid: number[][] = [];
     const vGrid: number[][] = [];
     for (let r = 0; r < rows; r++) {
@@ -547,11 +519,10 @@ function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: 
           const dlon = s.lon - lon;
           const d2 = dlat * dlat + dlon * dlon;
           if (d2 < 1e-10) {
-            // Coincident with station — use its value directly
             wSum = 1; uSum = s.u; vSum = s.v;
             break;
           }
-          const w = 1 / d2; // power=2
+          const w = 1 / d2;
           wSum += w;
           uSum += w * s.u;
           vSum += w * s.v;
@@ -560,9 +531,97 @@ function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: 
         vGrid[r][c] = wSum > 0 ? vSum / wSum : 0;
       }
     }
+    return { uGrid, vGrid };
+  }, [rows, cols, stations, lat_min, lat_max, lon_min, lon_max]);
+}
 
-    // --- Vorticity = ∂v/∂x - ∂u/∂y (curl of wind field) ---
-    // In grid space: ∂v/∂c - ∂u/∂r (c ~ x/lon, r ~ y/lat)
+/**
+ * Build a draped mesh colored by a signed scalar field.
+ * Shared by vorticity and divergence overlays.
+ */
+function buildSignedOverlayGeometry(
+  data: PressureGridData,
+  field: number[][],
+  colorFn: (t: number) => [number, number, number],
+): THREE.PlaneGeometry {
+  const { grid, rows, cols, pressure_min, pressure_max } = data;
+  const sceneWidth = 10;
+  const sceneDepth = 10 * (rows / cols);
+  const pRange = (pressure_max - pressure_min) || 1;
+  const heightScale = 8;
+
+  // p95 normalization
+  const allAbs: number[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      allAbs.push(Math.abs(field[r][c]));
+    }
+  }
+  allAbs.sort((a, b) => a - b);
+  const p95 = allAbs[Math.floor(allAbs.length * 0.95)] || 1;
+  const normScale = Math.max(p95, 1e-10);
+
+  const geo = new THREE.PlaneGeometry(sceneWidth, sceneDepth, cols - 1, rows - 1);
+  geo.rotateX(-Math.PI / 2);
+
+  const pos = geo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      const p = grid[r][c];
+      const y = ((p - pressure_min) / pRange) * heightScale + 0.05;
+      pos.setY(idx, y);
+
+      const raw = field[r][c] / normScale;
+      const clamped = Math.max(-1, Math.min(1, raw));
+      const t = 0.5 + clamped * 0.5;
+      const [cr, cg, cb] = colorFn(t);
+
+      const intensity = Math.min(Math.abs(raw), 1);
+      const blend = Math.pow(intensity, 0.8);
+      const neutral = 0.35;
+      colors[idx * 3] = neutral + (cr - neutral) * blend;
+      colors[idx * 3 + 1] = neutral + (cg - neutral) * blend;
+      colors[idx * 3 + 2] = neutral + (cb - neutral) * blend;
+    }
+  }
+  pos.needsUpdate = true;
+  geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+  return geo;
+}
+
+// ---------------------------------------------------------------------------
+// Vorticity overlay — curl of observed wind field (∂v/∂x - ∂u/∂y)
+// ---------------------------------------------------------------------------
+
+/**
+ * Diverging color ramp for vorticity.
+ * t=0 anticyclonic (warm red/orange), t=0.5 zero, t=1 cyclonic (cyan/blue).
+ */
+function vorticityColor(t: number): [number, number, number] {
+  const tc = Math.max(0, Math.min(1, t));
+  if (tc < 0.5) {
+    const s = tc / 0.5;
+    return [1.0 - 0.3 * s, 0.25 + 0.55 * s, 0.15 + 0.65 * s];
+  } else {
+    const s = (tc - 0.5) / 0.5;
+    return [0.7 - 0.55 * s, 0.8 - 0.15 * s, 0.8 + 0.2 * s];
+  }
+}
+
+function VorticityOverlay({ data, windGrid, opacity }: {
+  data: PressureGridData;
+  windGrid: { uGrid: number[][]; vGrid: number[][] };
+  opacity: number;
+}) {
+  const { rows, cols } = data;
+  const { uGrid, vGrid } = windGrid;
+
+  const geometry = useMemo(() => {
+    // Vorticity = ∂v/∂c - ∂u/∂r (c ~ x/lon, r ~ y/lat)
     const vort: number[][] = [];
     for (let r = 0; r < rows; r++) {
       vort[r] = [];
@@ -576,54 +635,68 @@ function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: 
         vort[r][c] = dv_dc - du_dr;
       }
     }
+    return buildSignedOverlayGeometry(data, vort, vorticityColor);
+  }, [data, rows, cols, uGrid, vGrid]);
 
-    // p95 normalization so edge artifacts don't wash out the interior
-    const allAbs: number[] = [];
+  return (
+    <mesh geometry={geometry}>
+      <meshBasicMaterial
+        vertexColors
+        transparent
+        opacity={opacity}
+        side={THREE.DoubleSide}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Divergence overlay — ∂u/∂x + ∂v/∂y of observed wind field
+// ---------------------------------------------------------------------------
+
+/**
+ * Diverging color ramp for convergence/divergence.
+ * t=0 convergence (warm amber/red — updraft), t=0.5 zero, t=1 divergence (cool teal/blue — subsidence).
+ */
+function divergenceColor(t: number): [number, number, number] {
+  const tc = Math.max(0, Math.min(1, t));
+  if (tc < 0.5) {
+    // Convergence (updraft): red-amber (0) → warm orange (0.25) → pale (0.5)
+    const s = tc / 0.5;
+    return [0.95 - 0.2 * s, 0.3 + 0.45 * s, 0.1 + 0.7 * s];
+  } else {
+    // Divergence (subsidence): pale (0.5) → teal (0.75) → deep blue-green (1)
+    const s = (tc - 0.5) / 0.5;
+    return [0.75 - 0.6 * s, 0.75 - 0.1 * s, 0.8 + 0.15 * s];
+  }
+}
+
+function DivergenceOverlay({ data, windGrid, opacity }: {
+  data: PressureGridData;
+  windGrid: { uGrid: number[][]; vGrid: number[][] };
+  opacity: number;
+}) {
+  const { rows, cols } = data;
+  const { uGrid, vGrid } = windGrid;
+
+  const geometry = useMemo(() => {
+    // Divergence = ∂u/∂c + ∂v/∂r (c ~ x/lon, r ~ y/lat)
+    const div: number[][] = [];
     for (let r = 0; r < rows; r++) {
+      div[r] = [];
       for (let c = 0; c < cols; c++) {
-        allAbs.push(Math.abs(vort[r][c]));
+        const du_dc = c > 0 && c < cols - 1
+          ? (uGrid[r][c + 1] - uGrid[r][c - 1]) / 2
+          : c === 0 ? uGrid[r][1] - uGrid[r][0] : uGrid[r][c] - uGrid[r][c - 1];
+        const dv_dr = r > 0 && r < rows - 1
+          ? (vGrid[r + 1][c] - vGrid[r - 1][c]) / 2
+          : r === 0 ? vGrid[1][c] - vGrid[0][c] : vGrid[r][c] - vGrid[r - 1][c];
+        div[r][c] = du_dc + dv_dr;
       }
     }
-    allAbs.sort((a, b) => a - b);
-    const p95 = allAbs[Math.floor(allAbs.length * 0.95)] || 1;
-    const normScale = Math.max(p95, 1e-10);
-
-    // --- Build draped mesh with vertex colors ---
-    const geo = new THREE.PlaneGeometry(sceneWidth, sceneDepth, cols - 1, rows - 1);
-    geo.rotateX(-Math.PI / 2);
-
-    const pos = geo.attributes.position;
-    const colors = new Float32Array(pos.count * 3);
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const idx = r * cols + c;
-        const p = grid[r][c];
-        const y = ((p - pressure_min) / pRange) * heightScale + 0.05;
-        pos.setY(idx, y);
-
-        const raw = vort[r][c] / normScale;
-        const clamped = Math.max(-1, Math.min(1, raw));
-        const t = 0.5 + clamped * 0.5;
-        const [cr, cg, cb] = vorticityColor(t);
-
-        // Blend toward neutral grey where vorticity is weak
-        const intensity = Math.min(Math.abs(raw), 1);
-        const blend = Math.pow(intensity, 0.8);
-        const neutral = 0.35;
-        colors[idx * 3] = neutral + (cr - neutral) * blend;
-        colors[idx * 3 + 1] = neutral + (cg - neutral) * blend;
-        colors[idx * 3 + 2] = neutral + (cb - neutral) * blend;
-      }
-    }
-    pos.needsUpdate = true;
-    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-
-    return geo;
-  }, [grid, rows, cols, pressure_min, pressure_max, pRange, heightScale,
-      stations, lat_min, lat_max, lon_min, lon_max]);
-
-  if (!geometry) return null;
+    return buildSignedOverlayGeometry(data, div, divergenceColor);
+  }, [data, rows, cols, uGrid, vGrid]);
 
   return (
     <mesh geometry={geometry}>
@@ -1379,7 +1452,7 @@ function CompassRose({ bearing, isDark }: { bearing: number; isDark: boolean }) 
 // Scene wrapper
 // ---------------------------------------------------------------------------
 
-function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs, flowVisible, coriolisEnabled, statesVisible, stationsVisible, tempVisible, tempOpacity, vorticityVisible, vorticityOpacity, onBearing }: {
+function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs, flowVisible, coriolisEnabled, statesVisible, stationsVisible, tempVisible, tempOpacity, vorticityVisible, vorticityOpacity, divergenceVisible, divergenceOpacity, onBearing }: {
   data: PressureGridData; isDark: boolean;
   selected: StationMarker | null; onSelect: (s: StationMarker | null) => void;
   rotating: boolean; zoom: number;
@@ -1388,8 +1461,12 @@ function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, 
   statesVisible: boolean; stationsVisible: boolean;
   tempVisible: boolean; tempOpacity: number;
   vorticityVisible: boolean; vorticityOpacity: number;
+  divergenceVisible: boolean; divergenceOpacity: number;
   onBearing?: (deg: number) => void;
 }) {
+  // Shared wind grid — computed once, used by both vorticity and divergence
+  const windGrid = useWindGrid(data);
+
   return (
     <Canvas
       camera={{ position: [0, 10, -14], fov: 45, near: 0.1, far: 100 }}
@@ -1404,7 +1481,8 @@ function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, 
         <PressureSurface data={data} />
         <SideWalls data={data} />
         {tempVisible && <TemperatureOverlay data={data} opacity={tempOpacity} />}
-        {vorticityVisible && <VorticityOverlay data={data} opacity={vorticityOpacity} />}
+        {vorticityVisible && windGrid && <VorticityOverlay data={data} windGrid={windGrid} opacity={vorticityOpacity} />}
+        {divergenceVisible && windGrid && <DivergenceOverlay data={data} windGrid={windGrid} opacity={divergenceOpacity} />}
         {radarVisible && <RadarOverlay data={data} opacity={radarOpacity} radarTs={radarTs} />}
         {flowVisible && <GradientFlowLines data={data} coriolis={coriolisEnabled} />}
         {statesVisible && <StateBoundaryLines data={data} isDark={isDark} />}
@@ -1563,6 +1641,52 @@ function VorticityScale({ isDark, offsetTop }: { isDark: boolean; offsetTop: num
 }
 
 // ---------------------------------------------------------------------------
+// Divergence color scale — shown when divergence layer is active
+// ---------------------------------------------------------------------------
+
+function DivergenceScale({ isDark, offsetTop }: { isDark: boolean; offsetTop: number }) {
+  const stops: string[] = [];
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    const [r, g, b] = divergenceColor(t);
+    stops.push(`rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`);
+  }
+
+  const panelStyle: React.CSSProperties = {
+    position: "absolute",
+    top: offsetTop,
+    left: 12,
+    zIndex: 10,
+    background: isDark ? "rgba(20, 20, 40, 0.85)" : "rgba(255, 255, 255, 0.9)",
+    border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+    borderRadius: 8,
+    padding: "8px 12px",
+    color: isDark ? "#ccc" : "#333",
+    fontSize: 11,
+    lineHeight: 1.5,
+    backdropFilter: "blur(8px)",
+    maxWidth: 180,
+  };
+
+  return (
+    <div style={panelStyle}>
+      <div style={{ fontWeight: 600, marginBottom: 3, fontSize: 11 }}>Convergence / Divergence</div>
+      <div style={{ fontSize: 10, color: isDark ? "#888" : "#999" }}>Updraft → Subsidence</div>
+      <div style={{
+        height: 8,
+        borderRadius: 3,
+        background: `linear-gradient(to right, ${stops.join(", ")})`,
+        margin: "3px 0",
+      }} />
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: isDark ? "#888" : "#999" }}>
+        <span>Conv</span>
+        <span>Div</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Layers popover panel
 // ---------------------------------------------------------------------------
 
@@ -1576,6 +1700,8 @@ function LayersPanel({ isDark, ...props }: {
   tempOpacity: number; setTempOpacity: (v: number) => void;
   vorticityVisible: boolean; setVorticityVisible: (v: boolean) => void;
   vorticityOpacity: number; setVorticityOpacity: (v: number) => void;
+  divergenceVisible: boolean; setDivergenceVisible: (v: boolean) => void;
+  divergenceOpacity: number; setDivergenceOpacity: (v: number) => void;
   statesVisible: boolean; setStatesVisible: (v: boolean) => void;
   stationsVisible: boolean; setStationsVisible: (v: boolean) => void;
 }) {
@@ -1657,6 +1783,20 @@ function LayersPanel({ isDark, ...props }: {
           <input type="range" min={0} max={100}
             value={Math.round(props.vorticityOpacity * 100)}
             onChange={(e) => props.setVorticityOpacity(Number(e.target.value) / 100)}
+            style={sliderStyle} />
+        )}
+      </label>
+
+      {/* Divergence */}
+      <label style={rowStyle}>
+        <input type="checkbox" checked={props.divergenceVisible}
+          onChange={(e) => props.setDivergenceVisible(e.target.checked)}
+          style={{ accentColor: "var(--color-accent)" }} />
+        Divergence
+        {props.divergenceVisible && (
+          <input type="range" min={0} max={100}
+            value={Math.round(props.divergenceOpacity * 100)}
+            onChange={(e) => props.setDivergenceOpacity(Number(e.target.value) / 100)}
             style={sliderStyle} />
         )}
       </label>
@@ -1792,6 +1932,8 @@ export default function PressureField() {
   const [tempOpacity, setTempOpacity] = useState(0.6);
   const [vorticityVisible, setVorticityVisible] = useState(false);
   const [vorticityOpacity, setVorticityOpacity] = useState(0.7);
+  const [divergenceVisible, setDivergenceVisible] = useState(false);
+  const [divergenceOpacity, setDivergenceOpacity] = useState(0.7);
   const [layersOpen, setLayersOpen] = useState(false);
   const [bearing, setBearing] = useState(0);
   const bearingRef = useRef(0);
@@ -1862,7 +2004,7 @@ export default function PressureField() {
 
   return (
     <div style={containerStyle}>
-      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} flowVisible={flowVisible} coriolisEnabled={coriolisEnabled} statesVisible={statesVisible} stationsVisible={stationsVisible} tempVisible={tempVisible} tempOpacity={tempOpacity} vorticityVisible={vorticityVisible} vorticityOpacity={vorticityOpacity} onBearing={handleBearing} />
+      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} flowVisible={flowVisible} coriolisEnabled={coriolisEnabled} statesVisible={statesVisible} stationsVisible={stationsVisible} tempVisible={tempVisible} tempOpacity={tempOpacity} vorticityVisible={vorticityVisible} vorticityOpacity={vorticityOpacity} divergenceVisible={divergenceVisible} divergenceOpacity={divergenceOpacity} onBearing={handleBearing} />
       <CompassRose bearing={bearing} isDark={isDark} />
       <InfoPanel data={data} isDark={isDark} />
       {/* Temperature color scale — only when temp layer active */}
@@ -1872,6 +2014,9 @@ export default function PressureField() {
         return <TempScale tMin={Math.min(...temps)} tMax={Math.max(...temps)} isDark={isDark} tempUnit={data.temp_unit || "F"} />;
       })()}
       {vorticityVisible && <VorticityScale isDark={isDark} offsetTop={tempVisible ? 230 : 160} />}
+      {divergenceVisible && <DivergenceScale isDark={isDark} offsetTop={
+        160 + (tempVisible ? 70 : 0) + (vorticityVisible ? 70 : 0)
+      } />}
       {/* Minimal scene controls */}
       <div style={{
         position: "absolute",
@@ -1958,6 +2103,8 @@ export default function PressureField() {
           tempOpacity={tempOpacity} setTempOpacity={setTempOpacity}
           vorticityVisible={vorticityVisible} setVorticityVisible={setVorticityVisible}
           vorticityOpacity={vorticityOpacity} setVorticityOpacity={setVorticityOpacity}
+          divergenceVisible={divergenceVisible} setDivergenceVisible={setDivergenceVisible}
+          divergenceOpacity={divergenceOpacity} setDivergenceOpacity={setDivergenceOpacity}
           statesVisible={statesVisible} setStatesVisible={setStatesVisible}
           stationsVisible={stationsVisible} setStationsVisible={setStationsVisible}
         />
