@@ -482,7 +482,7 @@ function GradientFlowLines({ data, coriolis }: { data: PressureGridData; corioli
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Vorticity overlay — curl of the pressure gradient field
+// Vorticity overlay — curl of observed wind field (∂v/∂x - ∂u/∂y)
 // ---------------------------------------------------------------------------
 
 /**
@@ -490,7 +490,6 @@ function GradientFlowLines({ data, coriolis }: { data: PressureGridData; corioli
  * t ∈ [0, 1] where 0 = max anticyclonic, 0.5 = zero, 1 = max cyclonic.
  * Anticyclonic (t < 0.5): warm red/orange
  * Cyclonic    (t > 0.5): cool cyan/blue
- * Near-zero   (t ≈ 0.5): transparent (handled by alpha, not here)
  */
 function vorticityColor(t: number): [number, number, number] {
   const tc = Math.max(0, Math.min(1, t));
@@ -506,46 +505,79 @@ function vorticityColor(t: number): [number, number, number] {
 }
 
 function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: number }) {
-  const { grid, rows, cols, pressure_min, pressure_max } = data;
+  const { grid, rows, cols, pressure_min, pressure_max, stations,
+          lat_min, lat_max, lon_min, lon_max } = data;
   const sceneWidth = 10;
   const sceneDepth = 10 * (rows / cols);
   const pRange = (pressure_max - pressure_min) || 1;
   const heightScale = 8;
 
   const geometry = useMemo(() => {
-    // --- Compute gradient field (central finite differences) ---
-    const gradC: number[][] = [];
-    const gradR: number[][] = [];
+    // --- IDW-interpolate u/v wind components onto the grid ---
+    // Filter to stations with both speed and direction
+    const windStations = stations.filter(
+      (s) => s.wind_mph != null && s.wind_dir != null && s.wind_mph >= 0
+    );
+    if (windStations.length < 3) return null;
+
+    // Decompose met-convention wind (dir = FROM, CW from N) to u/v
+    // u = east component, v = north component
+    const stationUV = windStations.map((s) => {
+      const dirRad = (s.wind_dir! * Math.PI) / 180;
+      // Wind FROM dir means the flow is opposite to the direction
+      return {
+        lat: s.lat, lon: s.lon,
+        u: -s.wind_mph! * Math.sin(dirRad),
+        v: -s.wind_mph! * Math.cos(dirRad),
+      };
+    });
+
+    // IDW interpolation of u and v onto the grid
+    const uGrid: number[][] = [];
+    const vGrid: number[][] = [];
     for (let r = 0; r < rows; r++) {
-      gradC[r] = [];
-      gradR[r] = [];
+      uGrid[r] = [];
+      vGrid[r] = [];
+      const lat = lat_min + (r / (rows - 1)) * (lat_max - lat_min);
       for (let c = 0; c < cols; c++) {
-        gradC[r][c] = c > 0 && c < cols - 1
-          ? (grid[r][c + 1] - grid[r][c - 1]) / 2
-          : c === 0 ? grid[r][1] - grid[r][0] : grid[r][c] - grid[r][c - 1];
-        gradR[r][c] = r > 0 && r < rows - 1
-          ? (grid[r + 1][c] - grid[r - 1][c]) / 2
-          : r === 0 ? grid[1][c] - grid[0][c] : grid[r][c] - grid[r - 1][c];
+        const lon = lon_min + (c / (cols - 1)) * (lon_max - lon_min);
+        let wSum = 0, uSum = 0, vSum = 0;
+        for (const s of stationUV) {
+          const dlat = s.lat - lat;
+          const dlon = s.lon - lon;
+          const d2 = dlat * dlat + dlon * dlon;
+          if (d2 < 1e-10) {
+            // Coincident with station — use its value directly
+            wSum = 1; uSum = s.u; vSum = s.v;
+            break;
+          }
+          const w = 1 / d2; // power=2
+          wSum += w;
+          uSum += w * s.u;
+          vSum += w * s.v;
+        }
+        uGrid[r][c] = wSum > 0 ? uSum / wSum : 0;
+        vGrid[r][c] = wSum > 0 ? vSum / wSum : 0;
       }
     }
 
-    // --- Vorticity = ∂gradR/∂c - ∂gradC/∂r (curl of gradient) ---
+    // --- Vorticity = ∂v/∂x - ∂u/∂y (curl of wind field) ---
+    // In grid space: ∂v/∂c - ∂u/∂r (c ~ x/lon, r ~ y/lat)
     const vort: number[][] = [];
     for (let r = 0; r < rows; r++) {
       vort[r] = [];
       for (let c = 0; c < cols; c++) {
-        const dGradR_dc = c > 0 && c < cols - 1
-          ? (gradR[r][c + 1] - gradR[r][c - 1]) / 2
-          : c === 0 ? gradR[r][1] - gradR[r][0] : gradR[r][c] - gradR[r][c - 1];
-        const dGradC_dr = r > 0 && r < rows - 1
-          ? (gradC[r + 1][c] - gradC[r - 1][c]) / 2
-          : r === 0 ? gradC[1][c] - gradC[0][c] : gradC[r][c] - gradC[r - 1][c];
-        vort[r][c] = dGradR_dc - dGradC_dr;
+        const dv_dc = c > 0 && c < cols - 1
+          ? (vGrid[r][c + 1] - vGrid[r][c - 1]) / 2
+          : c === 0 ? vGrid[r][1] - vGrid[r][0] : vGrid[r][c] - vGrid[r][c - 1];
+        const du_dr = r > 0 && r < rows - 1
+          ? (uGrid[r + 1][c] - uGrid[r - 1][c]) / 2
+          : r === 0 ? uGrid[1][c] - uGrid[0][c] : uGrid[r][c] - uGrid[r - 1][c];
+        vort[r][c] = dv_dc - du_dr;
       }
     }
 
-    // Use p95 of |vorticity| for normalization so edge/station artifacts
-    // don't compress the entire color range into invisible near-zero.
+    // p95 normalization so edge artifacts don't wash out the interior
     const allAbs: number[] = [];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -557,8 +589,6 @@ function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: 
     const normScale = Math.max(p95, 1e-10);
 
     // --- Build draped mesh with vertex colors ---
-    // Near-zero vorticity fades toward a neutral grey so only significant
-    // rotation is visually prominent.
     const geo = new THREE.PlaneGeometry(sceneWidth, sceneDepth, cols - 1, rows - 1);
     geo.rotateX(-Math.PI / 2);
 
@@ -572,8 +602,6 @@ function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: 
         const y = ((p - pressure_min) / pRange) * heightScale + 0.05;
         pos.setY(idx, y);
 
-        // Normalize vorticity to [0, 1] range centered at 0.5
-        // Clamp so values beyond p95 saturate instead of overflowing
         const raw = vort[r][c] / normScale;
         const clamped = Math.max(-1, Math.min(1, raw));
         const t = 0.5 + clamped * 0.5;
@@ -581,8 +609,8 @@ function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: 
 
         // Blend toward neutral grey where vorticity is weak
         const intensity = Math.min(Math.abs(raw), 1);
-        const blend = Math.pow(intensity, 0.8); // gentler curve with p95 normalization
-        const neutral = 0.35; // dark neutral
+        const blend = Math.pow(intensity, 0.8);
+        const neutral = 0.35;
         colors[idx * 3] = neutral + (cr - neutral) * blend;
         colors[idx * 3 + 1] = neutral + (cg - neutral) * blend;
         colors[idx * 3 + 2] = neutral + (cb - neutral) * blend;
@@ -592,7 +620,10 @@ function VorticityOverlay({ data, opacity }: { data: PressureGridData; opacity: 
     geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
     return geo;
-  }, [grid, rows, cols, pressure_min, pressure_max, pRange, heightScale]);
+  }, [grid, rows, cols, pressure_min, pressure_max, pRange, heightScale,
+      stations, lat_min, lat_max, lon_min, lon_max]);
+
+  if (!geometry) return null;
 
   return (
     <mesh geometry={geometry}>
