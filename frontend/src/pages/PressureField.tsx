@@ -1122,11 +1122,13 @@ function CameraControls({ rotating, zoom, onBearing }: {
     controlsRef.current.update();
 
     // Report camera bearing (azimuth from north) for compass rose.
-    // Scene has scale={[-1,1,1]} so X is mirrored — negate dx.
+    // Bearing = camera facing direction relative to scene north (+Z).
+    // Scene has scale={[-1,1,1]} so scene-east is world -X.
+    // atan2(dx, -dz) gives clockwise angle from north toward east.
     if (onBearing) {
       const dx = cam.position.x - target.x;
       const dz = cam.position.z - target.z;
-      const bearing = (Math.atan2(-dx, dz) * 180 / Math.PI + 360) % 360;
+      const bearing = (Math.atan2(dx, -dz) * 180 / Math.PI + 360) % 360;
       onBearing(bearing);
     }
   });
