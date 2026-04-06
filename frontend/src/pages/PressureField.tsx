@@ -1211,6 +1211,171 @@ function InfoPanel({ data, isDark }: { data: PressureGridData; isDark: boolean }
 }
 
 // ---------------------------------------------------------------------------
+// Temperature color scale — shown when temp layer is active
+// ---------------------------------------------------------------------------
+
+function TempScale({ tMin, tMax, isDark, tempUnit }: {
+  tMin: number; tMax: number; isDark: boolean; tempUnit: string;
+}) {
+  // Build CSS gradient matching tempColor sigmoid ramp
+  const stops: string[] = [];
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    const [r, g, b] = tempColor(t);
+    stops.push(`rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`);
+  }
+
+  const panelStyle: React.CSSProperties = {
+    position: "absolute",
+    top: 160,
+    left: 12,
+    zIndex: 10,
+    background: isDark ? "rgba(20, 20, 40, 0.85)" : "rgba(255, 255, 255, 0.9)",
+    border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+    borderRadius: 8,
+    padding: "8px 12px",
+    color: isDark ? "#ccc" : "#333",
+    fontSize: 11,
+    lineHeight: 1.5,
+    backdropFilter: "blur(8px)",
+    maxWidth: 180,
+  };
+
+  return (
+    <div style={panelStyle}>
+      <div style={{ fontWeight: 600, marginBottom: 3, fontSize: 11 }}>Temperature</div>
+      <div style={{ fontSize: 10, color: isDark ? "#888" : "#999" }}>Cool → Warm</div>
+      <div style={{
+        height: 8,
+        borderRadius: 3,
+        background: `linear-gradient(to right, ${stops.join(", ")})`,
+        margin: "3px 0",
+      }} />
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: isDark ? "#888" : "#999" }}>
+        <span>{fmtTemp(tMin, tempUnit)}</span>
+        <span>{fmtTemp(tMax, tempUnit)}</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Layers popover panel
+// ---------------------------------------------------------------------------
+
+function LayersPanel({ isDark, ...props }: {
+  isDark: boolean;
+  radarVisible: boolean; setRadarVisible: (v: boolean) => void;
+  radarOpacity: number; setRadarOpacity: (v: number) => void;
+  flowVisible: boolean; setFlowVisible: (v: boolean) => void;
+  coriolisEnabled: boolean; setCoriolisEnabled: (v: boolean) => void;
+  tempVisible: boolean; setTempVisible: (v: boolean) => void;
+  tempOpacity: number; setTempOpacity: (v: number) => void;
+  statesVisible: boolean; setStatesVisible: (v: boolean) => void;
+  stationsVisible: boolean; setStationsVisible: (v: boolean) => void;
+}) {
+  const panelStyle: React.CSSProperties = {
+    position: "absolute",
+    bottom: 56,
+    right: 12,
+    zIndex: 10,
+    background: isDark ? "rgba(20, 20, 40, 0.92)" : "rgba(255, 255, 255, 0.95)",
+    border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`,
+    borderRadius: 8,
+    padding: "10px 14px",
+    color: isDark ? "#ccc" : "#333",
+    fontSize: 11,
+    lineHeight: 1.8,
+    backdropFilter: "blur(10px)",
+    minWidth: 170,
+  };
+
+  const rowStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  };
+
+  const sliderStyle: React.CSSProperties = {
+    width: 50,
+    accentColor: "var(--color-accent)",
+    marginLeft: "auto",
+  };
+
+  const subRowStyle: React.CSSProperties = {
+    ...rowStyle,
+    paddingLeft: 18,
+    opacity: 0.85,
+  };
+
+  return (
+    <div style={panelStyle}>
+      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 12 }}>Layers</div>
+
+      {/* Radar */}
+      <label style={rowStyle}>
+        <input type="checkbox" checked={props.radarVisible}
+          onChange={(e) => props.setRadarVisible(e.target.checked)}
+          style={{ accentColor: "var(--color-accent)" }} />
+        Radar
+        {props.radarVisible && (
+          <input type="range" min={0} max={100}
+            value={Math.round(props.radarOpacity * 100)}
+            onChange={(e) => props.setRadarOpacity(Number(e.target.value) / 100)}
+            style={sliderStyle} />
+        )}
+      </label>
+
+      {/* Flow */}
+      <label style={rowStyle}>
+        <input type="checkbox" checked={props.flowVisible}
+          onChange={(e) => props.setFlowVisible(e.target.checked)}
+          style={{ accentColor: "var(--color-accent)" }} />
+        Flow
+      </label>
+      {props.flowVisible && (
+        <label style={subRowStyle}>
+          <input type="checkbox" checked={props.coriolisEnabled}
+            onChange={(e) => props.setCoriolisEnabled(e.target.checked)}
+            style={{ accentColor: "var(--color-accent)" }} />
+          Coriolis
+        </label>
+      )}
+
+      {/* Temp */}
+      <label style={rowStyle}>
+        <input type="checkbox" checked={props.tempVisible}
+          onChange={(e) => props.setTempVisible(e.target.checked)}
+          style={{ accentColor: "var(--color-accent)" }} />
+        Temp
+        {props.tempVisible && (
+          <input type="range" min={0} max={100}
+            value={Math.round(props.tempOpacity * 100)}
+            onChange={(e) => props.setTempOpacity(Number(e.target.value) / 100)}
+            style={sliderStyle} />
+        )}
+      </label>
+
+      {/* States */}
+      <label style={rowStyle}>
+        <input type="checkbox" checked={props.statesVisible}
+          onChange={(e) => props.setStatesVisible(e.target.checked)}
+          style={{ accentColor: "var(--color-accent)" }} />
+        States
+      </label>
+
+      {/* Stations */}
+      <label style={rowStyle}>
+        <input type="checkbox" checked={props.stationsVisible}
+          onChange={(e) => props.setStationsVisible(e.target.checked)}
+          style={{ accentColor: "var(--color-accent)" }} />
+        Stations
+      </label>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Station detail panel — shown when a station marker is clicked
 // ---------------------------------------------------------------------------
 
@@ -1306,6 +1471,7 @@ export default function PressureField() {
   const [coriolisEnabled, setCoriolisEnabled] = useState(false);
   const [tempVisible, setTempVisible] = useState(false);
   const [tempOpacity, setTempOpacity] = useState(0.6);
+  const [layersOpen, setLayersOpen] = useState(false);
 
   // Refresh radar tile cache-buster every 5 minutes
   useEffect(() => {
@@ -1362,7 +1528,13 @@ export default function PressureField() {
     <div style={containerStyle}>
       <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} flowVisible={flowVisible} coriolisEnabled={coriolisEnabled} statesVisible={statesVisible} stationsVisible={stationsVisible} tempVisible={tempVisible} tempOpacity={tempOpacity} />
       <InfoPanel data={data} isDark={isDark} />
-      {/* Scene controls */}
+      {/* Temperature color scale — only when temp layer active */}
+      {tempVisible && (() => {
+        const temps = data.stations.filter((s) => s.temp_f != null).map((s) => s.temp_f as number);
+        if (temps.length < 2) return null;
+        return <TempScale tMin={Math.min(...temps)} tMax={Math.max(...temps)} isDark={isDark} tempUnit={data.temp_unit || "F"} />;
+      })()}
+      {/* Minimal scene controls */}
       <div style={{
         position: "absolute",
         bottom: 16,
@@ -1406,91 +1578,50 @@ export default function PressureField() {
             style={{ width: 100, accentColor: "var(--color-accent)" }}
           />
         </label>
-        <span style={{ width: 1, height: 18, background: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)" }} />
-        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={radarVisible}
-            onChange={(e) => setRadarVisible(e.target.checked)}
-            style={{ accentColor: "var(--color-accent)" }}
-          />
-          Radar
-        </label>
-        {radarVisible && (
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={Math.round(radarOpacity * 100)}
-              onChange={(e) => setRadarOpacity(Number(e.target.value) / 100)}
-              style={{ width: 60, accentColor: "var(--color-accent)" }}
-            />
-          </label>
-        )}
-        <span style={{ width: 1, height: 18, background: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)" }} />
-        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={flowVisible}
-            onChange={(e) => setFlowVisible(e.target.checked)}
-            style={{ accentColor: "var(--color-accent)" }}
-          />
-          Flow
-        </label>
-        {flowVisible && (
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={coriolisEnabled}
-              onChange={(e) => setCoriolisEnabled(e.target.checked)}
-              style={{ accentColor: "var(--color-accent)" }}
-            />
-            Coriolis
-          </label>
-        )}
-        <span style={{ width: 1, height: 18, background: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)" }} />
-        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={tempVisible}
-            onChange={(e) => setTempVisible(e.target.checked)}
-            style={{ accentColor: "var(--color-accent)" }}
-          />
-          Temp
-        </label>
-        {tempVisible && (
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={Math.round(tempOpacity * 100)}
-              onChange={(e) => setTempOpacity(Number(e.target.value) / 100)}
-              style={{ width: 60, accentColor: "var(--color-accent)" }}
-            />
-          </label>
-        )}
-        <span style={{ width: 1, height: 18, background: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)" }} />
-        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={statesVisible}
-            onChange={(e) => setStatesVisible(e.target.checked)}
-            style={{ accentColor: "var(--color-accent)" }}
-          />
-          States
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={stationsVisible}
-            onChange={(e) => setStationsVisible(e.target.checked)}
-            style={{ accentColor: "var(--color-accent)" }}
-          />
-          Stations
-        </label>
       </div>
+      {/* Layers toggle button */}
+      <button
+        onClick={() => setLayersOpen(!layersOpen)}
+        title="Toggle layers"
+        style={{
+          position: "absolute",
+          bottom: 16,
+          right: 12,
+          zIndex: 10,
+          width: 36,
+          height: 36,
+          borderRadius: 8,
+          border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`,
+          background: layersOpen
+            ? (isDark ? "rgba(60, 60, 100, 0.95)" : "rgba(230, 230, 255, 0.95)")
+            : (isDark ? "rgba(20, 20, 40, 0.85)" : "rgba(255, 255, 255, 0.9)"),
+          backdropFilter: "blur(8px)",
+          color: isDark ? "#ccc" : "#333",
+          cursor: "pointer",
+          fontSize: 18,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          lineHeight: 1,
+        }}
+      >
+        {"\u{1F5C2}"}
+      </button>
+      {/* Layers popover */}
+      {layersOpen && (
+        <LayersPanel
+          isDark={isDark}
+          radarVisible={radarVisible} setRadarVisible={setRadarVisible}
+          radarOpacity={radarOpacity} setRadarOpacity={setRadarOpacity}
+          flowVisible={flowVisible} setFlowVisible={setFlowVisible}
+          coriolisEnabled={coriolisEnabled} setCoriolisEnabled={setCoriolisEnabled}
+          tempVisible={tempVisible} setTempVisible={setTempVisible}
+          tempOpacity={tempOpacity} setTempOpacity={setTempOpacity}
+          statesVisible={statesVisible} setStatesVisible={setStatesVisible}
+          stationsVisible={stationsVisible} setStationsVisible={setStationsVisible}
+        />
+      )}
       {selectedStation && (
         <StationDetailPanel
           station={selectedStation}
