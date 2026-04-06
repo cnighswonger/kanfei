@@ -372,6 +372,7 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
 
     // --- Seed streamlines on a jittered grid ---
     const segments: THREE.BufferGeometry[] = [];
+    const arrows: { position: THREE.Vector3; direction: THREE.Vector3 }[] = [];
     const seedSpacing = Math.sqrt((rows * cols) / FLOW_SEED_COUNT);
     for (let sr = seedSpacing / 2; sr < rows - 1; sr += seedSpacing) {
       for (let sc = seedSpacing / 2; sc < cols - 1; sc += seedSpacing) {
@@ -407,29 +408,30 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
           cc -= (dcc / mag) * FLOW_DT;
         }
         if (points.length > 2) {
-          // Color by position along line: white (origin) → hot pink (terminus)
-          // Brightness modulated by gradient magnitude
-          const colors: number[] = [];
-          const n = points.length - 1;
-          for (let i = 0; i < points.length; i++) {
-            const t = i / n; // 0 = origin, 1 = terminus
-            // Lerp: white [1, 1, 1] → hot pink [1, 0.1, 0.5]
-            const rv = 1;
-            const gv = 1 - t * 0.9;
-            const bv = 1 - t * 0.5;
-            const bright = 0.4 + 0.6 * Math.min(mags[i] / maxGradMag, 1);
-            colors.push(rv * bright, gv * bright, bv * bright);
-          }
           const geo = new THREE.BufferGeometry().setFromPoints(points);
+          // Uniform white lines — direction shown by arrowheads
+          const colors = new Float32Array(points.length * 3);
+          for (let i = 0; i < points.length; i++) {
+            const bright = 0.4 + 0.6 * Math.min(mags[i] / maxGradMag, 1);
+            colors[i * 3] = bright;
+            colors[i * 3 + 1] = bright;
+            colors[i * 3 + 2] = bright;
+          }
           geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
           segments.push(geo);
+
+          // Arrowhead: direction from second-to-last → last point
+          const tip = points[points.length - 1];
+          const prev = points[points.length - 2];
+          const dir = new THREE.Vector3().subVectors(tip, prev).normalize();
+          arrows.push({ position: tip, direction: dir });
         }
       }
     }
-    return segments;
+    return { segments, arrows };
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const material = useMemo(
+  const lineMaterial = useMemo(
     () => new THREE.LineBasicMaterial({
       vertexColors: true,
       opacity: 0.7,
@@ -438,11 +440,28 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
     [],
   );
 
+  const arrowGeo = useMemo(() => new THREE.ConeGeometry(0.04, 0.12, 6), []);
+  const arrowMat = useMemo(
+    () => new THREE.MeshBasicMaterial({ color: "#ff1493", transparent: true, opacity: 0.85 }),
+    [],
+  );
+
   return (
     <>
-      {lineSegments.map((geo, i) => (
-        <primitive key={i} object={new THREE.Line(geo, material)} />
+      {lineSegments.segments.map((geo, i) => (
+        <primitive key={`l${i}`} object={new THREE.Line(geo, lineMaterial)} />
       ))}
+      {lineSegments.arrows.map((arrow, i) => {
+        // Orient cone to point along flow direction
+        const q = new THREE.Quaternion();
+        q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), arrow.direction);
+        return (
+          <mesh key={`a${i}`} geometry={arrowGeo} material={arrowMat}
+            position={[arrow.position.x, arrow.position.y, arrow.position.z]}
+            quaternion={q}
+          />
+        );
+      })}
     </>
   );
 }
