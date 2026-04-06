@@ -293,7 +293,12 @@ const FLOW_STEPS = 60;
 /** Step size as a fraction of grid cells. */
 const FLOW_DT = 0.8;
 
-function GradientFlowLines({ data }: { data: PressureGridData }) {
+// Coriolis rotation constants (~25° clockwise, NH surface approximation)
+const COR_COS = 0.906;  // cos(25°)
+const COR_SIN = 0.423;  // sin(25°)
+const COR_FRICTION = 0.7; // surface friction reduction
+
+function GradientFlowLines({ data, coriolis }: { data: PressureGridData; coriolis: boolean }) {
   const { grid, rows, cols, pressure_min, pressure_max } = data;
   const sceneWidth = 10;
   const sceneDepth = 10 * (rows / cols);
@@ -337,6 +342,12 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
                + gradR[r0][c0 + 1] * (1 - dr) * dc
                + gradR[r0 + 1][c0] * dr * (1 - dc)
                + gradR[r0 + 1][c0 + 1] * dr * dc;
+      // Apply Coriolis rotation + friction if enabled
+      if (coriolis) {
+        const gc2 = (gc * COR_COS - gr * COR_SIN) * COR_FRICTION;
+        const gr2 = (gc * COR_SIN + gr * COR_COS) * COR_FRICTION;
+        return [gc2, gr2];
+      }
       return [gc, gr];
     };
 
@@ -429,7 +440,7 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
       }
     }
     return { segments, arrows };
-  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, coriolis]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const lineMaterial = useMemo(
     () => new THREE.LineBasicMaterial({
@@ -442,8 +453,8 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
 
   const arrowGeo = useMemo(() => new THREE.ConeGeometry(0.025, 0.07, 6), []);
   const arrowMat = useMemo(
-    () => new THREE.MeshBasicMaterial({ color: "#ff1493", transparent: true, opacity: 0.85 }),
-    [],
+    () => new THREE.MeshBasicMaterial({ color: coriolis ? "#ff8c00" : "#ff1493", transparent: true, opacity: 0.85 }),
+    [coriolis],
   );
 
   return (
@@ -463,6 +474,108 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
         );
       })}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Temperature overlay — IDW-interpolated station temps draped on the surface
+// ---------------------------------------------------------------------------
+
+function tempColor(t: number): [number, number, number] {
+  // Blue (cold, t=0) → white (mid, t=0.5) → red (hot, t=1)
+  if (t <= 0.5) {
+    const s = t / 0.5; // 0→1 within cold half
+    return [s, s, 1]; // blue → white
+  }
+  const s = (t - 0.5) / 0.5; // 0→1 within hot half
+  return [1, 1 - s, 1 - s]; // white → red
+}
+
+function TemperatureOverlay({ data, opacity }: { data: PressureGridData; opacity: number }) {
+  const { grid, rows, cols, pressure_min, pressure_max, stations } = data;
+  const sceneWidth = 10;
+  const sceneDepth = 10 * (rows / cols);
+  const pRange = (pressure_max - pressure_min) || 1;
+  const heightScale = 8;
+
+  const { geometry } = useMemo(() => {
+    // Collect stations with valid temperature
+    const tempStations = stations.filter(
+      (s): s is StationMarker & { temp_f: number } =>
+        s.temp_f != null && s.lat != null && s.lon != null,
+    );
+
+    if (tempStations.length < 2) return { geometry: null, tMin: 0, tMax: 0 };
+
+    const temps = tempStations.map((s) => s.temp_f);
+    const tMin = Math.min(...temps);
+    const tMax = Math.max(...temps);
+    const tRange = tMax - tMin || 1;
+
+    const { lat_min, lat_max, lon_min, lon_max } = data;
+
+    const geo = new THREE.PlaneGeometry(sceneWidth, sceneDepth, cols - 1, rows - 1);
+    geo.rotateX(-Math.PI / 2);
+
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
+
+        // Height from pressure grid (slight offset above surface, below radar)
+        const p = grid[r][c];
+        const pt = (p - pressure_min) / pRange;
+        pos.setY(idx, pt * heightScale + 0.015);
+
+        // IDW interpolation of temperature at this grid point
+        const lat = lat_min + (r / (rows - 1)) * (lat_max - lat_min);
+        const lon = lon_min + (c / (cols - 1)) * (lon_max - lon_min);
+
+        let wSum = 0;
+        let tSum = 0;
+        for (const s of tempStations) {
+          const dlat = s.lat - lat;
+          const dlon = s.lon - lon;
+          const d2 = dlat * dlat + dlon * dlon;
+          if (d2 < 1e-10) {
+            // Exactly on a station — use its value directly
+            wSum = 1;
+            tSum = s.temp_f;
+            break;
+          }
+          const w = 1 / d2; // power=2
+          wSum += w;
+          tSum += w * s.temp_f;
+        }
+        const tempHere = wSum > 0 ? tSum / wSum : (tMin + tMax) / 2;
+        const tt = (tempHere - tMin) / tRange;
+        const [cr, cg, cb] = tempColor(tt);
+        colors[idx * 3] = cr;
+        colors[idx * 3 + 1] = cg;
+        colors[idx * 3 + 2] = cb;
+      }
+    }
+
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    return { geometry: geo, tMin, tMax };
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!geometry) return null;
+
+  return (
+    <mesh geometry={geometry}>
+      <meshStandardMaterial
+        vertexColors
+        transparent
+        opacity={opacity}
+        side={THREE.DoubleSide}
+        roughness={0.8}
+        depthWrite={false}
+      />
+    </mesh>
   );
 }
 
@@ -1011,12 +1124,14 @@ function CameraControls({ rotating, zoom }: { rotating: boolean; zoom: number })
 // Scene wrapper
 // ---------------------------------------------------------------------------
 
-function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs, flowVisible, statesVisible, stationsVisible }: {
+function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, radarVisible, radarOpacity, radarTs, flowVisible, coriolisEnabled, statesVisible, stationsVisible, tempVisible, tempOpacity }: {
   data: PressureGridData; isDark: boolean;
   selected: StationMarker | null; onSelect: (s: StationMarker | null) => void;
   rotating: boolean; zoom: number;
   radarVisible: boolean; radarOpacity: number; radarTs: number;
-  flowVisible: boolean; statesVisible: boolean; stationsVisible: boolean;
+  flowVisible: boolean; coriolisEnabled: boolean;
+  statesVisible: boolean; stationsVisible: boolean;
+  tempVisible: boolean; tempOpacity: number;
 }) {
   return (
     <Canvas
@@ -1031,8 +1146,9 @@ function PressureFieldScene({ data, isDark, selected, onSelect, rotating, zoom, 
       <group scale={[-1, 1, 1]}>
         <PressureSurface data={data} />
         <SideWalls data={data} />
+        {tempVisible && <TemperatureOverlay data={data} opacity={tempOpacity} />}
         {radarVisible && <RadarOverlay data={data} opacity={radarOpacity} radarTs={radarTs} />}
-        {flowVisible && <GradientFlowLines data={data} />}
+        {flowVisible && <GradientFlowLines data={data} coriolis={coriolisEnabled} />}
         {statesVisible && <StateBoundaryLines data={data} isDark={isDark} />}
         {stationsVisible && <StationMarkers data={data} selected={selected} onSelect={onSelect} />}
         <GroundLabels data={data} />
@@ -1185,6 +1301,9 @@ export default function PressureField() {
   const [flowVisible, setFlowVisible] = useState(false);
   const [statesVisible, setStatesVisible] = useState(true);
   const [stationsVisible, setStationsVisible] = useState(true);
+  const [coriolisEnabled, setCoriolisEnabled] = useState(false);
+  const [tempVisible, setTempVisible] = useState(false);
+  const [tempOpacity, setTempOpacity] = useState(0.5);
 
   // Refresh radar tile cache-buster every 5 minutes
   useEffect(() => {
@@ -1239,7 +1358,7 @@ export default function PressureField() {
 
   return (
     <div style={containerStyle}>
-      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} flowVisible={flowVisible} statesVisible={statesVisible} stationsVisible={stationsVisible} />
+      <PressureFieldScene data={data} isDark={isDark} selected={selectedStation} onSelect={setSelectedStation} rotating={rotating} zoom={zoom} radarVisible={radarVisible} radarOpacity={radarOpacity} radarTs={radarTs} flowVisible={flowVisible} coriolisEnabled={coriolisEnabled} statesVisible={statesVisible} stationsVisible={stationsVisible} tempVisible={tempVisible} tempOpacity={tempOpacity} />
       <InfoPanel data={data} isDark={isDark} />
       {/* Scene controls */}
       <div style={{
@@ -1317,6 +1436,40 @@ export default function PressureField() {
           />
           Flow
         </label>
+        {flowVisible && (
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={coriolisEnabled}
+              onChange={(e) => setCoriolisEnabled(e.target.checked)}
+              style={{ accentColor: "var(--color-accent)" }}
+            />
+            Coriolis
+          </label>
+        )}
+        <span style={{ width: 1, height: 18, background: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)" }} />
+        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={tempVisible}
+            onChange={(e) => setTempVisible(e.target.checked)}
+            style={{ accentColor: "var(--color-accent)" }}
+          />
+          Temp
+        </label>
+        {tempVisible && (
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(tempOpacity * 100)}
+              onChange={(e) => setTempOpacity(Number(e.target.value) / 100)}
+              style={{ width: 60, accentColor: "var(--color-accent)" }}
+            />
+          </label>
+        )}
+        <span style={{ width: 1, height: 18, background: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)" }} />
         <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
           <input
             type="checkbox"
