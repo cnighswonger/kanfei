@@ -592,7 +592,7 @@ def _collect_pressure_points(
         median_ts = timestamps[len(timestamps) // 2]
 
     # Second pass: filter stale stations
-    pressure_points: list[tuple[float, float, float]] = []
+    fresh: list[tuple[float, float, float]] = []
     stale_count = 0
     for lat_s, lon_s, p, ts in candidates:
         if ts is not None and median_ts is not None:
@@ -600,11 +600,34 @@ def _collect_pressure_points(
             if age > _PRESSURE_OBS_MAX_AGE:
                 stale_count += 1
                 continue
-        pressure_points.append((lat_s, lon_s, p))
+        fresh.append((lat_s, lon_s, p))
 
     if stale_count:
         logger.info("Map: dropped %d stale station(s) (>%ds from median)",
                      stale_count, _PRESSURE_OBS_MAX_AGE)
+
+    # Third pass: drop pressure outliers via median absolute deviation.
+    # Real SLP varies ~±15 hPa regionally; stations far outside that
+    # are reporting uncorrected station pressure or bad data.
+    pressure_points: list[tuple[float, float, float]] = []
+    if fresh:
+        pressures = sorted(p for *_, p in fresh)
+        median_p = pressures[len(pressures) // 2]
+        deviations = sorted(abs(p - median_p) for p in pressures)
+        mad = deviations[len(deviations) // 2] or 1.0  # avoid div-by-zero
+        outlier_count = 0
+        for lat_s, lon_s, p in fresh:
+            # 5× MAD ≈ 3.3σ for normal data — generous enough
+            # to keep real gradients, strict enough to catch junk
+            if abs(p - median_p) > 5 * mad:
+                outlier_count += 1
+                continue
+            pressure_points.append((lat_s, lon_s, p))
+        if outlier_count:
+            logger.info("Map: dropped %d pressure outlier(s) (>5 MAD from %.1f hPa)",
+                         outlier_count, median_p)
+    else:
+        pressure_points = fresh
 
     # Add home station barometer if available
     try:
