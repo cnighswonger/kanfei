@@ -382,12 +382,12 @@ function GradientFlowLines({ data }: { data: PressureGridData }) {
     }
     if (maxGradMag < 1e-8) maxGradMag = 1;
 
-    // --- Yellow (low pressure) → Fuchsia (high pressure), brightness from gradient ---
+    // --- White (low pressure) → Hot pink (high pressure), brightness from gradient ---
     const flowColor = (pressureT: number, gradMag: number): [number, number, number] => {
-      // Lerp: yellow [1, 1, 0] → fuchsia [1, 0, 0.8]
+      // Lerp: white [1, 1, 1] → hot pink [1, 0.2, 0.6]
       const r = 1;
-      const g = 1 - pressureT;
-      const b = pressureT * 0.8;
+      const g = 1 - pressureT * 0.8;
+      const b = 1 - pressureT * 0.4;
       // Brightness: scale by gradient magnitude (0.4 floor so weak lines stay visible)
       const bright = 0.4 + 0.6 * Math.min(gradMag / maxGradMag, 1);
       return [r * bright, g * bright, b * bright];
