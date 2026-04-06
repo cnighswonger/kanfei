@@ -482,13 +482,14 @@ function GradientFlowLines({ data, coriolis }: { data: PressureGridData; corioli
 // ---------------------------------------------------------------------------
 
 function tempColor(t: number): [number, number, number] {
-  // Blue (cold, t=0) → white (mid, t=0.5) → red (hot, t=1)
-  if (t <= 0.5) {
-    const s = t / 0.5; // 0→1 within cold half
-    return [s, s, 1]; // blue → white
-  }
-  const s = (t - 0.5) / 0.5; // 0→1 within hot half
-  return [1, 1 - s, 1 - s]; // white → red
+  // Vivid blue (cold, t=0) → purple (mid) → vivid red (hot, t=1)
+  // No white midpoint — every value gets a distinct saturated color
+  const tc = Math.max(0, Math.min(1, t));
+  return [
+    0.1 + tc * 0.9,          // R: 0.1 → 1.0
+    0.15 * (1 - (2 * tc - 1) ** 2), // G: low everywhere, slight bump at mid
+    1.0 - tc * 0.9,          // B: 1.0 → 0.1
+  ];
 }
 
 function TemperatureOverlay({ data, opacity }: { data: PressureGridData; opacity: number }) {
@@ -1303,7 +1304,7 @@ export default function PressureField() {
   const [stationsVisible, setStationsVisible] = useState(true);
   const [coriolisEnabled, setCoriolisEnabled] = useState(false);
   const [tempVisible, setTempVisible] = useState(false);
-  const [tempOpacity, setTempOpacity] = useState(0.5);
+  const [tempOpacity, setTempOpacity] = useState(0.6);
 
   // Refresh radar tile cache-buster every 5 minutes
   useEffect(() => {
