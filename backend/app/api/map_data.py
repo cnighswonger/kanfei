@@ -217,7 +217,7 @@ async def _fetch_via_iem_direct(
             "pressure_hpa": pressure_hpa,
             "pressure_inhg": pressure_inhg,
             "precip_in": s.get("phour"),
-            "updated": s.get("local_valid"),
+            "updated": s.get("utc_valid"),
         })
 
     stations.sort(key=lambda s: s["distance_mi"])
@@ -457,6 +457,332 @@ def _marching_squares(
 
 _isobar_cache: dict[str, _StationCache] = {}
 _ISOBAR_CACHE_TTL = 300  # 5 minutes
+_PGRID_CACHE_TTL = 300  # 5 minutes
+_pgrid_cache: dict[str, _StationCache] = {}
+
+
+def _get_best_station_cache(
+    lat: float, lon: float,
+) -> Optional[_StationCache]:
+    """Return the station cache entry with the most stations, or None."""
+    lat_lon_prefix = f"{round(lat, 2)}:{round(lon, 2)}:"
+    best_cache = None
+    best_count = 0
+    for cache_key_k, sc in _station_cache.items():
+        if cache_key_k.startswith(lat_lon_prefix) and time.time() < sc.expires_at:
+            count = len(sc.data.get("stations", []))
+            if count > best_count:
+                best_cache = sc
+                best_count = count
+    return best_cache
+
+
+async def _ensure_station_cache(
+    db: Session, lat: float, lon: float,
+) -> Optional[_StationCache]:
+    """Return best station cache, fetching stations if cache is empty."""
+    cached = _get_best_station_cache(lat, lon)
+    if cached:
+        return cached
+
+    # Self-seed: fetch stations at a wide radius so the grid has coverage
+    cfg = get_effective_config(db)
+    radius = int(cfg.get("map_max_radius", 450))
+    stations = await _fetch_via_nowcast(lat, lon, radius, cfg)
+    if not stations:
+        stations = await _fetch_via_iem_direct(lat, lon, radius)
+
+    # Merge native APRS map collector observations (same as get_nearby_stations)
+    try:
+        from ..services.aprs_map_collector import get_nearby, is_running
+        if is_running():
+            aprs_obs = get_nearby(lat, lon, radius, max_stations=500)
+            existing_ids = {s["id"] for s in stations}
+            for obs in aprs_obs:
+                if obs.callsign not in existing_ids:
+                    pressure_hpa = round(obs.pressure_inhg * 33.8639, 1) if obs.pressure_inhg else None
+                    stations.append({
+                        "id": obs.callsign,
+                        "name": obs.callsign,
+                        "lat": obs.latitude,
+                        "lon": obs.longitude,
+                        "distance_mi": round(_haversine_mi(lat, lon, obs.latitude, obs.longitude), 1),
+                        "source": "CWOP",
+                        "temp_f": obs.temp_f,
+                        "wind_mph": round(obs.wind_speed_mph) if obs.wind_speed_mph is not None else None,
+                        "wind_dir": obs.wind_dir_deg,
+                        "wind_gust_mph": round(obs.wind_gust_mph) if obs.wind_gust_mph is not None else None,
+                        "pressure_hpa": pressure_hpa,
+                        "pressure_inhg": obs.pressure_inhg,
+                        "precip_in": obs.precip_in,
+                        "updated": datetime.fromtimestamp(obs.timestamp, tz=timezone.utc).isoformat(),
+                    })
+            if aprs_obs:
+                stations.sort(key=lambda s: s.get("distance_mi") or 9999)
+                logger.info("Map: merged %d APRS/CWOP stations into pressure grid seed", len(aprs_obs))
+    except Exception:
+        pass
+
+    if not stations:
+        return None
+
+    result = {
+        "stations": stations,
+        "home_lat": lat,
+        "home_lon": lon,
+        "radius_mi": radius,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+    }
+    key = _cache_key(lat, lon, radius)
+    _station_cache[key] = _StationCache(
+        data=result,
+        expires_at=time.time() + _STATION_CACHE_TTL,
+    )
+    logger.info("Map: self-seeded station cache with %d stations", len(stations))
+    return _station_cache[key]
+
+
+# Max age (seconds) for station observations used in pressure grid.
+# Stations whose "updated" timestamp is older than this are excluded.
+# TODO: expose as user-configurable setting (e.g. "pressure_grid_max_age")
+_PRESSURE_OBS_MAX_AGE = 7200  # 2 hours
+
+
+def _parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
+    """Best-effort parse of station timestamp strings.
+
+    Returns a **UTC naive** datetime so that all timestamps can be compared
+    on the same footing.  IEM ``utc_valid`` values are naive UTC strings;
+    APRS timestamps include a UTC offset which is converted then stripped.
+    """
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+    except (ValueError, TypeError):
+        return None
+
+
+def _collect_pressure_points(
+    stations: list[dict], db: Session, lat: float, lon: float,
+) -> list[tuple[float, float, float]]:
+    """Collect pressure points from station list + home barometer.
+
+    Staleness is detected by comparing each station's timestamp to the
+    **median** of all station timestamps.  All timestamps are normalised
+    to naive-UTC by ``_parse_timestamp`` (IEM ``utc_valid`` is already
+    UTC; APRS offsets are converted), so comparison is timezone-safe.
+    """
+    # First pass: gather candidates with parsed timestamps
+    candidates: list[tuple[float, float, float, Optional[datetime]]] = []
+    for s in stations:
+        p = s.get("pressure_hpa")
+        if p is None or s.get("lat") is None:
+            continue
+        ts = _parse_timestamp(s.get("updated"))
+        candidates.append((s["lat"], s["lon"], p, ts))
+
+    # Compute median timestamp from stations that have one
+    timestamps = sorted(ts for *_, ts in candidates if ts is not None)
+    median_ts: Optional[datetime] = None
+    if timestamps:
+        median_ts = timestamps[len(timestamps) // 2]
+
+    # Second pass: filter stale stations
+    fresh: list[tuple[float, float, float]] = []
+    stale_count = 0
+    for lat_s, lon_s, p, ts in candidates:
+        if ts is not None and median_ts is not None:
+            age = abs((median_ts - ts).total_seconds())
+            if age > _PRESSURE_OBS_MAX_AGE:
+                stale_count += 1
+                continue
+        fresh.append((lat_s, lon_s, p))
+
+    if stale_count:
+        logger.info("Map: dropped %d stale station(s) (>%ds from median)",
+                     stale_count, _PRESSURE_OBS_MAX_AGE)
+
+    # Third pass: drop pressure outliers.
+    # Real SLP across a 250mi radius varies at most ~15 hPa even in
+    # strong frontal zones.  Stations >20 hPa from the regional median
+    # are reporting uncorrected station pressure or bad altimeter data.
+    _PRESSURE_OUTLIER_THRESHOLD = 20.0  # hPa
+    pressure_points: list[tuple[float, float, float]] = []
+    if fresh:
+        pressures = sorted(p for *_, p in fresh)
+        median_p = pressures[len(pressures) // 2]
+        outlier_count = 0
+        for lat_s, lon_s, p in fresh:
+            if abs(p - median_p) > _PRESSURE_OUTLIER_THRESHOLD:
+                outlier_count += 1
+                continue
+            pressure_points.append((lat_s, lon_s, p))
+        if outlier_count:
+            logger.info("Map: dropped %d pressure outlier(s) (>%.0f hPa from median %.1f)",
+                         outlier_count, _PRESSURE_OUTLIER_THRESHOLD, median_p)
+    else:
+        pressure_points = fresh
+
+    # Add home station barometer if available
+    try:
+        from ..models.database import SessionLocal
+        from ..models.sensor_reading import SensorReadingModel
+        from ..models.sensor_meta import convert
+        _db = SessionLocal()
+        row = _db.query(SensorReadingModel.barometer,
+                        SensorReadingModel.timestamp).order_by(
+            SensorReadingModel.timestamp.desc()
+        ).first()
+        _db.close()
+        if row and row[0] is not None:
+            baro_display = convert("barometer", row[0])  # inHg
+            if baro_display:
+                baro_hpa = baro_display * 33.8639
+                pressure_points.append((lat, lon, baro_hpa))
+    except Exception:
+        pass
+
+    return pressure_points
+
+
+def _filter_pressure_outliers(
+    points: list[tuple[float, float, float]],
+    max_sigma: float = 2.5,
+) -> list[tuple[float, float, float]]:
+    """Remove pressure readings that are statistical outliers.
+
+    Stations at elevation sometimes report uncorrected station pressure
+    (vs sea-level altimeter setting), producing values far outside the
+    normal range.  Remove anything beyond max_sigma standard deviations.
+    """
+    if len(points) < 5:
+        return points
+    pressures = [p[2] for p in points]
+    mean = sum(pressures) / len(pressures)
+    variance = sum((p - mean) ** 2 for p in pressures) / len(pressures)
+    std = variance ** 0.5
+    if std < 0.1:
+        return points  # all nearly identical — nothing to filter
+    filtered = [p for p in points if abs(p[2] - mean) <= max_sigma * std]
+    removed = len(points) - len(filtered)
+    if removed:
+        logger.info("Map: filtered %d pressure outliers (mean=%.1f, std=%.2f)",
+                    removed, mean, std)
+    return filtered
+
+
+def _build_idw_grid(
+    pressure_points: list[tuple[float, float, float]],
+    grid_size: int,
+    margin: float = 0.2,
+    power: float = 2.0,
+    smooth_sigma: float = 0.0,
+) -> tuple[list[list[float]], float, float, float, float]:
+    """Build IDW-interpolated pressure grid from station points.
+
+    Args:
+        power: IDW exponent (lower = smoother, default 2.0 for isobars).
+        smooth_sigma: If > 0, apply Gaussian blur with this sigma (grid cells).
+
+    Returns (grid, lat_min, lat_max, lon_min, lon_max).
+    """
+    all_lats = [p[0] for p in pressure_points]
+    all_lons = [p[1] for p in pressure_points]
+    lat_min = min(all_lats) - margin
+    lat_max = max(all_lats) + margin
+    lon_min = min(all_lons) - margin
+    lon_max = max(all_lons) + margin
+
+    grid: list[list[float]] = []
+    for r in range(grid_size):
+        row: list[float] = []
+        g_lat = lat_min + (r / (grid_size - 1)) * (lat_max - lat_min)
+        for c in range(grid_size):
+            g_lon = lon_min + (c / (grid_size - 1)) * (lon_max - lon_min)
+            row.append(_idw_interpolate(pressure_points, g_lat, g_lon, power=power))
+        grid.append(row)
+
+    if smooth_sigma > 0:
+        try:
+            import numpy as np
+            from scipy.ndimage import gaussian_filter
+            arr = gaussian_filter(np.array(grid, dtype=np.float64), sigma=smooth_sigma)
+            grid = arr.tolist()
+        except ImportError:
+            pass  # scipy not available — skip smoothing
+
+    return grid, lat_min, lat_max, lon_min, lon_max
+
+
+def _build_smooth_grid(
+    pressure_points: list[tuple[float, float, float]],
+    grid_size: int,
+    margin: float = 0.2,
+    blur_sigma: float = 2.0,
+) -> tuple[list[list[float]], float, float, float, float]:
+    """Build smooth pressure grid using cubic Clough-Tocher interpolation.
+
+    Uses scipy.interpolate.griddata with method='cubic' — a local C1
+    interpolation based on Delaunay triangulation.  No global oscillations
+    (unlike thin-plate spline RBF).  Areas outside the convex hull of
+    data points are filled with nearest-neighbor values.
+
+    A light Gaussian blur is applied for extra smoothness.
+    Falls back to IDW if scipy is unavailable.
+    """
+    import numpy as np
+    all_lats = [p[0] for p in pressure_points]
+    all_lons = [p[1] for p in pressure_points]
+    lat_min = min(all_lats) - margin
+    lat_max = max(all_lats) + margin
+    lon_min = min(all_lons) - margin
+    lon_max = max(all_lons) + margin
+
+    try:
+        from scipy.interpolate import griddata
+        from scipy.ndimage import gaussian_filter
+
+        coords = np.array([[p[0], p[1]] for p in pressure_points])
+        values = np.array([p[2] for p in pressure_points])
+
+        # Build evaluation grid
+        lat_vals = np.linspace(lat_min, lat_max, grid_size)
+        lon_vals = np.linspace(lon_min, lon_max, grid_size)
+        mesh_lat, mesh_lon = np.meshgrid(lat_vals, lon_vals, indexing="ij")
+        grid_points = np.column_stack([mesh_lat.ravel(), mesh_lon.ravel()])
+
+        # Cubic interpolation — smooth C1 surface within convex hull
+        arr = griddata(coords, values, grid_points, method="cubic")
+
+        # Fill NaN (outside convex hull) with nearest-neighbor
+        nan_mask = np.isnan(arr)
+        if nan_mask.any():
+            nearest = griddata(coords, values, grid_points, method="nearest")
+            arr[nan_mask] = nearest[nan_mask]
+
+        arr = arr.reshape(grid_size, grid_size)
+
+        if blur_sigma > 0:
+            arr = gaussian_filter(arr, sigma=blur_sigma)
+
+        grid = arr.tolist()
+
+    except ImportError:
+        logger.warning("scipy not available — falling back to IDW for pressure grid")
+        grid = []
+        for r in range(grid_size):
+            row = []
+            g_lat = lat_min + (r / (grid_size - 1)) * (lat_max - lat_min)
+            for c in range(grid_size):
+                g_lon = lon_min + (c / (grid_size - 1)) * (lon_max - lon_min)
+                row.append(_idw_interpolate(pressure_points, g_lat, g_lon, power=1.5))
+            grid.append(row)
+
+    return grid, lat_min, lat_max, lon_min, lon_max
 
 
 @router.get("/isobars")
@@ -473,75 +799,27 @@ async def get_isobars(db: Session = Depends(get_db)):
     if lat == 0 and lon == 0:
         return {"contours": [], "interval_hpa": 4}
 
-    # Get station data from any cached nearby-stations radius.
-    # Use the cache with the most stations (largest radius) for best coverage.
-    lat_lon_prefix = f"{round(lat, 2)}:{round(lon, 2)}:"
-    best_cache = None
-    best_count = 0
-    for cache_key_k, sc in _station_cache.items():
-        if cache_key_k.startswith(lat_lon_prefix) and time.time() < sc.expires_at:
-            count = len(sc.data.get("stations", []))
-            if count > best_count:
-                best_cache = sc
-                best_count = count
-    if not best_cache:
+    best = _get_best_station_cache(lat, lon)
+    if not best:
+        return {"contours": [], "interval_hpa": 1}
+    stations = best.data.get("stations", [])
+    pressure_points = _collect_pressure_points(stations, db, lat, lon)
+    if not pressure_points:
         return {"contours": [], "interval_hpa": 1}
 
     # Check isobar cache — keyed by station count so it invalidates on zoom change
-    cache_key = f"iso:{round(lat, 2)}:{round(lon, 2)}:{best_count}"
+    cache_key = f"iso:{round(lat, 2)}:{round(lon, 2)}:{len(pressure_points)}"
     cached = _isobar_cache.get(cache_key)
     if cached and time.time() < cached.expires_at:
         return cached.data
 
-    stations = best_cache.data.get("stations", [])
-
-    # Collect pressure points
-    pressure_points: list[tuple[float, float, float]] = []
-    for s in stations:
-        p = s.get("pressure_hpa")
-        if p is not None and s.get("lat") is not None:
-            pressure_points.append((s["lat"], s["lon"], p))
-
-    # Add home station barometer if available
-    try:
-        from ..models.database import SessionLocal
-        from ..models.sensor_reading import SensorReadingModel
-        from ..models.sensor_meta import convert
-        _db = SessionLocal()
-        row = _db.query(SensorReadingModel.barometer).order_by(
-            SensorReadingModel.timestamp.desc()
-        ).first()
-        _db.close()
-        if row and row[0] is not None:
-            baro_display = convert("barometer", row[0])  # inHg
-            if baro_display:
-                baro_hpa = baro_display * 33.8639
-                pressure_points.append((lat, lon, baro_hpa))
-    except Exception:
-        pass
-
     if len(pressure_points) < 5:
         return {"contours": [], "interval_hpa": 4}
 
-    # Build interpolation grid — derive bounds from actual station positions.
-    # Scale grid resolution with area to keep contour quality consistent.
     GRID = min(80, max(40, len(pressure_points) * 2))
-    all_lats = [p[0] for p in pressure_points]
-    all_lons = [p[1] for p in pressure_points]
-    margin = 0.2  # small margin beyond outermost stations
-    lat_min = min(all_lats) - margin
-    lat_max = max(all_lats) + margin
-    lon_min = min(all_lons) - margin
-    lon_max = max(all_lons) + margin
-
-    grid: list[list[float]] = []
-    for r in range(GRID):
-        row: list[float] = []
-        g_lat = lat_min + (r / (GRID - 1)) * (lat_max - lat_min)
-        for c in range(GRID):
-            g_lon = lon_min + (c / (GRID - 1)) * (lon_max - lon_min)
-            row.append(_idw_interpolate(pressure_points, g_lat, g_lon))
-        grid.append(row)
+    grid, lat_min, lat_max, lon_min, lon_max = _build_idw_grid(
+        pressure_points, GRID,
+    )
 
     # Extract contours at configurable hPa intervals
     INTERVAL = int(cfg.get("map_isobar_interval", 1))
@@ -581,5 +859,94 @@ async def get_isobars(db: Session = Depends(get_db)):
 
     logger.info("Map: computed %d isobar contours from %d pressure points",
                 len(contours), len(pressure_points))
+
+    return result
+
+
+@router.get("/pressure-grid")
+async def get_pressure_grid(db: Session = Depends(get_db)):
+    """Return high-resolution IDW pressure grid for 3D visualization.
+
+    Cached for 5 minutes.  Grid is 120x120 interpolated from the best
+    available nearby-station cache.
+    """
+    cfg = get_effective_config(db)
+    lat = float(cfg.get("latitude", 0))
+    lon = float(cfg.get("longitude", 0))
+
+    if lat == 0 and lon == 0:
+        return {"grid": [], "rows": 0, "cols": 0, "station_count": 0}
+
+    # Self-seed station cache if needed (pressure page may load before map)
+    best = await _ensure_station_cache(db, lat, lon)
+    if not best:
+        return {"grid": [], "rows": 0, "cols": 0, "station_count": 0}
+    stations = best.data.get("stations", [])
+    pressure_points = _collect_pressure_points(stations, db, lat, lon)
+    pressure_points = _filter_pressure_outliers(pressure_points)
+    if len(pressure_points) < 5:
+        return {"grid": [], "rows": 0, "cols": 0, "station_count": len(pressure_points)}
+
+    cache_key = f"pgrid:{round(lat, 2)}:{round(lon, 2)}:{len(pressure_points)}"
+    cached = _pgrid_cache.get(cache_key)
+    if cached and time.time() < cached.expires_at:
+        return cached.data
+
+    GRID = 120
+    grid, lat_min, lat_max, lon_min, lon_max = _build_smooth_grid(
+        pressure_points, GRID, blur_sigma=5.0,
+    )
+
+    all_p = [p for _, _, p in pressure_points]
+
+    # Build station summary for frontend markers (include extra fields for detail panel)
+    station_markers = []
+    for pt_lat, pt_lon, pt_p in pressure_points:
+        is_home = abs(pt_lat - lat) < 0.001 and abs(pt_lon - lon) < 0.001
+        marker: dict = {
+            "lat": pt_lat, "lon": pt_lon,
+            "pressure_hpa": round(pt_p, 1), "name": "",
+            "is_home": is_home,
+        }
+        if stations:
+            for s in stations:
+                if (s.get("lat") is not None
+                        and abs(s["lat"] - pt_lat) < 0.001
+                        and abs(s["lon"] - pt_lon) < 0.001):
+                    marker["name"] = s.get("name", s.get("id", ""))
+                    marker["id"] = s.get("id", "")
+                    marker["source"] = s.get("source", "")
+                    marker["temp_f"] = s.get("temp_f")
+                    marker["wind_mph"] = s.get("wind_mph")
+                    marker["wind_dir"] = s.get("wind_dir")
+                    marker["pressure_inhg"] = s.get("pressure_inhg")
+                    marker["updated"] = s.get("updated")
+                    break
+        station_markers.append(marker)
+
+    result = {
+        "grid": [[round(v, 2) for v in row] for row in grid],
+        "rows": GRID,
+        "cols": GRID,
+        "lat_min": round(lat_min, 4),
+        "lat_max": round(lat_max, 4),
+        "lon_min": round(lon_min, 4),
+        "lon_max": round(lon_max, 4),
+        "pressure_min": round(min(all_p), 1),
+        "pressure_max": round(max(all_p), 1),
+        "station_count": len(pressure_points),
+        "stations": station_markers,
+        "pressure_unit": cfg.get("pressure_unit", "inHg"),
+        "temp_unit": cfg.get("temp_unit", "F"),
+        "wind_unit": cfg.get("wind_unit", "mph"),
+    }
+
+    _pgrid_cache[cache_key] = _StationCache(
+        data=result,
+        expires_at=time.time() + _PGRID_CACHE_TTL,
+    )
+
+    logger.info("Map: computed %dx%d pressure grid from %d points",
+                GRID, GRID, len(pressure_points))
 
     return result
