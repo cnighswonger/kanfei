@@ -1,3 +1,12 @@
+kanfei (0.1.0~beta9) unstable; urgency=medium
+
+  * Fix: Settings lockout on upgrade from pre-auth betas
+  * Login page now detects zero-users state and shows account creation form
+  * 3D pressure field: vorticity overlay (wind field curl)
+  * 3D pressure field: convergence/divergence overlay
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sat, 12 Apr 2026 14:00:00 +0000
+
 kanfei (0.1.0~beta8) unstable; urgency=low
 
   * Interactive weather map view (enable via map_enabled setting)
