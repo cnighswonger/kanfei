@@ -75,11 +75,12 @@ interface WindRoseProps {
   height?: number;
 }
 
-const REFRESH_MS = 5 * 60_000; // 5 minutes
+const REFRESH_MS = 60_000; // 1 minute
 
 export default function WindRose({ height }: WindRoseProps) {
   const [loading, setLoading] = useState(true);
   const [bins, setBins] = useState<BinResult | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +104,7 @@ export default function WindRose({ height }: WindRoseProps) {
             .filter((p) => p.value != null)
             .map((p) => ({ ts: new Date(p.timestamp).getTime(), val: p.value! }));
           setBins(binData(dirPts, spdPts));
+          setLastUpdate(new Date());
         })
         .catch(() => { if (!cancelled) setBins(null); })
         .finally(() => { if (!cancelled) setLoading(false); });
@@ -214,5 +216,22 @@ export default function WindRose({ height }: WindRoseProps) {
     );
   }
 
-  return <HighchartsReact highcharts={Highcharts} options={options} />;
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <HighchartsReact highcharts={Highcharts} options={options} />
+      </div>
+      {lastUpdate && (
+        <div style={{
+          textAlign: "center",
+          fontSize: "9px",
+          fontFamily: "var(--font-body)",
+          color: "var(--color-text-muted)",
+          padding: "2px 0 0",
+        }}>
+          12h distribution — updated {lastUpdate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+        </div>
+      )}
+    </div>
+  );
 }
