@@ -21,6 +21,7 @@ const UI_DEFAULTS: Record<string, string> = {
   ui_weather_bg_intensity: "30",
   ui_weather_bg_transparency: "15",
   ui_dashboard_layout: "",
+  ui_custom_theme: "",
 };
 
 // ---------------------------------------------------------------------------

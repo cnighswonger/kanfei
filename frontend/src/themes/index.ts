@@ -51,3 +51,18 @@ import classic from './classic';
 export const themes: Record<string, Theme> = { dark, light, classic };
 export const defaultTheme = 'dark';
 export { dark, light, classic };
+
+/** Deep-merge overrides onto a base preset to create a custom theme. */
+export function createCustomTheme(base: Theme, overrides: Partial<{
+  colors: Partial<Theme['colors']>;
+  fonts: Partial<Theme['fonts']>;
+  gauge: Partial<Theme['gauge']>;
+}>): Theme {
+  return {
+    name: 'custom',
+    label: 'Custom',
+    colors: { ...base.colors, ...overrides.colors },
+    fonts: { ...base.fonts, ...overrides.fonts },
+    gauge: { ...base.gauge, ...overrides.gauge },
+  };
+}

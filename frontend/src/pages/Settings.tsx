@@ -5,6 +5,7 @@ import type { ConfigItem, WeatherLinkConfig, WeatherLinkCalibration, AlertThresh
 import { useTheme } from "../context/ThemeContext.tsx";
 import { useWeatherBackground } from "../context/WeatherBackgroundContext.tsx";
 import { themes } from "../themes/index.ts";
+import ThemeEditor from "../components/settings/ThemeEditor.tsx";
 import { ALL_SCENES, SCENE_LABELS, SCENE_GRADIENTS } from "../components/WeatherBackground.tsx";
 import { API_BASE } from "../utils/constants.ts";
 import { getTimezone, setTimezone as storeTimezone, resolveTimezone, getTimezoneOptions } from "../utils/timezone.ts";
@@ -2754,8 +2755,18 @@ export default function Settings() {
                 {t.label}
               </option>
             ))}
+            <option value="custom">Custom</option>
           </select>
         </div>
+
+        {themeName === "custom" && (
+          <ThemeEditor onClose={() => {
+            // If no custom theme was saved, fall back to dark
+            if (!localStorage.getItem("ui_custom_theme")) {
+              setThemeName("dark");
+            }
+          }} />
+        )}
 
         <div style={fieldGroup}>
           <label style={labelStyle}>Timezone</label>

@@ -6,7 +6,7 @@
  * (already converted from raw DB units), so no client-side
  * transformation is needed here.
  */
-import { useState, useCallback, type ReactNode } from "react";
+import { useState, useCallback, useRef, type ReactNode } from "react";
 import { fetchHistory } from "../../api/client.ts";
 import TrendChart from "../charts/TrendChart.tsx";
 
@@ -39,6 +39,8 @@ export default function FlipTile({
   children,
 }: FlipTileProps) {
   const [flipped, setFlipped] = useState(defaultFlipped ?? false);
+  const [settling, setSettling] = useState(false);
+  const settleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [chartData, setChartData] = useState<{ x: number; y: number }[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -46,6 +48,9 @@ export default function FlipTile({
     if (disabled) return;
     const nextFlipped = !flipped;
     setFlipped(nextFlipped);
+    setSettling(true);
+    clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => setSettling(false), 650);
 
     if (nextFlipped && !backContent) {
       // Fetch last hour of data each time we flip to back
@@ -93,7 +98,9 @@ export default function FlipTile({
             transform: "rotateY(180deg)",
             position: "absolute",
             inset: 0,
-            background: "var(--color-bg-card-solid, var(--color-bg-card))",
+            background: settling
+              ? "var(--color-bg-card-solid, var(--color-bg-card))"
+              : "var(--color-bg-card)",
             borderRadius: "var(--gauge-border-radius, 16px)",
             border: "1px solid var(--color-border)",
             boxShadow: "var(--gauge-shadow)",
