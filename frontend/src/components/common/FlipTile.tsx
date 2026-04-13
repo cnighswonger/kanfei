@@ -2,11 +2,16 @@
  * Wrapper that gives any gauge tile a click-to-flip behaviour.
  * Front: the gauge (children). Back: a 1-hour sparkline chart.
  *
+ * When defaultFlipped is true, the DOM order is swapped so the chart
+ * content occupies the CSS front face. This ensures the initially-
+ * visible face uses --color-bg-card (honors theme transparency) and
+ * the hidden face uses --color-bg-card-solid (prevents bleed-through).
+ *
  * Note: the /api/history endpoint returns display-ready values
  * (already converted from raw DB units), so no client-side
  * transformation is needed here.
  */
-import { useState, useCallback, useRef, type ReactNode } from "react";
+import { useState, useCallback, type ReactNode } from "react";
 import { fetchHistory } from "../../api/client.ts";
 import TrendChart from "../charts/TrendChart.tsx";
 
@@ -29,6 +34,14 @@ interface FlipTileProps {
   children: ReactNode;
 }
 
+/** Styles for the face that sits in the CSS back position (rotated 180deg). */
+const backPositionStyle: React.CSSProperties = {
+  backfaceVisibility: "hidden",
+  transform: "rotateY(180deg)",
+  position: "absolute",
+  inset: 0,
+};
+
 export default function FlipTile({
   sensor,
   label,
@@ -38,22 +51,18 @@ export default function FlipTile({
   defaultFlipped,
   children,
 }: FlipTileProps) {
-  const [flipped, setFlipped] = useState(defaultFlipped ?? false);
-  const [settling, setSettling] = useState(false);
-  const settleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [toggled, setToggled] = useState(false);
   const [chartData, setChartData] = useState<{ x: number; y: number }[]>([]);
   const [loading, setLoading] = useState(false);
 
   const handleClick = useCallback(() => {
     if (disabled) return;
-    const nextFlipped = !flipped;
-    setFlipped(nextFlipped);
-    setSettling(true);
-    clearTimeout(settleTimer.current);
-    settleTimer.current = setTimeout(() => setSettling(false), 650);
+    const nextToggled = !toggled;
+    setToggled(nextToggled);
 
-    if (nextFlipped && !backContent) {
-      // Fetch last hour of data each time we flip to back
+    // Fetch trend data when the default TrendChart becomes visible
+    const willShowChart = defaultFlipped ? !nextToggled : nextToggled;
+    if (willShowChart && !backContent) {
       setLoading(true);
       const now = new Date();
       const hourAgo = new Date(now.getTime() - 3_600_000);
@@ -67,7 +76,91 @@ export default function FlipTile({
         .catch(() => setChartData([]))
         .finally(() => setLoading(false));
     }
-  }, [flipped, disabled, sensor, backContent]);
+  }, [toggled, disabled, sensor, backContent, defaultFlipped]);
+
+  // --- The two content blocks ---
+
+  const gaugeContent = (
+    <div style={{ height: "100%" }}>
+      {children}
+    </div>
+  );
+
+  const chartContent = (
+    <div
+      style={{
+        height: "100%",
+        background: "var(--color-bg-card-solid, var(--color-bg-card))",
+        borderRadius: "var(--gauge-border-radius, 16px)",
+        border: "1px solid var(--color-border)",
+        boxShadow: "var(--gauge-shadow)",
+        padding: "12px",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        boxSizing: "border-box",
+      }}
+    >
+      {backContent ? (
+        <div style={{ flex: 1, minHeight: 0 }}>
+          {backContent}
+        </div>
+      ) : (
+        <>
+          <h4
+            style={{
+              margin: "0 0 4px 0",
+              fontSize: "14px",
+              fontFamily: "var(--font-heading)",
+              color: "var(--color-text)",
+            }}
+          >
+            {label} — Past Hour
+          </h4>
+
+          {loading ? (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--color-text-muted)",
+                fontSize: "13px",
+                fontFamily: "var(--font-body)",
+              }}
+            >
+              Loading...
+            </div>
+          ) : chartData.length > 0 ? (
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <TrendChart title="" data={chartData} unit={unit} sensor={sensor} />
+            </div>
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--color-text-muted)",
+                fontSize: "13px",
+                fontFamily: "var(--font-body)",
+              }}
+            >
+              No data available
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  // When defaultFlipped, the chart is the CSS front face so it naturally
+  // inherits --color-bg-card transparency from the gauge card. The gauge
+  // moves to the CSS back position with the opaque -solid background.
+  const front = defaultFlipped ? chartContent : gaugeContent;
+  const back = defaultFlipped ? gaugeContent : chartContent;
 
   return (
     <div
@@ -78,90 +171,19 @@ export default function FlipTile({
         style={{
           transition: "transform 0.6s ease",
           transformStyle: "preserve-3d",
-          transform: flipped ? "rotateY(180deg)" : "none",
+          transform: toggled ? "rotateY(180deg)" : "none",
           position: "relative",
           height: "100%",
         }}
       >
-        {/* Front face — the gauge */}
+        {/* CSS front face — visible initially */}
         <div style={{ backfaceVisibility: "hidden", height: "100%" }}>
-          {children}
+          {front}
         </div>
 
-        {/* Back face — the chart.
-            Opaque -solid variant prevents front-face bleed-through in
-            the 3D transform.  Tile-level transparency will be addressed
-            in the theme customization feature. */}
-        <div
-          style={{
-            backfaceVisibility: "hidden",
-            transform: "rotateY(180deg)",
-            position: "absolute",
-            inset: 0,
-            background: settling
-              ? "var(--color-bg-card-solid, var(--color-bg-card))"
-              : "var(--color-bg-card)",
-            borderRadius: "var(--gauge-border-radius, 16px)",
-            border: "1px solid var(--color-border)",
-            boxShadow: "var(--gauge-shadow)",
-            padding: "12px",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-          }}
-        >
-          {backContent ? (
-            <div style={{ flex: 1, minHeight: 0 }}>
-              {backContent}
-            </div>
-          ) : (
-            <>
-              <h4
-                style={{
-                  margin: "0 0 4px 0",
-                  fontSize: "14px",
-                  fontFamily: "var(--font-heading)",
-                  color: "var(--color-text)",
-                }}
-              >
-                {label} — Past Hour
-              </h4>
-
-              {loading ? (
-                <div
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "var(--color-text-muted)",
-                    fontSize: "13px",
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  Loading...
-                </div>
-              ) : chartData.length > 0 ? (
-                <div style={{ flex: 1, minHeight: 0 }}>
-                  <TrendChart title="" data={chartData} unit={unit} sensor={sensor} />
-                </div>
-              ) : (
-                <div
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "var(--color-text-muted)",
-                    fontSize: "13px",
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  No data available
-                </div>
-              )}
-            </>
-          )}
+        {/* CSS back face — hidden initially, visible after flip */}
+        <div style={backPositionStyle}>
+          {back}
         </div>
       </div>
     </div>

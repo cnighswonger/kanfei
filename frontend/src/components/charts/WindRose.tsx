@@ -75,31 +75,42 @@ interface WindRoseProps {
   height?: number;
 }
 
+const REFRESH_MS = 5 * 60_000; // 5 minutes
+
 export default function WindRose({ height }: WindRoseProps) {
   const [loading, setLoading] = useState(true);
   const [bins, setBins] = useState<BinResult | null>(null);
 
   useEffect(() => {
-    const now = new Date();
-    const halfDay = new Date(now.getTime() - 12 * 3_600_000);
-    const start = halfDay.toISOString();
-    const end = now.toISOString();
+    let cancelled = false;
 
-    Promise.all([
-      fetchHistory("wind_direction", start, end, "5m"),
-      fetchHistory("wind_speed", start, end, "5m"),
-    ])
-      .then(([dirRes, spdRes]) => {
-        const dirPts = dirRes.points
-          .filter((p) => p.value != null)
-          .map((p) => ({ ts: new Date(p.timestamp).getTime(), val: p.value! }));
-        const spdPts = spdRes.points
-          .filter((p) => p.value != null)
-          .map((p) => ({ ts: new Date(p.timestamp).getTime(), val: p.value! }));
-        setBins(binData(dirPts, spdPts));
-      })
-      .catch(() => setBins(null))
-      .finally(() => setLoading(false));
+    function fetchData() {
+      const now = new Date();
+      const halfDay = new Date(now.getTime() - 12 * 3_600_000);
+      const start = halfDay.toISOString();
+      const end = now.toISOString();
+
+      Promise.all([
+        fetchHistory("wind_direction", start, end, "5m"),
+        fetchHistory("wind_speed", start, end, "5m"),
+      ])
+        .then(([dirRes, spdRes]) => {
+          if (cancelled) return;
+          const dirPts = dirRes.points
+            .filter((p) => p.value != null)
+            .map((p) => ({ ts: new Date(p.timestamp).getTime(), val: p.value! }));
+          const spdPts = spdRes.points
+            .filter((p) => p.value != null)
+            .map((p) => ({ ts: new Date(p.timestamp).getTime(), val: p.value! }));
+          setBins(binData(dirPts, spdPts));
+        })
+        .catch(() => { if (!cancelled) setBins(null); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }
+
+    fetchData();
+    const timer = setInterval(fetchData, REFRESH_MS);
+    return () => { cancelled = true; clearInterval(timer); };
   }, []);
 
   const options: Highcharts.Options | null = useMemo(() => {
