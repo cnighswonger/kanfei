@@ -90,7 +90,7 @@ export default function FlipTile({
             transform: "rotateY(180deg)",
             position: "absolute",
             inset: 0,
-            background: "var(--color-bg-card-solid, var(--color-bg-card))",
+            background: "var(--color-bg-card)",
             borderRadius: "var(--gauge-border-radius, 16px)",
             border: "1px solid var(--color-border)",
             boxShadow: "var(--gauge-shadow)",

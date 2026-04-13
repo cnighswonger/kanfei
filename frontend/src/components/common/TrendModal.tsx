@@ -67,7 +67,7 @@ export default function TrendModal({
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "var(--color-bg-card-solid, var(--color-bg-card))",
+              background: "var(--color-bg-card)",
               border: "1px solid var(--color-border)",
               borderRadius: "var(--gauge-border-radius, 16px)",
               boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
