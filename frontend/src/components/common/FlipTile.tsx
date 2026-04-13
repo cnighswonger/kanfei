@@ -86,10 +86,14 @@ export default function FlipTile({
     </div>
   );
 
-  // When the chart is the CSS front face (defaultFlipped), use transparent
-  // --color-bg-card so it matches other gauge tiles.  When it's the hidden
-  // back face, use the opaque -solid variant to prevent bleed-through.
-  const chartBg = defaultFlipped
+  // The chart face is in the CSS front position when defaultFlipped.
+  // Whether it's currently *visible* depends on toggled state:
+  //   defaultFlipped && !toggled → chart is front & visible → transparent
+  //   defaultFlipped && toggled  → chart is front & hidden  → opaque
+  //   !defaultFlipped && !toggled → chart is back & hidden  → opaque
+  //   !defaultFlipped && toggled  → chart is back & visible → transparent
+  const chartVisible = defaultFlipped ? !toggled : toggled;
+  const chartBg = chartVisible
     ? "var(--color-bg-card)"
     : "var(--color-bg-card-solid, var(--color-bg-card))";
 
