@@ -31,7 +31,6 @@ import SortableTile from "./SortableTile.tsx";
 import TileCatalogModal from "./TileCatalogModal.tsx";
 import FlipTile from "../components/common/FlipTile.tsx";
 import TrendModal from "../components/common/TrendModal.tsx";
-import WindRose from "../components/charts/WindRose.tsx";
 import NowcastBanner from "../components/panels/NowcastBanner.tsx";
 import { useWeatherData } from "../context/WeatherDataContext.tsx";
 import { useIsMobile } from "../hooks/useIsMobile.ts";
@@ -145,7 +144,7 @@ export default function DashboardGrid() {
     removeTile,
     setTileColSpan,
     setAllTilesSpan,
-    setTileDefaultFlipped,
+    setTileWindDisplay,
     resetToDefault,
   } = useDashboardLayout();
   const { currentConditions } = useWeatherData();
@@ -253,15 +252,13 @@ export default function DashboardGrid() {
             const tileW = tilePixelWidth(span, gridWidth);
             const compact = isMobile || tileW < COMPACT_THRESHOLD;
 
-            const content = <TileRenderer tileId={placement.tileId} />;
-            const windBack = placement.tileId === "wind" ? <WindRose /> : undefined;
+            const content = <TileRenderer tileId={placement.tileId} windDisplay={placement.windDisplay} />;
             const wrapped = def.hasFlipTile ? (
               compact ? (
                 <TrendModal
                   sensor={def.sensor!}
                   label={def.chartLabel!}
                   unit={def.chartUnit!}
-                  backContent={windBack}
                 >
                   {content}
                 </TrendModal>
@@ -270,8 +267,6 @@ export default function DashboardGrid() {
                   sensor={def.sensor!}
                   label={def.chartLabel!}
                   unit={def.chartUnit!}
-                  backContent={windBack}
-                  defaultFlipped={placement.defaultFlipped}
                 >
                   {content}
                 </FlipTile>
@@ -394,9 +389,12 @@ export default function DashboardGrid() {
                   gridWidth={gridWidth}
                   onRemove={() => removeTile(placement.tileId)}
                   onSetSpan={(n) => setTileColSpan(placement.tileId, n)}
-                  hasFlipTile={def.hasFlipTile}
-                  defaultFlipped={placement.defaultFlipped}
-                  onToggleDefaultFlipped={() => setTileDefaultFlipped(placement.tileId, !placement.defaultFlipped)}
+                  isWind={placement.tileId === "wind"}
+                  windDisplay={placement.windDisplay ?? "compass"}
+                  onToggleWindDisplay={() => setTileWindDisplay(
+                    placement.tileId,
+                    (placement.windDisplay ?? "compass") === "compass" ? "rose" : "compass",
+                  )}
                 >
                   <CompactProvider value={compact}>
                     {wrapped}
