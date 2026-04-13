@@ -24,6 +24,8 @@ export interface TileDefinition {
 export interface TilePlacement {
   tileId: string;
   colSpan?: number;
+  /** When true, the flip tile shows the back face (chart) by default. */
+  defaultFlipped?: boolean;
 }
 
 export interface DashboardLayout {

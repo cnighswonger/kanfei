@@ -161,13 +161,7 @@ export default function WindRose({ height }: WindRoseProps) {
         },
         title: { text: undefined },
       },
-      tooltip: {
-        shared: true,
-        valueSuffix: "%",
-        backgroundColor: getCSSVar("--color-bg-card-solid") || getCSSVar("--color-bg-card") || "#1e2130",
-        borderColor: borderColor,
-        style: { color: textColor, fontSize: "11px" },
-      },
+      tooltip: { enabled: false },
       plotOptions: {
         column: {
           stacking: "normal",

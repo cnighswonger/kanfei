@@ -145,6 +145,7 @@ export default function DashboardGrid() {
     removeTile,
     setTileColSpan,
     setAllTilesSpan,
+    setTileDefaultFlipped,
     resetToDefault,
   } = useDashboardLayout();
   const { currentConditions } = useWeatherData();
@@ -270,6 +271,7 @@ export default function DashboardGrid() {
                   label={def.chartLabel!}
                   unit={def.chartUnit!}
                   backContent={windBack}
+                  defaultFlipped={placement.defaultFlipped}
                 >
                   {content}
                 </FlipTile>
@@ -392,6 +394,9 @@ export default function DashboardGrid() {
                   gridWidth={gridWidth}
                   onRemove={() => removeTile(placement.tileId)}
                   onSetSpan={(n) => setTileColSpan(placement.tileId, n)}
+                  hasFlipTile={def.hasFlipTile}
+                  defaultFlipped={placement.defaultFlipped}
+                  onToggleDefaultFlipped={() => setTileDefaultFlipped(placement.tileId, !placement.defaultFlipped)}
                 >
                   <CompactProvider value={compact}>
                     {wrapped}

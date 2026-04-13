@@ -24,6 +24,8 @@ interface FlipTileProps {
   /** Optional custom back-face content. When provided, replaces the default
    *  TrendChart and the component is responsible for its own data fetching. */
   backContent?: ReactNode;
+  /** Start with the back face showing. */
+  defaultFlipped?: boolean;
   children: ReactNode;
 }
 
@@ -33,9 +35,10 @@ export default function FlipTile({
   unit,
   disabled,
   backContent,
+  defaultFlipped,
   children,
 }: FlipTileProps) {
-  const [flipped, setFlipped] = useState(false);
+  const [flipped, setFlipped] = useState(defaultFlipped ?? false);
   const [chartData, setChartData] = useState<{ x: number; y: number }[]>([]);
   const [loading, setLoading] = useState(false);
 
