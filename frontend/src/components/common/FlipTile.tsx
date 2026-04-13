@@ -84,18 +84,16 @@ export default function FlipTile({
         </div>
 
         {/* Back face — the chart.
-            When visible (flipped), use the theme-transparent bg so it
-            matches other gauge tiles.  When hidden, use the opaque -solid
-            variant so the front face doesn't bleed through. */}
+            Opaque -solid variant prevents front-face bleed-through in
+            the 3D transform.  Tile-level transparency will be addressed
+            in the theme customization feature. */}
         <div
           style={{
             backfaceVisibility: "hidden",
             transform: "rotateY(180deg)",
             position: "absolute",
             inset: 0,
-            background: flipped
-              ? "var(--color-bg-card)"
-              : "var(--color-bg-card-solid, var(--color-bg-card))",
+            background: "var(--color-bg-card-solid, var(--color-bg-card))",
             borderRadius: "var(--gauge-border-radius, 16px)",
             border: "1px solid var(--color-border)",
             boxShadow: "var(--gauge-shadow)",
