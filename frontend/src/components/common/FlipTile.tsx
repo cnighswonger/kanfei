@@ -21,11 +21,6 @@ interface FlipTileProps {
   unit: string;
   /** When true, click does not flip (used during dashboard edit mode). */
   disabled?: boolean;
-  /** Optional custom back-face content. When provided, replaces the default
-   *  TrendChart and the component is responsible for its own data fetching. */
-  backContent?: ReactNode;
-  /** Start with the back face showing. */
-  defaultFlipped?: boolean;
   children: ReactNode;
 }
 
@@ -34,11 +29,9 @@ export default function FlipTile({
   label,
   unit,
   disabled,
-  backContent,
-  defaultFlipped,
   children,
 }: FlipTileProps) {
-  const [flipped, setFlipped] = useState(defaultFlipped ?? false);
+  const [flipped, setFlipped] = useState(false);
   const [chartData, setChartData] = useState<{ x: number; y: number }[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -47,7 +40,7 @@ export default function FlipTile({
     const nextFlipped = !flipped;
     setFlipped(nextFlipped);
 
-    if (nextFlipped && !backContent) {
+    if (nextFlipped) {
       // Fetch last hour of data each time we flip to back
       setLoading(true);
       const now = new Date();
@@ -62,7 +55,7 @@ export default function FlipTile({
         .catch(() => setChartData([]))
         .finally(() => setLoading(false));
     }
-  }, [flipped, disabled, sensor, backContent]);
+  }, [flipped, disabled, sensor]);
 
   return (
     <div
@@ -83,10 +76,7 @@ export default function FlipTile({
           {children}
         </div>
 
-        {/* Back face — the chart.
-            Opaque -solid variant prevents front-face bleed-through in
-            the 3D transform.  Tile-level transparency will be addressed
-            in the theme customization feature. */}
+        {/* Back face — the chart (always opaque) */}
         <div
           style={{
             backfaceVisibility: "hidden",
@@ -103,57 +93,49 @@ export default function FlipTile({
             overflow: "hidden",
           }}
         >
-          {backContent ? (
+          <h4
+            style={{
+              margin: "0 0 4px 0",
+              fontSize: "14px",
+              fontFamily: "var(--font-heading)",
+              color: "var(--color-text)",
+            }}
+          >
+            {label} — Past Hour
+          </h4>
+
+          {loading ? (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--color-text-muted)",
+                fontSize: "13px",
+                fontFamily: "var(--font-body)",
+              }}
+            >
+              Loading...
+            </div>
+          ) : chartData.length > 0 ? (
             <div style={{ flex: 1, minHeight: 0 }}>
-              {backContent}
+              <TrendChart title="" data={chartData} unit={unit} sensor={sensor} />
             </div>
           ) : (
-            <>
-              <h4
-                style={{
-                  margin: "0 0 4px 0",
-                  fontSize: "14px",
-                  fontFamily: "var(--font-heading)",
-                  color: "var(--color-text)",
-                }}
-              >
-                {label} — Past Hour
-              </h4>
-
-              {loading ? (
-                <div
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "var(--color-text-muted)",
-                    fontSize: "13px",
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  Loading...
-                </div>
-              ) : chartData.length > 0 ? (
-                <div style={{ flex: 1, minHeight: 0 }}>
-                  <TrendChart title="" data={chartData} unit={unit} sensor={sensor} />
-                </div>
-              ) : (
-                <div
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "var(--color-text-muted)",
-                    fontSize: "13px",
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  No data available
-                </div>
-              )}
-            </>
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--color-text-muted)",
+                fontSize: "13px",
+                fontFamily: "var(--font-body)",
+              }}
+            >
+              No data available
+            </div>
           )}
         </div>
       </div>

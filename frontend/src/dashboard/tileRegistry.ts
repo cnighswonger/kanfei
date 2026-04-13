@@ -24,8 +24,8 @@ export interface TileDefinition {
 export interface TilePlacement {
   tileId: string;
   colSpan?: number;
-  /** When true, the flip tile shows the back face (chart) by default. */
-  defaultFlipped?: boolean;
+  /** Wind tile display mode: compass (default) or rose. */
+  windDisplay?: "compass" | "rose";
 }
 
 export interface DashboardLayout {
