@@ -10,6 +10,8 @@ interface TrendModalProps {
   sensor: string;
   label: string;
   unit: string;
+  /** Optional custom modal body. When provided, replaces TrendChart. */
+  backContent?: ReactNode;
   children: ReactNode;
 }
 
@@ -17,6 +19,7 @@ export default function TrendModal({
   sensor,
   label,
   unit,
+  backContent,
   children,
 }: TrendModalProps) {
   const [open, setOpen] = useState(false);
@@ -25,20 +28,22 @@ export default function TrendModal({
 
   const handleOpen = useCallback(() => {
     setOpen(true);
-    setLoading(true);
-    const now = new Date();
-    const hourAgo = new Date(now.getTime() - 3_600_000);
-    fetchHistory(sensor, hourAgo.toISOString(), now.toISOString(), "raw")
-      .then((res) => {
-        setChartData(
-          res.points
-            .map((p) => ({ x: new Date(p.timestamp).getTime(), y: p.value }))
-            .filter((pt): pt is { x: number; y: number } => Number.isFinite(pt.x) && Number.isFinite(pt.y)),
-        );
-      })
-      .catch(() => setChartData([]))
-      .finally(() => setLoading(false));
-  }, [sensor]);
+    if (!backContent) {
+      setLoading(true);
+      const now = new Date();
+      const hourAgo = new Date(now.getTime() - 3_600_000);
+      fetchHistory(sensor, hourAgo.toISOString(), now.toISOString(), "raw")
+        .then((res) => {
+          setChartData(
+            res.points
+              .map((p) => ({ x: new Date(p.timestamp).getTime(), y: p.value }))
+              .filter((pt): pt is { x: number; y: number } => Number.isFinite(pt.x) && Number.isFinite(pt.y)),
+          );
+        })
+        .catch(() => setChartData([]))
+        .finally(() => setLoading(false));
+    }
+  }, [sensor, backContent]);
 
   return (
     <>
@@ -73,47 +78,55 @@ export default function TrendModal({
               overflowY: "auto",
             }}
           >
-            <h4
-              style={{
-                margin: "0 0 8px 0",
-                fontSize: "14px",
-                fontFamily: "var(--font-heading)",
-                color: "var(--color-text)",
-              }}
-            >
-              {label} — Past Hour
-            </h4>
-
-            {loading ? (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  height: 160,
-                  color: "var(--color-text-muted)",
-                  fontSize: "13px",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                Loading...
+            {backContent ? (
+              <div style={{ minHeight: 200 }}>
+                {backContent}
               </div>
-            ) : chartData.length > 0 ? (
-              <TrendChart title="" data={chartData} unit={unit} height={200} sensor={sensor} />
             ) : (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  height: 160,
-                  color: "var(--color-text-muted)",
-                  fontSize: "13px",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                No data available
-              </div>
+              <>
+                <h4
+                  style={{
+                    margin: "0 0 8px 0",
+                    fontSize: "14px",
+                    fontFamily: "var(--font-heading)",
+                    color: "var(--color-text)",
+                  }}
+                >
+                  {label} — Past Hour
+                </h4>
+
+                {loading ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      height: 160,
+                      color: "var(--color-text-muted)",
+                      fontSize: "13px",
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    Loading...
+                  </div>
+                ) : chartData.length > 0 ? (
+                  <TrendChart title="" data={chartData} unit={unit} height={200} sensor={sensor} />
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      height: 160,
+                      color: "var(--color-text-muted)",
+                      fontSize: "13px",
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    No data available
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

@@ -31,6 +31,7 @@ import SortableTile from "./SortableTile.tsx";
 import TileCatalogModal from "./TileCatalogModal.tsx";
 import FlipTile from "../components/common/FlipTile.tsx";
 import TrendModal from "../components/common/TrendModal.tsx";
+import WindRose from "../components/charts/WindRose.tsx";
 import NowcastBanner from "../components/panels/NowcastBanner.tsx";
 import { useWeatherData } from "../context/WeatherDataContext.tsx";
 import { useIsMobile } from "../hooks/useIsMobile.ts";
@@ -252,12 +253,14 @@ export default function DashboardGrid() {
             const compact = isMobile || tileW < COMPACT_THRESHOLD;
 
             const content = <TileRenderer tileId={placement.tileId} />;
+            const windBack = placement.tileId === "wind" ? <WindRose /> : undefined;
             const wrapped = def.hasFlipTile ? (
               compact ? (
                 <TrendModal
                   sensor={def.sensor!}
                   label={def.chartLabel!}
                   unit={def.chartUnit!}
+                  backContent={windBack}
                 >
                   {content}
                 </TrendModal>
@@ -266,6 +269,7 @@ export default function DashboardGrid() {
                   sensor={def.sensor!}
                   label={def.chartLabel!}
                   unit={def.chartUnit!}
+                  backContent={windBack}
                 >
                   {content}
                 </FlipTile>
