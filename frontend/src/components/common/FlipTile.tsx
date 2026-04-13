@@ -86,11 +86,18 @@ export default function FlipTile({
     </div>
   );
 
+  // When the chart is the CSS front face (defaultFlipped), use transparent
+  // --color-bg-card so it matches other gauge tiles.  When it's the hidden
+  // back face, use the opaque -solid variant to prevent bleed-through.
+  const chartBg = defaultFlipped
+    ? "var(--color-bg-card)"
+    : "var(--color-bg-card-solid, var(--color-bg-card))";
+
   const chartContent = (
     <div
       style={{
         height: "100%",
-        background: "var(--color-bg-card-solid, var(--color-bg-card))",
+        background: chartBg,
         borderRadius: "var(--gauge-border-radius, 16px)",
         border: "1px solid var(--color-border)",
         boxShadow: "var(--gauge-shadow)",
