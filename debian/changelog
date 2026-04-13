@@ -1,3 +1,13 @@
+kanfei (0.1.0~beta11) unstable; urgency=low
+
+  * Custom theme editor with color/font/gauge controls (Settings > Display > Theme > Custom)
+  * Wind tile display mode toggle: Compass or Rose (3h polar histogram)
+  * Wind rose filters calm readings, auto-refreshes every 60s
+  * Timezone setting moved from Display into Units
+  * Flip tile backs always opaque (no transparency bleed-through)
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sun, 13 Apr 2026 23:30:00 +0000
+
 kanfei (0.1.0~beta10) unstable; urgency=low
 
   * Wind rose chart on dashboard wind tile flip (12h direction × speed)
