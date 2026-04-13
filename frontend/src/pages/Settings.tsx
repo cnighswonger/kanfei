@@ -2738,6 +2738,29 @@ export default function Settings() {
             ))}
           </div>
         </div>
+
+        <div style={fieldGroup}>
+          <label style={labelStyle}>Timezone</label>
+          <select
+            style={selectStyle}
+            value={timezone}
+            onChange={(e) => {
+              const tz = e.target.value;
+              setTimezoneState(tz);
+              storeTimezone(tz);
+              // Also save resolved IANA name to backend for nowcast service
+              const resolved = tz === "auto"
+                ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                : tz;
+              updateField("station_timezone", resolved);
+            }}
+          >
+            <option value="auto">Auto ({resolveTimezone()})</option>
+            {getTimezoneOptions().map((tz) => (
+              <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Display section */}
@@ -2767,29 +2790,6 @@ export default function Settings() {
             }
           }} />
         )}
-
-        <div style={fieldGroup}>
-          <label style={labelStyle}>Timezone</label>
-          <select
-            style={selectStyle}
-            value={timezone}
-            onChange={(e) => {
-              const tz = e.target.value;
-              setTimezoneState(tz);
-              storeTimezone(tz);
-              // Also save resolved IANA name to backend for nowcast service
-              const resolved = tz === "auto"
-                ? Intl.DateTimeFormat().resolvedOptions().timeZone
-                : tz;
-              updateField("station_timezone", resolved);
-            }}
-          >
-            <option value="auto">Auto ({resolveTimezone()})</option>
-            {getTimezoneOptions().map((tz) => (
-              <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
-            ))}
-          </select>
-        </div>
 
         <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "16px", marginTop: "8px" }}>
           <div style={fieldGroup}>
