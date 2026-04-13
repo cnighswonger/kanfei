@@ -7,6 +7,7 @@ import { useWeatherData } from "../context/WeatherDataContext.tsx";
 import TemperatureGauge from "../components/gauges/TemperatureGauge.tsx";
 import BarometerDial from "../components/gauges/BarometerDial.tsx";
 import WindCompass from "../components/gauges/WindCompass.tsx";
+import WindRose from "../components/charts/WindRose.tsx";
 import HumidityGauge from "../components/gauges/HumidityGauge.tsx";
 import RainGauge from "../components/gauges/RainGauge.tsx";
 import SolarUVGauge from "../components/gauges/SolarUVGauge.tsx";
@@ -15,9 +16,10 @@ import StationStatus from "../components/panels/StationStatus.tsx";
 
 interface TileRendererProps {
   tileId: string;
+  windDisplay?: "compass" | "rose";
 }
 
-export default function TileRenderer({ tileId }: TileRendererProps) {
+export default function TileRenderer({ tileId, windDisplay }: TileRendererProps) {
   const { currentConditions } = useWeatherData();
   const cc = currentConditions;
 
@@ -64,7 +66,19 @@ export default function TileRenderer({ tileId }: TileRendererProps) {
       );
 
     case "wind":
-      return (
+      return windDisplay === "rose" ? (
+        <div style={{
+          height: "100%",
+          background: "var(--color-bg-card)",
+          borderRadius: "var(--gauge-border-radius, 16px)",
+          border: "1px solid var(--color-border)",
+          boxShadow: "var(--gauge-shadow)",
+          padding: "8px",
+          boxSizing: "border-box",
+        }}>
+          <WindRose />
+        </div>
+      ) : (
         <WindCompass
           direction={cc?.wind?.direction?.value ?? null}
           speed={cc?.wind?.speed?.value ?? null}

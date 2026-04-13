@@ -17,12 +17,12 @@ interface SortableTileProps {
   gridWidth: number;
   onRemove: () => void;
   onSetSpan: (n: number) => void;
-  /** Whether the tile supports a flip face (shows flip toggle). */
-  hasFlipTile?: boolean;
-  /** Current default-flipped state. */
-  defaultFlipped?: boolean;
-  /** Called when the user toggles the default face. */
-  onToggleDefaultFlipped?: () => void;
+  /** Whether this is the wind tile (shows display mode toggle). */
+  isWind?: boolean;
+  /** Current wind display mode. */
+  windDisplay?: "compass" | "rose";
+  /** Called when the user toggles wind display mode. */
+  onToggleWindDisplay?: () => void;
   children: ReactNode;
 }
 
@@ -106,9 +106,9 @@ export default function SortableTile({
   gridWidth,
   onRemove,
   onSetSpan,
-  hasFlipTile,
-  defaultFlipped,
-  onToggleDefaultFlipped,
+  isWind,
+  windDisplay,
+  onToggleWindDisplay,
   children,
 }: SortableTileProps) {
   const {
@@ -149,21 +149,26 @@ export default function SortableTile({
         {"\u2630"}
       </div>
 
-      {/* Flip default toggle */}
-      {hasFlipTile && onToggleDefaultFlipped && (
+      {/* Wind display mode toggle */}
+      {isWind && onToggleWindDisplay && (
         <button
           style={{
             ...flipBtnStyle,
-            color: defaultFlipped ? "var(--color-accent)" : "var(--color-text-secondary)",
+            fontSize: 10,
+            fontWeight: 600,
+            fontFamily: "var(--font-body)",
+            width: "auto",
+            padding: "0 6px",
+            color: windDisplay === "rose" ? "var(--color-accent)" : "var(--color-text-secondary)",
           }}
           onClick={(e) => {
             e.stopPropagation();
-            onToggleDefaultFlipped();
+            onToggleWindDisplay();
           }}
-          aria-label={defaultFlipped ? "Default: chart side" : "Default: gauge side"}
-          title={defaultFlipped ? "Default: chart side" : "Default: gauge side"}
+          aria-label={windDisplay === "rose" ? "Switch to Compass" : "Switch to Rose"}
+          title={windDisplay === "rose" ? "Switch to Compass" : "Switch to Rose"}
         >
-          {"\u21C4"}
+          {windDisplay === "rose" ? "Rose" : "Compass"}
         </button>
       )}
 
