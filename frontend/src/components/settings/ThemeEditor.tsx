@@ -187,20 +187,7 @@ function ColorField({
 
   return (
     <div style={colorRowStyle}>
-      <div style={{ width: "170px", flexShrink: 0 }}>
-        <div style={{ fontWeight: 500 }}>{label}</div>
-        {hint && (
-          <div style={{
-            fontSize: "11px",
-            color: "var(--color-text-secondary)",
-            lineHeight: 1.3,
-            marginTop: "2px",
-            fontStyle: "italic",
-          }}>
-            {hint}
-          </div>
-        )}
-      </div>
+      <div style={{ width: "130px", flexShrink: 0, fontWeight: 500 }}>{label}</div>
       <div style={{ position: "relative" }} ref={popRef}>
         <div
           style={{ ...swatchStyle, background: value }}
@@ -225,11 +212,22 @@ function ColorField({
         )}
       </div>
       <input
-        style={{ ...inputStyle, maxWidth: "100px" }}
+        style={{ ...inputStyle, maxWidth: "100px", flex: "0 0 100px" }}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
+      {hint && (
+        <div style={{
+          flex: 1,
+          fontSize: "11px",
+          color: "var(--color-text-secondary)",
+          fontStyle: "italic",
+          marginLeft: "8px",
+        }}>
+          {hint}
+        </div>
+      )}
     </div>
   );
 }
