@@ -154,16 +154,21 @@ export default function SortableTile({
         <button
           style={{
             ...flipBtnStyle,
+            fontSize: 10,
+            fontWeight: 600,
+            fontFamily: "var(--font-body)",
+            width: "auto",
+            padding: "0 6px",
             color: windDisplay === "rose" ? "var(--color-accent)" : "var(--color-text-secondary)",
           }}
           onClick={(e) => {
             e.stopPropagation();
             onToggleWindDisplay();
           }}
-          aria-label={windDisplay === "rose" ? "Wind: Rose" : "Wind: Compass"}
-          title={windDisplay === "rose" ? "Wind: Rose" : "Wind: Compass"}
+          aria-label={windDisplay === "rose" ? "Switch to Compass" : "Switch to Rose"}
+          title={windDisplay === "rose" ? "Switch to Compass" : "Switch to Rose"}
         >
-          {"\u21C4"}
+          {windDisplay === "rose" ? "Rose" : "Compass"}
         </button>
       )}
 

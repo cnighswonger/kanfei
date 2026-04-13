@@ -366,7 +366,7 @@ export default function DashboardGrid() {
               const tileW = tilePixelWidth(span, gridWidth);
               const compact = isMobile || tileW < COMPACT_THRESHOLD;
 
-              const content = <TileRenderer tileId={placement.tileId} />;
+              const content = <TileRenderer tileId={placement.tileId} windDisplay={placement.windDisplay} />;
               const wrapped = (!compact && def.hasFlipTile) ? (
                 <FlipTile
                   sensor={def.sensor!}
