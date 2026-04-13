@@ -17,6 +17,12 @@ interface SortableTileProps {
   gridWidth: number;
   onRemove: () => void;
   onSetSpan: (n: number) => void;
+  /** Whether the tile supports a flip face (shows flip toggle). */
+  hasFlipTile?: boolean;
+  /** Current default-flipped state. */
+  defaultFlipped?: boolean;
+  /** Called when the user toggles the default face. */
+  onToggleDefaultFlipped?: () => void;
   children: ReactNode;
 }
 
@@ -75,6 +81,24 @@ const spanBadgeStyle: React.CSSProperties = {
   userSelect: "none",
 };
 
+const flipBtnStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 6,
+  left: 40,
+  width: 28,
+  height: 28,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 6,
+  background: "var(--color-bg-secondary)",
+  border: "1px solid var(--color-border)",
+  color: "var(--color-text-secondary)",
+  fontSize: 14,
+  cursor: "pointer",
+  zIndex: 10,
+};
+
 export default function SortableTile({
   id,
   colSpan,
@@ -82,6 +106,9 @@ export default function SortableTile({
   gridWidth,
   onRemove,
   onSetSpan,
+  hasFlipTile,
+  defaultFlipped,
+  onToggleDefaultFlipped,
   children,
 }: SortableTileProps) {
   const {
@@ -121,6 +148,24 @@ export default function SortableTile({
       <div style={handleStyle} {...attributes} {...listeners}>
         {"\u2630"}
       </div>
+
+      {/* Flip default toggle */}
+      {hasFlipTile && onToggleDefaultFlipped && (
+        <button
+          style={{
+            ...flipBtnStyle,
+            color: defaultFlipped ? "var(--color-accent)" : "var(--color-text-secondary)",
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleDefaultFlipped();
+          }}
+          aria-label={defaultFlipped ? "Default: chart side" : "Default: gauge side"}
+          title={defaultFlipped ? "Default: chart side" : "Default: gauge side"}
+        >
+          {"\u21C4"}
+        </button>
+      )}
 
       {/* Remove button */}
       <button

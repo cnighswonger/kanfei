@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
+from ..utils.units import inhg_thousandths_to_hpa_tenths
 from .serial_port import SerialPort
 from .commands import (
     build_loop_command,
@@ -206,13 +207,18 @@ class LinkDriver(StationDriver):
         - calibrated_temp = raw_temp + temp_cal
         - calibrated_bar = raw_bar - bar_cal
         - calibrated_hum = clamp(raw_hum + hum_cal, 1, 100)
+
+        Calibration values are stored in Davis-native units (tenths F,
+        thousandths inHg) but readings have already been converted to SI
+        (tenths C, tenths hPa) by _to_si() in loop_packet.py.  Convert
+        the offsets before applying.
         """
         if reading.inside_temp is not None:
-            reading.inside_temp += self.calibration.inside_temp
+            reading.inside_temp += round(self.calibration.inside_temp * 5 / 9)
         if reading.outside_temp is not None:
-            reading.outside_temp += self.calibration.outside_temp
+            reading.outside_temp += round(self.calibration.outside_temp * 5 / 9)
         if reading.barometer is not None:
-            reading.barometer -= self.calibration.barometer
+            reading.barometer -= inhg_thousandths_to_hpa_tenths(self.calibration.barometer)
         if reading.outside_humidity is not None:
             reading.outside_humidity = max(1, min(100,
                 reading.outside_humidity + self.calibration.outside_hum))

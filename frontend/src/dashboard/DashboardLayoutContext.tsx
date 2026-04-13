@@ -33,6 +33,7 @@ interface DashboardLayoutContextValue {
   removeTile: (tileId: string) => void;
   setTileColSpan: (tileId: string, colSpan: number) => void;
   setAllTilesSpan: (colSpan: number) => void;
+  setTileDefaultFlipped: (tileId: string, flipped: boolean) => void;
   resetToDefault: () => void;
 }
 
@@ -191,6 +192,19 @@ export function DashboardLayoutProvider({
     });
   }, []);
 
+  const setTileDefaultFlipped = useCallback((tileId: string, flipped: boolean) => {
+    setLayoutState((prev) => {
+      const next = {
+        ...prev,
+        tiles: prev.tiles.map((t) =>
+          t.tileId === tileId ? { ...t, defaultFlipped: flipped || undefined } : t,
+        ),
+      };
+      saveLayout(next);
+      return next;
+    });
+  }, []);
+
   const resetToDefault = useCallback(() => {
     updateLayout(DEFAULT_LAYOUT);
     setEditMode(false);
@@ -221,6 +235,7 @@ export function DashboardLayoutProvider({
         removeTile,
         setTileColSpan,
         setAllTilesSpan,
+        setTileDefaultFlipped,
         resetToDefault,
       }}
     >
