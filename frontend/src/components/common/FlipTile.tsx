@@ -32,6 +32,7 @@ export default function FlipTile({
   children,
 }: FlipTileProps) {
   const [toggled, setToggled] = useState(false);
+  const [animating, setAnimating] = useState(false);
   const [chartData, setChartData] = useState<{ x: number; y: number }[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -39,6 +40,8 @@ export default function FlipTile({
     if (disabled) return;
     const nextToggled = !toggled;
     setToggled(nextToggled);
+    setAnimating(true);
+    setTimeout(() => setAnimating(false), 650);
 
     const willShowChart = defaultFlipped ? !nextToggled : nextToggled;
     if (willShowChart && !backContent) {
@@ -117,29 +120,27 @@ export default function FlipTile({
           height: "100%",
         }}
       >
-        {/* CSS front face */}
+        {/* CSS front face — visible when !toggled */}
         <div
           style={{
             backfaceVisibility: "hidden",
             height: "100%",
-            background: frontVisible ? "transparent" : "var(--color-bg-card-solid, var(--color-bg-card))",
-            borderRadius: "var(--gauge-border-radius, 16px)",
-            overflow: "hidden",
+            // When settled and hidden, remove from rendering entirely
+            // to prevent any compositing bleed-through.
+            ...(!frontVisible && !animating ? { visibility: "hidden" as const } : {}),
           }}
         >
           {frontContent}
         </div>
 
-        {/* CSS back face */}
+        {/* CSS back face — visible when toggled */}
         <div
           style={{
             backfaceVisibility: "hidden",
             transform: "rotateY(180deg)",
             position: "absolute",
             inset: 0,
-            background: frontVisible ? "var(--color-bg-card-solid, var(--color-bg-card))" : "transparent",
-            borderRadius: "var(--gauge-border-radius, 16px)",
-            overflow: "hidden",
+            ...(frontVisible && !animating ? { visibility: "hidden" as const } : {}),
           }}
         >
           {backContentNode}
