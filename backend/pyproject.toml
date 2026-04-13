@@ -19,7 +19,7 @@ dependencies = [
     "matplotlib>=3.7",         # Radar composite visualizations
     "python-telegram-bot>=22.0",  # Telegram bot integration (async, getUpdates polling)
     "discord.py>=2.0",             # Discord bot integration (async, gateway WebSocket)
-    "bcrypt>=4.0",                   # Password hashing for auth
+    "bcrypt>=5.0.0",                   # Password hashing for auth
 ]
 
 [project.optional-dependencies]
