@@ -15,63 +15,65 @@ import { themes, type Theme } from "../../themes/index.ts";
 interface ColorDef {
   key: keyof Theme["colors"];
   label: string;
+  /** One-line description of where this color appears in the UI. */
+  hint: string;
 }
 
 const COLOR_GROUPS: { title: string; fields: ColorDef[] }[] = [
   {
     title: "General",
     fields: [
-      { key: "bg", label: "Background" },
-      { key: "bgSecondary", label: "Secondary BG" },
-      { key: "bgCard", label: "Card BG" },
-      { key: "bgCardHover", label: "Card Hover" },
-      { key: "text", label: "Text" },
-      { key: "textSecondary", label: "Secondary Text" },
-      { key: "textMuted", label: "Muted Text" },
+      { key: "bg",             label: "Background",     hint: "Page background" },
+      { key: "bgSecondary",    label: "Secondary BG",   hint: "Panels, dropdowns, inputs" },
+      { key: "bgCard",         label: "Card BG",        hint: "Gauge and dashboard tiles" },
+      { key: "bgCardHover",    label: "Card Hover",     hint: "Tile hover state" },
+      { key: "text",           label: "Text",           hint: "Main text and gauge values" },
+      { key: "textSecondary",  label: "Secondary Text", hint: "Labels, axes, chart gridlines" },
+      { key: "textMuted",      label: "Muted Text",     hint: "Timestamps, hints, disabled" },
     ],
   },
   {
     title: "Accent & Status",
     fields: [
-      { key: "accent", label: "Accent" },
-      { key: "accentHover", label: "Accent Hover" },
-      { key: "success", label: "Success" },
-      { key: "warning", label: "Warning" },
-      { key: "danger", label: "Danger" },
+      { key: "accent",      label: "Accent",       hint: "Buttons, links, active tabs" },
+      { key: "accentHover", label: "Accent Hover", hint: "Accent elements on hover" },
+      { key: "success",     label: "Success",      hint: "OK indicators, rising trends" },
+      { key: "warning",     label: "Warning",      hint: "Caution states, stale data" },
+      { key: "danger",      label: "Danger",       hint: "Errors, falling trends" },
     ],
   },
   {
     title: "Borders",
     fields: [
-      { key: "border", label: "Border" },
-      { key: "borderLight", label: "Border Light" },
+      { key: "border",      label: "Border",       hint: "Tile outlines, dividers" },
+      { key: "borderLight", label: "Border Light", hint: "Subtle separators" },
     ],
   },
   {
     title: "Gauges",
     fields: [
-      { key: "gaugeTrack", label: "Track" },
-      { key: "gaugeFill", label: "Fill" },
-      { key: "barometerNeedle", label: "Barometer Needle" },
-      { key: "windArrow", label: "Wind Arrow" },
-      { key: "rainBlue", label: "Rain" },
-      { key: "humidityGreen", label: "Humidity" },
-      { key: "solarYellow", label: "Solar" },
+      { key: "gaugeTrack",      label: "Track",            hint: "Empty portion of dial gauges" },
+      { key: "gaugeFill",       label: "Fill",             hint: "Filled portion of dial gauges" },
+      { key: "barometerNeedle", label: "Barometer Needle", hint: "Barometer pointer" },
+      { key: "windArrow",       label: "Wind Arrow",       hint: "Wind direction arrow on compass" },
+      { key: "rainBlue",        label: "Rain",             hint: "Rain gauge fill" },
+      { key: "humidityGreen",   label: "Humidity",         hint: "Humidity gauge fill" },
+      { key: "solarYellow",     label: "Solar",            hint: "Solar/UV gauge fill" },
     ],
   },
   {
     title: "Temperature",
     fields: [
-      { key: "tempHot", label: "Hot" },
-      { key: "tempCold", label: "Cold" },
-      { key: "tempMid", label: "Mid" },
+      { key: "tempHot",  label: "Hot",  hint: "Daily high marker on temperature gauge" },
+      { key: "tempCold", label: "Cold", hint: "Daily low marker on temperature gauge" },
+      { key: "tempMid",  label: "Mid",  hint: "Middle of temperature gradient" },
     ],
   },
   {
     title: "Layout",
     fields: [
-      { key: "headerBg", label: "Header BG" },
-      { key: "sidebarBg", label: "Sidebar BG" },
+      { key: "headerBg",  label: "Header BG",  hint: "Top navigation bar" },
+      { key: "sidebarBg", label: "Sidebar BG", hint: "Left navigation sidebar" },
     ],
   },
 ];
@@ -156,10 +158,12 @@ const btnStyle: React.CSSProperties = {
 
 function ColorField({
   label,
+  hint,
   value,
   onChange,
 }: {
   label: string;
+  hint?: string;
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -183,7 +187,19 @@ function ColorField({
 
   return (
     <div style={colorRowStyle}>
-      <div style={{ width: "110px", flexShrink: 0 }}>{label}</div>
+      <div style={{ width: "170px", flexShrink: 0 }}>
+        <div>{label}</div>
+        {hint && (
+          <div style={{
+            fontSize: "10px",
+            color: "var(--color-text-muted)",
+            lineHeight: 1.2,
+            marginTop: "1px",
+          }}>
+            {hint}
+          </div>
+        )}
+      </div>
       <div style={{ position: "relative" }} ref={popRef}>
         <div
           style={{ ...swatchStyle, background: value }}
@@ -367,6 +383,7 @@ export default function ThemeEditor({ onClose }: ThemeEditorProps) {
                 <ColorField
                   key={f.key}
                   label={f.label}
+                  hint={f.hint}
                   value={draft.colors[f.key]}
                   onChange={(v) => updateColor(f.key, v)}
                 />
