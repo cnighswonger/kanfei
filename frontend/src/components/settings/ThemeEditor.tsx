@@ -232,17 +232,21 @@ export default function ThemeEditor({ onClose }: ThemeEditorProps) {
     label: "Custom",
   }));
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [saved, setSaved] = useState(false);
   const committedRef = useRef(theme);
+  const savedRef = useRef(false);
 
   // Live preview: apply draft to DOM on every change
   useEffect(() => {
     applyThemeToDOM(draft);
   }, [draft]);
 
-  // On unmount/cancel, restore committed theme
+  // On unmount, restore committed theme ONLY if we didn't save
   useEffect(() => {
     return () => {
-      applyThemeToDOM(committedRef.current);
+      if (!savedRef.current) {
+        applyThemeToDOM(committedRef.current);
+      }
     };
   }, []);
 
@@ -280,7 +284,7 @@ export default function ThemeEditor({ onClose }: ThemeEditorProps) {
 
   const handleSave = useCallback(() => {
     // Auto-derive accentMuted from accent
-    const final = {
+    const final: Theme = {
       ...draft,
       colors: {
         ...draft.colors,
@@ -289,8 +293,10 @@ export default function ThemeEditor({ onClose }: ThemeEditorProps) {
     };
     setCustomTheme(final);
     committedRef.current = final;
-    onClose();
-  }, [draft, setCustomTheme, onClose]);
+    savedRef.current = true;
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }, [draft, setCustomTheme]);
 
   const handleCancel = useCallback(() => {
     // Restore original theme (cleanup effect handles DOM)
@@ -463,11 +469,11 @@ export default function ThemeEditor({ onClose }: ThemeEditorProps) {
           onClick={handleSave}
           style={{
             ...btnStyle,
-            background: "var(--color-accent)",
+            background: saved ? "var(--color-success, #22c55e)" : "var(--color-accent)",
             color: "#fff",
           }}
         >
-          Save Custom Theme
+          {saved ? "Saved!" : "Save Custom Theme"}
         </button>
         <button
           onClick={handleCancel}
