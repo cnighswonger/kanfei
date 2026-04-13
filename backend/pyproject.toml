@@ -14,7 +14,7 @@ dependencies = [
     "pydantic-settings>=2.1",
     "websockets>=12.0",
     "python-multipart>=0.0.6",
-    "anthropic>=0.45",
+    "anthropic>=0.94.0",
     "numpy>=1.24",             # Radar processing, threat tracking
     "matplotlib>=3.7",         # Radar composite visualizations
     "python-telegram-bot>=22.0",  # Telegram bot integration (async, getUpdates polling)
@@ -35,7 +35,7 @@ nexrad = [
 ]
 openai = [
     # Fallback AI providers (Grok/xAI, OpenAI) for nowcast generation
-    "openai>=1.12.0",
+    "openai>=2.31.0",
 ]
 dev = [
     "pytest>=7.4",
