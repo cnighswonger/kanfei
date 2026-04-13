@@ -17,12 +17,13 @@ const SECTORS = [
 ] as const;
 const SECTOR_WIDTH = 360 / SECTORS.length; // 22.5
 
-/** Speed bands in display units (mph by default). */
+/** Speed bands in display units (mph by default). Zero-speed readings
+ *  are filtered out entirely — see binData. */
 const BANDS = [
-  { label: "Calm (0\u20133)",     min: 0,  max: 3,  color: "#93c5fd" },
-  { label: "Light (3\u201310)",   min: 3,  max: 10, color: "#3b82f6" },
-  { label: "Moderate (10\u201320)", min: 10, max: 20, color: "#f59e0b" },
-  { label: "Strong (20+)",       min: 20, max: Infinity, color: "#ef4444" },
+  { label: "Light (<7)",     min: 0,  max: 7,  color: "#93c5fd" },
+  { label: "Breezy (7\u201315)",  min: 7,  max: 15, color: "#3b82f6" },
+  { label: "Windy (15\u201325)",  min: 15, max: 25, color: "#f59e0b" },
+  { label: "Strong (25+)",   min: 25, max: Infinity, color: "#ef4444" },
 ];
 
 // --- Helpers ---
@@ -57,6 +58,9 @@ function binData(
   for (const dp of dirPoints) {
     const spd = spdMap.get(dp.ts);
     if (spd == null) continue;
+    // Skip calm readings — wind direction is unreliable when speed is 0
+    // (Davis stations hold the last direction, producing a stuck-bar artifact).
+    if (spd <= 0) continue;
     const sector = dirToSector(dp.val);
     for (let b = 0; b < BANDS.length; b++) {
       if (spd >= BANDS[b].min && spd < BANDS[b].max) {
@@ -87,8 +91,8 @@ export default function WindRose({ height }: WindRoseProps) {
 
     function fetchData() {
       const now = new Date();
-      const halfDay = new Date(now.getTime() - 12 * 3_600_000);
-      const start = halfDay.toISOString();
+      const windowStart = new Date(now.getTime() - 3 * 3_600_000);
+      const start = windowStart.toISOString();
       const end = now.toISOString();
 
       Promise.all([
@@ -211,7 +215,7 @@ export default function WindRose({ height }: WindRoseProps) {
         height: "100%", color: "var(--color-text-muted)", fontSize: "13px",
         fontFamily: "var(--font-body)",
       }}>
-        No wind data available
+        Calm — no wind in last 3h
       </div>
     );
   }
@@ -229,7 +233,7 @@ export default function WindRose({ height }: WindRoseProps) {
           color: "var(--color-text-muted)",
           padding: "2px 0 0",
         }}>
-          12h distribution — updated {lastUpdate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+          3h distribution (calm filtered) — updated {lastUpdate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
         </div>
       )}
     </div>
