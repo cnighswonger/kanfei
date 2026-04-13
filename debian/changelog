@@ -1,3 +1,13 @@
+kanfei (0.1.0~beta10) unstable; urgency=low
+
+  * Wind rose chart on dashboard wind tile flip (12h direction × speed)
+  * Default face toggle for all flip tiles (edit mode)
+  * Fix: barometer calibration offset wrong units (~3× over-correction)
+  * Fix: temperature calibration offset wrong units (F vs C delta)
+  * Fix: ESLint peer dependency conflict in CI
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sun, 13 Apr 2026 20:00:00 +0000
+
 kanfei (0.1.0~beta9) unstable; urgency=medium
 
   * Fix: Settings lockout on upgrade from pre-auth betas
