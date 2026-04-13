@@ -17,7 +17,7 @@ dependencies = [
     "anthropic>=0.45",
     "numpy>=1.24",             # Radar processing, threat tracking
     "matplotlib>=3.7",         # Radar composite visualizations
-    "python-telegram-bot>=22.0",  # Telegram bot integration (async, getUpdates polling)
+    "python-telegram-bot>=22.7",  # Telegram bot integration (async, getUpdates polling)
     "discord.py>=2.0",             # Discord bot integration (async, gateway WebSocket)
     "bcrypt>=4.0",                   # Password hashing for auth
 ]
