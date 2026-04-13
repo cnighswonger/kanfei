@@ -123,8 +123,6 @@ export default function WindRose({ height }: WindRoseProps) {
     if (!bins || bins.total === 0) return null;
 
     const textColor = getCSSVar("--color-text-secondary") || "#9ca3b4";
-    const mutedColor = getCSSVar("--color-text-muted") || "#5c6478";
-    const borderColor = getCSSVar("--color-border") || "#2a2d3e";
 
     // Convert counts to percentages of total.
     const pctCounts = bins.counts.map((band) =>
@@ -160,21 +158,21 @@ export default function WindRose({ height }: WindRoseProps) {
       xAxis: {
         categories: [...SECTORS],
         tickmarkPlacement: "on",
-        lineColor: borderColor,
-        gridLineColor: borderColor,
+        lineColor: textColor,
+        gridLineColor: textColor,
         labels: {
-          style: { color: mutedColor, fontSize: "10px" },
+          style: { color: textColor, fontSize: "10px" },
         },
       },
       yAxis: {
         min: 0,
         endOnTick: false,
         showLastLabel: true,
-        gridLineColor: borderColor,
+        gridLineColor: textColor,
         gridLineInterpolation: "polygon",
         labels: {
           format: "{value}%",
-          style: { color: mutedColor, fontSize: "9px" },
+          style: { color: textColor, fontSize: "9px" },
         },
         title: { text: undefined },
       },
