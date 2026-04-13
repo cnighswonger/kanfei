@@ -188,13 +188,14 @@ function ColorField({
   return (
     <div style={colorRowStyle}>
       <div style={{ width: "170px", flexShrink: 0 }}>
-        <div>{label}</div>
+        <div style={{ fontWeight: 500 }}>{label}</div>
         {hint && (
           <div style={{
-            fontSize: "10px",
-            color: "var(--color-text-muted)",
-            lineHeight: 1.2,
-            marginTop: "1px",
+            fontSize: "11px",
+            color: "var(--color-text-secondary)",
+            lineHeight: 1.3,
+            marginTop: "2px",
+            fontStyle: "italic",
           }}>
             {hint}
           </div>
