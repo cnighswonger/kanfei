@@ -15,8 +15,8 @@ dependencies = [
     "websockets>=12.0",
     "python-multipart>=0.0.6",
     "anthropic>=0.45",
-    "numpy>=1.24",             # Radar processing, threat tracking
-    "matplotlib>=3.7",         # Radar composite visualizations
+    "numpy>=2.2.6",             # Radar processing, threat tracking
+    "matplotlib>=3.10.8",         # Radar composite visualizations
     "python-telegram-bot>=22.0",  # Telegram bot integration (async, getUpdates polling)
     "discord.py>=2.0",             # Discord bot integration (async, gateway WebSocket)
     "bcrypt>=4.0",                   # Password hashing for auth
@@ -25,8 +25,8 @@ dependencies = [
 [project.optional-dependencies]
 nexrad = [
     # NEXRAD Level II radar processing (mesocyclone/hail detection)
-    "arm-pyart>=1.15.0",
-    "boto3>=1.28.0",
+    "arm-pyart>=2.2.0",
+    "boto3>=1.42.88",
     "scikit-learn>=1.3.0",     # DBSCAN clustering for multi-peak detection
     "Pillow>=9.0",             # Radar composite image generation
     "scipy>=1.10.0",           # Pressure isobar interpolation
@@ -44,10 +44,10 @@ dev = [
 ]
 testing = [
     # Historic event testing dependencies
-    "arm-pyart>=1.15.0",      # NEXRAD Level II processing
+    "arm-pyart>=2.2.0",      # NEXRAD Level II processing
     "xarray>=2023.0.0",        # Multi-dimensional arrays
     "netCDF4>=1.6.0",          # CWOP MADIS data (netCDF format)
-    "boto3>=1.28.0",           # AWS S3 access for NEXRAD archive
+    "boto3>=1.42.88",           # AWS S3 access for NEXRAD archive
     "s3fs>=2023.0.0",          # S3 filesystem interface
     "geopandas>=0.14.0",       # NWS alert shapefiles
     "shapely>=2.0.0",          # Geometric operations
