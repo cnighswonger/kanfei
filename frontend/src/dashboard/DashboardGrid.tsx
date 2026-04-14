@@ -39,13 +39,13 @@ import { useFeatureFlags } from "../context/FeatureFlagsContext.tsx";
 const COMPACT_THRESHOLD = 240;
 
 const editToggleStyle: React.CSSProperties = {
-  background: "none",
-  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card-solid, var(--color-bg-card))",
+  border: "1px solid var(--color-text-secondary)",
   borderRadius: 6,
   padding: "4px 10px",
   cursor: "pointer",
-  fontSize: 14,
-  color: "var(--color-text-secondary)",
+  fontSize: 16,
+  color: "var(--color-text)",
   fontFamily: "var(--font-body)",
   marginLeft: 12,
   verticalAlign: "middle",
