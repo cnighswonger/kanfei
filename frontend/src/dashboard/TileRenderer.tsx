@@ -1,6 +1,7 @@
 /**
  * Maps a tile ID to the corresponding gauge/panel component with
- * live weather data props. Extracted from Dashboard.tsx.
+ * live weather data props. The wind tile supports a display mode
+ * toggle (compass vs polar rose). Extracted from Dashboard.tsx.
  */
 
 import { useWeatherData } from "../context/WeatherDataContext.tsx";

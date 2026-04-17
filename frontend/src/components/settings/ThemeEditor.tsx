@@ -346,6 +346,7 @@ export default function ThemeEditor({ onClose }: ThemeEditorProps) {
             ...inputStyle,
             maxWidth: "150px",
           }}
+          aria-label="Base theme"
         >
           {Object.entries(themes).map(([key, t]) => (
             <option key={key} value={key}>{t.label}</option>

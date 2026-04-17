@@ -4,7 +4,7 @@ import logging
 import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ..config import settings
 from .dependencies import require_admin
@@ -16,6 +16,14 @@ router = APIRouter()
 
 class DiscordTestRequest(BaseModel):
     channel_id: str
+
+    @field_validator("channel_id")
+    @classmethod
+    def channel_id_must_be_numeric(cls, v: str) -> str:
+        v = v.strip()
+        if not v.isdigit():
+            raise ValueError("channel_id must be a numeric string")
+        return v
 
 
 def _get_discord_token() -> str:

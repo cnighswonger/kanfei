@@ -1,7 +1,8 @@
 """GET /api/astronomy - Sun and moon data."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _fmt_time(dt) -> str:
+def _fmt_time(dt: Optional[datetime]) -> str:
     """Format a datetime as a locale-friendly time string."""
     if dt is None:
         return "--"
@@ -25,14 +26,14 @@ def _fmt_time(dt) -> str:
     return str(dt)
 
 
-def _fmt_date(d) -> str:
+def _fmt_date(d: Optional[date]) -> str:
     """Format a date for display."""
     if d is None:
         return "--"
     return d.strftime("%b %d, %Y")
 
 
-def _fmt_duration(seconds) -> str:
+def _fmt_duration(seconds: Optional[float]) -> str:
     """Format seconds into Xh Ym string."""
     if seconds is None:
         return "--"
@@ -41,7 +42,7 @@ def _fmt_duration(seconds) -> str:
     return f"{h}h {m}m"
 
 
-def _fmt_change(seconds) -> str:
+def _fmt_change(seconds: Optional[float]) -> str:
     """Format day length change in seconds to +/-Xm Ys."""
     if seconds is None:
         return "--"
