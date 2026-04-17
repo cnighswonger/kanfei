@@ -8,6 +8,7 @@ import Highcharts from "highcharts";
 import "highcharts/highcharts-more";
 import { HighchartsReact } from "highcharts-react-official";
 import { fetchHistory } from "../../api/client.ts";
+import { useTheme } from "../../context/ThemeContext.tsx";
 
 // --- Constants ---
 
@@ -19,11 +20,11 @@ const SECTOR_WIDTH = 360 / SECTORS.length; // 22.5
 
 /** Speed bands in display units (mph by default). Zero-speed readings
  *  are filtered out entirely — see binData. */
-const BANDS = [
-  { label: "Light (<7)",     min: 0,  max: 7,  color: "#93c5fd" },
-  { label: "Breezy (7\u201315)",  min: 7,  max: 15, color: "#3b82f6" },
-  { label: "Windy (15\u201325)",  min: 15, max: 25, color: "#f59e0b" },
-  { label: "Strong (25+)",   min: 25, max: Infinity, color: "#ef4444" },
+const BAND_DEFS = [
+  { label: "Light (<7)",     min: 0,  max: 7,  cssVar: "--color-wind-light",  themeVar: "",               fallback: "#93c5fd" },
+  { label: "Breezy (7\u201315)",  min: 7,  max: 15, cssVar: "--color-wind-breezy", themeVar: "--color-accent",  fallback: "#3b82f6" },
+  { label: "Windy (15\u201325)",  min: 15, max: 25, cssVar: "--color-wind-windy",  themeVar: "--color-warning", fallback: "#f59e0b" },
+  { label: "Strong (25+)",   min: 25, max: Infinity, cssVar: "--color-wind-strong", themeVar: "--color-danger",  fallback: "#ef4444" },
 ];
 
 // --- Helpers ---
@@ -52,7 +53,7 @@ function binData(
   const spdMap = new Map<number, number>();
   for (const p of spdPoints) spdMap.set(p.ts, p.val);
 
-  const counts = BANDS.map(() => new Array(SECTORS.length).fill(0));
+  const counts = BAND_DEFS.map(() => new Array(SECTORS.length).fill(0));
   let total = 0;
 
   for (const dp of dirPoints) {
@@ -62,8 +63,8 @@ function binData(
     // (Davis stations hold the last direction, producing a stuck-bar artifact).
     if (spd <= 0) continue;
     const sector = dirToSector(dp.val);
-    for (let b = 0; b < BANDS.length; b++) {
-      if (spd >= BANDS[b].min && spd < BANDS[b].max) {
+    for (let b = 0; b < BAND_DEFS.length; b++) {
+      if (spd >= BAND_DEFS[b].min && spd < BAND_DEFS[b].max) {
         counts[b][sector]++;
         total++;
         break;
@@ -82,6 +83,7 @@ interface WindRoseProps {
 const REFRESH_MS = 60_000; // 1 minute
 
 export default function WindRose({ height }: WindRoseProps) {
+  const { themeName } = useTheme();
   const [loading, setLoading] = useState(true);
   const [bins, setBins] = useState<BinResult | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -123,6 +125,10 @@ export default function WindRose({ height }: WindRoseProps) {
     if (!bins || bins.total === 0) return null;
 
     const textColor = getCSSVar("--color-text-secondary") || "#9ca3b4";
+
+    const bandColors = BAND_DEFS.map((b) =>
+      getCSSVar(b.cssVar) || (b.themeVar && getCSSVar(b.themeVar)) || b.fallback,
+    );
 
     // Convert counts to percentages of total.
     const pctCounts = bins.counts.map((band) =>
@@ -185,14 +191,14 @@ export default function WindRose({ height }: WindRoseProps) {
           borderWidth: 0,
         },
       },
-      series: BANDS.map((band, i) => ({
+      series: BAND_DEFS.map((band, i) => ({
         type: "column" as const,
         name: band.label,
         data: pctCounts[i],
-        color: band.color,
+        color: bandColors[i],
       })),
     };
-  }, [bins, height]);
+  }, [bins, height, themeName]);
 
   if (loading) {
     return (

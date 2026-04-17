@@ -78,12 +78,12 @@ function IconStorm() {
 
 function mapForecastIcon(text: string): { icon: React.ReactNode; color: string } {
   const t = text.toLowerCase();
-  if (t.includes("stormy")) return { icon: <IconStorm />, color: "#a855f7" };
-  if (t.includes("rain") || t.includes("very unsettled")) return { icon: <IconRain />, color: "#3b82f6" };
-  if (t.includes("shower")) return { icon: <IconCloudDrizzle />, color: "#60a5fa" };
-  if (t.includes("changeable") || t.includes("unsettled") || t.includes("less settled")) return { icon: <IconCloud />, color: "#94a3b8" };
-  if (t.includes("fairly fine") || t.includes("becoming fine") || t.includes("improving")) return { icon: <IconSunCloud />, color: "#fbbf24" };
-  return { icon: <IconSun />, color: "#f59e0b" };
+  if (t.includes("stormy")) return { icon: <IconStorm />, color: "var(--color-forecast-stormy, #a855f7)" };
+  if (t.includes("rain") || t.includes("very unsettled")) return { icon: <IconRain />, color: "var(--color-forecast-rain, var(--color-accent, #3b82f6))" };
+  if (t.includes("shower")) return { icon: <IconCloudDrizzle />, color: "var(--color-forecast-shower, #60a5fa)" };
+  if (t.includes("changeable") || t.includes("unsettled") || t.includes("less settled")) return { icon: <IconCloud />, color: "var(--color-forecast-changeable, var(--color-text-secondary, #94a3b8))" };
+  if (t.includes("fairly fine") || t.includes("becoming fine") || t.includes("improving")) return { icon: <IconSunCloud />, color: "var(--color-forecast-fair, #fbbf24)" };
+  return { icon: <IconSun />, color: "var(--color-forecast-sunny, var(--color-solar-yellow, #f59e0b))" };
 }
 
 function trendArrow(trend: string | null): { symbol: string; color: string } {

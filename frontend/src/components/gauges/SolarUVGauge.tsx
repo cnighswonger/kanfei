@@ -11,11 +11,11 @@ interface SolarUVGaugeProps {
 }
 
 function uvColor(uv: number): string {
-  if (uv < 3) return '#22c55e';     // Low - green
-  if (uv < 6) return '#f59e0b';     // Moderate - yellow
-  if (uv < 8) return '#f97316';     // High - orange
-  if (uv < 11) return '#ef4444';    // Very high - red
-  return '#7c3aed';                  // Extreme - purple
+  if (uv < 3) return 'var(--color-uv-low, var(--color-success, #22c55e))';
+  if (uv < 6) return 'var(--color-uv-moderate, var(--color-warning, #f59e0b))';
+  if (uv < 8) return 'var(--color-uv-high, #f97316)';
+  if (uv < 11) return 'var(--color-uv-very-high, var(--color-danger, #ef4444))';
+  return 'var(--color-uv-extreme, #7c3aed)';
 }
 
 function uvLabel(uv: number): string {
@@ -28,10 +28,10 @@ function uvLabel(uv: number): string {
 
 function solarIntensity(wr: number): { label: string; color: string } {
   if (wr === 0) return { label: 'None', color: 'var(--color-text-muted)' };
-  if (wr < 200) return { label: 'Low', color: '#f59e0b' };
-  if (wr < 600) return { label: 'Moderate', color: '#f97316' };
-  if (wr < 1000) return { label: 'High', color: '#ef4444' };
-  return { label: 'Very High', color: '#dc2626' };
+  if (wr < 200) return { label: 'Low', color: 'var(--color-solar-low, var(--color-solar-yellow, #f59e0b))' };
+  if (wr < 600) return { label: 'Moderate', color: 'var(--color-solar-moderate, #f97316)' };
+  if (wr < 1000) return { label: 'High', color: 'var(--color-solar-high, var(--color-danger, #ef4444))' };
+  return { label: 'Very High', color: 'var(--color-solar-extreme, #dc2626)' };
 }
 
 export default function SolarUVGauge({ solarRadiation, uvIndex }: SolarUVGaugeProps) {

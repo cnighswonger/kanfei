@@ -498,8 +498,8 @@ export default function Nowcast() {
         const bg = isWarning
           ? "var(--color-danger, #dc2626)"
           : isWatch
-            ? "#d97706"
-            : "#ca8a04";
+            ? "var(--color-alert-watch, #d97706)"
+            : "var(--color-alert-minor, #ca8a04)";
         const expanded = alertsExpanded.has(alert.alert_id);
         return (
           <div
@@ -569,10 +569,10 @@ export default function Nowcast() {
         const level = (sw.threat_level || "WARNING").toUpperCase();
         const bg =
           level === "EMERGENCY"
-            ? "#7f1d1d"
+            ? "var(--color-alert-emergency, #7f1d1d)"
             : level === "WARNING"
               ? "var(--color-danger, #dc2626)"
-              : "#d97706";
+              : "var(--color-alert-watch, #d97706)";
         return (
           <div
             style={{

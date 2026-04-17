@@ -16,9 +16,9 @@ interface RainGaugeProps {
 function rateColor(rate: number): string {
   if (rate === 0) return 'var(--color-text-muted)';
   if (rate < 0.1) return 'var(--color-rain-blue, #06b6d4)';
-  if (rate < 0.3) return '#0ea5e9';
-  if (rate < 1.0) return '#2563eb';
-  return '#7c3aed';
+  if (rate < 0.3) return 'var(--color-rain-moderate, #0ea5e9)';
+  if (rate < 1.0) return 'var(--color-rain-heavy, #2563eb)';
+  return 'var(--color-rain-extreme, #7c3aed)';
 }
 
 export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRate }: RainGaugeProps) {
