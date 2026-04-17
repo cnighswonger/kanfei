@@ -1,3 +1,15 @@
+kanfei (0.1.0~beta12) unstable; urgency=low
+
+  * Dashboard edit pencil button: improved contrast (opaque bg, theme-aware color)
+  * Accessibility: aria-labels on setup wizard, Settings selects, theme editor
+  * Input validation: Telegram/Discord chat IDs validated as numeric at schema level
+  * Type hints: astronomy.py helpers, db_admin.py row converter
+  * Theme-aware colors: gauges, charts, header forecast icons, nowcast alerts now
+    use CSS custom properties with fallbacks instead of hardcoded hex
+  * Wind rose chart colors update on theme switch
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Thu, 17 Apr 2026 22:00:00 +0000
+
 kanfei (0.1.0~beta11) unstable; urgency=low
 
   * Custom theme editor with color/font/gauge controls (Settings > Display > Theme > Custom)
