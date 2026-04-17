@@ -1202,6 +1202,7 @@ function BackupTab({ val, updateField, isMobile }: {
               style={selectStyle}
               value={String(val("backup_interval_hours") || 24)}
               onChange={(e) => updateField("backup_interval_hours", Number(e.target.value))}
+              aria-label="Backup interval"
             >
               <option value="6">Every 6 hours</option>
               <option value="12">Every 12 hours</option>
@@ -1543,6 +1544,7 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
                 width: "auto",
                 minWidth: "120px",
               }}
+              aria-label="Log level filter"
             >
               <option value="WARNING">WARNING+</option>
               <option value="ERROR">ERROR+</option>
@@ -2754,6 +2756,7 @@ export default function Settings() {
                 : tz;
               updateField("station_timezone", resolved);
             }}
+            aria-label="Timezone"
           >
             <option value="auto">Auto ({resolveTimezone()})</option>
             {getTimezoneOptions().map((tz) => (
@@ -2772,6 +2775,7 @@ export default function Settings() {
             style={selectStyle}
             value={themeName}
             onChange={(e) => setThemeName(e.target.value)}
+            aria-label="Theme"
           >
             {Object.entries(themes).map(([key, t]) => (
               <option key={key} value={key}>

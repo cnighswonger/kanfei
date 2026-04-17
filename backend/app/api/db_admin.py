@@ -9,6 +9,8 @@ from datetime import datetime, date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse, FileResponse
+from typing import Any
+
 from pydantic import BaseModel
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
@@ -146,7 +148,7 @@ def get_stats(db: Session = Depends(get_db), _admin=Depends(require_admin)):
 # Export — JSON
 # ---------------------------------------------------------------------------
 
-def _model_row_to_dict(row) -> dict:
+def _model_row_to_dict(row: Any) -> dict:
     """Convert a SQLAlchemy model instance to a JSON-serialisable dict."""
     d = {}
     for col in row.__table__.columns:

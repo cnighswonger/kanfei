@@ -4,7 +4,7 @@ import logging
 import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -17,6 +17,14 @@ router = APIRouter()
 
 class TelegramTestRequest(BaseModel):
     chat_id: str
+
+    @field_validator("chat_id")
+    @classmethod
+    def chat_id_must_be_numeric(cls, v: str) -> str:
+        v = v.strip()
+        if not v.lstrip("-").isdigit():
+            raise ValueError("chat_id must be a numeric string")
+        return v
 
 
 def _get_telegram_token() -> str:

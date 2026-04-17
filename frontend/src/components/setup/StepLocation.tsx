@@ -195,6 +195,7 @@ export default function StepLocation({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+          aria-label="Search address or city"
         />
         <button
           style={{
@@ -205,6 +206,7 @@ export default function StepLocation({
           }}
           onClick={handleSearch}
           disabled={searching}
+          aria-label="Search location"
         >
           {searching ? "Searching..." : "Search"}
         </button>

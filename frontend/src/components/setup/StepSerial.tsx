@@ -177,6 +177,7 @@ export default function StepSerial({
           }}
           onClick={handleAutoDetect}
           disabled={busy}
+          aria-label="Auto-detect weather station"
         >
           {detecting ? "Scanning..." : "Auto-Detect Station"}
         </button>
@@ -209,6 +210,7 @@ export default function StepSerial({
                 }}
                 onClick={refreshPorts}
                 disabled={busy}
+                aria-label="Refresh serial ports"
               >
                 Refresh
               </button>
@@ -220,6 +222,7 @@ export default function StepSerial({
                 onChange({ serialPort: e.target.value, stationType: null })
               }
               disabled={busy}
+              aria-label="Serial port"
             >
               {ports.length === 0 && (
                 <option value="">No ports detected</option>
@@ -244,6 +247,7 @@ export default function StepSerial({
                 })
               }
               disabled={busy}
+              aria-label="Baud rate"
             >
               <option value={19200}>19200 (Vantage Pro)</option>
               <option value={2400}>2400 (WeatherLink)</option>
@@ -261,6 +265,7 @@ export default function StepSerial({
             }}
             onClick={handleTestConnection}
             disabled={busy || !serialPort}
+            aria-label="Test serial connection"
           >
             {probing ? "Testing..." : "Test Connection"}
           </button>
