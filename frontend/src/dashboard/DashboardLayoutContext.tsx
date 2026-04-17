@@ -1,7 +1,8 @@
 /**
- * Dashboard layout context — manages tile arrangement with backend-persisted
- * preferences (localStorage as sync cache). Follows the same pattern as
- * ThemeContext and WeatherBackgroundContext.
+ * Dashboard layout context — manages tile arrangement and per-tile display
+ * options (e.g. wind compass vs rose) with backend-persisted preferences
+ * (localStorage as sync cache). Follows the same pattern as ThemeContext
+ * and WeatherBackgroundContext.
  */
 
 import {

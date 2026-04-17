@@ -4,7 +4,8 @@
  * drag-resized in edit mode.
  * Normal mode: plain CSS grid, zero DnD overhead.
  * Edit mode: DndContext + SortableContext for drag-and-drop reordering,
- *   plus per-tile ResizeHandle for width adjustment.
+ *   per-tile ResizeHandle for width adjustment, and wind display toggle
+ *   (compass ↔ rose).
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
