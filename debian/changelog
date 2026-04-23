@@ -1,3 +1,13 @@
+kanfei (0.1.0~beta13) unstable; urgency=low
+
+  * Wind history chart: dual-panel direction scatter + speed/gust columns
+  * Wind gust sensor now persisted to database (all station protocols)
+  * Wind tile flip-back shows 4h wind history instead of 1h sparkline
+  * History page: "Wind History" combined view in sensor dropdown
+  * FlipTile/TrendModal support custom back content
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 23 Apr 2026 05:00:00 +0000
+
 kanfei (0.1.0~beta12) unstable; urgency=low
 
   * Dashboard edit pencil button: improved contrast (opaque bg, theme-aware color)
