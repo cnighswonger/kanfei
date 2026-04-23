@@ -9,6 +9,7 @@ import {
 import { getHighchartsTimeConfig, resolveTimezone } from "../utils/timezone.ts";
 import { computeYAxisScale } from "../utils/chartScaling.ts";
 import { useIsMobile } from "../hooks/useIsMobile.ts";
+import WindHistory from "../components/charts/WindHistory.tsx";
 
 // --- Sensor unit mapping (sensor key -> unit string) ---
 
@@ -18,6 +19,7 @@ const SENSOR_UNITS: Record<string, string> = {
   humidity_inside: "%",
   humidity_outside: "%",
   wind_speed: "mph",
+  wind_gust: "mph",
   wind_direction: "deg",
   barometer: "inHg",
   rain_daily: "in",
@@ -39,6 +41,10 @@ function isoLocal(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+const PRESET_HOURS: Record<Preset, number> = {
+  "1h": 1, "12h": 12, "24h": 24, "7d": 168, "30d": 720, custom: 24,
+};
 
 function presetRange(preset: Preset): { start: string; end: string } {
   const now = new Date();
@@ -148,8 +154,9 @@ export default function History() {
     return presetRange(preset);
   }, [preset, customStart, customEnd]);
 
+  const isWindCombined = sensor === "wind_combined";
   const { data, summary, loading, error } = useHistoricalData(
-    sensor,
+    isWindCombined ? "" : sensor,
     start,
     end,
     resolution,
@@ -473,75 +480,88 @@ export default function History() {
 
       {/* Chart area */}
       <div style={cardStyle}>
-        {loading && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              height: isMobile ? "280px" : "400px",
-            }}
-          >
-            <div
-              style={{
-                width: "36px",
-                height: "36px",
-                border: "3px solid var(--color-border)",
-                borderTopColor: "var(--color-accent)",
-                borderRadius: "50%",
-                animation: "spin 0.8s linear infinite",
-              }}
+        {isWindCombined ? (
+          <div style={{ height: isMobile ? 320 : 440 }}>
+            <WindHistory
+              hours={preset === "custom"
+                ? Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 3_600_000))
+                : PRESET_HOURS[preset]}
+              height={isMobile ? 320 : 440}
             />
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
-        )}
+        ) : (
+          <>
+            {loading && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  height: isMobile ? "280px" : "400px",
+                }}
+              >
+                <div
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    border: "3px solid var(--color-border)",
+                    borderTopColor: "var(--color-accent)",
+                    borderRadius: "50%",
+                    animation: "spin 0.8s linear infinite",
+                  }}
+                />
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              </div>
+            )}
 
-        {error && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              height: isMobile ? "280px" : "400px",
-              flexDirection: "column",
-              gap: "8px",
-            }}
-          >
-            <span
-              style={{ color: "var(--color-danger)", fontSize: "16px" }}
-            >
-              Failed to load data
-            </span>
-            <span
-              style={{
-                color: "var(--color-text-muted)",
-                fontSize: "13px",
-                maxWidth: "400px",
-                textAlign: "center",
-              }}
-            >
-              {error}
-            </span>
-          </div>
-        )}
+            {error && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  height: isMobile ? "280px" : "400px",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                <span
+                  style={{ color: "var(--color-danger)", fontSize: "16px" }}
+                >
+                  Failed to load data
+                </span>
+                <span
+                  style={{
+                    color: "var(--color-text-muted)",
+                    fontSize: "13px",
+                    maxWidth: "400px",
+                    textAlign: "center",
+                  }}
+                >
+                  {error}
+                </span>
+              </div>
+            )}
 
-        {!loading && !error && data.length === 0 && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              height: isMobile ? "280px" : "400px",
-              color: "var(--color-text-muted)",
-              fontSize: "14px",
-            }}
-          >
-            No data available for the selected range.
-          </div>
-        )}
+            {!loading && !error && data.length === 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  height: isMobile ? "280px" : "400px",
+                  color: "var(--color-text-muted)",
+                  fontSize: "14px",
+                }}
+              >
+                No data available for the selected range.
+              </div>
+            )}
 
-        {!loading && !error && data.length > 0 && (
-          <HighchartsReact highcharts={Highcharts} options={chartOptions} />
+            {!loading && !error && data.length > 0 && (
+              <HighchartsReact highcharts={Highcharts} options={chartOptions} />
+            )}
+          </>
         )}
       </div>
       </div>

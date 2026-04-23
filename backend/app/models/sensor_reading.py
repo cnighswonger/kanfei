@@ -23,6 +23,7 @@ class SensorReadingModel(Base):
     inside_humidity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     outside_humidity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     wind_speed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    wind_gust: Mapped[int | None] = mapped_column(Integer, nullable=True)
     wind_direction: Mapped[int | None] = mapped_column(Integer, nullable=True)
     barometer: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rain_total: Mapped[int | None] = mapped_column(Integer, nullable=True)

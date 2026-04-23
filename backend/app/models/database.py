@@ -68,3 +68,13 @@ def init_database() -> None:
                 "ALTER TABLE sensor_readings ADD COLUMN extra_json TEXT"
             ))
             conn.commit()
+
+    # Migrate: add wind_gust column if missing
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("SELECT wind_gust FROM sensor_readings LIMIT 1"))
+        except Exception:
+            conn.execute(text(
+                "ALTER TABLE sensor_readings ADD COLUMN wind_gust INTEGER"
+            ))
+            conn.commit()
