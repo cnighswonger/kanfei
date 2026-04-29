@@ -29,6 +29,7 @@ SENSOR_COLUMNS = {
     "inside_humidity": SensorReadingModel.inside_humidity,
     "outside_humidity": SensorReadingModel.outside_humidity,
     "wind_speed": SensorReadingModel.wind_speed,
+    "wind_gust": SensorReadingModel.wind_gust,
     "wind_direction": SensorReadingModel.wind_direction,
     "barometer": SensorReadingModel.barometer,
     "rain_total": SensorReadingModel.rain_total,
@@ -53,6 +54,7 @@ SENSOR_UNITS: dict[str, str] = {
     "inside_humidity": "%",
     "outside_humidity": "%",
     "wind_speed": "mph",
+    "wind_gust": "mph",
     "wind_direction": "°",
     "barometer": "inHg",
     "rain_total": "in",
@@ -83,6 +85,7 @@ SENSOR_CONVERTERS: dict[str, object] = {
     "theta_e": si_theta_e_to_display,
     "barometer": si_pressure_to_display_inhg,
     "wind_speed": si_wind_to_display_mph,
+    "wind_gust": si_wind_to_display_mph,
     "rain_total": si_rain_to_display_in,
     "rain_yearly": si_rain_to_display_in,
     "rain_rate": si_rain_to_display_in,  # tenths mm/hr → in/hr
@@ -110,6 +113,7 @@ SENSOR_BOUNDS: dict[str, tuple[int, int]] = {
     "inside_humidity": (1, 104),       # sensor tolerance: ±4% above 90% RH
     "outside_humidity": (1, 104),
     "wind_speed": (0, 894),            # 0 to 89.4 m/s ≈ 200 mph (tenths m/s)
+    "wind_gust": (0, 894),             # same range as wind_speed
     "wind_direction": (0, 360),
     "barometer": (8466, 11863),        # 846.6 to 1186.3 hPa (tenths hPa)
     "rain_total": (0, 253746),         # 0 to 25374.6 mm (tenths mm)

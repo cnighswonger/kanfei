@@ -199,6 +199,10 @@ class Poller:
             round(snapshot.wind_speed * 10)
             if snapshot.wind_speed is not None else None
         )
+        wind_gust_tenths_ms = (
+            round(snapshot.wind_gust * 10)
+            if snapshot.wind_gust is not None else None
+        )
 
         # Compute derived values
         hi = None
@@ -243,6 +247,7 @@ class Poller:
                     round(snapshot.wind_speed * 10)
                     if snapshot.wind_speed is not None else None
                 ),
+                wind_gust=wind_gust_tenths_ms,
                 wind_direction=snapshot.wind_direction,
                 barometer=(
                     round(snapshot.barometer * 10)
