@@ -14,7 +14,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.5.0",
+    "@react-three/fiber": "^9.6.0",
     "highcharts": "^12.6.0",
     "highcharts-react-official": "^3.2.3",
     "leaflet": "^1.9.4",
@@ -23,7 +23,7 @@
     "react-dom": "^19.2.5",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.14.1",
-    "three": "^0.183.2"
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
