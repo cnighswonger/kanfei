@@ -181,7 +181,7 @@ export function clearRainYearly(): Promise<{ success: boolean }> {
   return request("/api/weatherlink/clear-rain-yearly", { method: "POST" });
 }
 
-export function forceArchive(): Promise<{ success: boolean }> {
+export function forceArchive(): Promise<{ success: boolean; records_synced?: number }> {
   return request("/api/weatherlink/force-archive", { method: "POST" });
 }
 

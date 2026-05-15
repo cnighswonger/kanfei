@@ -2007,7 +2007,16 @@ export default function Settings() {
     setWlError(null);
     try {
       const resp = await forceArchive();
-      setWlMsg(resp.success ? "Archive record written" : "Failed to write archive");
+      if (resp.success) {
+        const n = resp.records_synced ?? 0;
+        setWlMsg(
+          n > 0
+            ? `Archive record written (${n} new record${n === 1 ? "" : "s"} synced)`
+            : "Archive record written"
+        );
+      } else {
+        setWlMsg("Failed to write archive");
+      }
     } catch (err: unknown) {
       setWlError(err instanceof Error ? err.message : String(err));
     }
