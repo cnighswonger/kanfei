@@ -29,7 +29,15 @@ from app.utils.units import f_tenths_to_c_tenths, inhg_thousandths_to_hpa_tenths
 
 @pytest.fixture(autouse=True)
 def _setup_db():
-    Base.metadata.create_all(bind=engine)
+    # Drop + recreate the two tables we touch so the schema in the configured
+    # SQLite DB always matches the current ORM definitions, regardless of
+    # whether kanfei.db pre-dates a recent migration (e.g. wind_gust column).
+    # create_all alone only creates MISSING tables — it won't add columns to
+    # an existing-but-stale table, which silently breaks every test that
+    # tries to insert a row using the newer schema.
+    tables = [SensorReadingModel.__table__, ArchiveRecordModel.__table__]
+    Base.metadata.drop_all(bind=engine, tables=tables)
+    Base.metadata.create_all(bind=engine, tables=tables)
     yield
     db = SessionLocal()
     db.query(SensorReadingModel).delete()
