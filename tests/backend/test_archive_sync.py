@@ -6,12 +6,15 @@ during async_sync_archive.
 """
 
 from datetime import datetime
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.models.archive_record import ArchiveRecordModel
 from app.models.database import Base, SessionLocal, engine
 from app.models.sensor_reading import SensorReadingModel
+from app.protocol.constants import StationModel
+from app.services import archive_sync as archive_sync_mod
 from app.services.archive_sync import (
     _project_to_sensor_reading,
     _valid_archive_baro,
@@ -19,6 +22,7 @@ from app.services.archive_sync import (
     _valid_archive_solar,
     _valid_archive_temp,
     _valid_archive_u8,
+    async_sync_archive,
 )
 from app.utils.units import f_tenths_to_c_tenths, inhg_thousandths_to_hpa_tenths, mph_to_ms_tenths
 
@@ -202,3 +206,151 @@ class TestSentinelFiltering:
         assert out.wind_chill is None
         assert out.feels_like is None
         assert out.theta_e is None
+
+
+def _mock_driver_with_records(records):
+    """Build a Mock LinkDriver shaped enough to drive async_sync_archive.
+
+    `records` is a list of parsed-archive dicts (as returned by
+    parse_archive_record).  The mock returns pointers spanning N*21 bytes
+    so the iterator emits exactly len(records) addresses; the actual raw
+    bytes returned by read_archive are placeholders since we monkeypatch
+    parse_archive_record to return our synthetic dicts instead.
+    """
+    driver = MagicMock()
+    driver.station_model = StationModel.MONITOR
+    record_size = 21  # basic-station archive record size
+    n = len(records)
+    driver.read_archive_pointers = MagicMock(return_value=(n * record_size, 0))
+    driver.read_archive_period = MagicMock(return_value=1)
+    driver.read_archive = MagicMock(return_value=b"\x00" * record_size)
+    return driver
+
+
+class TestSyncOrchestratorDedupe:
+    """Orchestrator-level regression for the archive-interval-aligned
+    dedupe semantics — the round-2 Codex re-review explicitly called out
+    the lack of this coverage.
+
+    Rule: a SensorReadingModel row gets bridged in for an archive record
+    at `record_time` ONLY when no live sensor_readings row already exists
+    in `[record_time - archive_interval, record_time)`.
+    """
+
+    @pytest.mark.asyncio
+    async def test_live_sample_inside_interval_suppresses_bridge(self, monkeypatch):
+        """Live row at 12:00:30 falls inside [12:00:00, 12:01:00) — the
+        12:01:00 archive row should NOT trigger a bridge insert."""
+        archive_ts = datetime(2026, 5, 15, 12, 1, 0)
+        live_ts = datetime(2026, 5, 15, 12, 0, 30)
+
+        db = SessionLocal()
+        try:
+            db.add(SensorReadingModel(
+                timestamp=live_ts,
+                station_type=int(StationModel.MONITOR.value),
+                outside_temp=200,  # arbitrary live reading
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        archive_rec = {
+            "archive_address": 0x0000,
+            "record_time": archive_ts,
+            "station_type": int(StationModel.MONITOR.value),
+            "barometer": 29920, "inside_humidity": 45, "outside_humidity": 60,
+            "rain_in_period": 0, "inside_temp_avg": 720, "outside_temp_avg": 680,
+            "wind_speed_avg": 10, "wind_direction": 4,
+            "outside_temp_hi": 695, "wind_gust": 18, "outside_temp_lo": 665,
+        }
+
+        monkeypatch.setattr(archive_sync_mod, "parse_archive_record",
+                            lambda data, addr, model: archive_rec)
+        driver = _mock_driver_with_records([archive_rec])
+
+        inserted = await async_sync_archive(driver)
+        assert inserted == 1  # archive_records row landed
+
+        db = SessionLocal()
+        try:
+            sr_count = db.query(SensorReadingModel).count()
+        finally:
+            db.close()
+        # Only the pre-seeded live row should be present — no bridge insert.
+        assert sr_count == 1
+
+    @pytest.mark.asyncio
+    async def test_live_sample_outside_interval_does_not_suppress(self, monkeypatch):
+        """Live row at 11:58:30 falls outside [12:00:00, 12:01:00) — the
+        12:01:00 archive row SHOULD trigger a bridge insert."""
+        archive_ts = datetime(2026, 5, 15, 12, 1, 0)
+        live_ts = datetime(2026, 5, 15, 11, 58, 30)
+
+        db = SessionLocal()
+        try:
+            db.add(SensorReadingModel(
+                timestamp=live_ts,
+                station_type=int(StationModel.MONITOR.value),
+                outside_temp=200,
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        archive_rec = {
+            "archive_address": 0x0000,
+            "record_time": archive_ts,
+            "station_type": int(StationModel.MONITOR.value),
+            "barometer": 29920, "inside_humidity": 45, "outside_humidity": 60,
+            "rain_in_period": 0, "inside_temp_avg": 720, "outside_temp_avg": 680,
+            "wind_speed_avg": 10, "wind_direction": 4,
+            "outside_temp_hi": 695, "wind_gust": 18, "outside_temp_lo": 665,
+        }
+
+        monkeypatch.setattr(archive_sync_mod, "parse_archive_record",
+                            lambda data, addr, model: archive_rec)
+        driver = _mock_driver_with_records([archive_rec])
+
+        inserted = await async_sync_archive(driver)
+        assert inserted == 1
+
+        db = SessionLocal()
+        try:
+            sr_rows = db.query(SensorReadingModel).order_by(
+                SensorReadingModel.timestamp
+            ).all()
+        finally:
+            db.close()
+        # Pre-seeded live row plus the bridged backfill row.
+        assert len(sr_rows) == 2
+        assert sr_rows[0].timestamp == live_ts
+        assert sr_rows[1].timestamp == archive_ts
+
+    @pytest.mark.asyncio
+    async def test_no_live_samples_bridges_normally(self, monkeypatch):
+        """With an empty sensor_readings table, every archive record
+        should land a bridged sensor_readings row."""
+        archive_rec = {
+            "archive_address": 0x0000,
+            "record_time": datetime(2026, 5, 15, 12, 1, 0),
+            "station_type": int(StationModel.MONITOR.value),
+            "barometer": 29920, "inside_humidity": 45, "outside_humidity": 60,
+            "rain_in_period": 0, "inside_temp_avg": 720, "outside_temp_avg": 680,
+            "wind_speed_avg": 10, "wind_direction": 4,
+            "outside_temp_hi": 695, "wind_gust": 18, "outside_temp_lo": 665,
+        }
+
+        monkeypatch.setattr(archive_sync_mod, "parse_archive_record",
+                            lambda data, addr, model: archive_rec)
+        driver = _mock_driver_with_records([archive_rec])
+
+        inserted = await async_sync_archive(driver)
+        assert inserted == 1
+
+        db = SessionLocal()
+        try:
+            sr_count = db.query(SensorReadingModel).count()
+        finally:
+            db.close()
+        assert sr_count == 1
