@@ -9,13 +9,26 @@ application downtime.
 import asyncio
 import logging
 import struct
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from ..protocol.link_driver import LinkDriver, bcd_decode
 from ..protocol.constants import StationModel, BASIC_STATIONS
 from ..models.database import SessionLocal
 from ..models.archive_record import ArchiveRecordModel
+from ..models.sensor_reading import SensorReadingModel
+from ..utils.units import (
+    f_tenths_to_c_tenths,
+    inhg_thousandths_to_hpa_tenths,
+    mph_to_ms_tenths,
+)
+from .calculations import (
+    dew_point,
+    equivalent_potential_temperature,
+    feels_like,
+    heat_index,
+    wind_chill,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +46,18 @@ ARCHIVE_RECORD_SIZE = {
 
 # Maximum valid SRAM address (0x7F00-0x7FFF reserved for MDMP).
 SRAM_MAX_ADDR = 0x7F00
+
+# Window around an archive record's minute-boundary timestamp inside which
+# any existing sensor_readings row is considered to already cover the period.
+# Archive timestamps are HH:MM:00 (no seconds); live poll timestamps land on
+# arbitrary seconds, so an exact-equality check would never dedupe.
+_DEDUPE_WINDOW = timedelta(seconds=30)
+
+# Compass-rose direction codes (0–15) → degrees, per Davis appendix.txt:F.
+_WIND_DIR_DEGREES = [
+    0, 22, 45, 68, 90, 112, 135, 158,
+    180, 202, 225, 248, 270, 292, 315, 338,
+]
 
 
 # --- Timestamp decoding ---
@@ -244,6 +269,95 @@ def _iter_archive_addresses(
     return addresses
 
 
+# --- archive_records → sensor_readings projection ---
+
+def _project_to_sensor_reading(record: dict) -> SensorReadingModel:
+    """Build a SensorReadingModel from a parsed archive record dict.
+
+    Davis on-device archive records store period aggregates (TinAvg/TOutAvg/
+    WspAvg + THiOut/TLowOut/Gust) in native units (1/10 °F, 1/1000 inHg, mph,
+    compass code 0–15).  This projects the avg/snapshot fields into SI tenths
+    matching sensor_readings, recomputing derived values (heat index, dew
+    point, wind chill, feels-like, theta-e) the same way the live poller does.
+
+    The hi/lo period extremes from archive_records have no home in
+    sensor_readings and are preserved only in archive_records.
+    """
+    inside_temp_c = (
+        f_tenths_to_c_tenths(record["inside_temp_avg"])
+        if record.get("inside_temp_avg") is not None else None
+    )
+    outside_temp_c = (
+        f_tenths_to_c_tenths(record["outside_temp_avg"])
+        if record.get("outside_temp_avg") is not None else None
+    )
+    barometer_hpa = (
+        inhg_thousandths_to_hpa_tenths(record["barometer"])
+        if record.get("barometer") else None
+    )
+    wind_speed_ms = (
+        mph_to_ms_tenths(record["wind_speed_avg"])
+        if record.get("wind_speed_avg") is not None else None
+    )
+    wind_gust_ms = (
+        mph_to_ms_tenths(record["wind_gust"])
+        if record.get("wind_gust") is not None else None
+    )
+    wind_dir_deg = (
+        _WIND_DIR_DEGREES[record["wind_direction"]]
+        if record.get("wind_direction") is not None
+        and 0 <= record["wind_direction"] <= 15
+        else None
+    )
+    outside_hum = record.get("outside_humidity")
+    inside_hum = record.get("inside_humidity")
+    solar_rad = record.get("solar_rad_avg")
+    uv_tenths = (
+        record["uv_avg"]  # already tenths on Health stations
+        if record.get("uv_avg") is not None else None
+    )
+
+    hi = dp = wc = fl = theta = None
+    if outside_temp_c is not None and outside_hum is not None:
+        hi = heat_index(outside_temp_c, outside_hum)
+        dp = dew_point(outside_temp_c, outside_hum)
+        if barometer_hpa is not None:
+            theta = equivalent_potential_temperature(
+                outside_temp_c, outside_hum, barometer_hpa
+            )
+    if outside_temp_c is not None and wind_speed_ms is not None:
+        wc = wind_chill(outside_temp_c, wind_speed_ms)
+    if (outside_temp_c is not None
+            and outside_hum is not None
+            and wind_speed_ms is not None):
+        fl = feels_like(outside_temp_c, outside_hum, wind_speed_ms)
+
+    return SensorReadingModel(
+        timestamp=record["record_time"],
+        station_type=record["station_type"],
+        inside_temp=inside_temp_c,
+        outside_temp=outside_temp_c,
+        inside_humidity=inside_hum,
+        outside_humidity=outside_hum,
+        wind_speed=wind_speed_ms,
+        wind_gust=wind_gust_ms,
+        wind_direction=wind_dir_deg,
+        barometer=barometer_hpa,
+        solar_radiation=solar_rad,
+        uv_index=uv_tenths,
+        heat_index=hi,
+        dew_point=dp,
+        wind_chill=wc,
+        feels_like=fl,
+        theta_e=theta,
+        # Rain fields are intentionally left NULL on backfilled rows:
+        # rain_total is daily-cumulative (needs a known midnight baseline
+        # we can't reconstruct from period deltas across a sleep gap), and
+        # rain_rate would need the rain-collector resolution nibble decoded
+        # against per-station config to be meaningful.
+    )
+
+
 # --- Orchestrator ---
 
 async def async_sync_archive(driver: LinkDriver) -> int:
@@ -329,6 +443,19 @@ async def async_sync_archive(driver: LinkDriver) -> int:
 
             db.add(ArchiveRecordModel(**record))
             inserted += 1
+
+            # Bridge to sensor_readings so the history chart shows the
+            # backfilled interval.  Skip if any live sample already exists
+            # within +/- _DEDUPE_WINDOW of this archive minute — the live
+            # sample is a true instantaneous reading and is preferred over
+            # a derived-from-aggregate row.
+            rt = record["record_time"]
+            has_nearby_reading = db.query(SensorReadingModel.id).filter(
+                SensorReadingModel.timestamp >= rt - _DEDUPE_WINDOW,
+                SensorReadingModel.timestamp <= rt + _DEDUPE_WINDOW,
+            ).first() is not None
+            if not has_nearby_reading:
+                db.add(_project_to_sensor_reading(record))
 
             if inserted % 100 == 0:
                 db.commit()

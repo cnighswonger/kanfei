@@ -658,7 +658,13 @@ class LoggerDaemon:
         if not link or not link.connected:
             raise RuntimeError("Not connected (or driver does not support archive force)")
         ok = await link.async_force_archive()
-        return {"success": ok}
+        records_synced = 0
+        if ok:
+            try:
+                records_synced = await async_sync_archive(link)
+            except Exception as exc:
+                logger.warning("Post-force archive sync failed: %s", exc)
+        return {"success": ok, "records_synced": records_synced}
 
 
 # --------------- Entry point ---------------
