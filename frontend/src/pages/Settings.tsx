@@ -1933,27 +1933,19 @@ export default function Settings() {
     setWlMsg(null);
     setWlError(null);
     try {
-      const update: Record<string, unknown> = {};
-      if (wlConfig === null || wlArchivePeriod !== wlConfig.archive_period) {
-        update.archive_period = wlArchivePeriod;
-      }
-      if (wlConfig === null || wlSamplePeriod !== wlConfig.sample_period) {
-        update.sample_period = wlSamplePeriod;
-      }
-      const calChanged = wlConfig === null ||
-        wlCal.inside_temp !== wlConfig.calibration.inside_temp ||
-        wlCal.outside_temp !== wlConfig.calibration.outside_temp ||
-        wlCal.barometer !== wlConfig.calibration.barometer ||
-        wlCal.outside_humidity !== wlConfig.calibration.outside_humidity ||
-        wlCal.rain_cal !== wlConfig.calibration.rain_cal;
-      if (calChanged) {
-        update.calibration = wlCal;
-      }
-      if (Object.keys(update).length === 0) {
-        setWlMsg("No changes to save");
-        setWlSaving(false);
-        return;
-      }
+      // Always send all three fields, even when the form values match the
+      // cached wlConfig.  The previous diff-only behavior silently skipped
+      // SAP/SSP/WWR-cal whenever the form already matched cache, so any
+      // drift on the link (issue #147) couldn't be repaired by Save — the
+      // user's click was a no-op as far as the link was concerned.  Sending
+      // the full payload every time forces the link to converge on what the
+      // user is looking at, and the daemon-side reconcile mirrors the same
+      // value into the canonical station_config row.
+      const update: Record<string, unknown> = {
+        archive_period: wlArchivePeriod,
+        sample_period: wlSamplePeriod,
+        calibration: wlCal,
+      };
       const resp = await updateWeatherLinkConfig(update);
       if ("error" in resp) {
         setWlError(String((resp as Record<string, unknown>).error));
