@@ -1,3 +1,49 @@
+kanfei (0.1.0~beta14) unstable; urgency=medium
+
+  * Fix: archive backfill on reconnect now reaches the history chart.
+    async_sync_archive was writing recovered records only to
+    archive_records, which the chart, extremes, and uploaders don't read.
+    A new bridge projects each archive record into sensor_readings at
+    the same timestamp, converting Davis-native units (1/10 °F, 1/1000
+    inHg, mph, compass code 0-15) to SI tenths and recomputing dew
+    point, wind chill, heat index, feels-like, and theta-e the same way
+    the live poller does.  Invalid Davis sentinels (-32768/32767 temps,
+    0/0xFFFF baro, 0xFF wind, 0x80/0xFF humidity, >= 0xFFF solar) are
+    stripped before conversion so backfilled rows never carry garbage.
+    Dedupe is archive-interval-aligned, so a live sample inside the
+    covered period correctly suppresses the bridge insert without
+    bleeding across the next interval boundary.
+  * Fix: the Force Archive button now syncs the new record into the
+    database instead of leaving it stranded in the link's SRAM; the
+    confirmation message reports the synced-record count.
+  * Fix: WeatherLink settings drift detection and self-healing.
+    archive_period, sample_period, and calibration are anchored in a
+    canonical station_config.weatherlink_canonical row.  The daemon
+    reconciles the link's actual registers against that row on every
+    connect (force-writing via SAP/SSP/WWR-cal on drift, logging the
+    correction).  The Settings page's Save handler also stops sending
+    diff-only payloads, so a Save click can now repair a drift even
+    when the form values appear unchanged.  Every successful write
+    reads back the register to confirm persistence; an ACK without a
+    matching readback is reported as failed rather than silently
+    trusted.
+  * Fix: rain accumulator unit conversion now uses rain_cal instead of
+    a hardcoded /10.  The previous code happened to produce correct mm
+    only when rain_cal was set to 254; every other setting, including
+    the Davis default of 100, under-reported daily and yearly rainfall
+    by a factor of 254/rain_cal (~2.54× at default).  rain_rate is on
+    a separate code path and is tracked as a follow-up pending
+    hardware verification.
+  * Tooling: tools/migrate_rain_unit_fix.py corrects historical
+    sensor_readings.rain_total / rain_yearly rows for users running
+    on rain_cal=100.  Idempotent, dry-run aware, creates a
+    .pre-rain-fix-migration backup, skips automatically when
+    rain_cal=254 (already-correct data), and refuses unusual rain_cal
+    values without --force-rain-cal N to confirm.  Not auto-run during
+    upgrade — operator opts in manually.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sat, 16 May 2026 15:45:00 +0000
+
 kanfei (0.1.0~beta13) unstable; urgency=low
 
   * Wind history chart: dual-panel direction scatter + speed/gust columns
