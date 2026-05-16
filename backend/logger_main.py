@@ -411,7 +411,12 @@ class LoggerDaemon:
             )
             return
 
-        # Archive period
+        # Archive period — write, then read-back to verify the register
+        # actually took the new value.  Codex review on PR #148 flagged that
+        # SAP ACK alone doesn't guarantee persistence: the link may ACK and
+        # then keep the old value, in which case trusting the ACK would put
+        # cache != register and silently re-introduce drift.  Trust the
+        # readback as the post-write truth.
         target_arc = canonical.get("archive_period")
         if (target_arc is not None
                 and self._archive_period is not None
@@ -421,14 +426,23 @@ class LoggerDaemon:
                 self._archive_period, target_arc,
             )
             if await link.async_set_archive_period(target_arc):
-                self._archive_period = target_arc
+                actual = await link.async_read_archive_period()
+                if actual == target_arc:
+                    self._archive_period = actual
+                else:
+                    logger.warning(
+                        "SAP ACKed but link still reports %s after write (wanted %s)",
+                        actual, target_arc,
+                    )
+                    if actual is not None:
+                        self._archive_period = actual
             else:
                 logger.warning(
                     "SAP failed during reconciliation; leaving link at %s",
                     self._archive_period,
                 )
 
-        # Sample period
+        # Sample period — same read-back discipline.
         target_samp = canonical.get("sample_period")
         if (target_samp is not None
                 and self._sample_period is not None
@@ -438,7 +452,16 @@ class LoggerDaemon:
                 self._sample_period, target_samp,
             )
             if await link.async_set_sample_period(target_samp):
-                self._sample_period = target_samp
+                actual = await link.async_read_sample_period()
+                if actual == target_samp:
+                    self._sample_period = actual
+                else:
+                    logger.warning(
+                        "SSP ACKed but link still reports %s after write (wanted %s)",
+                        actual, target_samp,
+                    )
+                    if actual is not None:
+                        self._sample_period = actual
             else:
                 logger.warning(
                     "SSP failed during reconciliation; leaving link at %s",
@@ -446,7 +469,11 @@ class LoggerDaemon:
                 )
 
         # Calibration — write_calibration covers all five fields atomically,
-        # so a mismatch on any single field triggers a full re-write.
+        # so a mismatch on any single field triggers a full re-write.  Read
+        # back the calibration registers after a successful write to confirm
+        # the link actually persisted the values; on mismatch, the readback
+        # becomes link.calibration (read_calibration mutates it in place) so
+        # the daemon sees the link's real state, not the requested state.
         target_cal = canonical.get("calibration") or {}
         live_cal = link_state["calibration"]
         if target_cal and target_cal != live_cal:
@@ -461,7 +488,14 @@ class LoggerDaemon:
                 outside_hum=int(target_cal.get("outside_humidity", live_cal["outside_humidity"])),
                 rain_cal=int(target_cal.get("rain_cal", live_cal["rain_cal"])),
             )
-            if not await link.async_write_calibration(offsets):
+            if await link.async_write_calibration(offsets):
+                fresh = await link.async_read_calibration()
+                if fresh != offsets:
+                    logger.warning(
+                        "WWR-cal ACKed but readback differs: wanted=%s, got=%s",
+                        offsets, fresh,
+                    )
+            else:
                 logger.warning(
                     "WWR-cal failed during reconciliation; leaving link calibration unchanged",
                 )
@@ -756,21 +790,55 @@ class LoggerDaemon:
         canonical.setdefault("calibration", {})
         canonical_changed = False
 
+        # Each branch follows the same shape: write, then read back, and
+        # only declare success (and update self-cache + canonical) when the
+        # readback matches the requested value.  Codex review on PR #148:
+        # an ACK alone doesn't guarantee the register actually took the
+        # change, so trusting ACK lets cache and canonical drift away from
+        # the link's true state silently.  A mismatch is "failed" — the
+        # canonical row stays at the previous value, and the daemon's
+        # cached state is set to whatever the link is actually reporting.
         if msg.get("archive_period") is not None:
-            ok = await link.async_set_archive_period(msg["archive_period"])
-            results["archive_period"] = "ok" if ok else "failed"
-            if ok:
-                self._archive_period = msg["archive_period"]
-                canonical["archive_period"] = msg["archive_period"]
-                canonical_changed = True
+            want = msg["archive_period"]
+            ack = await link.async_set_archive_period(want)
+            if ack:
+                actual = await link.async_read_archive_period()
+                if actual == want:
+                    self._archive_period = actual
+                    canonical["archive_period"] = actual
+                    canonical_changed = True
+                    results["archive_period"] = "ok"
+                else:
+                    logger.warning(
+                        "SAP ACKed but link still reports %s (wanted %s)",
+                        actual, want,
+                    )
+                    if actual is not None:
+                        self._archive_period = actual
+                    results["archive_period"] = "failed"
+            else:
+                results["archive_period"] = "failed"
 
         if msg.get("sample_period") is not None:
-            ok = await link.async_set_sample_period(msg["sample_period"])
-            results["sample_period"] = "ok" if ok else "failed"
-            if ok:
-                self._sample_period = msg["sample_period"]
-                canonical["sample_period"] = msg["sample_period"]
-                canonical_changed = True
+            want = msg["sample_period"]
+            ack = await link.async_set_sample_period(want)
+            if ack:
+                actual = await link.async_read_sample_period()
+                if actual == want:
+                    self._sample_period = actual
+                    canonical["sample_period"] = actual
+                    canonical_changed = True
+                    results["sample_period"] = "ok"
+                else:
+                    logger.warning(
+                        "SSP ACKed but link still reports %s (wanted %s)",
+                        actual, want,
+                    )
+                    if actual is not None:
+                        self._sample_period = actual
+                    results["sample_period"] = "failed"
+            else:
+                results["sample_period"] = "failed"
 
         if msg.get("calibration") is not None:
             cal = msg["calibration"]
@@ -781,17 +849,27 @@ class LoggerDaemon:
                 outside_hum=cal["outside_humidity"],
                 rain_cal=cal["rain_cal"],
             )
-            ok = await link.async_write_calibration(offsets)
-            results["calibration"] = "ok" if ok else "failed"
-            if ok:
-                canonical["calibration"] = {
-                    "inside_temp": cal["inside_temp"],
-                    "outside_temp": cal["outside_temp"],
-                    "barometer": cal["barometer"],
-                    "outside_humidity": cal["outside_humidity"],
-                    "rain_cal": cal["rain_cal"],
-                }
-                canonical_changed = True
+            ack = await link.async_write_calibration(offsets)
+            if ack:
+                fresh = await link.async_read_calibration()
+                if fresh == offsets:
+                    canonical["calibration"] = {
+                        "inside_temp": cal["inside_temp"],
+                        "outside_temp": cal["outside_temp"],
+                        "barometer": cal["barometer"],
+                        "outside_humidity": cal["outside_humidity"],
+                        "rain_cal": cal["rain_cal"],
+                    }
+                    canonical_changed = True
+                    results["calibration"] = "ok"
+                else:
+                    logger.warning(
+                        "WWR-cal ACKed but readback differs: wanted=%s, got=%s",
+                        offsets, fresh,
+                    )
+                    results["calibration"] = "failed"
+            else:
+                results["calibration"] = "failed"
 
         if canonical_changed:
             self._save_canonical_wl_config(canonical)
