@@ -73,6 +73,37 @@ class CalibrationOffsets:
     rain_cal: int = 100     # clicks per inch
 
 
+def _rain_register_to_mm(value: Optional[int], rain_cal: int) -> Optional[float]:
+    """Convert a Davis link rain accumulator register (RAIN_DAILY /
+    RAIN_YEARLY) to millimeters using the station's rain calibration.
+
+    The link's rain register magnitude scales with rain_cal: a Davis
+    station with rain_cal=100 (the default for the standard 0.01" tipping
+    bucket) reports the register in units of 0.01"; a station configured
+    with rain_cal=N reports in units of (1/N)".  Either way:
+
+        inches = register_value / rain_cal
+        mm     = inches × 25.4 = register_value × 25.4 / rain_cal
+
+    Equivalent to the `click_inches × 25.4` formula used in the Vantage
+    (`vantage/loop_packet.py:_clicks_to_mm`) and WeatherLink Live
+    (`weatherlink_live/sensors.py:_clicks_to_mm`) drivers — those just
+    derive `click_inches` from `rain_size`, while here it's `1/rain_cal`.
+
+    Previously the legacy LinkDriver did `register / 10.0` which
+    happened to land on the correct mm value only when rain_cal=254
+    (because 254/10 = 25.4 for one inch of rain).  Every other rain_cal
+    setting — including the Davis default of 100 — produced rain values
+    that were too low by a factor of 254/rain_cal (~2.54× for default).
+    See cnighswonger/kanfei issue tracker for context.
+    """
+    if value is None:
+        return None
+    if rain_cal <= 0:
+        rain_cal = 100  # guard against a zero/negative calibration read
+    return value * 25.4 / rain_cal
+
+
 class LinkDriver(StationDriver):
     """High-level WeatherLink serial communication driver.
 
@@ -1017,17 +1048,15 @@ class LinkDriver(StationDriver):
                 reading.barometer / 10.0
                 if reading.barometer is not None else None
             ),
-            rain_daily=(
-                rain_daily_clicks / 10.0
-                if rain_daily_clicks is not None else None
+            rain_daily=_rain_register_to_mm(
+                rain_daily_clicks, self.calibration.rain_cal,
             ),
             rain_rate=(
                 reading.rain_rate / 10.0
                 if reading.rain_rate is not None else None
             ),
-            rain_yearly=(
-                yearly_clicks / 10.0
-                if yearly_clicks is not None else None
+            rain_yearly=_rain_register_to_mm(
+                yearly_clicks, self.calibration.rain_cal,
             ),
             solar_radiation=reading.solar_radiation,
             uv_index=(

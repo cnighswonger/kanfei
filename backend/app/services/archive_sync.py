@@ -9,13 +9,26 @@ application downtime.
 import asyncio
 import logging
 import struct
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from ..protocol.link_driver import LinkDriver, bcd_decode
 from ..protocol.constants import StationModel, BASIC_STATIONS
 from ..models.database import SessionLocal
 from ..models.archive_record import ArchiveRecordModel
+from ..models.sensor_reading import SensorReadingModel
+from ..utils.units import (
+    f_tenths_to_c_tenths,
+    inhg_thousandths_to_hpa_tenths,
+    mph_to_ms_tenths,
+)
+from .calculations import (
+    dew_point,
+    equivalent_potential_temperature,
+    feels_like,
+    heat_index,
+    wind_chill,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +46,62 @@ ARCHIVE_RECORD_SIZE = {
 
 # Maximum valid SRAM address (0x7F00-0x7FFF reserved for MDMP).
 SRAM_MAX_ADDR = 0x7F00
+
+# Compass-rose direction codes (0–15) → degrees, per Davis appendix.txt:F.
+_WIND_DIR_DEGREES = [
+    0, 22, 45, 68, 90, 112, 135, 158,
+    180, 202, 225, 248, 270, 292, 315, 338,
+]
+
+
+# --- Archive-field invalid-sentinel filters ---
+#
+# The Davis SRAM archive image uses sentinel values to mark fields where the
+# sensor was unplugged or the reading was rejected (database.txt:148-153).
+# The existing per-station parsers already strip a few (humidity 0xFF, wind
+# direction 0xFF) but pass the rest through unchanged, so values like
+# -32768 °F/10 land in archive_records.  The live LOOP parser handles the
+# full set in loop_packet._valid_temp_*/_valid_humidity/etc.  The bridge
+# mirrors those rules here, before any unit conversion, so backfilled
+# sensor_readings rows never carry sentinel-derived garbage to the chart,
+# extremes, or upstream uploaders.
+
+def _valid_archive_temp(value):
+    """Davis archive temp (i16, 1/10 °F).  -32768 / 32767 = invalid."""
+    if value is None or value == -32768 or value == 32767:
+        return None
+    if value > 2500 or value < -900:  # > 250 °F or < -90 °F: out-of-range
+        return None
+    return value
+
+
+def _valid_archive_baro(value):
+    """Davis archive barometer (u16, 1/1000 inHg).  0 / 0xFFFF = invalid."""
+    if value is None or value == 0 or value == 0xFFFF:
+        return None
+    return value
+
+
+def _valid_archive_u8(value):
+    """Davis archive u8 field (wind speed, gust, UV).  0xFF = invalid."""
+    if value is None or value == 0xFF:
+        return None
+    return value
+
+
+def _valid_archive_humidity(value):
+    """Davis archive humidity (u8).  0xFF or 0x80 (128) = invalid
+    per database.txt:150-152."""
+    if value is None or value == 0xFF or value == 0x80:
+        return None
+    return value
+
+
+def _valid_archive_solar(value):
+    """Davis archive solar radiation (u16, W/m²).  >= 0xFFF / 0xFFFF = invalid."""
+    if value is None or value >= 0xFFF:
+        return None
+    return value
 
 
 # --- Timestamp decoding ---
@@ -244,6 +313,101 @@ def _iter_archive_addresses(
     return addresses
 
 
+# --- archive_records → sensor_readings projection ---
+
+def _project_to_sensor_reading(record: dict) -> SensorReadingModel:
+    """Build a SensorReadingModel from a parsed archive record dict.
+
+    Davis on-device archive records store period aggregates (TinAvg/TOutAvg/
+    WspAvg + THiOut/TLowOut/Gust) in native units (1/10 °F, 1/1000 inHg, mph,
+    compass code 0–15).  This projects the avg/snapshot fields into SI tenths
+    matching sensor_readings, recomputing derived values (heat index, dew
+    point, wind chill, feels-like, theta-e) the same way the live poller does.
+
+    The hi/lo period extremes from archive_records have no home in
+    sensor_readings and are preserved only in archive_records.
+    """
+    # Strip Davis invalid sentinels before unit conversion (see helper
+    # comments above) — otherwise -32768 °F/10 becomes -18382 °C/10 in
+    # sensor_readings and surfaces as a -1838 °C spike on the chart.
+    inside_temp_raw = _valid_archive_temp(record.get("inside_temp_avg"))
+    outside_temp_raw = _valid_archive_temp(record.get("outside_temp_avg"))
+    barometer_raw = _valid_archive_baro(record.get("barometer"))
+    wind_speed_raw = _valid_archive_u8(record.get("wind_speed_avg"))
+    wind_gust_raw = _valid_archive_u8(record.get("wind_gust"))
+    inside_hum = _valid_archive_humidity(record.get("inside_humidity"))
+    outside_hum = _valid_archive_humidity(record.get("outside_humidity"))
+    solar_rad = _valid_archive_solar(record.get("solar_rad_avg"))
+    uv_tenths = _valid_archive_u8(record.get("uv_avg"))
+
+    inside_temp_c = (
+        f_tenths_to_c_tenths(inside_temp_raw)
+        if inside_temp_raw is not None else None
+    )
+    outside_temp_c = (
+        f_tenths_to_c_tenths(outside_temp_raw)
+        if outside_temp_raw is not None else None
+    )
+    barometer_hpa = (
+        inhg_thousandths_to_hpa_tenths(barometer_raw)
+        if barometer_raw is not None else None
+    )
+    wind_speed_ms = (
+        mph_to_ms_tenths(wind_speed_raw)
+        if wind_speed_raw is not None else None
+    )
+    wind_gust_ms = (
+        mph_to_ms_tenths(wind_gust_raw)
+        if wind_gust_raw is not None else None
+    )
+    wind_dir_deg = (
+        _WIND_DIR_DEGREES[record["wind_direction"]]
+        if record.get("wind_direction") is not None
+        and 0 <= record["wind_direction"] <= 15
+        else None
+    )
+
+    hi = dp = wc = fl = theta = None
+    if outside_temp_c is not None and outside_hum is not None:
+        hi = heat_index(outside_temp_c, outside_hum)
+        dp = dew_point(outside_temp_c, outside_hum)
+        if barometer_hpa is not None:
+            theta = equivalent_potential_temperature(
+                outside_temp_c, outside_hum, barometer_hpa
+            )
+    if outside_temp_c is not None and wind_speed_ms is not None:
+        wc = wind_chill(outside_temp_c, wind_speed_ms)
+    if (outside_temp_c is not None
+            and outside_hum is not None
+            and wind_speed_ms is not None):
+        fl = feels_like(outside_temp_c, outside_hum, wind_speed_ms)
+
+    return SensorReadingModel(
+        timestamp=record["record_time"],
+        station_type=record["station_type"],
+        inside_temp=inside_temp_c,
+        outside_temp=outside_temp_c,
+        inside_humidity=inside_hum,
+        outside_humidity=outside_hum,
+        wind_speed=wind_speed_ms,
+        wind_gust=wind_gust_ms,
+        wind_direction=wind_dir_deg,
+        barometer=barometer_hpa,
+        solar_radiation=solar_rad,
+        uv_index=uv_tenths,
+        heat_index=hi,
+        dew_point=dp,
+        wind_chill=wc,
+        feels_like=fl,
+        theta_e=theta,
+        # Rain fields are intentionally left NULL on backfilled rows:
+        # rain_total is daily-cumulative (needs a known midnight baseline
+        # we can't reconstruct from period deltas across a sleep gap), and
+        # rain_rate would need the rain-collector resolution nibble decoded
+        # against per-station config to be meaningful.
+    )
+
+
 # --- Orchestrator ---
 
 async def async_sync_archive(driver: LinkDriver) -> int:
@@ -329,6 +493,26 @@ async def async_sync_archive(driver: LinkDriver) -> int:
 
             db.add(ArchiveRecordModel(**record))
             inserted += 1
+
+            # Bridge to sensor_readings so the history chart shows the
+            # backfilled interval.  Each archive row at HH:MM:00 represents
+            # the [HH:MM-N:00, HH:MM:00) period (N = archive_interval).
+            # Skip the bridge insert when any live sample already falls in
+            # that period — the live sample is a true instantaneous reading
+            # and is preferred over a derived-from-aggregate row.
+            #
+            # The interval-aligned check avoids the bug where a symmetric
+            # ±30 s window around the archive timestamp suppressed the
+            # NEXT minute's archive row whenever a live row landed at
+            # HH:MM:59 (Codex review on PR #145).
+            rt = record["record_time"]
+            interval = timedelta(minutes=period or 1)
+            has_live_in_period = db.query(SensorReadingModel.id).filter(
+                SensorReadingModel.timestamp >= rt - interval,
+                SensorReadingModel.timestamp < rt,
+            ).first() is not None
+            if not has_live_in_period:
+                db.add(_project_to_sensor_reading(record))
 
             if inserted % 100 == 0:
                 db.commit()
