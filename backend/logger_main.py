@@ -372,6 +372,79 @@ class LoggerDaemon:
         finally:
             db.close()
 
+    # Marker recording that the bar_cal-sign migration has run.  See
+    # _migrate_bar_cal_sign_v1 below and issue #154.
+    _BAR_CAL_SIGN_MIGRATION_KEY = "bar_cal_sign_migration_v1"
+
+    def _migrate_bar_cal_sign_v1(self) -> None:
+        """One-time migration: flip the sign of the canonical row's
+        barometer calibration entry.
+
+        Issue #154 changed kanfei's in-memory barometer cal sign from
+        "subtract from raw" (Davis BAR_CAL register convention) to
+        "add to raw" (user-facing convention).  Existing users who
+        calibrated via the UI before that fix have their canonical
+        station_config row storing the *old* sign — typically the
+        negated value they had to enter as a workaround for the sign-
+        inversion bug.
+
+        If we just shipped the link_driver.py negate-on-I/O change
+        without migrating the canonical row, the first post-fix
+        reconcile would see canonical (old sign) ≠ link cal (new sign)
+        and force-write the canonical's negated value back through the
+        new negate-on-write path, putting the register at the opposite
+        of where the user wanted it.  That would silently break every
+        working barometer calibration.
+
+        This runs at the top of _reconcile_wl_settings before any
+        compare/write, idempotent via a station_config marker.
+        """
+        db = SessionLocal()
+        try:
+            marker = db.query(StationConfigModel).filter_by(
+                key=self._BAR_CAL_SIGN_MIGRATION_KEY,
+            ).first()
+            if marker is not None and marker.value:
+                return  # already migrated
+
+            row = db.query(StationConfigModel).filter_by(
+                key=self._CANONICAL_KEY,
+            ).first()
+            if row is not None and row.value:
+                try:
+                    canonical = json.loads(row.value)
+                except (json.JSONDecodeError, ValueError):
+                    canonical = None
+                if canonical is not None:
+                    cal = canonical.get("calibration") or {}
+                    if "barometer" in cal and cal["barometer"] != 0:
+                        old = int(cal["barometer"])
+                        cal["barometer"] = -old
+                        canonical["calibration"] = cal
+                        row.value = json.dumps(canonical)
+                        logger.info(
+                            "bar_cal sign migration: canonical barometer "
+                            "%d -> %d (issue #154)",
+                            old, -old,
+                        )
+
+            # Record outcome regardless — once we've passed this check,
+            # future restarts skip it.  The value field records whether
+            # we flipped anything for audit.
+            outcome = "flipped" if (
+                row is not None and row.value
+            ) else "no-canonical"
+            if marker is None:
+                db.add(StationConfigModel(
+                    key=self._BAR_CAL_SIGN_MIGRATION_KEY,
+                    value=outcome,
+                ))
+            else:
+                marker.value = outcome
+            db.commit()
+        finally:
+            db.close()
+
     async def _reconcile_wl_settings(self, link: LinkDriver) -> None:
         """Force the link's settings to match the canonical row in station_config.
 
@@ -388,6 +461,12 @@ class LoggerDaemon:
         link via SAP/SSP/WWR-cal.  A failed write is logged but is not fatal;
         the daemon's cached values fall back to the link's actual state.
         """
+        # One-time migration of the canonical row's barometer cal sign.
+        # See _migrate_bar_cal_sign_v1 docstring and issue #154.  This
+        # MUST run before _load_canonical_wl_config below so the post-
+        # migration value is what gets compared against the link cal.
+        self._migrate_bar_cal_sign_v1()
+
         canonical = self._load_canonical_wl_config()
         link_cal = link.calibration
         link_state = {

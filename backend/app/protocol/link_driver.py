@@ -65,12 +65,26 @@ def _bcd_encode(val: int) -> int:
 
 @dataclass
 class CalibrationOffsets:
-    """Calibration offsets read from station memory."""
-    inside_temp: int = 0    # tenths F to add
-    outside_temp: int = 0   # tenths F to add
-    barometer: int = 0      # thousandths inHg to subtract
-    outside_hum: int = 0    # percent to add
-    rain_cal: int = 100     # clicks per inch
+    """Calibration offsets in their user-facing sign convention.
+
+    Every additive field here is a value to **add** to the raw sensor
+    reading.  This matches the natural UX expectation that "+0.456 inHg
+    cal → reading goes up by 0.456 inHg".
+
+    The legacy Davis BAR_CAL register itself stores the value with the
+    opposite sign — per `reference/techref.txt:1070`, the firmware
+    computes `Barometer = Barometer - BarCal`.  LinkDriver negates the
+    barometer field at the device I/O boundary (read_calibration and
+    write_calibration) so the rest of kanfei — the UI, the canonical
+    station_config row, apply_calibration, and these dataclass values
+    — all use the user-facing "add" convention.  See issue #154 for
+    the original bug report.
+    """
+    inside_temp: int = 0    # tenths F to add to raw reading
+    outside_temp: int = 0   # tenths F to add to raw reading
+    barometer: int = 0      # thousandths inHg to add to raw reading
+    outside_hum: int = 0    # percent to add to raw reading
+    rain_cal: int = 100     # clicks per inch (multiplicative, not additive)
 
 
 def _rain_register_to_mm(value: Optional[int], rain_cal: int) -> Optional[float]:
@@ -198,9 +212,17 @@ class LinkDriver(StationDriver):
             BasicBank1.BAR_CAL.nibbles,
         )
         if data and len(data) >= 2:
-            self.calibration.barometer = struct.unpack("<h", data[:2])[0]
-            logger.info("Barometer calibration raw bytes: %s -> %d",
-                        data[:2].hex(), self.calibration.barometer)
+            # Davis BAR_CAL register stores the value with subtract semantics
+            # (firmware: Barometer = Barometer - BarCal, per techref.txt:1070).
+            # Negate on read so in-memory cal.barometer is the user-facing
+            # "add to reading" sign convention.  See issue #154.
+            register_value = struct.unpack("<h", data[:2])[0]
+            self.calibration.barometer = -register_value
+            logger.info(
+                "Barometer calibration raw bytes: %s -> register=%d, "
+                "user-facing (add) sign=%d",
+                data[:2].hex(), register_value, self.calibration.barometer,
+            )
         else:
             logger.warning("Failed to read barometer calibration (data=%s)", data)
 
@@ -234,22 +256,31 @@ class LinkDriver(StationDriver):
     def apply_calibration(self, reading: SensorReading) -> SensorReading:
         """Apply calibration offsets to a sensor reading.
 
-        Per techref.txt:
-        - calibrated_temp = raw_temp + temp_cal
-        - calibrated_bar = raw_bar - bar_cal
-        - calibrated_hum = clamp(raw_hum + hum_cal, 1, 100)
+        All cal fields are in their user-facing "add to reading" sign
+        convention (see CalibrationOffsets docstring).  For barometer,
+        the on-device BAR_CAL register stores the negated value per the
+        Davis firmware spec (`Barometer = Barometer - BarCal` in
+        techref.txt:1070); the negation happens at read_calibration and
+        write_calibration so this method sees the user-facing sign and
+        adds uniformly.
 
         Calibration values are stored in Davis-native units (tenths F,
         thousandths inHg) but readings have already been converted to SI
         (tenths C, tenths hPa) by _to_si() in loop_packet.py.  Convert
         the offsets before applying.
+
+        The LOOP packet on legacy Davis stations returns RAW (uncalibrated)
+        readings — the user is expected to apply cal client-side per
+        techref.txt ("Thus, you may have to calibrate the data you read
+        off the station").  apply_calibration is the sole place cal is
+        applied on the legacy path.
         """
         if reading.inside_temp is not None:
             reading.inside_temp += round(self.calibration.inside_temp * 5 / 9)
         if reading.outside_temp is not None:
             reading.outside_temp += round(self.calibration.outside_temp * 5 / 9)
         if reading.barometer is not None:
-            reading.barometer -= inhg_thousandths_to_hpa_tenths(self.calibration.barometer)
+            reading.barometer += inhg_thousandths_to_hpa_tenths(self.calibration.barometer)
         if reading.outside_humidity is not None:
             reading.outside_humidity = max(1, min(100,
                 reading.outside_humidity + self.calibration.outside_hum))
@@ -768,8 +799,12 @@ class LinkDriver(StationDriver):
                     data,
                 )
 
-                # Barometer (signed i16, thousandths inHg)
-                data = struct.pack("<h", offsets.barometer)
+                # Barometer (signed i16, thousandths inHg).  offsets.barometer
+                # is in user-facing "add to reading" sign; the Davis BAR_CAL
+                # register expects the negated form per techref.txt:1070
+                # (firmware computes `Barometer = Barometer - BarCal`).
+                # See issue #154.
+                data = struct.pack("<h", -offsets.barometer)
                 ok &= self.write_station_memory(
                     BasicBank1.BAR_CAL.bank,
                     BasicBank1.BAR_CAL.address,
