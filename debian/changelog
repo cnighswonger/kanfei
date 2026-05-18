@@ -1,3 +1,40 @@
+kanfei (0.1.0~beta15) unstable; urgency=medium
+
+  * Fix: Davis barometer calibration field is no longer sign-inverted.
+    The legacy BAR_CAL register stores its value with subtract-from-raw
+    semantics (per reference/techref.txt:1070), but pre-fix kanfei
+    exposed that raw register sign 1:1 through the UI, so a user who
+    entered the intuitive "+456 thousandths inHg → add 0.456 inHg"
+    actually got "−0.456 inHg" applied to their reading.  Negating at
+    the kanfei-to-Davis I/O boundary makes the UI, the canonical
+    station_config row, and apply_calibration all use the user-facing
+    "add to reading" sign throughout; only the on-device register
+    sees the negated form Davis expects.  A one-time
+    bar_cal_sign_migration_v1 marker flips any existing pre-fix
+    canonical row's barometer entry on first connect so working
+    calibrations carry through the upgrade.  Scope: legacy LinkDriver
+    only (Monitor II / Wizard III / Perception / GroWeather / Energy /
+    Health) — Vantage and other drivers use different cal semantics
+    and aren't affected.
+  * Test infrastructure: tests/backend/conftest.py unconditionally
+    overrides KANFEI_DB_PATH to a per-process temp file before any
+    `app.*` import, so the suite can never touch the operator's real
+    kanfei.db.  Closes a hazard that, post-#145/#148, would have wiped
+    rows in sensor_readings, archive_records, users, and sessions for
+    anyone who ran pytest in a shell with KANFEI_DB_PATH pointing at
+    a populated database.
+  * Routine dependency updates across the frontend: eslint v9 → v10
+    (with @eslint/js and eslint-plugin-react-hooks bumped to match),
+    react-router-dom 7.15.0 → 7.15.1, react-colorful 5.6.1 → 5.7.0,
+    @react-three/fiber 9.6.0 → 9.6.1, @types/node 25.6.0 → 25.8.0,
+    plus globals, react, and build-tools group bumps.  The eslint
+    major bump introduced react-hooks 7.1.1 with a new
+    react-hooks/set-state-in-effect rule that flags pre-existing
+    patterns; CI does not run lint so the bumps land safely, with
+    cleanup tracked separately.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Mon, 18 May 2026 15:35:00 +0000
+
 kanfei (0.1.0~beta14) unstable; urgency=medium
 
   * Fix: archive backfill on reconnect now reaches the history chart.
