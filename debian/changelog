@@ -32,8 +32,23 @@ kanfei (0.1.0~beta15) unstable; urgency=medium
     react-hooks/set-state-in-effect rule that flags pre-existing
     patterns; CI does not run lint so the bumps land safely, with
     cleanup tracked separately.
+  * Fix (UI re-roll): the Settings → WeatherLink section now gates
+    every input/select and the Save button on a discrete load-status
+    state until the live values land from the daemon.  Without the
+    gate, the placeholder defaults (archive_period=30, sample_period=60,
+    all-zero calibration) were displayed indistinguishably from real
+    saved values during the serial-I/O latency window, and a user who
+    typed corrections against those placeholders and hit Save could
+    overwrite their actual settings.  The new load state distinguishes
+    "still loading" from "load failed" (the latter happens when the
+    logger daemon is down or the link isn't connected — the endpoint
+    returns a 200 with an `{error: ...}` body) and surfaces the error
+    with a retry link rather than silently locking the section forever.
+    Also updates the Barometer Offset tooltip to reflect the post-cal-
+    sign-fix semantics ("add to raw reading", with a pointer back to
+    the sign-flip change).
 
- -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Mon, 18 May 2026 15:35:00 +0000
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Mon, 18 May 2026 16:30:00 +0000
 
 kanfei (0.1.0~beta14) unstable; urgency=medium
 
