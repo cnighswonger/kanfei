@@ -1790,6 +1790,15 @@ export default function Settings() {
   const [wlSaving, setWlSaving] = useState(false);
   const [wlMsg, setWlMsg] = useState<string | null>(null);
   const [wlError, setWlError] = useState<string | null>(null);
+  // Tracks the initial `/api/weatherlink/config` read distinctly from the
+  // "is wlConfig populated?" check.  Required because that endpoint can
+  // return a 200 with an `{error: ...}` body when the logger daemon is
+  // down or the link isn't connected — without a separate load-status
+  // signal we couldn't tell "still in flight" from "load failed", and
+  // the inputs would stay disabled forever on the failure path with no
+  // user-visible explanation.  See Codex review on PR #156.
+  const [wlLoadStatus, setWlLoadStatus] = useState<"loading" | "loaded" | "error">("loading");
+  const [wlLoadError, setWlLoadError] = useState<string | null>(null);
 
   // Load config + serial ports (fast), then weatherlink config (slow, non-blocking)
   useEffect(() => {
@@ -1814,7 +1823,20 @@ export default function Settings() {
         setLoading(false);
       });
 
-    // Load WeatherLink hardware config in background (serial I/O is slow)
+    // Load WeatherLink hardware config in background (serial I/O is slow).
+    // Result handling:
+    //   • success → wlConfig populated, status flips to "loaded"
+    //   • API-level error (`{error: ...}` in a 200) → status "error" with
+    //     the error message surfaced; inputs stay locked but the user
+    //     sees WHY rather than a stuck spinner
+    //   • promise rejection (network / transport failure) → same "error"
+    //     status with a synthesized message
+    loadWlConfig();
+  }, []);
+
+  const loadWlConfig = useCallback(() => {
+    setWlLoadStatus("loading");
+    setWlLoadError(null);
     fetchWeatherLinkConfig()
       .then((wl) => {
         if (wl && !("error" in wl)) {
@@ -1822,9 +1844,20 @@ export default function Settings() {
           if (wl.archive_period != null) setWlArchivePeriod(wl.archive_period);
           if (wl.sample_period != null) setWlSamplePeriod(wl.sample_period);
           setWlCal(wl.calibration);
+          setWlLoadStatus("loaded");
+        } else {
+          const msg = (wl && "error" in wl && typeof wl.error === "string")
+            ? wl.error
+            : "WeatherLink config unavailable (no response from logger daemon).";
+          setWlLoadError(msg);
+          setWlLoadStatus("error");
         }
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        setWlLoadError(msg || "Failed to read WeatherLink config.");
+        setWlLoadStatus("error");
+      });
   }, []);
 
   // Reset active tab if the current tab's feature gets disabled.
@@ -2482,7 +2515,7 @@ export default function Settings() {
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>
           WeatherLink
-          {wlConfig === null && (
+          {wlLoadStatus === "loading" && (
             <span style={{
               marginLeft: "12px",
               fontSize: "13px",
@@ -2493,7 +2526,47 @@ export default function Settings() {
               loading current values from hardware…
             </span>
           )}
+          {wlLoadStatus === "error" && (
+            <span style={{
+              marginLeft: "12px",
+              fontSize: "13px",
+              fontWeight: 400,
+              color: "var(--color-danger, #d33)",
+            }}>
+              could not read current settings —
+              {" "}
+              <button
+                type="button"
+                onClick={loadWlConfig}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--color-danger, #d33)",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  font: "inherit",
+                  padding: 0,
+                }}
+              >
+                retry
+              </button>
+            </span>
+          )}
         </h3>
+        {wlLoadStatus === "error" && wlLoadError && (
+          <div style={{
+            marginBottom: "12px",
+            padding: "8px 12px",
+            background: "var(--color-danger-bg, #fde8e8)",
+            color: "var(--color-danger, #b00)",
+            border: "1px solid var(--color-danger, #d33)",
+            borderRadius: "4px",
+            fontSize: "13px",
+          }}>
+            {wlLoadError} The inputs below are locked until a successful read —
+            saving stale placeholder values would overwrite your real settings.
+          </div>
+        )}
 
         {/* Timing row — inputs disabled until the live values land so the
             placeholder defaults (30/60/zeros) can't be mistaken for the
@@ -2504,10 +2577,10 @@ export default function Settings() {
               Archive Period (minutes)
             </label>
             <select
-              style={{ ...selectStyle, opacity: wlConfig === null ? 0.5 : 1 }}
+              style={{ ...selectStyle, opacity: wlLoadStatus !== "loaded" ? 0.5 : 1 }}
               value={wlArchivePeriod}
               onChange={(e) => setWlArchivePeriod(parseInt(e.target.value))}
-              disabled={wlConfig === null}
+              disabled={wlLoadStatus !== "loaded"}
             >
               {[1, 5, 10, 15, 30, 60, 120].map((m) => (
                 <option key={m} value={m}>{m}</option>
@@ -2519,7 +2592,7 @@ export default function Settings() {
               Sample Period (seconds)
             </label>
             <input
-              style={{ ...inputStyle, opacity: wlConfig === null ? 0.5 : 1 }}
+              style={{ ...inputStyle, opacity: wlLoadStatus !== "loaded" ? 0.5 : 1 }}
               type="number"
               min={1}
               max={255}
@@ -2528,7 +2601,7 @@ export default function Settings() {
                 const v = parseInt(e.target.value);
                 if (!isNaN(v) && v >= 1 && v <= 255) setWlSamplePeriod(v);
               }}
-              disabled={wlConfig === null}
+              disabled={wlLoadStatus !== "loaded"}
             />
           </div>
         </div>
@@ -2540,11 +2613,11 @@ export default function Settings() {
               Inside Temp Offset (tenths °F)
             </label>
             <input
-              style={{ ...inputStyle, opacity: wlConfig === null ? 0.5 : 1 }}
+              style={{ ...inputStyle, opacity: wlLoadStatus !== "loaded" ? 0.5 : 1 }}
               type="number"
               value={wlCal.inside_temp}
               onChange={(e) => setWlCal({ ...wlCal, inside_temp: parseInt(e.target.value) || 0 })}
-              disabled={wlConfig === null}
+              disabled={wlLoadStatus !== "loaded"}
             />
           </div>
           <div style={fieldGroup}>
@@ -2552,11 +2625,11 @@ export default function Settings() {
               Outside Temp Offset (tenths °F)
             </label>
             <input
-              style={{ ...inputStyle, opacity: wlConfig === null ? 0.5 : 1 }}
+              style={{ ...inputStyle, opacity: wlLoadStatus !== "loaded" ? 0.5 : 1 }}
               type="number"
               value={wlCal.outside_temp}
               onChange={(e) => setWlCal({ ...wlCal, outside_temp: parseInt(e.target.value) || 0 })}
-              disabled={wlConfig === null}
+              disabled={wlLoadStatus !== "loaded"}
             />
           </div>
           <div style={fieldGroup}>
@@ -2564,11 +2637,11 @@ export default function Settings() {
               Barometer Offset (thousandths inHg)
             </label>
             <input
-              style={{ ...inputStyle, opacity: wlConfig === null ? 0.5 : 1 }}
+              style={{ ...inputStyle, opacity: wlLoadStatus !== "loaded" ? 0.5 : 1 }}
               type="number"
               value={wlCal.barometer}
               onChange={(e) => setWlCal({ ...wlCal, barometer: parseInt(e.target.value) || 0 })}
-              disabled={wlConfig === null}
+              disabled={wlLoadStatus !== "loaded"}
             />
           </div>
           <div style={fieldGroup}>
@@ -2576,11 +2649,11 @@ export default function Settings() {
               Humidity Offset (%)
             </label>
             <input
-              style={{ ...inputStyle, opacity: wlConfig === null ? 0.5 : 1 }}
+              style={{ ...inputStyle, opacity: wlLoadStatus !== "loaded" ? 0.5 : 1 }}
               type="number"
               value={wlCal.outside_humidity}
               onChange={(e) => setWlCal({ ...wlCal, outside_humidity: parseInt(e.target.value) || 0 })}
-              disabled={wlConfig === null}
+              disabled={wlLoadStatus !== "loaded"}
             />
           </div>
           <div style={fieldGroup}>
@@ -2588,11 +2661,11 @@ export default function Settings() {
               Rain Calibration (clicks/inch)
             </label>
             <input
-              style={{ ...inputStyle, opacity: wlConfig === null ? 0.5 : 1 }}
+              style={{ ...inputStyle, opacity: wlLoadStatus !== "loaded" ? 0.5 : 1 }}
               type="number"
               value={wlCal.rain_cal}
               onChange={(e) => setWlCal({ ...wlCal, rain_cal: parseInt(e.target.value) || 100 })}
-              disabled={wlConfig === null}
+              disabled={wlLoadStatus !== "loaded"}
             />
           </div>
         </div>
@@ -2608,19 +2681,27 @@ export default function Settings() {
           <button
             style={{
               ...btnPrimary,
-              opacity: (wlSaving || wlConfig === null) ? 0.6 : 1,
-              cursor: wlSaving ? "wait" : (wlConfig === null ? "not-allowed" : "pointer"),
+              opacity: (wlSaving || wlLoadStatus !== "loaded") ? 0.6 : 1,
+              cursor: wlSaving ? "wait" : (wlLoadStatus !== "loaded" ? "not-allowed" : "pointer"),
               ...(isMobile ? { gridColumn: "1 / -1", fontSize: "13px", padding: "8px 12px" } : {}),
             }}
             onClick={handleWlSave}
-            disabled={wlSaving || wlConfig === null}
+            disabled={wlSaving || wlLoadStatus !== "loaded"}
             title={
-              wlConfig === null
+              wlLoadStatus === "loading"
                 ? "Waiting for the WeatherLink to report its current settings before any save is allowed"
+                : wlLoadStatus === "error"
+                ? "Cannot save: current settings could not be read from the WeatherLink. Use the retry link above to try again."
                 : "Write the above settings to the WeatherLink hardware"
             }
           >
-            {wlSaving ? "Saving..." : wlConfig === null ? "Loading..." : "Save to WeatherLink"}
+            {wlSaving
+              ? "Saving..."
+              : wlLoadStatus === "loading"
+              ? "Loading..."
+              : wlLoadStatus === "error"
+              ? "Unavailable"
+              : "Save to WeatherLink"}
           </button>
 
           <button
