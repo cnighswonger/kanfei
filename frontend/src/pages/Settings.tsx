@@ -2633,7 +2633,7 @@ export default function Settings() {
             />
           </div>
           <div style={fieldGroup}>
-            <label style={labelStyle} title="Subtracted from raw barometer reading (thousandths inHg). Adjust to match a known reference.">
+            <label style={labelStyle} title="Added to raw barometer reading (thousandths inHg). Adjust to match a known reference. Sign flipped in #155 — positive values now raise the displayed pressure, negative values lower it.">
               Barometer Offset (thousandths inHg)
             </label>
             <input
