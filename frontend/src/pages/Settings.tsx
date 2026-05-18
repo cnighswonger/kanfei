@@ -2480,18 +2480,34 @@ export default function Settings() {
       {/* WeatherLink section — only for Davis serial drivers */}
       {["legacy", "vantage"].includes(String(val("station_driver_type") || "legacy")) && (
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
-        <h3 style={sectionTitle}>WeatherLink</h3>
+        <h3 style={sectionTitle}>
+          WeatherLink
+          {wlConfig === null && (
+            <span style={{
+              marginLeft: "12px",
+              fontSize: "13px",
+              fontWeight: 400,
+              color: "var(--color-text-muted, #888)",
+              fontStyle: "italic",
+            }}>
+              loading current values from hardware…
+            </span>
+          )}
+        </h3>
 
-        {/* Timing row */}
+        {/* Timing row — inputs disabled until the live values land so the
+            placeholder defaults (30/60/zeros) can't be mistaken for the
+            user's saved settings and overwritten on Save. */}
         <div style={gridTwoCol(isMobile)}>
           <div style={fieldGroup}>
             <label style={labelStyle} title="How often the WeatherLink saves a summary record to its internal memory. Shorter intervals give finer history but fill the buffer faster.">
               Archive Period (minutes)
             </label>
             <select
-              style={selectStyle}
+              style={{ ...selectStyle, opacity: wlConfig === null ? 0.5 : 1 }}
               value={wlArchivePeriod}
               onChange={(e) => setWlArchivePeriod(parseInt(e.target.value))}
+              disabled={wlConfig === null}
             >
               {[1, 5, 10, 15, 30, 60, 120].map((m) => (
                 <option key={m} value={m}>{m}</option>
@@ -2503,7 +2519,7 @@ export default function Settings() {
               Sample Period (seconds)
             </label>
             <input
-              style={inputStyle}
+              style={{ ...inputStyle, opacity: wlConfig === null ? 0.5 : 1 }}
               type="number"
               min={1}
               max={255}
@@ -2512,6 +2528,7 @@ export default function Settings() {
                 const v = parseInt(e.target.value);
                 if (!isNaN(v) && v >= 1 && v <= 255) setWlSamplePeriod(v);
               }}
+              disabled={wlConfig === null}
             />
           </div>
         </div>
@@ -2523,10 +2540,11 @@ export default function Settings() {
               Inside Temp Offset (tenths °F)
             </label>
             <input
-              style={inputStyle}
+              style={{ ...inputStyle, opacity: wlConfig === null ? 0.5 : 1 }}
               type="number"
               value={wlCal.inside_temp}
               onChange={(e) => setWlCal({ ...wlCal, inside_temp: parseInt(e.target.value) || 0 })}
+              disabled={wlConfig === null}
             />
           </div>
           <div style={fieldGroup}>
@@ -2534,10 +2552,11 @@ export default function Settings() {
               Outside Temp Offset (tenths °F)
             </label>
             <input
-              style={inputStyle}
+              style={{ ...inputStyle, opacity: wlConfig === null ? 0.5 : 1 }}
               type="number"
               value={wlCal.outside_temp}
               onChange={(e) => setWlCal({ ...wlCal, outside_temp: parseInt(e.target.value) || 0 })}
+              disabled={wlConfig === null}
             />
           </div>
           <div style={fieldGroup}>
@@ -2545,10 +2564,11 @@ export default function Settings() {
               Barometer Offset (thousandths inHg)
             </label>
             <input
-              style={inputStyle}
+              style={{ ...inputStyle, opacity: wlConfig === null ? 0.5 : 1 }}
               type="number"
               value={wlCal.barometer}
               onChange={(e) => setWlCal({ ...wlCal, barometer: parseInt(e.target.value) || 0 })}
+              disabled={wlConfig === null}
             />
           </div>
           <div style={fieldGroup}>
@@ -2556,10 +2576,11 @@ export default function Settings() {
               Humidity Offset (%)
             </label>
             <input
-              style={inputStyle}
+              style={{ ...inputStyle, opacity: wlConfig === null ? 0.5 : 1 }}
               type="number"
               value={wlCal.outside_humidity}
               onChange={(e) => setWlCal({ ...wlCal, outside_humidity: parseInt(e.target.value) || 0 })}
+              disabled={wlConfig === null}
             />
           </div>
           <div style={fieldGroup}>
@@ -2567,10 +2588,11 @@ export default function Settings() {
               Rain Calibration (clicks/inch)
             </label>
             <input
-              style={inputStyle}
+              style={{ ...inputStyle, opacity: wlConfig === null ? 0.5 : 1 }}
               type="number"
               value={wlCal.rain_cal}
               onChange={(e) => setWlCal({ ...wlCal, rain_cal: parseInt(e.target.value) || 100 })}
+              disabled={wlConfig === null}
             />
           </div>
         </div>
@@ -2586,15 +2608,19 @@ export default function Settings() {
           <button
             style={{
               ...btnPrimary,
-              opacity: wlSaving ? 0.6 : 1,
-              cursor: wlSaving ? "wait" : "pointer",
+              opacity: (wlSaving || wlConfig === null) ? 0.6 : 1,
+              cursor: wlSaving ? "wait" : (wlConfig === null ? "not-allowed" : "pointer"),
               ...(isMobile ? { gridColumn: "1 / -1", fontSize: "13px", padding: "8px 12px" } : {}),
             }}
             onClick={handleWlSave}
-            disabled={wlSaving}
-            title="Write the above settings to the WeatherLink hardware"
+            disabled={wlSaving || wlConfig === null}
+            title={
+              wlConfig === null
+                ? "Waiting for the WeatherLink to report its current settings before any save is allowed"
+                : "Write the above settings to the WeatherLink hardware"
+            }
           >
-            {wlSaving ? "Saving..." : "Save to WeatherLink"}
+            {wlSaving ? "Saving..." : wlConfig === null ? "Loading..." : "Save to WeatherLink"}
           </button>
 
           <button
