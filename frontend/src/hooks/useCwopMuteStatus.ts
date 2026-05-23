@@ -21,7 +21,19 @@ export function useCwopMuteStatus(): string[] {
     const refresh = () => {
       fetchCwopMuteStatus()
         .then((res) => {
-          if (!cancelled) setMuted(res.muted);
+          if (cancelled) return;
+          // Preserve array identity when the muted set is unchanged so
+          // consumers (AppShell) don't re-render every poll cycle.
+          setMuted((prev) => {
+            const next = res.muted;
+            if (
+              prev.length === next.length &&
+              prev.every((c, i) => c === next[i])
+            ) {
+              return prev;
+            }
+            return next;
+          });
         })
         .catch(() => {
           // Ignore — banner just stays at its previous state.
