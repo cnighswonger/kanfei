@@ -1,3 +1,27 @@
+kanfei (0.1.0~beta16) unstable; urgency=medium
+
+  * New: per-channel CWOP/APRS mute.  Operators can now take an individual
+    sensor out of CWOP service (e.g. while it's under repair or known to
+    be miscalibrated) without dropping the rest of the station from the
+    public feed and without polluting CWOP with bad readings.  Nine
+    channels are individually toggleable in Settings → CWOP — Sensor
+    Reporting (outdoor temperature, outdoor humidity, wind speed,
+    direction, gust, barometer, and the three rain accumulators); muted
+    fields go out in the APRS-101 WX packet as the spec's "missing value"
+    sentinel (e.g. t..., b.....) so other stations and aggregators ignore
+    them.  A non-dismissable banner surfaces the active mute set on every
+    page of the dashboard for the logged-in operator so the suppression
+    is never forgotten.  The mute-status feed (/api/cwop/mute-status) is
+    auth-gated and returns an empty list to anonymous callers, so the
+    banner only appears for the operator and the public dashboard never
+    leaks maintenance state.  Closes #161.  Extension to other upload
+    destinations (Weather Underground, MQTT, push exports) is tracked
+    separately in #162.
+  * Routine dependency updates across the frontend: typescript-eslint
+    8.59.3 → 8.59.4 and @types/node 25.8.0 → 25.9.0.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sat, 23 May 2026 15:00:00 +0000
+
 kanfei (0.1.0~beta15) unstable; urgency=medium
 
   * Fix: Davis barometer calibration field is no longer sign-inverted.
