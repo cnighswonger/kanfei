@@ -100,6 +100,14 @@ export function syncStationTime(): Promise<{ status: string; synced_to?: string;
   return request("/api/station/sync-time", { method: "POST" });
 }
 
+export interface CwopMuteStatus {
+  muted: string[];
+}
+
+export function fetchCwopMuteStatus(): Promise<CwopMuteStatus> {
+  return request<CwopMuteStatus>("/api/cwop/mute-status");
+}
+
 // --- Setup ---
 
 import type {

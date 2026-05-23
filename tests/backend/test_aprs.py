@@ -87,7 +87,7 @@ class TestAPRSFormatPacket:
         obs = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         pkt = APRSWeatherPacket(
             callsign="N0CALL", latitude=0.0, longitude=0.0,
-            wind_dir_deg=None, wind_speed_tenths_ms=0, obs_time=obs,
+            wind_dir_deg=0, wind_speed_tenths_ms=0, obs_time=obs,
         )
         assert "_000/000" in pkt.format_packet()
 
@@ -121,3 +121,83 @@ class TestAPRSFormatPacket:
             assert False, "Should have raised NotImplementedError"
         except NotImplementedError:
             pass
+
+
+class TestMissingValueSentinels:
+    """Per-field APRS101 missing-value sentinel emission when field is None."""
+
+    OBS = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+    def _base_kwargs(self):
+        return {
+            "callsign": "N0CALL",
+            "latitude": 0.0,
+            "longitude": 0.0,
+            "wind_dir_deg": 270,
+            "wind_speed_tenths_ms": 45,
+            "wind_gust_tenths_ms": 67,
+            "temp_tenths_c": 222,
+            "rain_hour_tenths_mm": 13,
+            "rain_24h_tenths_mm": 64,
+            "rain_midnight_tenths_mm": 30,
+            "humidity_pct": 50,
+            "pressure_tenths_hpa": 10132,
+            "obs_time": self.OBS,
+        }
+
+    def test_temp_none_emits_t_dots(self):
+        kw = self._base_kwargs()
+        kw["temp_tenths_c"] = None
+        assert "t..." in APRSWeatherPacket(**kw).format_packet()
+
+    def test_humidity_none_emits_h_dots(self):
+        kw = self._base_kwargs()
+        kw["humidity_pct"] = None
+        assert "h.." in APRSWeatherPacket(**kw).format_packet()
+
+    def test_barometer_none_emits_b_dots(self):
+        kw = self._base_kwargs()
+        kw["pressure_tenths_hpa"] = None
+        assert "b....." in APRSWeatherPacket(**kw).format_packet()
+
+    def test_wind_speed_none_emits_speed_dots(self):
+        kw = self._base_kwargs()
+        kw["wind_speed_tenths_ms"] = None
+        assert "_270/..." in APRSWeatherPacket(**kw).format_packet()
+
+    def test_wind_direction_none_emits_dir_dots(self):
+        kw = self._base_kwargs()
+        kw["wind_dir_deg"] = None
+        assert "_.../010" in APRSWeatherPacket(**kw).format_packet()
+
+    def test_wind_gust_none_emits_g_dots(self):
+        kw = self._base_kwargs()
+        kw["wind_gust_tenths_ms"] = None
+        assert "g..." in APRSWeatherPacket(**kw).format_packet()
+
+    def test_rain_hour_none_emits_r_dots(self):
+        kw = self._base_kwargs()
+        kw["rain_hour_tenths_mm"] = None
+        assert "r..." in APRSWeatherPacket(**kw).format_packet()
+
+    def test_rain_24h_none_emits_p_dots(self):
+        kw = self._base_kwargs()
+        kw["rain_24h_tenths_mm"] = None
+        assert "p..." in APRSWeatherPacket(**kw).format_packet()
+
+    def test_rain_midnight_none_emits_P_dots(self):
+        kw = self._base_kwargs()
+        kw["rain_midnight_tenths_mm"] = None
+        assert "P..." in APRSWeatherPacket(**kw).format_packet()
+
+    def test_all_none_emits_all_sentinels(self):
+        pkt = APRSWeatherPacket(
+            callsign="N0CALL", latitude=0.0, longitude=0.0,
+            wind_dir_deg=None, wind_speed_tenths_ms=None,
+            wind_gust_tenths_ms=None, temp_tenths_c=None,
+            rain_hour_tenths_mm=None, rain_24h_tenths_mm=None,
+            rain_midnight_tenths_mm=None, humidity_pct=None,
+            pressure_tenths_hpa=None, obs_time=self.OBS,
+        )
+        result = pkt.format_packet()
+        assert "_.../...g...t...r...p...P...h..b....." in result

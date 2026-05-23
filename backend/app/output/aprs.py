@@ -65,34 +65,20 @@ class APRSWeatherPacket:
         latitude: float,
         longitude: float,
         wind_dir_deg: Optional[int] = None,
-        wind_speed_tenths_ms: int = 0,
-        wind_gust_tenths_ms: int = 0,
-        temp_tenths_c: int = 222,
-        rain_hour_tenths_mm: int = 0,
-        rain_24h_tenths_mm: int = 0,
-        rain_midnight_tenths_mm: int = 0,
-        humidity_pct: int = 0,
-        pressure_tenths_hpa: int = 10132,
+        wind_speed_tenths_ms: Optional[int] = 0,
+        wind_gust_tenths_ms: Optional[int] = 0,
+        temp_tenths_c: Optional[int] = 222,
+        rain_hour_tenths_mm: Optional[int] = 0,
+        rain_24h_tenths_mm: Optional[int] = 0,
+        rain_midnight_tenths_mm: Optional[int] = 0,
+        humidity_pct: Optional[int] = 0,
+        pressure_tenths_hpa: Optional[int] = 10132,
         obs_time: Optional[datetime] = None,
     ) -> None:
         """Initialize an APRS weather packet.
 
-        All values in SI units.
-
-        Args:
-            callsign: Amateur radio callsign (e.g., "N0CALL").
-            latitude: Station latitude in decimal degrees.
-            longitude: Station longitude in decimal degrees.
-            wind_dir_deg: Wind direction in degrees (0-359), or None if calm.
-            wind_speed_tenths_ms: Sustained wind speed in tenths of m/s.
-            wind_gust_tenths_ms: Wind gust speed in tenths of m/s.
-            temp_tenths_c: Temperature in tenths of °C.
-            rain_hour_tenths_mm: Rain in last hour (tenths of mm).
-            rain_24h_tenths_mm: Rain in last 24 hours (tenths of mm).
-            rain_midnight_tenths_mm: Rain since midnight (tenths of mm).
-            humidity_pct: Relative humidity 0-100%.
-            pressure_tenths_hpa: Sea-level barometric pressure in tenths of hPa.
-            obs_time: Observation UTC time (defaults to now).
+        All values in SI units. Pass ``None`` for any field to emit the APRS101
+        "missing value" sentinel (dotted placeholder) instead of a number.
         """
         self.callsign = callsign
         self.latitude = latitude
@@ -162,36 +148,62 @@ class APRSWeatherPacket:
         lat_str = self._format_latitude()
         lon_str = self._format_longitude()
 
-        # Wind direction (3 digits, 000 if calm)
-        wind_dir = self.wind_dir_deg if self.wind_dir_deg is not None else 0
-        dir_str = f"{wind_dir:03d}"
+        # Wind direction (3 digits, "..." when missing/muted)
+        if self.wind_dir_deg is None:
+            dir_str = "..."
+        else:
+            dir_str = f"{self.wind_dir_deg:03d}"
 
         # Wind speed (3 digits, mph) — convert from tenths m/s
-        wind_mph = round(self.wind_speed_tenths_ms / 10.0 * 2.23694)
-        spd_str = f"{wind_mph:03d}"
+        if self.wind_speed_tenths_ms is None:
+            spd_str = "..."
+        else:
+            wind_mph = round(self.wind_speed_tenths_ms / 10.0 * 2.23694)
+            spd_str = f"{wind_mph:03d}"
 
         # Wind gust (3 digits, mph)
-        gust_mph = round(self.wind_gust_tenths_ms / 10.0 * 2.23694)
-        gust_str = f"{gust_mph:03d}"
+        if self.wind_gust_tenths_ms is None:
+            gust_str = "..."
+        else:
+            gust_mph = round(self.wind_gust_tenths_ms / 10.0 * 2.23694)
+            gust_str = f"{gust_mph:03d}"
 
         # Temperature (3 digits, whole degrees F) — convert from tenths °C
-        temp_f = round(self.temp_tenths_c / 10.0 * 9 / 5 + 32)
-        temp_str = f"{temp_f:03d}"
+        if self.temp_tenths_c is None:
+            temp_str = "..."
+        else:
+            temp_f = round(self.temp_tenths_c / 10.0 * 9 / 5 + 32)
+            temp_str = f"{temp_f:03d}"
 
         # Rain (3 digits each, hundredths of inch) — convert from tenths mm
-        rain_hr_in = round(self.rain_hour_tenths_mm / 10.0 / 25.4 * 100)
-        rain_24_in = round(self.rain_24h_tenths_mm / 10.0 / 25.4 * 100)
-        rain_mid_in = round(self.rain_midnight_tenths_mm / 10.0 / 25.4 * 100)
-        rain_hr = f"{rain_hr_in:03d}"
-        rain_24 = f"{rain_24_in:03d}"
-        rain_mid = f"{rain_mid_in:03d}"
+        if self.rain_hour_tenths_mm is None:
+            rain_hr = "..."
+        else:
+            rain_hr_in = round(self.rain_hour_tenths_mm / 10.0 / 25.4 * 100)
+            rain_hr = f"{rain_hr_in:03d}"
+        if self.rain_24h_tenths_mm is None:
+            rain_24 = "..."
+        else:
+            rain_24_in = round(self.rain_24h_tenths_mm / 10.0 / 25.4 * 100)
+            rain_24 = f"{rain_24_in:03d}"
+        if self.rain_midnight_tenths_mm is None:
+            rain_mid = "..."
+        else:
+            rain_mid_in = round(self.rain_midnight_tenths_mm / 10.0 / 25.4 * 100)
+            rain_mid = f"{rain_mid_in:03d}"
 
-        # Humidity (2 digits, 00 = 100%)
-        hum = self.humidity_pct % 100  # 100 becomes 00
-        hum_str = f"{hum:02d}"
+        # Humidity (2 digits, 00 = 100%, ".." when missing/muted)
+        if self.humidity_pct is None:
+            hum_str = ".."
+        else:
+            hum = self.humidity_pct % 100  # 100 becomes 00
+            hum_str = f"{hum:02d}"
 
         # Barometric pressure (5 digits, tenths of hPa) — already SI
-        baro_str = f"{self.pressure_tenths_hpa:05d}"
+        if self.pressure_tenths_hpa is None:
+            baro_str = "....."
+        else:
+            baro_str = f"{self.pressure_tenths_hpa:05d}"
 
         # Assemble the packet
         packet = (

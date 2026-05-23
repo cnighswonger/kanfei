@@ -60,6 +60,18 @@ _DEFAULTS: dict[str, object] = {
     "cwop_enabled": False,
     "cwop_callsign": "",
     "cwop_upload_interval": 300,
+    # Per-channel CWOP/APRS mute toggles.  When true, the corresponding APRS
+    # WX field is emitted as the APRS101 "missing value" sentinel instead of
+    # a number.  See backend/app/services/cwop.py::CWOP_MUTE_CHANNELS.
+    "cwop_mute_outdoor_temperature": False,
+    "cwop_mute_outdoor_humidity": False,
+    "cwop_mute_wind_speed": False,
+    "cwop_mute_wind_direction": False,
+    "cwop_mute_wind_gust": False,
+    "cwop_mute_barometer": False,
+    "cwop_mute_rain_daily": False,
+    "cwop_mute_rain_hour": False,
+    "cwop_mute_rain_24h": False,
     "station_timezone": "",
     "nowcast_enabled": False,
     "nowcast_disclaimer_accepted": False,

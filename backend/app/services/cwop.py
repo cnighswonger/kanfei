@@ -38,6 +38,26 @@ MAX_BACKOFF_INTERVAL = 1800  # 30 minutes
 # CWOP callsigns use these prefixes and always authenticate with -1.
 _CWOP_PREFIXES = ("CW", "DW", "EW")
 
+# Channels the operator can individually mute from the CWOP/APRS packet.
+# Each id corresponds to one APRS WX field. Mute state is stored in
+# station_config under the key ``cwop_mute_<channel_id>``.
+CWOP_MUTE_CHANNELS: tuple[str, ...] = (
+    "outdoor_temperature",
+    "outdoor_humidity",
+    "wind_speed",
+    "wind_direction",
+    "wind_gust",
+    "barometer",
+    "rain_daily",
+    "rain_hour",
+    "rain_24h",
+)
+
+
+def _mute_key(channel: str) -> str:
+    """Return the station_config key that stores the mute bool for ``channel``."""
+    return f"cwop_mute_{channel}"
+
 
 def aprs_passcode(callsign: str) -> str:
     """Compute the APRS-IS passcode from a callsign.
@@ -89,18 +109,21 @@ class CwopUploader:
         self._last_upload: float = 0.0
         self._consecutive_errors: int = 0
         self._effective_interval: int = 300
+        self._muted: frozenset[str] = frozenset()
 
     def reload_config(self) -> None:
         """Read CWOP config from the station_config database table."""
         db = SessionLocal()
         try:
+            keys = [
+                "cwop_enabled", "cwop_callsign",
+                "cwop_upload_interval",
+                "latitude", "longitude",
+            ]
+            keys.extend(_mute_key(c) for c in CWOP_MUTE_CHANNELS)
             rows = (
                 db.query(StationConfigModel)
-                .filter(StationConfigModel.key.in_([
-                    "cwop_enabled", "cwop_callsign",
-                    "cwop_upload_interval",
-                    "latitude", "longitude",
-                ]))
+                .filter(StationConfigModel.key.in_(keys))
                 .all()
             )
             cfg = {r.key: r.value for r in rows}
@@ -118,6 +141,10 @@ class CwopUploader:
                 self._latitude = 0.0
                 self._longitude = 0.0
             self._effective_interval = self._upload_interval
+            self._muted = frozenset(
+                c for c in CWOP_MUTE_CHANNELS
+                if cfg.get(_mute_key(c), "false").lower() == "true"
+            )
         except Exception as exc:
             logger.error("Failed to load CWOP config: %s", exc)
         finally:
@@ -255,44 +282,86 @@ class CwopUploader:
             db.close()
 
     def _build_packet(self, data: dict) -> Optional[str]:
-        """Extract sensor values from broadcast data and format APRS packet."""
-        temp_f = _extract(data, ("temperature", "outside", "value"))
-        if temp_f is None:
-            return None
+        """Extract sensor values from broadcast data and format APRS packet.
 
+        Channels named in ``self._muted`` are passed to ``APRSWeatherPacket``
+        as ``None``, which emits the APRS101 "missing value" sentinel in the
+        corresponding WX field (e.g. ``t...``).  A muted outdoor temperature
+        still produces a packet (with ``t...``); a *missing* outdoor
+        temperature (data dict has no value, channel not muted) still
+        short-circuits to ``None`` because we have nothing to publish.
+        """
+        muted = self._muted
+
+        temp_f = _extract(data, ("temperature", "outside", "value"))
         humidity = _extract(data, ("humidity", "outside", "value"))
         wind_speed = _extract(data, ("wind", "speed", "value"))
         wind_dir = _extract(data, ("wind", "direction", "value"))
         baro_inhg = _extract(data, ("barometer", "value"))
         rain_daily = _extract(data, ("rain", "daily", "value"))
-
-        # Wind gust: today's peak wind speed from daily extremes
         wind_gust = _extract(data, ("daily_extremes", "wind_speed_hi", "value"))
 
-        # Rain accumulation: query DB for hourly and 24h totals (tenths mm)
-        rain_hour_tenths_mm = self._get_rain_accumulation(1)
-        rain_24h_tenths_mm = self._get_rain_accumulation(24)
+        if temp_f is None and "outdoor_temperature" not in muted:
+            return None
+
+        # Rain accumulation: query DB for hourly and 24h totals (tenths mm).
+        # Skip the query when muted — saves a DB round-trip per upload.
+        rain_hour_tenths_mm: Optional[int]
+        rain_24h_tenths_mm: Optional[int]
+        rain_hour_tenths_mm = None if "rain_hour" in muted else self._get_rain_accumulation(1)
+        rain_24h_tenths_mm = None if "rain_24h" in muted else self._get_rain_accumulation(24)
 
         # Broadcast data is in display units (°F, mph, inHg, in).
-        # Convert to SI for the APRSWeatherPacket (tenths °C, tenths m/s, tenths hPa, tenths mm).
-        temp_c_tenths = round((temp_f - 32) * 5 / 9 * 10) if temp_f is not None else 222
-        wind_ms_tenths = round(float(wind_speed) * 4.4704) if wind_speed is not None else 0
-        gust_ms_tenths = round(float(wind_gust) * 4.4704) if wind_gust is not None else 0
-        baro_hpa_tenths = round(float(baro_inhg) * 33.8639 * 10) if baro_inhg is not None else 10132
-        rain_mm_tenths = round(float(rain_daily) * 25.4 * 10) if rain_daily is not None else 0
+        # Convert to SI for the APRSWeatherPacket (tenths °C, tenths m/s,
+        # tenths hPa, tenths mm).  None ⇒ APRSWeatherPacket emits the
+        # APRS101 missing-value sentinel.
+        if "outdoor_temperature" in muted or temp_f is None:
+            temp_c_tenths: Optional[int] = None
+        else:
+            temp_c_tenths = round((temp_f - 32) * 5 / 9 * 10)
+
+        if "wind_speed" in muted or wind_speed is None:
+            wind_ms_tenths: Optional[int] = None
+        else:
+            wind_ms_tenths = round(float(wind_speed) * 4.4704)
+
+        if "wind_gust" in muted or wind_gust is None:
+            gust_ms_tenths: Optional[int] = None
+        else:
+            gust_ms_tenths = round(float(wind_gust) * 4.4704)
+
+        if "barometer" in muted or baro_inhg is None:
+            baro_hpa_tenths: Optional[int] = None
+        else:
+            baro_hpa_tenths = round(float(baro_inhg) * 33.8639 * 10)
+
+        if "rain_daily" in muted or rain_daily is None:
+            rain_mm_tenths: Optional[int] = None
+        else:
+            rain_mm_tenths = round(float(rain_daily) * 25.4 * 10)
+
+        if "wind_direction" in muted or wind_dir is None:
+            wind_dir_deg: Optional[int] = None
+        else:
+            wind_dir_deg = int(wind_dir)
+
+        if "outdoor_humidity" in muted or humidity is None:
+            humidity_pct: Optional[int] = None
+        else:
+            humidity_pct = int(humidity)
 
         pkt = APRSWeatherPacket(
             callsign=self._callsign,
             latitude=self._latitude,
             longitude=self._longitude,
-            wind_dir_deg=int(wind_dir) if wind_dir is not None else None,
+            wind_dir_deg=wind_dir_deg,
             wind_speed_tenths_ms=wind_ms_tenths,
             wind_gust_tenths_ms=gust_ms_tenths,
             temp_tenths_c=temp_c_tenths,
             rain_hour_tenths_mm=rain_hour_tenths_mm,
             rain_24h_tenths_mm=rain_24h_tenths_mm,
             rain_midnight_tenths_mm=rain_mm_tenths,
-            humidity_pct=int(humidity) if humidity is not None else 0,
+            humidity_pct=humidity_pct,
             pressure_tenths_hpa=baro_hpa_tenths,
         )
         return pkt.format_packet()
