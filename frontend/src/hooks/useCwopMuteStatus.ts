@@ -1,0 +1,47 @@
+// Polls /api/cwop/mute-status for the list of CWOP channels the operator
+// has muted.  The AppShell uses this to drive a persistent reminder banner
+// whenever any sensor is being suppressed from the APRS WX packet.
+//
+// Settings dispatches a `cwop-mute-changed` window event after a successful
+// save so the banner reflects mute toggles inside a frame, without waiting
+// for the next 30s poll.
+
+import { useEffect, useState } from "react";
+import { fetchCwopMuteStatus } from "../api/client.ts";
+
+const POLL_MS = 30_000;
+const EVENT_NAME = "cwop-mute-changed";
+
+export function useCwopMuteStatus(): string[] {
+  const [muted, setMuted] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refresh = () => {
+      fetchCwopMuteStatus()
+        .then((res) => {
+          if (!cancelled) setMuted(res.muted);
+        })
+        .catch(() => {
+          // Ignore — banner just stays at its previous state.
+        });
+    };
+
+    refresh();
+    const timer = window.setInterval(refresh, POLL_MS);
+    window.addEventListener(EVENT_NAME, refresh);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener(EVENT_NAME, refresh);
+    };
+  }, []);
+
+  return muted;
+}
+
+export function notifyCwopMuteChanged(): void {
+  window.dispatchEvent(new Event(EVENT_NAME));
+}

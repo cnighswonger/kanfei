@@ -7,7 +7,20 @@ import WeatherBackground from '../WeatherBackground';
 import { useWeatherBackground } from '../../context/WeatherBackgroundContext';
 import { useWeatherData } from '../../context/WeatherDataContext';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useCwopMuteStatus } from '../../hooks/useCwopMuteStatus';
 import { readUIPref, writeUIPref, syncUIPrefs } from '../../utils/uiPrefs';
+
+const CWOP_CHANNEL_LABELS: Record<string, string> = {
+  outdoor_temperature: 'Outdoor Temperature',
+  outdoor_humidity: 'Outdoor Humidity',
+  wind_speed: 'Wind Speed',
+  wind_direction: 'Wind Direction',
+  wind_gust: 'Wind Gust',
+  barometer: 'Barometer',
+  rain_daily: 'Rain (Daily)',
+  rain_hour: 'Rain (Hourly)',
+  rain_24h: 'Rain (24 Hour)',
+};
 
 interface AppShellProps {
   children: ReactNode;
@@ -27,6 +40,7 @@ export default function AppShell({
   const { enabled } = useWeatherBackground();
   const { nowcastWarning, dismissNowcastWarning } = useWeatherData();
   const isMobile = useIsMobile();
+  const cwopMuted = useCwopMuteStatus();
 
   // Auto-dismiss warning after 30 seconds.
   useEffect(() => {
@@ -136,6 +150,34 @@ export default function AppShell({
                 <span style={{ flexShrink: 0 }}>{'\u26A0'}</span>
                 <span style={{ flex: 1 }}>{nowcastWarning}</span>
                 <span style={{ flexShrink: 0, opacity: 0.7, fontSize: 11 }}>click to dismiss</span>
+              </div>
+            )}
+            {cwopMuted.length > 0 && (
+              <div
+                role="status"
+                style={{
+                  padding: '10px 16px',
+                  margin: '24px 24px 0 24px',
+                  background: 'var(--color-warning-bg, #664d03)',
+                  color: 'var(--color-warning-text, #fff3cd)',
+                  border: '1px solid var(--color-warning-border, #997404)',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontFamily: 'var(--font-body)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <span style={{ flexShrink: 0 }}>{'⚠'}</span>
+                <span style={{ flex: 1 }}>
+                  CWOP reporting: muted channels —{' '}
+                  {cwopMuted
+                    .map((c) => CWOP_CHANNEL_LABELS[c] ?? c)
+                    .join(', ')}
+                  . Other stations will receive &lsquo;missing value&rsquo; for these
+                  until you re-enable them in Settings &rarr; CWOP.
+                </span>
               </div>
             )}
             {children}
