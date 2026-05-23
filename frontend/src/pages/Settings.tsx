@@ -12,6 +12,7 @@ import { getTimezone, setTimezone as storeTimezone, resolveTimezone, getTimezone
 import { useIsMobile } from "../hooks/useIsMobile.ts";
 import { useFeatureFlags } from "../context/FeatureFlagsContext.tsx";
 import StepLocation from "../components/setup/StepLocation.tsx";
+import { notifyCwopMuteChanged } from "../hooks/useCwopMuteStatus.ts";
 
 // --- Shared styles ---
 
@@ -1915,6 +1916,7 @@ export default function Settings() {
       const updated = await updateConfig(items);
       setConfigItems(updated);
       setSaveSuccess(true);
+      notifyCwopMuteChanged();
       await refreshFeatureFlags();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
@@ -1939,6 +1941,7 @@ export default function Settings() {
       items = items.filter((i) => !i.key.startsWith("ui_"));
       const updated = await updateConfig(items);
       setConfigItems(updated);
+      notifyCwopMuteChanged();
       const result = await reconnectStation();
       if (result.success) {
         setReconnectMsg(
@@ -3227,6 +3230,46 @@ export default function Settings() {
               <option value="900">15 minutes</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* CWOP — Sensor Reporting (per-channel mute, issue #161) */}
+      <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
+        <h3 style={sectionTitle}>CWOP — Sensor Reporting</h3>
+        <p style={{
+          marginTop: 0,
+          marginBottom: 12,
+          fontSize: 12,
+          fontFamily: "var(--font-body)",
+          color: "var(--color-text-muted)",
+        }}>
+          Muted channels are sent to CWOP as the APRS &lsquo;missing value&rsquo;
+          (&hellip;) so other stations and aggregators ignore them. Use while a
+          sensor is under repair.
+        </p>
+        <div style={gridTwoCol(isMobile)}>
+          {[
+            ["cwop_mute_outdoor_temperature", "Outdoor Temperature"],
+            ["cwop_mute_outdoor_humidity", "Outdoor Humidity"],
+            ["cwop_mute_wind_speed", "Wind Speed"],
+            ["cwop_mute_wind_direction", "Wind Direction"],
+            ["cwop_mute_wind_gust", "Wind Gust"],
+            ["cwop_mute_barometer", "Barometer"],
+            ["cwop_mute_rain_daily", "Rain — Daily"],
+            ["cwop_mute_rain_hour", "Rain — Hourly"],
+            ["cwop_mute_rain_24h", "Rain — 24 Hour"],
+          ].map(([key, label]) => (
+            <div key={key} style={fieldGroup}>
+              <label style={checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={val(key) === true}
+                  onChange={(e) => updateField(key, e.target.checked)}
+                />
+                Mute {label}
+              </label>
+            </div>
+          ))}
         </div>
       </div>
 
