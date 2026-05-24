@@ -52,6 +52,12 @@ FIELD_MAP: dict[str, tuple[str, ...]] = {
 # AND any derived field computed from the same sensor — sending a derived
 # value based on known-bad data defeats the purpose of muting.  WU has no
 # 24h-rain field, so ``rain_24h`` is a no-op for this service.
+#
+# ``yearrainin`` and ``rainratein`` are WU-only fields with no CWOP analog;
+# both come from the same physical rain gauge counter as ``dailyrainin``.
+# If the operator mutes ``rain_daily`` the gauge itself is the thing under
+# repair, so the cumulative and rate views of the same broken sensor must
+# also drop out.
 _DROP_BY_CHANNEL: dict[str, tuple[str, ...]] = {
     "outdoor_temperature": ("tempf", "windchillf", "heatindexf", "dewptf"),
     "outdoor_humidity":    ("humidity", "heatindexf", "dewptf"),
@@ -59,7 +65,7 @@ _DROP_BY_CHANNEL: dict[str, tuple[str, ...]] = {
     "wind_direction":      ("winddir",),
     "wind_gust":           ("windgustmph",),
     "barometer":           ("baromin",),
-    "rain_daily":          ("dailyrainin",),
+    "rain_daily":          ("dailyrainin", "yearrainin", "rainratein"),
     "rain_hour":           ("rainin",),
     "rain_24h":            (),
 }

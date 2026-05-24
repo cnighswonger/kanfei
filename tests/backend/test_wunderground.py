@@ -66,7 +66,7 @@ _SAMPLE_BROADCAST = {
     "rain": {
         "daily": {"value": 0.12},
         "yearly": {"value": 4.5},
-        "rate": {"value": 0.0},
+        "rate": {"value": 0.03},
     },
     "daily_extremes": {"wind_speed_hi": {"value": 15}},
     "derived": {
@@ -115,6 +115,22 @@ class TestBuildParamsMute:
                 f"channel {channel}: field {field!r} should be dropped"
             )
 
+    def test_rain_daily_mute_drops_yearly_and_rate(self, wu_db):
+        # The WU-only rain fields ``yearrainin`` and ``rainratein`` come from
+        # the same physical gauge counter as ``dailyrainin``; muting the
+        # primary rain channel must drop all three.
+        _set_mute("rain_daily", True)
+        up = WundergroundUploader()
+        with patch.object(
+            WundergroundUploader, "_get_hourly_rain_inches", return_value=0.05,
+        ):
+            up.reload_config()
+            params = up._build_params(_SAMPLE_BROADCAST)
+        for f in ("dailyrainin", "yearrainin", "rainratein"):
+            assert f not in params, f"{f!r} should be dropped when rain_daily muted"
+        # Hourly rain comes from a separate query gate; still present.
+        assert "rainin" in params
+
     def test_temperature_mute_drops_derived(self, wu_db):
         _set_mute("outdoor_temperature", True)
         up = WundergroundUploader()
@@ -161,8 +177,8 @@ class TestBuildParamsMute:
             params = up._build_params(_SAMPLE_BROADCAST)
         for f in (
             "tempf", "humidity", "windspeedmph", "windgustmph", "winddir",
-            "baromin", "dailyrainin", "rainin", "windchillf", "heatindexf",
-            "dewptf", "solarradiation", "UV",
+            "baromin", "dailyrainin", "yearrainin", "rainratein", "rainin",
+            "windchillf", "heatindexf", "dewptf", "solarradiation", "UV",
         ):
             assert f in params, f"{f!r} missing in unmuted output: {params!r}"
 
