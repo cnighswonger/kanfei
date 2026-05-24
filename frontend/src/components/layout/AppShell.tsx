@@ -7,10 +7,10 @@ import WeatherBackground from '../WeatherBackground';
 import { useWeatherBackground } from '../../context/WeatherBackgroundContext';
 import { useWeatherData } from '../../context/WeatherDataContext';
 import { useIsMobile } from '../../hooks/useIsMobile';
-import { useCwopMuteStatus } from '../../hooks/useCwopMuteStatus';
+import { useMuteStatus } from '../../hooks/useMuteStatus';
 import { readUIPref, writeUIPref, syncUIPrefs } from '../../utils/uiPrefs';
 
-const CWOP_CHANNEL_LABELS: Record<string, string> = {
+const CHANNEL_LABELS: Record<string, string> = {
   outdoor_temperature: 'Outdoor Temperature',
   outdoor_humidity: 'Outdoor Humidity',
   wind_speed: 'Wind Speed',
@@ -40,7 +40,7 @@ export default function AppShell({
   const { enabled } = useWeatherBackground();
   const { nowcastWarning, dismissNowcastWarning } = useWeatherData();
   const isMobile = useIsMobile();
-  const cwopMuted = useCwopMuteStatus();
+  const channelMuted = useMuteStatus();
 
   // Auto-dismiss warning after 30 seconds.
   useEffect(() => {
@@ -152,7 +152,7 @@ export default function AppShell({
                 <span style={{ flexShrink: 0, opacity: 0.7, fontSize: 11 }}>click to dismiss</span>
               </div>
             )}
-            {cwopMuted.length > 0 && (
+            {channelMuted.length > 0 && (
               <div
                 role="status"
                 style={{
@@ -171,12 +171,13 @@ export default function AppShell({
               >
                 <span style={{ flexShrink: 0 }}>{'⚠'}</span>
                 <span style={{ flex: 1 }}>
-                  CWOP reporting: muted channels —{' '}
-                  {cwopMuted
-                    .map((c) => CWOP_CHANNEL_LABELS[c] ?? c)
+                  Muted channels —{' '}
+                  {channelMuted
+                    .map((c) => CHANNEL_LABELS[c] ?? c)
                     .join(', ')}
-                  . Other stations will receive &lsquo;missing value&rsquo; for these
-                  until you re-enable them in Settings &rarr; CWOP.
+                  . Other stations and aggregators will receive &lsquo;missing
+                  value&rsquo; for these until you re-enable them in Settings
+                  &rarr; Channel Mute.
                 </span>
               </div>
             )}

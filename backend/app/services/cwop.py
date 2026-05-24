@@ -24,6 +24,7 @@ from ..models.database import SessionLocal
 from ..models.sensor_reading import SensorReadingModel
 from ..models.station_config import StationConfigModel
 from ..output.aprs import APRSWeatherPacket
+from .channel_mute import MUTE_CHANNELS, mute_key, load_muted_channels
 
 logger = logging.getLogger(__name__)
 
@@ -38,25 +39,11 @@ MAX_BACKOFF_INTERVAL = 1800  # 30 minutes
 # CWOP callsigns use these prefixes and always authenticate with -1.
 _CWOP_PREFIXES = ("CW", "DW", "EW")
 
-# Channels the operator can individually mute from the CWOP/APRS packet.
-# Each id corresponds to one APRS WX field. Mute state is stored in
-# station_config under the key ``cwop_mute_<channel_id>``.
-CWOP_MUTE_CHANNELS: tuple[str, ...] = (
-    "outdoor_temperature",
-    "outdoor_humidity",
-    "wind_speed",
-    "wind_direction",
-    "wind_gust",
-    "barometer",
-    "rain_daily",
-    "rain_hour",
-    "rain_24h",
-)
-
-
-def _mute_key(channel: str) -> str:
-    """Return the station_config key that stores the mute bool for ``channel``."""
-    return f"cwop_mute_{channel}"
+# Compat aliases — the canonical names now live in ``channel_mute``.  Kept
+# here so existing imports (tests, downstream code) keep working.  See
+# issue #162 for the rename context.
+CWOP_MUTE_CHANNELS = MUTE_CHANNELS
+_mute_key = mute_key
 
 
 def aprs_passcode(callsign: str) -> str:
@@ -120,7 +107,6 @@ class CwopUploader:
                 "cwop_upload_interval",
                 "latitude", "longitude",
             ]
-            keys.extend(_mute_key(c) for c in CWOP_MUTE_CHANNELS)
             rows = (
                 db.query(StationConfigModel)
                 .filter(StationConfigModel.key.in_(keys))
@@ -141,10 +127,7 @@ class CwopUploader:
                 self._latitude = 0.0
                 self._longitude = 0.0
             self._effective_interval = self._upload_interval
-            self._muted = frozenset(
-                c for c in CWOP_MUTE_CHANNELS
-                if cfg.get(_mute_key(c), "false").lower() == "true"
-            )
+            self._muted = load_muted_channels(db)
         except Exception as exc:
             logger.error("Failed to load CWOP config: %s", exc)
         finally:

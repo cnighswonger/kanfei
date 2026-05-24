@@ -78,3 +78,30 @@ def init_database() -> None:
                 "ALTER TABLE sensor_readings ADD COLUMN wind_gust INTEGER"
             ))
             conn.commit()
+
+    # Migrate: cwop_mute_* → channel_mute_* (issue #162)
+    # Mute keys were CWOP-specific in beta16; from beta17 they gate every
+    # outbound upload, so the prefix is generalised.  Copy old → new for
+    # any value the operator set, then drop the old rows.  Idempotent.
+    # ``updated_at`` is NOT NULL with an ORM-level default; raw SQL needs
+    # to provide CURRENT_TIMESTAMP explicitly or INSERT OR IGNORE will
+    # silently skip the row.
+    with engine.connect() as conn:
+        try:
+            rows = conn.execute(text(
+                "SELECT key, value FROM station_config WHERE key LIKE 'cwop_mute_%'"
+            )).fetchall()
+            for old_key, value in rows:
+                new_key = old_key.replace("cwop_mute_", "channel_mute_", 1)
+                conn.execute(text(
+                    "INSERT OR IGNORE INTO station_config "
+                    "(key, value, updated_at) "
+                    "VALUES (:k, :v, CURRENT_TIMESTAMP)"
+                ), {"k": new_key, "v": value})
+            if rows:
+                conn.execute(text(
+                    "DELETE FROM station_config WHERE key LIKE 'cwop_mute_%'"
+                ))
+            conn.commit()
+        except Exception:
+            pass
