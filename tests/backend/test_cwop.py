@@ -6,6 +6,7 @@ import pytest
 
 from app.models.database import Base, SessionLocal, engine
 from app.models.station_config import StationConfigModel
+from app.services.channel_mute import MUTE_CHANNELS, mute_key
 from app.services.cwop import (
     CWOP_MUTE_CHANNELS,
     CwopUploader,
@@ -13,6 +14,12 @@ from app.services.cwop import (
     _mute_key,
     aprs_passcode,
 )
+
+
+def test_compat_aliases_match_shared_module():
+    # Compat re-exports in cwop.py must point at the canonical names.
+    assert CWOP_MUTE_CHANNELS is MUTE_CHANNELS
+    assert _mute_key is mute_key
 
 
 class TestAprsPasscode:
