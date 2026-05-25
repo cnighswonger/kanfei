@@ -1,3 +1,25 @@
+kanfei (0.1.0~beta17) unstable; urgency=medium
+
+  * New: per-channel sensor mute now gates every outbound upload, not
+    just CWOP/APRS.  Operators who take a faulty sensor out of service
+    will see it dropped from Weather Underground uploads in addition to
+    the CWOP feed; the muted field is omitted from the WU URL, and any
+    derived value computed from the same sensor (wind-chill, heat-index,
+    dew-point) is also dropped so a known-bad reading doesn't leak in
+    through the back door.  The mute keys in the database have been
+    renamed cwop_mute_* → channel_mute_* with an idempotent startup
+    migration, the Settings section is now "Channel Mute", and the
+    on-screen banner reads "Muted channels — … in Settings → Channel
+    Mute."  Closes #162.
+  * New: each daily extreme on the dashboard now shows when today's
+    high or low was first reached.  The wind tile gains "at HH:MM" under
+    Peak, and Temperature, Humidity, and Barometer tiles show
+    "H 2:45 PM · L 6:42 AM"-style timestamps below the H/L values.
+    Mobile compact-card layout unchanged.  Solar/UV has no daily
+    extreme today and is unaffected.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Mon, 25 May 2026 15:56:49 +0000
+
 kanfei (0.1.0~beta16) unstable; urgency=medium
 
   * New: per-channel CWOP/APRS mute.  Operators can now take an individual
