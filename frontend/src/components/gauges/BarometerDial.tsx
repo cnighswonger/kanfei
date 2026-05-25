@@ -3,6 +3,7 @@
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
+import { formatTimestamp } from "../../utils/formatting.ts";
 
 interface BarometerDialProps {
   value: number | null;        // Pressure in display units (e.g. 29.921 inHg)
@@ -11,6 +12,8 @@ interface BarometerDialProps {
   trendRate?: number | null;   // Rate of change
   high?: number | null;        // Today's high
   low?: number | null;         // Today's low
+  highAt?: string | null;      // ISO-8601 UTC timestamp of today's high
+  lowAt?: string | null;       // ISO-8601 UTC timestamp of today's low
 }
 
 const RANGES = {
@@ -18,7 +21,7 @@ const RANGES = {
   hPa: { min: 965, max: 1050, step: 10, decimals: 0 },
 };
 
-export default function BarometerDial({ value, unit, trend, high, low }: BarometerDialProps) {
+export default function BarometerDial({ value, unit, trend, high, low, highAt, lowAt }: BarometerDialProps) {
   const range = RANGES[unit as keyof typeof RANGES] || RANGES.inHg;
   const { min, max, step, decimals } = range;
 
@@ -243,10 +246,21 @@ export default function BarometerDial({ value, unit, trend, high, low }: Baromet
           fontFamily: 'var(--font-gauge)',
           color: 'var(--color-text-secondary)',
           marginTop: '-4px',
+          textAlign: 'center',
+          lineHeight: 1.3,
         }}>
-          H {high != null ? high.toFixed(decimals) : '--'}
-          {' / '}
-          L {low != null ? low.toFixed(decimals) : '--'}
+          <div>
+            H {high != null ? high.toFixed(decimals) : '--'}
+            {' / '}
+            L {low != null ? low.toFixed(decimals) : '--'}
+          </div>
+          {(highAt || lowAt) && (
+            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+              {highAt && <>H {formatTimestamp(highAt)}</>}
+              {highAt && lowAt && ' · '}
+              {lowAt && <>L {formatTimestamp(lowAt)}</>}
+            </div>
+          )}
         </div>
       )}
     </div>

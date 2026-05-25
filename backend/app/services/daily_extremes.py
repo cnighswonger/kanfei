@@ -10,10 +10,27 @@ from ..models.sensor_reading import SensorReadingModel
 from ..models.sensor_meta import convert, SENSOR_UNITS
 
 
-def _val(column: str, raw) -> Optional[dict]:
+def _iso_z(ts: Optional[datetime]) -> Optional[str]:
+    """Serialise a naive-UTC datetime (SQLite returns these) as ISO-8601 with Z.
+
+    Frontend ``new Date(iso)`` requires an explicit timezone designator to
+    parse as UTC; without it the value is interpreted as local time.
+    """
+    if ts is None:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _val(column: str, raw, at: Optional[datetime] = None) -> Optional[dict]:
     if raw is None:
         return None
-    return {"value": convert(column, raw), "unit": SENSOR_UNITS.get(column, "")}
+    return {
+        "value": convert(column, raw),
+        "unit": SENSOR_UNITS.get(column, ""),
+        "at": _iso_z(at),
+    }
 
 
 def _clamp_hum(val: Optional[dict]) -> Optional[dict]:
@@ -22,6 +39,24 @@ def _clamp_hum(val: Optional[dict]) -> Optional[dict]:
         return val
     val["value"] = max(0, min(100, val["value"]))
     return val
+
+
+def _at(db: Session, midnight: datetime, column, raw) -> Optional[datetime]:
+    """Earliest timestamp at which ``column`` equalled ``raw`` since midnight.
+
+    Returns ``None`` when ``raw`` is ``None``.  For tied extrema the earliest
+    occurrence wins so the displayed time is the first time the peak was
+    reached today.
+    """
+    if raw is None:
+        return None
+    S = SensorReadingModel
+    row = (
+        db.query(func.min(S.timestamp))
+        .filter(S.timestamp >= midnight, column == raw)
+        .first()
+    )
+    return row[0] if row is not None else None
 
 
 def get_daily_extremes(db: Session) -> Optional[dict]:
@@ -51,16 +86,16 @@ def get_daily_extremes(db: Session) -> Optional[dict]:
         return None
 
     return {
-        "outside_temp_hi": _val("outside_temp", row[0]),
-        "outside_temp_lo": _val("outside_temp", row[1]),
-        "inside_temp_hi": _val("inside_temp", row[2]),
-        "inside_temp_lo": _val("inside_temp", row[3]),
-        "wind_speed_hi": _val("wind_speed", row[4]),
-        "barometer_hi": _val("barometer", row[5]),
-        "barometer_lo": _val("barometer", row[6]),
-        "humidity_hi": _clamp_hum(_val("outside_humidity", row[7])),
-        "humidity_lo": _clamp_hum(_val("outside_humidity", row[8])),
-        "rain_rate_hi": _val("rain_rate", row[9]),
-        "inside_humidity_hi": _clamp_hum(_val("inside_humidity", row[10])),
-        "inside_humidity_lo": _clamp_hum(_val("inside_humidity", row[11])),
+        "outside_temp_hi": _val("outside_temp", row[0], _at(db, midnight, S.outside_temp, row[0])),
+        "outside_temp_lo": _val("outside_temp", row[1], _at(db, midnight, S.outside_temp, row[1])),
+        "inside_temp_hi": _val("inside_temp", row[2], _at(db, midnight, S.inside_temp, row[2])),
+        "inside_temp_lo": _val("inside_temp", row[3], _at(db, midnight, S.inside_temp, row[3])),
+        "wind_speed_hi": _val("wind_speed", row[4], _at(db, midnight, S.wind_speed, row[4])),
+        "barometer_hi": _val("barometer", row[5], _at(db, midnight, S.barometer, row[5])),
+        "barometer_lo": _val("barometer", row[6], _at(db, midnight, S.barometer, row[6])),
+        "humidity_hi": _clamp_hum(_val("outside_humidity", row[7], _at(db, midnight, S.outside_humidity, row[7]))),
+        "humidity_lo": _clamp_hum(_val("outside_humidity", row[8], _at(db, midnight, S.outside_humidity, row[8]))),
+        "rain_rate_hi": _val("rain_rate", row[9], _at(db, midnight, S.rain_rate, row[9])),
+        "inside_humidity_hi": _clamp_hum(_val("inside_humidity", row[10], _at(db, midnight, S.inside_humidity, row[10]))),
+        "inside_humidity_lo": _clamp_hum(_val("inside_humidity", row[11], _at(db, midnight, S.inside_humidity, row[11]))),
     }

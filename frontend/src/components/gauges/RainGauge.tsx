@@ -3,6 +3,7 @@
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
+import { formatTimestamp } from "../../utils/formatting.ts";
 
 interface RainGaugeProps {
   rate: number | null;       // inches/hr (or display unit per hr)
@@ -11,6 +12,7 @@ interface RainGaugeProps {
   yearly: number | null;     // yearly total
   unit: string;              // 'in' or 'mm'
   peakRate?: number | null;  // Today's peak rain rate
+  peakRateAt?: string | null; // ISO-8601 UTC timestamp of peak rate
 }
 
 function rateColor(rate: number): string {
@@ -21,7 +23,7 @@ function rateColor(rate: number): string {
   return 'var(--color-rain-extreme, #7c3aed)';
 }
 
-export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRate }: RainGaugeProps) {
+export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRate, peakRateAt }: RainGaugeProps) {
   const decimals = unit === 'mm' ? 1 : 2;
   const rateStr = rate !== null ? rate.toFixed(decimals) : '--';
   const dailyStr = daily !== null ? daily.toFixed(decimals) : '--';
@@ -127,8 +129,15 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
           fontFamily: 'var(--font-body)',
           color: 'var(--color-text-secondary)',
           marginBottom: '4px',
+          textAlign: 'center',
+          lineHeight: 1.3,
         }}>
-          Peak: {peakRate.toFixed(decimals)} {unit}/hr
+          <div>Peak: {peakRate.toFixed(decimals)} {unit}/hr</div>
+          {peakRateAt && (
+            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+              at {formatTimestamp(peakRateAt)}
+            </div>
+          )}
         </div>
       )}
 

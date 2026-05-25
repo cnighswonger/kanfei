@@ -4,12 +4,15 @@
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
+import { formatTimestamp } from "../../utils/formatting.ts";
 
 interface TemperatureGaugeProps {
   value: number | null;       // Current temp in display units (e.g. 72.5)
   unit: string;               // 'F' or 'C'
   high?: number | null;       // Today's high
   low?: number | null;        // Today's low
+  highAt?: string | null;     // ISO-8601 UTC timestamp of today's high
+  lowAt?: string | null;      // ISO-8601 UTC timestamp of today's low
   label?: string;             // e.g. 'Outside' or 'Inside'
   min?: number;               // Scale min (default: -20F or -30C)
   max?: number;               // Scale max (default: 120F or 50C)
@@ -82,6 +85,8 @@ export default function TemperatureGauge({
   unit,
   high,
   low,
+  highAt,
+  lowAt,
   label,
   min: customMin,
   max: customMax,
@@ -291,6 +296,20 @@ export default function TemperatureGauge({
       }}>
         {displayVal !== null ? `${displayVal.toFixed(1)}°${unit}` : '--.-°'}
       </div>
+
+      {(highAt || lowAt) && (
+        <div style={{
+          fontSize: '10px',
+          fontFamily: 'var(--font-gauge)',
+          color: 'var(--color-text-muted)',
+          marginTop: '2px',
+          textAlign: 'center',
+        }}>
+          {highAt && <>H {formatTimestamp(highAt)}</>}
+          {highAt && lowAt && ' · '}
+          {lowAt && <>L {formatTimestamp(lowAt)}</>}
+        </div>
+      )}
     </div>
   );
 }
