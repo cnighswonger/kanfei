@@ -4,12 +4,14 @@
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
+import { formatTimestamp } from "../../utils/formatting.ts";
 
 interface WindCompassProps {
   direction: number | null;  // 0-359 degrees
   speed: number | null;      // mph (or display unit)
   gust?: number | null;
   peak?: number | null;      // Today's peak wind speed
+  peakAt?: string | null;    // ISO-8601 UTC timestamp of today's peak
   unit: string;              // 'mph', 'kph', 'knots'
   cardinal?: string | null;  // e.g. 'NNE'
 }
@@ -17,7 +19,7 @@ interface WindCompassProps {
 const CARDINALS_16 = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
                        'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 
-export default function WindCompass({ direction, speed, gust, peak, unit, cardinal }: WindCompassProps) {
+export default function WindCompass({ direction, speed, gust, peak, peakAt, unit, cardinal }: WindCompassProps) {
   const isMobile = useCompact();
   if (isMobile) {
     return (
@@ -190,8 +192,13 @@ export default function WindCompass({ direction, speed, gust, peak, unit, cardin
           </span>
         )}
         {peak != null && (
-          <span>
-            Peak {peak.toFixed(0)} {unit}
+          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
+            <span>Peak {peak.toFixed(0)} {unit}</span>
+            {peakAt && (
+              <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+                at {formatTimestamp(peakAt)}
+              </span>
+            )}
           </span>
         )}
       </div>

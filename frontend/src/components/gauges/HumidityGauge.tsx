@@ -5,12 +5,15 @@
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
+import { formatTimestamp } from "../../utils/formatting.ts";
 
 interface HumidityGaugeProps {
   value: number | null;  // 0-100%
   label?: string;        // 'Inside' or 'Outside'
   high?: number | null;  // Today's high
   low?: number | null;   // Today's low
+  highAt?: string | null; // ISO-8601 UTC timestamp of today's high
+  lowAt?: string | null;  // ISO-8601 UTC timestamp of today's low
 }
 
 /** Compute a tight gauge range from the current value and daily hi/lo. */
@@ -94,7 +97,7 @@ function humidityColor(pct: number): string {
   }
 }
 
-export default function HumidityGauge({ value, label, high, low }: HumidityGaugeProps) {
+export default function HumidityGauge({ value, label, high, low, highAt, lowAt }: HumidityGaugeProps) {
   const cx = 120;
   const cy = 120;
   const r = 90;
@@ -251,10 +254,21 @@ export default function HumidityGauge({ value, label, high, low }: HumidityGauge
           fontFamily: 'var(--font-gauge)',
           color: 'var(--color-text-secondary)',
           marginTop: '-4px',
+          textAlign: 'center',
+          lineHeight: 1.3,
         }}>
-          H {high != null ? `${high}%` : '--%'}
-          {' / '}
-          L {low != null ? `${low}%` : '--%'}
+          <div>
+            H {high != null ? `${high}%` : '--%'}
+            {' / '}
+            L {low != null ? `${low}%` : '--%'}
+          </div>
+          {(highAt || lowAt) && (
+            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+              {highAt && <>H {formatTimestamp(highAt)}</>}
+              {highAt && lowAt && ' · '}
+              {lowAt && <>L {formatTimestamp(lowAt)}</>}
+            </div>
+          )}
         </div>
       )}
     </div>

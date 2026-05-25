@@ -10,6 +10,15 @@ export interface ValueWithUnit {
   unit: string;
 }
 
+// Daily extremes carry an ISO-8601 UTC timestamp (``Z`` suffix) marking
+// when the high/low was first observed today.  ``null`` when no rows
+// have hit the column yet (server pre-first-reading).
+export interface ExtremeReading {
+  value: number;
+  unit: string;
+  at: string | null;
+}
+
 // --- Current Conditions ---
 
 export interface TemperatureData {
@@ -52,18 +61,18 @@ export interface DerivedData {
 }
 
 export interface DailyExtremes {
-  outside_temp_hi: ValueWithUnit | null;
-  outside_temp_lo: ValueWithUnit | null;
-  inside_temp_hi: ValueWithUnit | null;
-  inside_temp_lo: ValueWithUnit | null;
-  wind_speed_hi: ValueWithUnit | null;
-  barometer_hi: ValueWithUnit | null;
-  barometer_lo: ValueWithUnit | null;
-  humidity_hi: ValueWithUnit | null;
-  humidity_lo: ValueWithUnit | null;
-  inside_humidity_hi: ValueWithUnit | null;
-  inside_humidity_lo: ValueWithUnit | null;
-  rain_rate_hi: ValueWithUnit | null;
+  outside_temp_hi: ExtremeReading | null;
+  outside_temp_lo: ExtremeReading | null;
+  inside_temp_hi: ExtremeReading | null;
+  inside_temp_lo: ExtremeReading | null;
+  wind_speed_hi: ExtremeReading | null;
+  barometer_hi: ExtremeReading | null;
+  barometer_lo: ExtremeReading | null;
+  humidity_hi: ExtremeReading | null;
+  humidity_lo: ExtremeReading | null;
+  inside_humidity_hi: ExtremeReading | null;
+  inside_humidity_lo: ExtremeReading | null;
+  rain_rate_hi: ExtremeReading | null;
 }
 
 export interface CurrentConditions {

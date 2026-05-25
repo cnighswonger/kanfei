@@ -32,6 +32,8 @@ export default function TileRenderer({ tileId, windDisplay }: TileRendererProps)
           unit={cc?.temperature?.outside?.unit ?? "F"}
           high={cc?.daily_extremes?.outside_temp_hi?.value ?? null}
           low={cc?.daily_extremes?.outside_temp_lo?.value ?? null}
+          highAt={cc?.daily_extremes?.outside_temp_hi?.at ?? null}
+          lowAt={cc?.daily_extremes?.outside_temp_lo?.at ?? null}
           label="Outside"
         />
       );
@@ -43,6 +45,8 @@ export default function TileRenderer({ tileId, windDisplay }: TileRendererProps)
           unit={cc?.temperature?.inside?.unit ?? "F"}
           high={cc?.daily_extremes?.inside_temp_hi?.value ?? null}
           low={cc?.daily_extremes?.inside_temp_lo?.value ?? null}
+          highAt={cc?.daily_extremes?.inside_temp_hi?.at ?? null}
+          lowAt={cc?.daily_extremes?.inside_temp_lo?.at ?? null}
           label="Inside"
         />
       );
@@ -63,6 +67,8 @@ export default function TileRenderer({ tileId, windDisplay }: TileRendererProps)
           trendRate={cc?.barometer?.trend_rate ?? null}
           high={cc?.daily_extremes?.barometer_hi?.value ?? null}
           low={cc?.daily_extremes?.barometer_lo?.value ?? null}
+          highAt={cc?.daily_extremes?.barometer_hi?.at ?? null}
+          lowAt={cc?.daily_extremes?.barometer_lo?.at ?? null}
         />
       );
 
@@ -85,6 +91,7 @@ export default function TileRenderer({ tileId, windDisplay }: TileRendererProps)
           speed={cc?.wind?.speed?.value ?? null}
           gust={cc?.wind?.gust?.value ?? null}
           peak={cc?.daily_extremes?.wind_speed_hi?.value ?? null}
+          peakAt={cc?.daily_extremes?.wind_speed_hi?.at ?? null}
           unit={cc?.wind?.speed?.unit ?? "mph"}
           cardinal={cc?.wind?.cardinal ?? null}
         />
@@ -97,6 +104,8 @@ export default function TileRenderer({ tileId, windDisplay }: TileRendererProps)
           label="Outside"
           high={cc?.daily_extremes?.humidity_hi?.value ?? null}
           low={cc?.daily_extremes?.humidity_lo?.value ?? null}
+          highAt={cc?.daily_extremes?.humidity_hi?.at ?? null}
+          lowAt={cc?.daily_extremes?.humidity_lo?.at ?? null}
         />
       );
 
@@ -107,6 +116,8 @@ export default function TileRenderer({ tileId, windDisplay }: TileRendererProps)
           label="Inside"
           high={cc?.daily_extremes?.inside_humidity_hi?.value ?? null}
           low={cc?.daily_extremes?.inside_humidity_lo?.value ?? null}
+          highAt={cc?.daily_extremes?.inside_humidity_hi?.at ?? null}
+          lowAt={cc?.daily_extremes?.inside_humidity_lo?.at ?? null}
         />
       );
 
@@ -119,6 +130,7 @@ export default function TileRenderer({ tileId, windDisplay }: TileRendererProps)
           yearly={cc?.rain?.yearly?.value ?? null}
           unit={cc?.rain?.daily?.unit ?? "in"}
           peakRate={(cc?.rain?.daily?.value ?? 0) > 0 ? (cc?.daily_extremes?.rain_rate_hi?.value ?? null) : null}
+          peakRateAt={(cc?.rain?.daily?.value ?? 0) > 0 ? (cc?.daily_extremes?.rain_rate_hi?.at ?? null) : null}
         />
       );
 
