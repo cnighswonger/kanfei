@@ -18,6 +18,7 @@ from sqlalchemy import func
 
 from ..models.database import SessionLocal
 from ..models.station_config import StationConfigModel
+from .channel_mute import load_muted_channels
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,29 @@ FIELD_MAP: dict[str, tuple[str, ...]] = {
 }
 
 
+# When a channel is muted (issue #162), drop its directly-mapped WU field
+# AND any derived field computed from the same sensor — sending a derived
+# value based on known-bad data defeats the purpose of muting.  WU has no
+# 24h-rain field, so ``rain_24h`` is a no-op for this service.
+#
+# ``yearrainin`` and ``rainratein`` are WU-only fields with no CWOP analog;
+# both come from the same physical rain gauge counter as ``dailyrainin``.
+# If the operator mutes ``rain_daily`` the gauge itself is the thing under
+# repair, so the cumulative and rate views of the same broken sensor must
+# also drop out.
+_DROP_BY_CHANNEL: dict[str, tuple[str, ...]] = {
+    "outdoor_temperature": ("tempf", "windchillf", "heatindexf", "dewptf"),
+    "outdoor_humidity":    ("humidity", "heatindexf", "dewptf"),
+    "wind_speed":          ("windspeedmph", "windchillf"),
+    "wind_direction":      ("winddir",),
+    "wind_gust":           ("windgustmph",),
+    "barometer":           ("baromin",),
+    "rain_daily":          ("dailyrainin", "yearrainin", "rainratein"),
+    "rain_hour":           ("rainin",),
+    "rain_24h":            (),
+}
+
+
 def _extract(data: dict, path: tuple[str, ...]) -> Optional[Any]:
     """Walk a nested dict by key path, returning None if any key is missing."""
     obj: Any = data
@@ -70,6 +94,7 @@ class WundergroundUploader:
         self._last_upload: float = 0.0
         self._consecutive_errors: int = 0
         self._effective_interval: int = 60
+        self._muted: frozenset[str] = frozenset()
 
     def reload_config(self) -> None:
         """Read WU config from the station_config database table."""
@@ -93,6 +118,7 @@ class WundergroundUploader:
                 self._upload_interval = 60
             # Reset effective interval when config is reloaded
             self._effective_interval = self._upload_interval
+            self._muted = load_muted_channels(db)
         except Exception as exc:
             logger.error("Failed to load WU config: %s", exc)
         finally:
@@ -114,7 +140,7 @@ class WundergroundUploader:
 
     async def _do_upload(self, data: dict) -> None:
         """Build WU query params and send HTTP GET."""
-        params = self._build_params(self._station_id, self._station_key, data)
+        params = self._build_params(data)
 
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
@@ -152,12 +178,17 @@ class WundergroundUploader:
                 self._consecutive_errors, self._effective_interval,
             )
 
-    @staticmethod
-    def _build_params(station_id: str, station_key: str, data: dict) -> dict:
-        """Map sensor broadcast data to WU query parameters."""
+    def _build_params(self, data: dict) -> dict:
+        """Map sensor broadcast data to WU query parameters.
+
+        Channels named in ``self._muted`` (and any derived WU field
+        computed from the same sensor) are dropped from the upload —
+        WU's protocol treats an absent parameter as "no reading," which
+        is the desired behaviour while a sensor is out of service.
+        """
         params: dict[str, Any] = {
-            "ID": station_id,
-            "PASSWORD": station_key,
+            "ID": self._station_id,
+            "PASSWORD": self._station_key,
             "dateutc": "now",
             "action": "updateraw",
             "softwaretype": "kanfei",
@@ -168,10 +199,17 @@ class WundergroundUploader:
             if value is not None:
                 params[wu_param] = value
 
-        # Hourly rain — not in broadcast, compute from DB
-        rain_hour = WundergroundUploader._get_hourly_rain_inches()
-        if rain_hour is not None:
-            params["rainin"] = rain_hour
+        # Hourly rain — not in broadcast, compute from DB.  Skip the
+        # query when ``rain_hour`` is muted to save a round-trip.
+        if "rain_hour" not in self._muted:
+            rain_hour = self._get_hourly_rain_inches()
+            if rain_hour is not None:
+                params["rainin"] = rain_hour
+
+        # Drop muted fields and any derived fields that depend on them.
+        for channel in self._muted:
+            for field in _DROP_BY_CHANNEL.get(channel, ()):
+                params.pop(field, None)
 
         return params
 
