@@ -377,8 +377,8 @@ class LoggerDaemon:
     _LEGACY_LINK_PERIOD_MIGRATION_KEY = "legacy_link_period_migration_v1"
 
     def _migrate_legacy_link_period_v1(self) -> None:
-        """One-time migration: drop the canonical's archive_period if its
-        persisted value is not one Davis honors.
+        """One-time migration: replace the canonical's archive_period if
+        its persisted value is not one Davis honors.
 
         Issue #174 fixed a memory_map.py bank typo that made
         read_archive_period return a different garbage byte on every
@@ -391,12 +391,21 @@ class LoggerDaemon:
         Without this migration, a user upgrading to the fixed build
         would still have the garbage canonical value persisted, and the
         post-fix reconciler would dutifully push it back to the now-
-        correctly-read register on every connect.  Resetting the field
-        to None lets the next reconcile re-seed from the (now correct)
-        read.  sample_period and calibration are intentionally left
-        alone — those weren't gated by the legal-set check and the
-        user's persisted values may be intentional.
+        correctly-read register on every connect.
+
+        Replaces the bogus value with the freshly-read self._archive_period
+        (now correct post-fix) so the reconciler that runs next sees
+        canonical == link and is a no-op.  If the fresh read also failed
+        (returned None), defers the migration to the next restart so we
+        never leave canonical with a missing archive_period — the
+        reconcile path only re-seeds when the *whole* canonical row is
+        missing, not individual fields.  sample_period and calibration
+        are intentionally left alone.
         """
+        # Need self._archive_period to be populated by _connect() before
+        # this runs; defer otherwise.
+        fresh_ap = getattr(self, "_archive_period", None)
+
         db = SessionLocal()
         try:
             marker = db.query(StationConfigModel).filter_by(
@@ -408,7 +417,7 @@ class LoggerDaemon:
             row = db.query(StationConfigModel).filter_by(
                 key=self._CANONICAL_KEY,
             ).first()
-            outcome = "no-canonical"
+            outcome: Optional[str] = "no-canonical"
             if row is not None and row.value:
                 try:
                     canonical = json.loads(row.value)
@@ -417,15 +426,27 @@ class LoggerDaemon:
                 if canonical is not None:
                     ap = canonical.get("archive_period")
                     if ap is not None and ap not in DAVIS_LEGAL_ARCHIVE_PERIODS:
-                        del canonical["archive_period"]
+                        if fresh_ap is None:
+                            # Post-fix read still failing — leave canonical
+                            # as-is and retry on the next restart.  Do NOT
+                            # set the marker.
+                            logger.warning(
+                                "legacy-link-period migration: canonical "
+                                "archive_period=%s is bogus but the fresh "
+                                "register read also failed; deferring "
+                                "migration until next restart (issue #174)",
+                                ap,
+                            )
+                            return
+                        canonical["archive_period"] = fresh_ap
                         row.value = json.dumps(canonical)
                         logger.info(
-                            "legacy-link-period migration: dropped bogus "
-                            "canonical archive_period=%s (issue #174); "
-                            "will re-seed on next reconcile",
-                            ap,
+                            "legacy-link-period migration: replaced bogus "
+                            "canonical archive_period=%s with %s "
+                            "(issue #174)",
+                            ap, fresh_ap,
                         )
-                        outcome = f"dropped:{ap}"
+                        outcome = f"replaced:{ap}->{fresh_ap}"
                     else:
                         outcome = "valid"
 

@@ -59,7 +59,6 @@ Idempotent: a marker row in ``station_config``
 
 import argparse
 import json
-import shutil
 import sqlite3
 import sys
 from pathlib import Path
@@ -179,17 +178,25 @@ def migrate(db_path: str, dry_run: bool, archive_period: Optional[int]) -> int:
                 )
             return 0
 
-        # Backup before writing
+        # Backup before writing.  sqlite3.Connection.backup() is the safe
+        # pre-write snapshot: it captures the live DB *and* any
+        # uncheckpointed WAL frames, with no BUSY-vs-stale ambiguity.
+        # Codex flagged wal_checkpoint(TRUNCATE) + shutil.copy2 as
+        # unreliable on a live install — BUSY returns leave WAL frames
+        # uncopied and the backup file looks stale.
         backup_path = f"{db_path}.pre-legacy-link-bank-fix"
         print(f"\nCreating backup: {backup_path}")
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        conn.close()
-        shutil.copy2(db_path, backup_path)
-        conn = sqlite3.connect(db_path)
+        backup_conn = sqlite3.connect(backup_path)
+        try:
+            conn.backup(backup_conn)
+        finally:
+            backup_conn.close()
 
         actions: list[str] = []
 
-        # 1. Drop bogus archive_period from canonical
+        # 1. Drop bogus archive_period from canonical.  The companion
+        # daemon-side migration (_migrate_legacy_link_period_v1) will
+        # replace it with the live link reading on next reconcile.
         if canonical_bogus and canonical is not None:
             del canonical["archive_period"]
             conn.execute(
@@ -200,14 +207,18 @@ def migrate(db_path: str, dry_run: bool, archive_period: Optional[int]) -> int:
             actions.append(f"canonical-dropped:{canonical_ap}")
             print(f"Dropped canonical.archive_period (was {canonical_ap})")
 
-        # 2. Rewrite bogus archive_records.archive_interval if user supplied target
+        # 2. Rewrite bogus archive_records.archive_interval if user supplied target.
         if bogus_intervals:
             if archive_period is None:
                 print(
                     "Skipping archive_records repair — pass --archive-period N "
                     "to set those rows to a Davis-legal value.",
                 )
-                actions.append(f"archive-records-left:{bogus_row_total}")
+                print(
+                    f"Re-run with --archive-period N to finish; "
+                    f"{bogus_row_total} archive_records rows still hold "
+                    f"bogus intervals.",
+                )
             else:
                 placeholders = ",".join("?" for _ in DAVIS_LEGAL_ARCHIVE_PERIODS)
                 cur = conn.execute(
@@ -221,6 +232,18 @@ def migrate(db_path: str, dry_run: bool, archive_period: Optional[int]) -> int:
                     f"(archive_interval -> {archive_period})"
                 )
                 actions.append(f"archive-records-repaired:{cur.rowcount}->{archive_period}")
+
+        # Only set the terminal marker when there is nothing left to
+        # repair — otherwise a later rerun (e.g. canonical-only first,
+        # then --archive-period N) would exit at the _already_migrated()
+        # check and the archive rows could never be cleaned up.  This
+        # matches the two-pass usage documented at the top of the file.
+        repair_remains = bool(bogus_intervals) and archive_period is None
+        if repair_remains:
+            conn.commit()
+            print(f"\nPartial migration committed.  Backup at: {backup_path}")
+            print("Re-run with --archive-period N to clean up archive_records.")
+            return 0
 
         _set_marker(conn, ";".join(actions) if actions else "clean")
         conn.commit()

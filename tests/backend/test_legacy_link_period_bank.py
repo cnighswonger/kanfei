@@ -183,21 +183,47 @@ class TestLegacyLinkPeriodMigration:
         finally:
             db.close()
 
-    def test_drops_bogus_archive_period(self):
+    def test_replaces_bogus_archive_period_with_fresh_read(self):
+        """Bogus canonical AP + Davis-legal fresh read => replace in canonical.
+
+        Codex review on PR #175 flagged that dropping the field is not
+        enough: _reconcile_wl_settings only re-seeds when the *whole*
+        canonical row is None, so dropping just one field leaves it
+        permanently missing.  The migration must replace in place.
+        """
         self._seed_canonical(68)
         daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon._archive_period = 1  # the freshly-read (post-fix) value
         daemon._migrate_legacy_link_period_v1()
 
         canonical = self._read_canonical()
-        assert "archive_period" not in canonical
+        assert canonical["archive_period"] == 1  # replaced, not dropped
         # sample_period and calibration untouched
         assert canonical["sample_period"] == 248
         assert canonical["calibration"]["barometer"] == 456
-        assert self._read_marker() == "dropped:68"
+        assert self._read_marker() == "replaced:68->1"
+
+    def test_defers_when_fresh_read_also_failed(self):
+        """Bogus canonical AP + fresh read returned None => defer.
+
+        Setting the marker here would lock in a permanently-broken
+        canonical (post-fix migrations would skip and the field would
+        stay bogus).  Leave both canonical and marker untouched so the
+        next restart can retry.
+        """
+        self._seed_canonical(68)
+        daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon._archive_period = None  # fresh read still failing
+        daemon._migrate_legacy_link_period_v1()
+
+        canonical = self._read_canonical()
+        assert canonical["archive_period"] == 68  # untouched
+        assert self._read_marker() is None  # marker NOT set
 
     def test_preserves_legal_archive_period(self):
         self._seed_canonical(1)
         daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon._archive_period = 1
         daemon._migrate_legacy_link_period_v1()
 
         canonical = self._read_canonical()
@@ -206,17 +232,19 @@ class TestLegacyLinkPeriodMigration:
 
     def test_no_canonical_records_marker(self):
         daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon._archive_period = 1
         daemon._migrate_legacy_link_period_v1()
         assert self._read_marker() == "no-canonical"
 
     def test_idempotent_second_run_noop(self):
         self._seed_canonical(68)
         daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon._archive_period = 1
 
         daemon._migrate_legacy_link_period_v1()
-        assert self._read_marker() == "dropped:68"
+        assert self._read_marker() == "replaced:68->1"
 
-        # Re-seed bogus value to verify the second migration call DOES NOT
+        # Re-poison canonical to verify the second migration call DOES NOT
         # re-fire and touch it.
         db = SessionLocal()
         try:
@@ -231,4 +259,4 @@ class TestLegacyLinkPeriodMigration:
         daemon._migrate_legacy_link_period_v1()  # should no-op
         canonical = self._read_canonical()
         assert canonical["archive_period"] == 999  # untouched
-        assert self._read_marker() == "dropped:68"  # marker unchanged
+        assert self._read_marker() == "replaced:68->1"  # marker unchanged
