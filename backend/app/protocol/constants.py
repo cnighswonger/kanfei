@@ -56,6 +56,12 @@ BASIC_STATIONS = {
     StationModel.OLD_LINK,
 }
 
+# Davis-legal archive period values in minutes.  The station's firmware
+# only honors these values for the SAP command and the ArcPeriod register;
+# anything else read back from the register is treated as a corrupt read.
+DAVIS_LEGAL_ARCHIVE_PERIODS = frozenset({1, 5, 10, 15, 30, 60, 120})
+
+
 # LOOP data sizes per station type (data bytes, excluding SOH and CRC)
 LOOP_DATA_SIZE = {
     StationModel.WIZARD_III: 15,
