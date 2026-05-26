@@ -27,7 +27,7 @@ from app.config import settings
 from app.models.database import init_database, SessionLocal, engine
 from app.models.station_config import StationConfigModel
 from app.protocol.base import StationDriver
-from app.protocol.link_driver import LinkDriver, CalibrationOffsets
+from app.protocol.link_driver import LinkDriver, CalibrationOffsets, _rain_register_to_mm
 from app.protocol.serial_port import list_serial_ports
 from app.protocol.constants import STATION_NAMES
 from app.services.poller import Poller
@@ -635,7 +635,7 @@ class LoggerDaemon:
 
     async def _midnight_rain_reset_loop(self) -> None:
         """At station-local midnight, save daily rain as yesterday and clear."""
-        while self._running:
+        while True:
             tz = self._get_station_timezone()
             now = datetime.now(tz)
             next_midnight = (now + timedelta(days=1)).replace(
@@ -652,9 +652,6 @@ class LoggerDaemon:
             except asyncio.CancelledError:
                 break
 
-            if not self._running:
-                break
-
             await self._do_midnight_rain_reset()
 
     async def _do_midnight_rain_reset(self) -> None:
@@ -664,10 +661,14 @@ class LoggerDaemon:
             logger.warning("Midnight rain reset skipped — station not connected")
             return
 
-        # Read current daily rain (direct memory read for accuracy)
+        # Read current daily rain (direct memory read for accuracy).
+        # Convert via the same helper used by the poller (#149) so non-default
+        # rain_cal stations record the correct yesterday value: inches =
+        # clicks / rain_cal, derived from the mm form returned by the helper.
         try:
             daily_clicks = await link.async_read_rain_daily()
-            daily_inches = round(daily_clicks * 0.01, 2) if daily_clicks else 0.0
+            mm = _rain_register_to_mm(daily_clicks, link.calibration.rain_cal)
+            daily_inches = round(mm / 25.4, 2) if mm else 0.0
         except Exception:
             daily_inches = 0.0
 
