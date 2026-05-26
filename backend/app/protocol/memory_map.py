@@ -97,8 +97,12 @@ class LinkBank1:
     INSIDE_HUMIDITY = MemAddr(1, 0x2E, 2)
     OUTSIDE_HUMIDITY = MemAddr(1, 0x30, 2)
     RAIN = MemAddr(1, 0x32, 4)
-    SAMPLE_PERIOD = MemAddr(0, 0x13A, 2)
-    ARCHIVE_PERIOD = MemAddr(0, 0x13C, 2)
+    # Link Bank 1, not 0 (techref.txt lines 2045-2072, "Monitor, Wizard, and
+    # Perception Link / Bank 1").  Prior bank=0 read returned whatever stale
+    # byte was at station memory 0x13A/0x13C — on a Monitor that's Tp2Lo
+    # (outside temp low), a sensor field that changes constantly.  See #174.
+    SAMPLE_PERIOD = MemAddr(1, 0x13A, 2)
+    ARCHIVE_PERIOD = MemAddr(1, 0x13C, 2)
 
 
 # ============================================================
@@ -111,7 +115,8 @@ class GroWeatherLinkBank1:
     """
     OLD_ARCHIVE_PTR = MemAddr(1, 0x06, 4)
     NEW_ARCHIVE_PTR = MemAddr(1, 0x0A, 4)
-    ARCHIVE_PERIOD = MemAddr(0, 0x152, 2)
+    # Bank 1 per techref.txt lines 2604-2633 ("Energy Link / Bank 1").  See #174.
+    ARCHIVE_PERIOD = MemAddr(1, 0x152, 2)
 
 
 # ============================================================

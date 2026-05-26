@@ -35,6 +35,7 @@ from .constants import (
     ACK,
     CAN,
     MAX_RETRIES,
+    DAVIS_LEGAL_ARCHIVE_PERIODS,
 )
 from .loop_packet import parse_loop_packet
 from .station_types import SensorReading
@@ -520,7 +521,12 @@ class LinkDriver(StationDriver):
         return (new_ptr, old_ptr)
 
     def read_archive_period(self) -> Optional[int]:
-        """Read the archive interval in minutes from link memory."""
+        """Read the archive interval in minutes from link memory.
+
+        Davis only honors {1, 5, 10, 15, 30, 60, 120}; anything else is
+        treated as a corrupt read and returns None so callers don't poison
+        the canonical config or archive_records with garbage. See #174.
+        """
         if self.station_model is None:
             return None
 
@@ -531,7 +537,15 @@ class LinkDriver(StationDriver):
         data = self.read_link_memory(addr.bank, addr.address, addr.nibbles)
         if data is None or len(data) < 1:
             return None
-        return data[0]
+        value = data[0]
+        if value not in DAVIS_LEGAL_ARCHIVE_PERIODS:
+            logger.warning(
+                "read_archive_period: rejecting non-Davis-legal value %d "
+                "(expected one of %s) — treating as corrupt read",
+                value, sorted(DAVIS_LEGAL_ARCHIVE_PERIODS),
+            )
+            return None
+        return value
 
     async def async_read_archive(self, address: int, n_bytes: int) -> Optional[bytes]:
         """Async version of read_archive."""
@@ -724,21 +738,39 @@ class LinkDriver(StationDriver):
         """Read the sample period in seconds from link memory.
 
         Raw value is stored as (256 - seconds), so we decode back.
+        Decoded value must be in 1..255; anything else is a corrupt read
+        and returns None (see #174).
         """
         addr = LinkBank1.SAMPLE_PERIOD
         data = self.read_link_memory(addr.bank, addr.address, addr.nibbles)
         if data is None or len(data) < 1:
             return None
         raw = data[0]
-        return (256 - raw) if raw != 0 else 256
+        decoded = (256 - raw) if raw != 0 else 256
+        if not 1 <= decoded <= 255:
+            logger.warning(
+                "read_sample_period: decoded value %d out of range — "
+                "treating as corrupt read",
+                decoded,
+            )
+            return None
+        return decoded
 
     def set_archive_period(self, minutes: int) -> bool:
-        """Set the archive period (1-120 minutes) via SAP command.
+        """Set the archive period via SAP command.
+
+        Davis firmware only honors {1, 5, 10, 15, 30, 60, 120}; values
+        outside that set are rejected up-front rather than written to
+        the register (see #174 — earlier 1..120 range check let through
+        garbage like 68 and 102).
 
         Sends SAP with io_lock held.  Returns True on ACK.
         """
-        if not 1 <= minutes <= 120:
-            raise ValueError("Archive period must be 1-120 minutes")
+        if minutes not in DAVIS_LEGAL_ARCHIVE_PERIODS:
+            raise ValueError(
+                f"Archive period must be one of {sorted(DAVIS_LEGAL_ARCHIVE_PERIODS)} "
+                f"(got {minutes})"
+            )
 
         with self._io_lock:
             self.serial.flush()

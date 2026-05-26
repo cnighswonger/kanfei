@@ -29,7 +29,7 @@ from app.models.station_config import StationConfigModel
 from app.protocol.base import StationDriver
 from app.protocol.link_driver import LinkDriver, CalibrationOffsets, _rain_register_to_mm
 from app.protocol.serial_port import list_serial_ports
-from app.protocol.constants import STATION_NAMES
+from app.protocol.constants import STATION_NAMES, DAVIS_LEGAL_ARCHIVE_PERIODS
 from app.services.poller import Poller
 from app.services.archive_sync import async_sync_archive
 from app.ipc.server import IPCServer
@@ -372,6 +372,74 @@ class LoggerDaemon:
         finally:
             db.close()
 
+    # Marker recording that the legacy-link-period bank-typo migration has
+    # run.  See _migrate_legacy_link_period_v1 below and issue #174.
+    _LEGACY_LINK_PERIOD_MIGRATION_KEY = "legacy_link_period_migration_v1"
+
+    def _migrate_legacy_link_period_v1(self) -> None:
+        """One-time migration: drop the canonical's archive_period if its
+        persisted value is not one Davis honors.
+
+        Issue #174 fixed a memory_map.py bank typo that made
+        read_archive_period return a different garbage byte on every
+        call for every legacy Davis station (Monitor/Wizard/Perception/
+        GroWeather/Energy/Health).  Garbage seeded the canonical on
+        first connect, then got pushed back to the station register on
+        every restart via set_archive_period (which used to accept any
+        1..120 value).
+
+        Without this migration, a user upgrading to the fixed build
+        would still have the garbage canonical value persisted, and the
+        post-fix reconciler would dutifully push it back to the now-
+        correctly-read register on every connect.  Resetting the field
+        to None lets the next reconcile re-seed from the (now correct)
+        read.  sample_period and calibration are intentionally left
+        alone — those weren't gated by the legal-set check and the
+        user's persisted values may be intentional.
+        """
+        db = SessionLocal()
+        try:
+            marker = db.query(StationConfigModel).filter_by(
+                key=self._LEGACY_LINK_PERIOD_MIGRATION_KEY,
+            ).first()
+            if marker is not None and marker.value:
+                return  # already migrated
+
+            row = db.query(StationConfigModel).filter_by(
+                key=self._CANONICAL_KEY,
+            ).first()
+            outcome = "no-canonical"
+            if row is not None and row.value:
+                try:
+                    canonical = json.loads(row.value)
+                except (json.JSONDecodeError, ValueError):
+                    canonical = None
+                if canonical is not None:
+                    ap = canonical.get("archive_period")
+                    if ap is not None and ap not in DAVIS_LEGAL_ARCHIVE_PERIODS:
+                        del canonical["archive_period"]
+                        row.value = json.dumps(canonical)
+                        logger.info(
+                            "legacy-link-period migration: dropped bogus "
+                            "canonical archive_period=%s (issue #174); "
+                            "will re-seed on next reconcile",
+                            ap,
+                        )
+                        outcome = f"dropped:{ap}"
+                    else:
+                        outcome = "valid"
+
+            if marker is None:
+                db.add(StationConfigModel(
+                    key=self._LEGACY_LINK_PERIOD_MIGRATION_KEY,
+                    value=outcome,
+                ))
+            else:
+                marker.value = outcome
+            db.commit()
+        finally:
+            db.close()
+
     # Marker recording that the bar_cal-sign migration has run.  See
     # _migrate_bar_cal_sign_v1 below and issue #154.
     _BAR_CAL_SIGN_MIGRATION_KEY = "bar_cal_sign_migration_v1"
@@ -461,6 +529,11 @@ class LoggerDaemon:
         link via SAP/SSP/WWR-cal.  A failed write is logged but is not fatal;
         the daemon's cached values fall back to the link's actual state.
         """
+        # One-time migration of the canonical row's archive_period field
+        # to drop legacy bank-typo garbage.  See _migrate_legacy_link_period_v1
+        # docstring and issue #174.
+        self._migrate_legacy_link_period_v1()
+
         # One-time migration of the canonical row's barometer cal sign.
         # See _migrate_bar_cal_sign_v1 docstring and issue #154.  This
         # MUST run before _load_canonical_wl_config below so the post-
