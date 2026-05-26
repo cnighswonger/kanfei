@@ -1,3 +1,23 @@
+kanfei (0.1.0~beta18) unstable; urgency=medium
+
+  * Fix: "Yesterday" rain tile is no longer permanently stuck at 0.  The
+    midnight rollover task that captures the prior day's rain total has
+    been silently dead on every kanfei install since v0.1.0 due to a
+    dangling-attribute bug in the daemon loop — the task raised
+    AttributeError on first iteration and asyncio swallowed it.  This
+    release re-enables the rollover.  Davis stations with non-default
+    rain_cal (e.g. the rain_cal=254 workaround from beta14) will also
+    record the correct yesterday value now: the conversion goes through
+    the same calibration-aware helper added in beta14.  The hardware
+    clear runs before the persist commits, so a failed hardware clear
+    leaves yesterday untouched and the daemon retries at the next
+    midnight rather than double-counting.  Non-Davis drivers (Tempest,
+    Ambient, etc.) still don't get yesterday rollover — tracked
+    separately — but no longer emit a misleading "station not
+    connected" warning every midnight.  Closes #170.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Tue, 26 May 2026 13:39:36 +0000
+
 kanfei (0.1.0~beta17) unstable; urgency=medium
 
   * New: per-channel sensor mute now gates every outbound upload, not
