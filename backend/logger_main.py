@@ -374,11 +374,17 @@ class LoggerDaemon:
 
     # Marker recording that the legacy-link-period bank-typo migration has
     # run.  See _migrate_legacy_link_period_v1 below and issue #174.
-    _LEGACY_LINK_PERIOD_MIGRATION_KEY = "legacy_link_period_migration_v1"
+    #
+    # Versioned: v1 (PR #175) only repaired the canonical row.  v2 (PR #176)
+    # also repairs archive_records.archive_interval rows poisoned by the
+    # same bug.  An install carrying the v1 marker must still run the v2
+    # migration to get the records repair, so the key string is bumped to
+    # force a re-run; the v1 marker row, if present, is harmless.
+    _LEGACY_LINK_PERIOD_MIGRATION_KEY = "legacy_link_period_migration_v2"
 
     def _migrate_legacy_link_period_v1(self) -> None:
-        """One-time migration: replace the canonical's archive_period if
-        its persisted value is not one Davis honors.
+        """One-time migration: repair canonical.archive_period AND the
+        archive_records.archive_interval rows poisoned by the bank typo.
 
         Issue #174 fixed a memory_map.py bank typo that made
         read_archive_period return a different garbage byte on every
@@ -386,21 +392,28 @@ class LoggerDaemon:
         GroWeather/Energy/Health).  Garbage seeded the canonical on
         first connect, then got pushed back to the station register on
         every restart via set_archive_period (which used to accept any
-        1..120 value).
+        1..120 value).  Each archive_sync batch was tagged with whatever
+        garbage byte read_archive_period returned at the start of the
+        run, so historical archive_records hold ``archive_interval``
+        values like 255, 68, 102, 221 — values that no Davis station
+        actually emits.
 
-        Without this migration, a user upgrading to the fixed build
-        would still have the garbage canonical value persisted, and the
-        post-fix reconciler would dutifully push it back to the now-
-        correctly-read register on every connect.
+        Two repairs in one shot:
 
-        Replaces the bogus value with the freshly-read self._archive_period
-        (now correct post-fix) so the reconciler that runs next sees
-        canonical == link and is a no-op.  If the fresh read also failed
-        (returned None), defers the migration to the next restart so we
-        never leave canonical with a missing archive_period — the
-        reconcile path only re-seeds when the *whole* canonical row is
-        missing, not individual fields.  sample_period and calibration
-        are intentionally left alone.
+        1. Canonical row: if ``archive_period`` is outside the Davis-
+           legal set, replace it with the freshly-read
+           ``self._archive_period`` (correct post-fix).  If the fresh
+           read also returned None, defer (no marker, retry next
+           restart) so canonical is never left permanently incomplete —
+           the reconcile path only re-seeds when the *whole* canonical
+           row is missing, not individual fields.
+        2. archive_records rows: any row whose ``archive_interval`` is
+           not in the Davis-legal set is rewritten to the target value
+           (whichever of fresh-read / already-legal-canonical we pulled
+           in step 1).  No-op when no bogus rows exist.
+
+        sample_period and calibration are intentionally left alone in
+        both steps.
         """
         # Need self._archive_period to be populated by _connect() before
         # this runs; defer otherwise.
@@ -414,10 +427,16 @@ class LoggerDaemon:
             if marker is not None and marker.value:
                 return  # already migrated
 
+            # --- Step 1: canonical row ---
             row = db.query(StationConfigModel).filter_by(
                 key=self._CANONICAL_KEY,
             ).first()
-            outcome: Optional[str] = "no-canonical"
+            canonical_outcome: str = "no-canonical"
+            # The repair target for archive_records.archive_interval —
+            # whichever value the daemon will end up reconciling against
+            # the station.  Starts at fresh_ap and is overridden below if
+            # canonical already holds a legal value.
+            target_ap: Optional[int] = fresh_ap
             if row is not None and row.value:
                 try:
                     canonical = json.loads(row.value)
@@ -446,10 +465,45 @@ class LoggerDaemon:
                             "(issue #174)",
                             ap, fresh_ap,
                         )
-                        outcome = f"replaced:{ap}->{fresh_ap}"
+                        canonical_outcome = f"replaced:{ap}->{fresh_ap}"
                     else:
-                        outcome = "valid"
+                        canonical_outcome = "valid"
+                        if ap in DAVIS_LEGAL_ARCHIVE_PERIODS:
+                            # Prefer the already-legal canonical value
+                            # over fresh_ap when both exist — that's
+                            # what the reconciler will push to the
+                            # station register, so historical rows
+                            # should match.
+                            target_ap = ap
 
+            # --- Step 2: archive_records rows ---
+            records_outcome = "records-clean"
+            if target_ap is not None:
+                # Late import to keep the existing import surface small;
+                # the model lives in app.models and isn't needed
+                # elsewhere in this file.
+                from app.models.archive_record import ArchiveRecordModel
+                bogus_filter = (
+                    ArchiveRecordModel.archive_interval.isnot(None),
+                    ArchiveRecordModel.archive_interval.notin_(
+                        DAVIS_LEGAL_ARCHIVE_PERIODS
+                    ),
+                )
+                bogus_count = db.query(ArchiveRecordModel).filter(*bogus_filter).count()
+                if bogus_count > 0:
+                    updated = db.query(ArchiveRecordModel).filter(*bogus_filter).update(
+                        {ArchiveRecordModel.archive_interval: target_ap},
+                        synchronize_session=False,
+                    )
+                    logger.info(
+                        "legacy-link-period migration: repaired %d "
+                        "archive_records rows (archive_interval -> %s) "
+                        "(issue #174)",
+                        updated, target_ap,
+                    )
+                    records_outcome = f"records-repaired:{updated}->{target_ap}"
+
+            outcome = f"{canonical_outcome};{records_outcome}"
             if marker is None:
                 db.add(StationConfigModel(
                     key=self._LEGACY_LINK_PERIOD_MIGRATION_KEY,
