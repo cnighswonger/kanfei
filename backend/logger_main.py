@@ -374,7 +374,13 @@ class LoggerDaemon:
 
     # Marker recording that the legacy-link-period bank-typo migration has
     # run.  See _migrate_legacy_link_period_v1 below and issue #174.
-    _LEGACY_LINK_PERIOD_MIGRATION_KEY = "legacy_link_period_migration_v1"
+    #
+    # Versioned: v1 (PR #175) only repaired the canonical row.  v2 (PR #176)
+    # also repairs archive_records.archive_interval rows poisoned by the
+    # same bug.  An install carrying the v1 marker must still run the v2
+    # migration to get the records repair, so the key string is bumped to
+    # force a re-run; the v1 marker row, if present, is harmless.
+    _LEGACY_LINK_PERIOD_MIGRATION_KEY = "legacy_link_period_migration_v2"
 
     def _migrate_legacy_link_period_v1(self) -> None:
         """One-time migration: repair canonical.archive_period AND the
