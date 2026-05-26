@@ -15,10 +15,12 @@ Locks in three things:
 """
 
 import json
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
 
+from app.models.archive_record import ArchiveRecordModel
 from app.models.database import Base, SessionLocal, engine
 from app.models.station_config import StationConfigModel
 from app.protocol.constants import DAVIS_LEGAL_ARCHIVE_PERIODS, StationModel
@@ -29,11 +31,13 @@ from logger_main import LoggerDaemon
 
 @pytest.fixture(autouse=True)
 def _setup_db():
-    Base.metadata.drop_all(bind=engine, tables=[StationConfigModel.__table__])
-    Base.metadata.create_all(bind=engine, tables=[StationConfigModel.__table__])
+    tables = [StationConfigModel.__table__, ArchiveRecordModel.__table__]
+    Base.metadata.drop_all(bind=engine, tables=tables)
+    Base.metadata.create_all(bind=engine, tables=tables)
     yield
     db = SessionLocal()
     db.query(StationConfigModel).delete()
+    db.query(ArchiveRecordModel).delete()
     db.commit()
     db.close()
 
@@ -183,6 +187,31 @@ class TestLegacyLinkPeriodMigration:
         finally:
             db.close()
 
+    def _seed_archive_records(self, intervals: list[int]) -> None:
+        db = SessionLocal()
+        try:
+            for i, interval in enumerate(intervals):
+                db.add(ArchiveRecordModel(
+                    archive_address=0x1000 + i,
+                    record_time=datetime(2026, 5, 25, 12, 0, 0, tzinfo=timezone.utc),
+                    station_type=2,
+                    archive_interval=interval,
+                ))
+            db.commit()
+        finally:
+            db.close()
+
+    def _read_interval_distribution(self) -> dict:
+        db = SessionLocal()
+        try:
+            rows = db.query(ArchiveRecordModel.archive_interval).all()
+            counts: dict[int, int] = {}
+            for (v,) in rows:
+                counts[v] = counts.get(v, 0) + 1
+            return counts
+        finally:
+            db.close()
+
     def test_replaces_bogus_archive_period_with_fresh_read(self):
         """Bogus canonical AP + Davis-legal fresh read => replace in canonical.
 
@@ -201,7 +230,7 @@ class TestLegacyLinkPeriodMigration:
         # sample_period and calibration untouched
         assert canonical["sample_period"] == 248
         assert canonical["calibration"]["barometer"] == 456
-        assert self._read_marker() == "replaced:68->1"
+        assert self._read_marker() == "replaced:68->1;records-clean"
 
     def test_defers_when_fresh_read_also_failed(self):
         """Bogus canonical AP + fresh read returned None => defer.
@@ -212,6 +241,7 @@ class TestLegacyLinkPeriodMigration:
         next restart can retry.
         """
         self._seed_canonical(68)
+        self._seed_archive_records([255, 255, 102])  # bogus rows present too
         daemon = LoggerDaemon.__new__(LoggerDaemon)
         daemon._archive_period = None  # fresh read still failing
         daemon._migrate_legacy_link_period_v1()
@@ -219,6 +249,8 @@ class TestLegacyLinkPeriodMigration:
         canonical = self._read_canonical()
         assert canonical["archive_period"] == 68  # untouched
         assert self._read_marker() is None  # marker NOT set
+        # archive_records also untouched — defer applies to the whole migration
+        assert self._read_interval_distribution() == {255: 2, 102: 1}
 
     def test_preserves_legal_archive_period(self):
         self._seed_canonical(1)
@@ -228,13 +260,13 @@ class TestLegacyLinkPeriodMigration:
 
         canonical = self._read_canonical()
         assert canonical["archive_period"] == 1
-        assert self._read_marker() == "valid"
+        assert self._read_marker() == "valid;records-clean"
 
     def test_no_canonical_records_marker(self):
         daemon = LoggerDaemon.__new__(LoggerDaemon)
         daemon._archive_period = 1
         daemon._migrate_legacy_link_period_v1()
-        assert self._read_marker() == "no-canonical"
+        assert self._read_marker() == "no-canonical;records-clean"
 
     def test_idempotent_second_run_noop(self):
         self._seed_canonical(68)
@@ -242,7 +274,7 @@ class TestLegacyLinkPeriodMigration:
         daemon._archive_period = 1
 
         daemon._migrate_legacy_link_period_v1()
-        assert self._read_marker() == "replaced:68->1"
+        assert self._read_marker() == "replaced:68->1;records-clean"
 
         # Re-poison canonical to verify the second migration call DOES NOT
         # re-fire and touch it.
@@ -259,4 +291,73 @@ class TestLegacyLinkPeriodMigration:
         daemon._migrate_legacy_link_period_v1()  # should no-op
         canonical = self._read_canonical()
         assert canonical["archive_period"] == 999  # untouched
-        assert self._read_marker() == "replaced:68->1"  # marker unchanged
+        assert self._read_marker() == "replaced:68->1;records-clean"  # unchanged
+
+    def test_repairs_archive_records_alongside_canonical(self):
+        """Bogus canonical + bogus archive_records => repair both in one pass.
+
+        This is the beta19 self-healing path: an upgrader with both a
+        bogus canonical AP and a tableful of archive_interval=255 (or
+        other garbage) gets the canonical replaced AND every bogus
+        archive row rewritten in a single connect, with no manual tool.
+        """
+        self._seed_canonical(68)
+        self._seed_archive_records([255, 255, 255, 102, 221, 1])  # 5 bogus + 1 clean
+
+        daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon._archive_period = 1
+        daemon._migrate_legacy_link_period_v1()
+
+        dist = self._read_interval_distribution()
+        assert dist == {1: 6}  # all five bogus rows rewritten to 1
+        assert self._read_marker() == "replaced:68->1;records-repaired:5->1"
+
+    def test_repairs_archive_records_when_canonical_already_legal(self):
+        """Legal canonical + bogus archive_records => repair rows using canonical's value.
+
+        Covers the user who manually fixed canonical via the Settings UI
+        before upgrading but left archive_records bogus.  Target value is
+        canonical's existing legal AP, not fresh_ap, so the repair
+        matches what the reconciler will push to the station.
+        """
+        self._seed_canonical(5)  # legal AP that differs from fresh_ap below
+        self._seed_archive_records([255, 102])
+        daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon._archive_period = 1  # would-be fresh read, but canonical wins
+
+        daemon._migrate_legacy_link_period_v1()
+
+        dist = self._read_interval_distribution()
+        assert dist == {5: 2}  # rewritten to canonical's value, not fresh_ap
+        assert self._read_marker() == "valid;records-repaired:2->5"
+
+    def test_no_repair_when_no_bogus_records_exist(self):
+        """Legal canonical + only legal records => marker says records-clean."""
+        self._seed_canonical(1)
+        self._seed_archive_records([1, 1, 5, 10, 30])  # all Davis-legal
+        daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon._archive_period = 1
+        daemon._migrate_legacy_link_period_v1()
+
+        # All rows untouched
+        dist = self._read_interval_distribution()
+        assert dist == {1: 2, 5: 1, 10: 1, 30: 1}
+        assert self._read_marker() == "valid;records-clean"
+
+    def test_no_repair_when_target_ap_unknown(self):
+        """No canonical + no fresh_ap => can't choose a target, leave records.
+
+        Edge: a brand-new install where the daemon hasn't read the link
+        yet (fresh_ap=None) AND there's no canonical row yet.  We have
+        no value to rewrite bogus archive_intervals to, so leave them.
+        With both fresh_ap None and no canonical there's nothing to
+        defer for either — set marker as a clean no-op.
+        """
+        self._seed_archive_records([255, 102])
+        daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon._archive_period = None
+        daemon._migrate_legacy_link_period_v1()
+
+        dist = self._read_interval_distribution()
+        assert dist == {255: 1, 102: 1}  # untouched
+        assert self._read_marker() == "no-canonical;records-clean"
