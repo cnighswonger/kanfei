@@ -655,9 +655,29 @@ class LoggerDaemon:
             await self._do_midnight_rain_reset()
 
     async def _do_midnight_rain_reset(self) -> None:
-        """Save today's daily rain as yesterday, then clear the station counter."""
+        """Save today's daily rain as yesterday, then clear the station counter.
+
+        Order matters: clear hardware BEFORE persisting yesterday.  If the
+        clear fails, leave both the in-config ``rain_yesterday`` row and the
+        poller's cached value untouched — otherwise the next midnight reads
+        an un-cleared station counter (today's total + tomorrow's rainfall)
+        and rolls that pile into ``rain_yesterday``, double-counting today's
+        rain.  Driver-agnostic rollover (Tempest et al.) is tracked in #171;
+        for now this method is a no-op on any non-``LinkDriver`` driver.
+        """
+        driver = self.driver
         link = self._link
-        if not link or not link.connected:
+        if link is None:
+            # Non-Davis driver: midnight rollover for these drivers is tracked
+            # in #171.  Log at debug so we don't spam WARN every night on
+            # healthy Tempest / Ambient / etc. installs.
+            if driver is not None:
+                logger.debug(
+                    "Midnight rain reset: skipping for non-LinkDriver driver %s",
+                    type(driver).__name__,
+                )
+            return
+        if not link.connected:
             logger.warning("Midnight rain reset skipped — station not connected")
             return
 
@@ -669,10 +689,23 @@ class LoggerDaemon:
             daily_clicks = await link.async_read_rain_daily()
             mm = _rain_register_to_mm(daily_clicks, link.calibration.rain_cal)
             daily_inches = round(mm / 25.4, 2) if mm else 0.0
-        except Exception:
-            daily_inches = 0.0
+        except Exception as exc:
+            logger.warning("Midnight rain reset: read failed (%s) — skipping", exc)
+            return
 
-        # Persist as rain_yesterday in config
+        # Clear station hardware FIRST.  Only persist yesterday after the
+        # hardware clear succeeds; otherwise tomorrow's midnight will read
+        # an un-cleared counter and double-count.
+        try:
+            ok = await link.async_clear_rain_daily()
+        except Exception as exc:
+            logger.warning("Midnight rain reset: hardware clear raised (%s) — yesterday NOT updated", exc)
+            return
+        if not ok:
+            logger.warning("Midnight rain reset: hardware clear failed — yesterday NOT updated")
+            return
+
+        # Hardware clear succeeded — safe to commit yesterday now.
         db = SessionLocal()
         try:
             row = db.query(StationConfigModel).filter_by(key="rain_yesterday").first()
@@ -690,23 +723,13 @@ class LoggerDaemon:
         finally:
             db.close()
 
-        # Update poller's cached value
         if self.poller:
             self.poller.rain_yesterday = daily_inches
 
-        # Clear station hardware + reset poller rain cache
-        try:
-            ok = await link.async_clear_rain_daily()
-            if ok:
-                await self._refresh_after_rain_clear()
-                logger.info(
-                    "Midnight rain reset: yesterday=%.2f in, daily cleared",
-                    daily_inches,
-                )
-            else:
-                logger.warning("Midnight rain reset: hardware clear failed")
-        except Exception as exc:
-            logger.warning("Midnight rain reset failed: %s", exc)
+        await self._refresh_after_rain_clear()
+        logger.info(
+            "Midnight rain reset: yesterday=%.2f in, daily cleared", daily_inches,
+        )
 
     # ---- IPC handler registration ----
 

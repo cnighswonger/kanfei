@@ -153,6 +153,162 @@ class TestRainCalConversion:
             db.close()
 
 
+class TestClearMustSucceedBeforeYesterdayCommit:
+    """Codex review of PR #173 caught the order-of-operations bug: yesterday
+    was committed BEFORE the hardware clear ran, so a failed clear left the
+    station counter accumulating while the software had already rolled —
+    next midnight then double-counted today's rain into yesterday.  Fix is
+    to clear first; only commit yesterday if the clear actually succeeded."""
+
+    @pytest.mark.asyncio
+    async def test_clear_returning_false_does_not_persist_yesterday(self):
+        daemon = _make_daemon_with_link(daily_clicks=50, rain_cal=100)
+        daemon.driver.async_clear_rain_daily = AsyncMock(return_value=False)
+        # Seed an existing rain_yesterday row so we can verify it is NOT
+        # overwritten when the clear fails.
+        db = SessionLocal()
+        try:
+            db.add(StationConfigModel(
+                key="rain_yesterday",
+                value="0.99",
+                updated_at=datetime(2026, 5, 25, tzinfo=timezone.utc),
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        await daemon._do_midnight_rain_reset()
+
+        db = SessionLocal()
+        try:
+            row = db.query(StationConfigModel).filter_by(key="rain_yesterday").first()
+            assert row is not None
+            assert float(row.value) == pytest.approx(0.99), \
+                "yesterday was overwritten despite hardware clear failure"
+        finally:
+            db.close()
+
+        # Poller cached value must also be untouched.
+        assert daemon.poller.rain_yesterday == 0.0
+
+    @pytest.mark.asyncio
+    async def test_clear_raising_does_not_persist_yesterday(self):
+        daemon = _make_daemon_with_link(daily_clicks=50, rain_cal=100)
+        daemon.driver.async_clear_rain_daily = AsyncMock(
+            side_effect=RuntimeError("serial timeout"),
+        )
+        db = SessionLocal()
+        try:
+            db.add(StationConfigModel(
+                key="rain_yesterday",
+                value="0.42",
+                updated_at=datetime(2026, 5, 25, tzinfo=timezone.utc),
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        await daemon._do_midnight_rain_reset()
+
+        db = SessionLocal()
+        try:
+            row = db.query(StationConfigModel).filter_by(key="rain_yesterday").first()
+            assert float(row.value) == pytest.approx(0.42)
+        finally:
+            db.close()
+        assert daemon.poller.rain_yesterday == 0.0
+
+    @pytest.mark.asyncio
+    async def test_read_failure_skips_persist_and_clear(self):
+        """If the daily-rain read raises, neither yesterday nor the hardware
+        counter should change — better to retry next midnight than to commit
+        a wrong value or clear with stale state."""
+        daemon = _make_daemon_with_link(daily_clicks=999, rain_cal=100)
+        daemon.driver.async_read_rain_daily = AsyncMock(
+            side_effect=RuntimeError("serial timeout"),
+        )
+
+        await daemon._do_midnight_rain_reset()
+
+        # No yesterday row should have been created.
+        db = SessionLocal()
+        try:
+            row = db.query(StationConfigModel).filter_by(key="rain_yesterday").first()
+            assert row is None
+        finally:
+            db.close()
+
+        # Hardware clear must NOT have been called when the read failed.
+        daemon.driver.async_clear_rain_daily.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_clear_called_before_persist_on_happy_path(self):
+        """Lock the ordering invariant: clear runs first, persist runs after."""
+        daemon = _make_daemon_with_link(daily_clicks=100, rain_cal=100)
+
+        calls: list[str] = []
+
+        async def _record_clear():
+            calls.append("clear")
+            return True
+
+        daemon.driver.async_clear_rain_daily = _record_clear
+
+        # Intercept the DB commit to record where it falls relative to clear.
+        orig_session = SessionLocal
+
+        class _TrackingSession:
+            def __init__(self):
+                self._s = orig_session()
+
+            def __getattr__(self, name):
+                if name == "commit":
+                    def commit():
+                        calls.append("persist")
+                        return self._s.commit()
+                    return commit
+                return getattr(self._s, name)
+
+        import logger_main as lm
+        original = lm.SessionLocal
+        lm.SessionLocal = _TrackingSession
+        try:
+            await daemon._do_midnight_rain_reset()
+        finally:
+            lm.SessionLocal = original
+
+        assert calls == ["clear", "persist"], (
+            f"clear must precede persist, got {calls}"
+        )
+
+
+class TestNonLinkDriverIsQuietNoOp:
+    """A non-Davis driver (Tempest, Ambient, etc.) has ``self._link is None``.
+    The rollover task now runs for every driver because the loop is fixed;
+    the per-driver gating must not spam WARN every night on healthy non-Davis
+    installs.  Driver-agnostic rollover is tracked in #171."""
+
+    @pytest.mark.asyncio
+    async def test_non_link_driver_does_not_warn(self, caplog):
+        daemon = LoggerDaemon()
+        daemon.driver = SimpleNamespace(connected=True)  # a non-LinkDriver
+        # Override _link to behave like the real property would for non-Davis.
+        LoggerDaemon._link = property(lambda self: None)  # type: ignore[assignment]
+
+        import logging
+        with caplog.at_level(logging.WARNING, logger="davis.logger"):
+            await daemon._do_midnight_rain_reset()
+
+        warn_records = [
+            r for r in caplog.records
+            if r.levelno >= logging.WARNING and "Midnight rain reset" in r.message
+        ]
+        assert warn_records == [], (
+            f"non-LinkDriver should not emit WARN, got: "
+            f"{[r.message for r in warn_records]}"
+        )
+
+
 class TestLoopSurvivesFirstIteration:
     """The ``_midnight_rain_reset_loop`` must not raise ``AttributeError``
     on entry — that was the regression that left rollover dead since the
