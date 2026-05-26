@@ -1,3 +1,26 @@
+kanfei (0.1.0~beta19) unstable; urgency=medium
+
+  * Fix: archive-period readings on legacy Davis stations (Weather Monitor /
+    Wizard / Perception / GroWeather / Energy / Health) are correct for the
+    first time.  A memory-map register declaration shipped at the wrong link
+    bank since v0.1.0, so every read of the station's archive-period register
+    returned a different garbage byte from an unrelated sensor field.  Effects
+    observed by users: the history chart's time-bin resolution looked off
+    because each archive row was tagged with a bogus interval; the
+    station-config "archive period" value in Settings could show an impossible
+    value like 68 or 102 minutes; and the daemon could push that bogus value
+    back to the station's hardware register on every restart.  This release
+    fixes the register address, validates every read and write against the
+    Davis-legal set {1, 5, 10, 15, 30, 60, 120}, and ships a one-shot
+    self-heal that runs on the first connect after upgrade: the daemon
+    rewrites the canonical archive-period to the correct freshly-read value
+    AND fixes every historical archive_records row that was tagged with a
+    bogus interval — both in a single connect, no manual steps.  Vantage Pro
+    and Vantage Pro 2 users are unaffected by this bug; they use a separate
+    driver path that was never wrong.  Closes #174.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Tue, 26 May 2026 23:03:50 +0000
+
 kanfei (0.1.0~beta18) unstable; urgency=medium
 
   * Fix: "Yesterday" rain tile is no longer permanently stuck at 0.  The
