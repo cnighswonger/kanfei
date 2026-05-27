@@ -426,10 +426,21 @@ def cmd_restore(args: argparse.Namespace) -> int:
 
     # Determine the live DB path (where the daemon actually reads from).
     # restore_backup writes to this exact path regardless of what the source
-    # archive named its DB file — see issue #179.
-    db_path = _resolve_db_path()
+    # archive named its DB file — see issue #179.  We resolve from
+    # settings.db_path directly here rather than via _resolve_db_path():
+    # for restore the destination is allowed to not exist yet (fresh
+    # install), and _resolve_db_path() falls back to scanning repo-root
+    # for an existing file, which would restore into the wrong place
+    # (Codex review on PR #180).
+    sys.path.insert(0, str(BACKEND_DIR))
+    try:
+        from app.config import settings
+        db_path = settings.db_path
+    except Exception as exc:
+        fail(f"Could not resolve live DB path: {exc}")
+        return 1
     if not db_path:
-        fail("Could not resolve live DB path (set KANFEI_DB_PATH).")
+        fail("Live DB path is empty (set KANFEI_DB_PATH).")
         return 1
 
     step(f"Archive:        {archive}")
