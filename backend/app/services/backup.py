@@ -115,14 +115,23 @@ def create_backup(db_path: str, output_path: str) -> dict:
     return manifest
 
 
-def restore_backup(archive_path: str, target_dir: str) -> dict:
+def restore_backup(archive_path: str, target_db_path: str) -> dict:
     """Restore from a backup archive.
 
     Creates a .pre-restore copy of the current DB as a safety net.
 
+    The restored DB is always written to ``target_db_path`` — the source
+    archive's ``db_file`` name from the manifest is used only to locate
+    the file inside the archive, never to construct the destination
+    filename.  This prevents the silent-no-op when the source install
+    used a different DB filename (e.g. legacy ``weather.db`` Windows
+    checkout) than the running deb install (``kanfei.db``); see #179.
+
     Args:
         archive_path: Path to the .tar.gz backup archive.
-        target_dir: Directory to restore into (where the DB lives).
+        target_db_path: Full path to the live DB file (typically
+            ``settings.db_path``).  The restored DB replaces this file;
+            backgrounds restore to ``target_db_path.parent/backgrounds``.
 
     Returns:
         Manifest dict from the archive.
@@ -131,8 +140,9 @@ def restore_backup(archive_path: str, target_dir: str) -> dict:
     if not archive.exists():
         raise FileNotFoundError(f"Archive not found: {archive_path}")
 
-    target = Path(target_dir)
-    target.mkdir(parents=True, exist_ok=True)
+    current_db = Path(target_db_path)
+    target_dir = current_db.parent
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     # Extract to temp dir first, validate manifest
     with tempfile.TemporaryDirectory() as tmp:
@@ -150,21 +160,30 @@ def restore_backup(archive_path: str, target_dir: str) -> dict:
             raise ValueError("Invalid backup: no manifest found")
 
         manifest = json.loads(manifest_path.read_text())
-        db_name = manifest.get("db_file", "kanfei.db")
+        src_db_name = manifest.get("db_file", "kanfei.db")
 
-        extracted_db = tmp_path / db_name
+        extracted_db = tmp_path / src_db_name
         if not extracted_db.exists():
-            raise ValueError(f"Invalid backup: database {db_name} not found in archive")
+            raise ValueError(
+                f"Invalid backup: database {src_db_name} not found in archive"
+            )
 
-        # Safety: backup current DB before overwriting
-        current_db = target / db_name
+        if src_db_name != current_db.name:
+            logger.info(
+                "Restore: source DB name %r differs from target %r; "
+                "writing restored DB to %s",
+                src_db_name, current_db.name, current_db,
+            )
+
+        # Safety: backup current DB before overwriting (uses the TARGET
+        # filename so the pre-restore file lands next to the live DB
+        # the running services actually read from).
         if current_db.exists():
-            pre_restore = target / f"{db_name}.pre-restore"
+            pre_restore = current_db.with_suffix(current_db.suffix + ".pre-restore")
             shutil.copy2(current_db, pre_restore)
             logger.info("Pre-restore backup: %s", pre_restore)
 
-        # Also checkpoint current DB WAL before replacing
-        if current_db.exists():
+            # Checkpoint current DB WAL before replacing
             try:
                 _wal_checkpoint(str(current_db))
             except Exception:
@@ -175,13 +194,13 @@ def restore_backup(archive_path: str, target_dir: str) -> dict:
 
         # Restore backgrounds
         extracted_bg = tmp_path / "backgrounds"
-        target_bg = target / "backgrounds"
+        target_bg = target_dir / "backgrounds"
         if extracted_bg.is_dir():
             if target_bg.exists():
                 shutil.rmtree(target_bg)
             shutil.copytree(extracted_bg, target_bg)
 
-    logger.info("Restored from backup: %s", archive)
+    logger.info("Restored from backup: %s -> %s", archive, current_db)
     return manifest
 
 

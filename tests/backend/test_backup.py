@@ -105,9 +105,9 @@ class TestRestoreBackup:
         # Restore to new location
         restore_dir = tmp_path / "restored"
         restore_dir.mkdir()
-        manifest = restore_backup(archive, str(restore_dir))
-
         restored_db = restore_dir / "kanfei.db"
+        manifest = restore_backup(archive, str(restored_db))
+
         assert restored_db.exists()
         assert manifest["db_file"] == "kanfei.db"
 
@@ -122,9 +122,9 @@ class TestRestoreBackup:
         create_backup(fake_db, archive)
 
         # Restore over existing DB
-        manifest = restore_backup(archive, str(tmp_path))
+        manifest = restore_backup(archive, fake_db)
 
-        pre_restore = tmp_path / "kanfei.db.pre-restore"
+        pre_restore = Path(fake_db + ".pre-restore")
         assert pre_restore.exists()
 
     def test_restores_backgrounds(self, fake_db_with_backgrounds, tmp_path):
@@ -133,7 +133,7 @@ class TestRestoreBackup:
 
         restore_dir = tmp_path / "restored"
         restore_dir.mkdir()
-        restore_backup(archive, str(restore_dir))
+        restore_backup(archive, str(restore_dir / "kanfei.db"))
 
         assert (restore_dir / "backgrounds" / "clear-day.jpg").exists()
         assert (restore_dir / "backgrounds" / "rain.png").exists()
@@ -142,7 +142,7 @@ class TestRestoreBackup:
         bad_file = tmp_path / "bad.tar.gz"
         bad_file.write_bytes(b"not a tar file")
         with pytest.raises(Exception):
-            restore_backup(str(bad_file), str(tmp_path / "out"))
+            restore_backup(str(bad_file), str(tmp_path / "out" / "kanfei.db"))
 
     def test_missing_manifest_raises(self, tmp_path):
         # Create a tar.gz without a manifest
@@ -153,7 +153,7 @@ class TestRestoreBackup:
             tar.add(str(dummy), arcname="dummy.txt")
 
         with pytest.raises(ValueError, match="no manifest"):
-            restore_backup(str(archive), str(tmp_path / "out"))
+            restore_backup(str(archive), str(tmp_path / "out" / "kanfei.db"))
 
     def test_rejects_path_traversal(self, tmp_path):
         # Create a malicious tar.gz with path traversal
@@ -165,7 +165,69 @@ class TestRestoreBackup:
             tar.addfile(info, io.BytesIO(b"evil\n"))
 
         with pytest.raises(ValueError, match="Unsafe path"):
-            restore_backup(str(archive), str(tmp_path / "out"))
+            restore_backup(str(archive), str(tmp_path / "out" / "kanfei.db"))
+
+    def test_restores_to_target_path_when_source_name_differs(self, tmp_path):
+        """Backup from a 'weather.db' source restored against target 'kanfei.db'
+        lands at kanfei.db.  Regression test for issue #179 — silent no-op
+        when source manifest's db_file != target's actual DB filename.
+        """
+        # Build a fake source DB named weather.db (legacy Windows-dev convention)
+        src_db = tmp_path / "src" / "weather.db"
+        src_db.parent.mkdir()
+        conn = sqlite3.connect(str(src_db))
+        conn.execute("CREATE TABLE station_config (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)")
+        conn.execute("INSERT INTO station_config VALUES ('marker', 'from-source', '2026-01-01')")
+        conn.execute("CREATE TABLE sensor_readings (id INTEGER PRIMARY KEY, temp REAL)")
+        for i in range(42):
+            conn.execute("INSERT INTO sensor_readings (temp) VALUES (?)", (i * 1.5,))
+        conn.commit()
+        conn.close()
+
+        # Take a backup of weather.db
+        archive = tmp_path / "backup.tar.gz"
+        manifest_from_create = create_backup(str(src_db), str(archive))
+        assert manifest_from_create["db_file"] == "weather.db"
+
+        # Restore against a target that uses the kanfei.db filename
+        target_db = tmp_path / "live" / "kanfei.db"
+        target_db.parent.mkdir()
+        manifest = restore_backup(str(archive), str(target_db))
+
+        # Restored DB lives at the target path, not at target.parent/weather.db
+        assert target_db.exists()
+        assert not (target_db.parent / "weather.db").exists()
+        # Manifest reports source name (informational), but the file landed at target
+        assert manifest["db_file"] == "weather.db"
+
+        # Content is intact: it's the source DB, just renamed at the destination
+        conn = sqlite3.connect(str(target_db))
+        marker = conn.execute(
+            "SELECT value FROM station_config WHERE key='marker'"
+        ).fetchone()[0]
+        n = conn.execute("SELECT COUNT(*) FROM sensor_readings").fetchone()[0]
+        conn.close()
+        assert marker == "from-source"
+        assert n == 42
+
+    def test_pre_restore_backup_uses_target_name(self, fake_db, tmp_path):
+        """The pre-restore safety backup lands next to the live DB at the
+        TARGET filename (so a rollback restores the right file)."""
+        # Source backup with a different db_file name
+        src_db = tmp_path / "src" / "weather.db"
+        src_db.parent.mkdir()
+        conn = sqlite3.connect(str(src_db))
+        conn.execute("CREATE TABLE station_config (k TEXT, v TEXT, u TEXT)")
+        conn.commit()
+        conn.close()
+        archive = tmp_path / "backup.tar.gz"
+        create_backup(str(src_db), str(archive))
+
+        # fake_db is named kanfei.db; restore against it.  Pre-restore should
+        # be {fake_db}.pre-restore, not {dir}/weather.db.pre-restore.
+        restore_backup(str(archive), fake_db)
+        assert Path(fake_db + ".pre-restore").exists()
+        assert not (Path(fake_db).parent / "weather.db.pre-restore").exists()
 
 
 class TestListBackups:

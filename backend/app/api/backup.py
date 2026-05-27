@@ -107,8 +107,7 @@ async def restore_from_upload(
         content = await file.read()
         upload_path.write_bytes(content)
 
-        target_dir = str(Path(settings.db_path).parent)
-        manifest = restore_backup(str(upload_path), target_dir)
+        manifest = restore_backup(str(upload_path), settings.db_path)
 
         return {"status": "restored", "manifest": manifest}
     except ValueError as exc:
