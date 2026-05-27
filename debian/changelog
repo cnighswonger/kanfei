@@ -1,3 +1,18 @@
+kanfei (0.1.0~beta20) unstable; urgency=medium
+
+  * Fix: the 3D pressure-field view now renders with the intended smooth
+    cubic-interpolated surface on every .deb install.  Since the 3D view
+    first shipped, the backend's smooth-surface code path required scipy,
+    but scipy was declared only in an optional "nexrad" dependency group
+    that the .deb's postinst doesn't install — so every .deb-installed
+    kanfei silently fell back to plain inverse-distance-weighting and the
+    rendered surface was visibly bumpier than designed.  This release
+    moves scipy into the main runtime dependencies; the postinst's
+    existing pip-install step picks it up on first install or upgrade.
+    Adds ~30MB to the venv install size.  Closes #177.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 27 May 2026 00:34:58 +0000
+
 kanfei (0.1.0~beta19) unstable; urgency=medium
 
   * Fix: archive-period readings on legacy Davis stations (Weather Monitor /
