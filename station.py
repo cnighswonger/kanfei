@@ -424,12 +424,16 @@ def cmd_restore(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(BACKEND_DIR))
     from app.services.backup import restore_backup
 
-    # Determine target directory (where the DB lives)
+    # Determine the live DB path (where the daemon actually reads from).
+    # restore_backup writes to this exact path regardless of what the source
+    # archive named its DB file — see issue #179.
     db_path = _resolve_db_path()
-    target_dir = str(Path(db_path).parent) if db_path else str(ROOT)
+    if not db_path:
+        fail("Could not resolve live DB path (set KANFEI_DB_PATH).")
+        return 1
 
-    step(f"Archive:    {archive}")
-    step(f"Target dir: {target_dir}")
+    step(f"Archive:        {archive}")
+    step(f"Target DB path: {db_path}")
     warn("This will overwrite the current database!")
     warn("A .pre-restore copy will be created as a safety net.")
 
@@ -445,7 +449,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        manifest = restore_backup(str(archive), target_dir)
+        manifest = restore_backup(str(archive), db_path)
         ok("Restore complete!")
         ok(f"  Database: {manifest['db_file']}")
         ok(f"  From: {manifest['timestamp']}")
