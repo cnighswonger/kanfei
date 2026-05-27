@@ -1,3 +1,23 @@
+kanfei (0.1.0~beta21) unstable; urgency=medium
+
+  * Fix: the backup-restore endpoint now writes the restored database
+    to the path your live install actually reads from, regardless of
+    what the source backup's manifest called its database file.
+    Previously, restoring a backup taken on an install whose database
+    was named anything other than "kanfei.db" (notably the legacy
+    "weather.db" naming used by Windows dev-checkout installs) would
+    silently write to that source-named path instead of the live
+    "kanfei.db", leaving the live install untouched and the user's
+    data orphaned on disk — with a success message and no warning.
+    This release derives the destination from KANFEI_DB_PATH directly
+    and emits an INFO log line whenever the source and target
+    filenames differ so the rename is visible.  The CLI restore
+    command (python station.py restore) also picks up the same fix,
+    including correct behaviour when restoring against a not-yet-
+    existent destination on a fresh install.  Closes #179.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 27 May 2026 20:32:46 +0000
+
 kanfei (0.1.0~beta20) unstable; urgency=medium
 
   * Fix: the 3D pressure-field view now renders with the intended smooth
