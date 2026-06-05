@@ -44,6 +44,7 @@ const classic: Theme = {
     shadow: '0 2px 16px rgba(58,46,30,0.15)',
     borderRadius: '8px',
   },
+  fontScale: 1.0,
 };
 
 export default classic;

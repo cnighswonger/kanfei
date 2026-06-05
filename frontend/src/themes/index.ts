@@ -42,6 +42,9 @@ export interface Theme {
     shadow: string;
     borderRadius: string;
   };
+  /** Global font-size multiplier applied via the `--font-scale` CSS variable.
+   *  Editor clamps to 0.85–1.25; 1.0 = preset baseline. */
+  fontScale: number;
 }
 
 import dark from './dark';
@@ -57,6 +60,7 @@ export function createCustomTheme(base: Theme, overrides: Partial<{
   colors: Partial<Theme['colors']>;
   fonts: Partial<Theme['fonts']>;
   gauge: Partial<Theme['gauge']>;
+  fontScale: number;
 }>): Theme {
   return {
     name: 'custom',
@@ -64,5 +68,6 @@ export function createCustomTheme(base: Theme, overrides: Partial<{
     colors: { ...base.colors, ...overrides.colors },
     fonts: { ...base.fonts, ...overrides.fonts },
     gauge: { ...base.gauge, ...overrides.gauge },
+    fontScale: overrides.fontScale ?? base.fontScale,
   };
 }
