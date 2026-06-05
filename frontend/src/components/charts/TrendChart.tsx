@@ -58,7 +58,7 @@ export default function TrendChart({
       title: {
         text: title,
         style: {
-          fontSize: "11px",
+          fontSize: "calc(11px * var(--font-scale))",
           color: mutedColor,
           fontWeight: "normal",
         },
@@ -70,14 +70,14 @@ export default function TrendChart({
         lineColor: borderColor,
         tickColor: borderColor,
         labels: {
-          style: { color: mutedColor, fontSize: "9px" },
+          style: { color: mutedColor, fontSize: "calc(9px * var(--font-scale))" },
         },
         gridLineWidth: 0,
       },
       yAxis: {
         title: { text: undefined },
         labels: {
-          style: { color: mutedColor, fontSize: "9px" },
+          style: { color: mutedColor, fontSize: "calc(9px * var(--font-scale))" },
         },
         gridLineColor: borderColor,
         gridLineWidth: 1,
@@ -93,7 +93,7 @@ export default function TrendChart({
         valueSuffix: ` ${unit}`,
         backgroundColor: getCSSVar("--color-bg-card-solid") || getCSSVar("--color-bg-card") || "#1e2130",
         borderColor: borderColor,
-        style: { color: textColor, fontSize: "11px" },
+        style: { color: textColor, fontSize: "calc(11px * var(--font-scale))" },
       },
       plotOptions: {
         spline: {

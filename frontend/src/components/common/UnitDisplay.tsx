@@ -14,7 +14,7 @@ export default function UnitDisplay({
   value,
   unit,
   decimals = 1,
-  fontSize = '16px',
+  fontSize = 'calc(16px * var(--font-scale))',
   nullText = '--',
 }: UnitDisplayProps) {
   return (

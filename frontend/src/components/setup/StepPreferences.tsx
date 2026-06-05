@@ -24,7 +24,7 @@ interface StepPreferencesProps {
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text-secondary)",
   marginBottom: "6px",
@@ -45,7 +45,7 @@ const radioLabel: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: "6px",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text)",
   cursor: "pointer",
@@ -55,7 +55,7 @@ const checkboxLabel: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: "8px",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text)",
   cursor: "pointer",
@@ -63,7 +63,7 @@ const checkboxLabel: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   padding: "8px 12px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -85,7 +85,7 @@ const cardStyle: React.CSSProperties = {
 
 const sectionTitle: React.CSSProperties = {
   margin: "0 0 16px 0",
-  fontSize: "16px",
+  fontSize: "calc(16px * var(--font-scale))",
   fontFamily: "var(--font-heading)",
   color: "var(--color-text)",
 };
@@ -104,7 +104,7 @@ export default function StepPreferences({
     <div>
       <p
         style={{
-          fontSize: "14px",
+          fontSize: "calc(14px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-secondary)",
           marginBottom: "20px",
@@ -209,7 +209,7 @@ export default function StepPreferences({
           </label>
           <div
             style={{
-              fontSize: "12px",
+              fontSize: "calc(12px * var(--font-scale))",
               color: "var(--color-text-muted)",
               marginTop: "4px",
               marginLeft: "26px",

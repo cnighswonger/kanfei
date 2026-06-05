@@ -30,7 +30,7 @@ interface StepLocationProps {
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text-secondary)",
   marginBottom: "6px",
@@ -39,7 +39,7 @@ const labelStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   padding: "8px 12px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -52,7 +52,7 @@ const inputStyle: React.CSSProperties = {
 
 const btnStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   padding: "8px 16px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -169,7 +169,7 @@ export default function StepLocation({
     <div>
       <p
         style={{
-          fontSize: "14px",
+          fontSize: "calc(14px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-secondary)",
           marginBottom: "16px",
@@ -214,7 +214,7 @@ export default function StepLocation({
       {searchError && (
         <div
           style={{
-            fontSize: "12px",
+            fontSize: "calc(12px * var(--font-scale))",
             color: "var(--color-danger)",
             marginBottom: "8px",
           }}

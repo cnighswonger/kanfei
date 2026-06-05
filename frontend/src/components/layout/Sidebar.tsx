@@ -91,7 +91,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
                 padding: collapsed ? '10px 0' : '10px 12px',
                 borderRadius: '8px',
                 textDecoration: 'none',
-                fontSize: '14px',
+                fontSize: 'calc(14px * var(--font-scale))',
                 fontWeight: isActive ? 600 : 400,
                 color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                 background: isActive ? 'var(--color-accent-muted)' : 'transparent',
@@ -100,7 +100,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
                 overflow: 'hidden',
               })}
             >
-              <span style={{ fontSize: '16px', width: '20px', textAlign: 'center', flexShrink: 0 }}>
+              <span style={{ fontSize: 'calc(16px * var(--font-scale))', width: 'calc(20px * var(--font-scale))', textAlign: 'center', flexShrink: 0 }}>
                 {item.icon}
               </span>
               {!collapsed && <span>{item.label}</span>}
@@ -122,7 +122,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
               padding: collapsed ? '10px 0' : '10px 12px',
               borderRadius: '8px',
               textDecoration: 'none',
-              fontSize: '14px',
+              fontSize: 'calc(14px * var(--font-scale))',
               fontWeight: isActive ? 600 : 400,
               color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)',
               background: isActive ? 'var(--color-accent-muted)' : 'transparent',
@@ -131,7 +131,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
               overflow: 'hidden',
             })}
           >
-            <span style={{ fontSize: '16px', width: '20px', textAlign: 'center', flexShrink: 0 }}>
+            <span style={{ fontSize: 'calc(16px * var(--font-scale))', width: 'calc(20px * var(--font-scale))', textAlign: 'center', flexShrink: 0 }}>
               {'\u24D8'}
             </span>
             {!collapsed && <span>About</span>}

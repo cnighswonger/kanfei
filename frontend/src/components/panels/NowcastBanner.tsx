@@ -85,7 +85,7 @@ export default function NowcastBanner() {
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <span
             style={{
-              fontSize: "12px",
+              fontSize: "calc(12px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-secondary)",
               textTransform: "uppercase",
@@ -97,7 +97,7 @@ export default function NowcastBanner() {
           </span>
           <span
             style={{
-              fontSize: "11px",
+              fontSize: "calc(11px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-muted)",
             }}
@@ -112,7 +112,7 @@ export default function NowcastBanner() {
             display: "flex",
             alignItems: "center",
             gap: "6px",
-            fontSize: "11px",
+            fontSize: "calc(11px * var(--font-scale))",
             fontFamily: "var(--font-body)",
             color: "var(--color-text-muted)",
           }}
@@ -134,7 +134,7 @@ export default function NowcastBanner() {
       <p
         style={{
           margin: 0,
-          fontSize: isMobile ? "13px" : "14px",
+          fontSize: isMobile ? "calc(13px * var(--font-scale))" : "calc(14px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text)",
           lineHeight: 1.6,
@@ -148,7 +148,7 @@ export default function NowcastBanner() {
         <div
           style={{
             marginTop: "8px",
-            fontSize: "12px",
+            fontSize: "calc(12px * var(--font-scale))",
             fontFamily: "var(--font-mono)",
             color: "var(--color-rain-blue, var(--color-accent))",
             padding: "4px 8px",

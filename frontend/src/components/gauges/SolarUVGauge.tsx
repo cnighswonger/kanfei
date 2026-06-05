@@ -71,10 +71,10 @@ export default function SolarUVGauge({ solarRadiation, uvIndex }: SolarUVGaugePr
           <span>Solar: {solarRadiation !== null ? `${solarRadiation} W/m\u00B2` : "--"}</span>
         }
       >
-        <span style={{ fontSize: "28px", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: uvCol }}>
+        <span style={{ fontSize: "calc(28px * var(--font-scale))", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: uvCol }}>
           {uvIndex !== null ? uvIndex.toFixed(1) : "--"}
         </span>
-        <span style={{ fontSize: "12px", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "2px" }}>
+        <span style={{ fontSize: "calc(12px * var(--font-scale))", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "calc(2px * var(--font-scale))" }}>
           UV
         </span>
       </CompactCard>
@@ -98,7 +98,7 @@ export default function SolarUVGauge({ solarRadiation, uvIndex }: SolarUVGaugePr
     }}>
       {/* UV Index section */}
       <div style={{
-        fontSize: '12px',
+        fontSize: 'calc(12px * var(--font-scale))',
         fontFamily: 'var(--font-body)',
         color: 'var(--color-text-secondary)',
         textTransform: 'uppercase',
@@ -145,7 +145,7 @@ export default function SolarUVGauge({ solarRadiation, uvIndex }: SolarUVGaugePr
       </svg>
 
       <div style={{
-        fontSize: '11px',
+        fontSize: 'calc(11px * var(--font-scale))',
         fontFamily: 'var(--font-body)',
         color: uvCol,
         fontWeight: 'bold',
@@ -165,7 +165,7 @@ export default function SolarUVGauge({ solarRadiation, uvIndex }: SolarUVGaugePr
 
       {/* Solar Radiation section */}
       <div style={{
-        fontSize: '12px',
+        fontSize: 'calc(12px * var(--font-scale))',
         fontFamily: 'var(--font-body)',
         color: 'var(--color-text-secondary)',
         textTransform: 'uppercase',
@@ -175,7 +175,7 @@ export default function SolarUVGauge({ solarRadiation, uvIndex }: SolarUVGaugePr
 
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
         <span style={{
-          fontSize: '28px',
+          fontSize: 'calc(28px * var(--font-scale))',
           fontFamily: 'var(--font-gauge)',
           fontWeight: 'bold',
           color: solar?.color ?? 'var(--color-text-muted)',
@@ -184,7 +184,7 @@ export default function SolarUVGauge({ solarRadiation, uvIndex }: SolarUVGaugePr
           {solarRadiation !== null ? solarRadiation : '--'}
         </span>
         <span style={{
-          fontSize: '12px',
+          fontSize: 'calc(12px * var(--font-scale))',
           fontFamily: 'var(--font-body)',
           color: 'var(--color-text-muted)',
         }}>
@@ -193,7 +193,7 @@ export default function SolarUVGauge({ solarRadiation, uvIndex }: SolarUVGaugePr
       </div>
 
       <div style={{
-        fontSize: '11px',
+        fontSize: 'calc(11px * var(--font-scale))',
         fontFamily: 'var(--font-body)',
         color: solar?.color ?? 'var(--color-text-muted)',
         fontWeight: 'bold',

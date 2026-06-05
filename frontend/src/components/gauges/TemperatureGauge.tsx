@@ -126,7 +126,7 @@ export default function TemperatureGauge({
           ) : undefined
         }
       >
-        <span style={{ fontSize: "28px", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: fillColor }}>
+        <span style={{ fontSize: "calc(28px * var(--font-scale))", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: fillColor }}>
           {displayVal !== null ? `${displayVal.toFixed(1)}°${unit}` : "--.-°"}
         </span>
       </CompactCard>
@@ -156,7 +156,7 @@ export default function TemperatureGauge({
     }}>
       {label && (
         <div style={{
-          fontSize: '12px',
+          fontSize: 'calc(12px * var(--font-scale))',
           fontFamily: 'var(--font-body)',
           color: 'var(--color-text-secondary)',
           marginBottom: '4px',
@@ -287,7 +287,7 @@ export default function TemperatureGauge({
 
       {/* Digital readout */}
       <div style={{
-        fontSize: '28px',
+        fontSize: 'calc(28px * var(--font-scale))',
         fontFamily: 'var(--font-gauge)',
         fontWeight: 'bold',
         color: displayVal !== null ? fillColor : 'var(--color-text-muted)',
@@ -299,7 +299,7 @@ export default function TemperatureGauge({
 
       {(highAt || lowAt) && (
         <div style={{
-          fontSize: '10px',
+          fontSize: 'calc(10px * var(--font-scale))',
           fontFamily: 'var(--font-gauge)',
           color: 'var(--color-text-muted)',
           marginTop: '2px',

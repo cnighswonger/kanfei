@@ -26,13 +26,13 @@ const cardStyle: React.CSSProperties = {
 
 const sectionTitle: React.CSSProperties = {
   margin: "0 0 16px 0",
-  fontSize: "18px",
+  fontSize: "calc(18px * var(--font-scale))",
   fontFamily: "var(--font-heading)",
   color: "var(--color-text)",
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text-secondary)",
   marginBottom: "6px",
@@ -41,7 +41,7 @@ const labelStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   padding: "8px 12px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -60,7 +60,7 @@ const readOnlyInput: React.CSSProperties = {
 
 const selectStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   padding: "8px 12px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -86,7 +86,7 @@ const radioLabel: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: "6px",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text)",
   cursor: "pointer",
@@ -96,7 +96,7 @@ const checkboxLabel: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: "8px",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text)",
   cursor: "pointer",
@@ -104,7 +104,7 @@ const checkboxLabel: React.CSSProperties = {
 
 const btnPrimary: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   padding: "10px 24px",
   borderRadius: "6px",
   border: "none",
@@ -257,7 +257,7 @@ function UsageTab({
   };
 
   const statValueStyle: React.CSSProperties = {
-    fontSize: "22px",
+    fontSize: "calc(22px * var(--font-scale))",
     fontWeight: 700,
     fontFamily: "var(--font-heading)",
     color: "var(--color-text)",
@@ -265,7 +265,7 @@ function UsageTab({
   };
 
   const statLabelStyle: React.CSSProperties = {
-    fontSize: "11px",
+    fontSize: "calc(11px * var(--font-scale))",
     textTransform: "uppercase",
     letterSpacing: "0.5px",
     color: "var(--color-text-muted)",
@@ -292,10 +292,10 @@ function UsageTab({
           gap: "10px",
         }}>
           <div>
-            <strong style={{ color: "var(--color-warning)", fontFamily: "var(--font-body)", fontSize: "14px" }}>
+            <strong style={{ color: "var(--color-warning)", fontFamily: "var(--font-body)", fontSize: "calc(14px * var(--font-scale))" }}>
               Nowcast Paused {'\u2014'} Budget Limit Reached
             </strong>
-            <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", fontFamily: "var(--font-body)", marginTop: "4px" }}>
+            <div style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-secondary)", fontFamily: "var(--font-body)", marginTop: "calc(4px * var(--font-scale))" }}>
               Monthly budget of ${budget.limit_usd.toFixed(2)} reached (${budget.current_usd.toFixed(2)} used).
               Nowcast generation has been automatically paused.
             </div>
@@ -305,7 +305,7 @@ function UsageTab({
             disabled={resuming}
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               padding: "8px 16px",
               borderRadius: "6px",
               border: "1px solid var(--color-border)",
@@ -329,7 +329,7 @@ function UsageTab({
           <div style={statCardStyle}>
             <div style={statValueStyle}>${today?.estimated_cost_usd.toFixed(2) ?? "0.00"}</div>
             <div style={statLabelStyle}>Today</div>
-            <div style={{ fontSize: "12px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "4px" }}>
+            <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "calc(4px * var(--font-scale))" }}>
               {today?.calls ?? 0} calls {'\u00B7'} {formatTokens((today?.input_tokens ?? 0) + (today?.output_tokens ?? 0))} tokens
             </div>
           </div>
@@ -338,7 +338,7 @@ function UsageTab({
           <div style={statCardStyle}>
             <div style={statValueStyle}>${month?.estimated_cost_usd.toFixed(2) ?? "0.00"}</div>
             <div style={statLabelStyle}>This Month</div>
-            <div style={{ fontSize: "12px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "4px" }}>
+            <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "calc(4px * var(--font-scale))" }}>
               {month?.calls ?? 0} calls {'\u00B7'} {formatTokens((month?.input_tokens ?? 0) + (month?.output_tokens ?? 0))} tokens
             </div>
             {/* Budget progress bar */}
@@ -358,7 +358,7 @@ function UsageTab({
                     transition: "width 0.3s ease",
                   }} />
                 </div>
-                <div style={{ fontSize: "11px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "3px" }}>
+                <div style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "calc(3px * var(--font-scale))" }}>
                   ${budget.current_usd.toFixed(2)} / ${budget.limit_usd.toFixed(2)} budget
                 </div>
               </div>
@@ -369,7 +369,7 @@ function UsageTab({
           <div style={statCardStyle}>
             <div style={statValueStyle}>${allTime?.estimated_cost_usd.toFixed(2) ?? "0.00"}</div>
             <div style={statLabelStyle}>All Time</div>
-            <div style={{ fontSize: "12px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "4px" }}>
+            <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "calc(4px * var(--font-scale))" }}>
               {allTime?.calls ?? 0} calls {'\u00B7'} {formatTokens((allTime?.input_tokens ?? 0) + (allTime?.output_tokens ?? 0))} tokens
             </div>
           </div>
@@ -385,7 +385,7 @@ function UsageTab({
               width: "100%",
               borderCollapse: "collapse",
               fontFamily: "var(--font-body)",
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
             }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
@@ -437,10 +437,10 @@ function UsageTab({
             })()}
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
-            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)" }}>
               {costData[0]?.date ?? ""}
             </span>
-            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)" }}>
               {costData[costData.length - 1]?.date ?? ""}
             </span>
           </div>
@@ -454,7 +454,7 @@ function UsageTab({
         <div style={fieldGroup}>
           <label style={labelStyle}>
             Anthropic Admin API Key
-            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
               Optional. Enables real-time cost data from your Anthropic account.
               Requires an Admin API key (sk-ant-admin...) from the Claude Console.
             </span>
@@ -480,14 +480,14 @@ function UsageTab({
               step={1}
               placeholder="0 = unlimited"
             />
-            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", marginTop: "2px", display: "block" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "calc(2px * var(--font-scale))", display: "block" }}>
               Set to 0 for no limit
             </span>
           </div>
 
           <div style={{ ...fieldGroup, display: "flex", alignItems: "center", paddingTop: isMobile ? "0" : "18px" }}>
             <label style={{
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-secondary)",
               display: "flex",
@@ -514,7 +514,7 @@ function UsageTab({
             width: "100%",
             borderCollapse: "collapse",
             fontFamily: "var(--font-body)",
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
           }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
@@ -538,7 +538,7 @@ function UsageTab({
             </tbody>
           </table>
         </div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "8px" }}>
+        <div style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "calc(8px * var(--font-scale))" }}>
           Local cost estimates are based on these rates. For actual billing, configure the Admin API key above.
         </div>
       </div>
@@ -717,7 +717,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
           padding: "12px 20px",
           border: purgeResult.startsWith("Error") ? "1px solid var(--color-danger)" : "1px solid var(--color-success)",
           color: purgeResult.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
-          fontSize: "14px",
+          fontSize: "calc(14px * var(--font-scale))",
           fontFamily: "var(--font-body)",
         }}>
           {purgeResult}
@@ -730,7 +730,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
           padding: "12px 20px",
           border: compactResult.startsWith("Error") ? "1px solid var(--color-danger)" : "1px solid var(--color-success)",
           color: compactResult.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
-          fontSize: "14px",
+          fontSize: "calc(14px * var(--font-scale))",
           fontFamily: "var(--font-body)",
         }}>
           {compactResult}
@@ -742,18 +742,18 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
         <h3 style={sectionTitle}>Database Overview</h3>
         <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "2px" }}>
+            <div style={{ fontSize: "calc(11px * var(--font-scale))", textTransform: "uppercase", letterSpacing: "calc(0.5px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "calc(2px * var(--font-scale))" }}>
               File Size
             </div>
-            <div style={{ fontSize: "20px", fontWeight: 700, fontFamily: "var(--font-heading)", color: "var(--color-text)" }}>
+            <div style={{ fontSize: "calc(20px * var(--font-scale))", fontWeight: 700, fontFamily: "var(--font-heading)", color: "var(--color-text)" }}>
               {formatBytes(stats?.db_size_bytes ?? 0)}
             </div>
           </div>
           <div>
-            <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "2px" }}>
+            <div style={{ fontSize: "calc(11px * var(--font-scale))", textTransform: "uppercase", letterSpacing: "calc(0.5px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "calc(2px * var(--font-scale))" }}>
               Total Rows
             </div>
-            <div style={{ fontSize: "20px", fontWeight: 700, fontFamily: "var(--font-heading)", color: "var(--color-text)" }}>
+            <div style={{ fontSize: "calc(20px * var(--font-scale))", fontWeight: 700, fontFamily: "var(--font-heading)", color: "var(--color-text)" }}>
               {totalRows.toLocaleString()}
             </div>
           </div>
@@ -768,7 +768,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
             width: "100%",
             borderCollapse: "collapse",
             fontFamily: "var(--font-body)",
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
           }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
@@ -794,10 +794,10 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
                   </td>
                   {!isMobile && (
                     <>
-                      <td style={{ padding: "8px 12px", color: "var(--color-text-muted)", textAlign: "right", fontSize: "12px" }}>
+                      <td style={{ padding: "8px 12px", color: "var(--color-text-muted)", textAlign: "right", fontSize: "calc(12px * var(--font-scale))" }}>
                         {formatDateShort(t.oldest)}
                       </td>
-                      <td style={{ padding: "8px 12px", color: "var(--color-text-muted)", textAlign: "right", fontSize: "12px" }}>
+                      <td style={{ padding: "8px 12px", color: "var(--color-text-muted)", textAlign: "right", fontSize: "calc(12px * var(--font-scale))" }}>
                         {formatDateShort(t.newest)}
                       </td>
                     </>
@@ -809,7 +809,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
                           href={getDbExportUrl(t.table)}
                           download
                           style={{
-                            fontSize: "11px",
+                            fontSize: "calc(11px * var(--font-scale))",
                             padding: "3px 8px",
                             borderRadius: "4px",
                             border: "1px solid var(--color-border)",
@@ -832,7 +832,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
                             setPurgeResult(null);
                           }}
                           style={{
-                            fontSize: "11px",
+                            fontSize: "calc(11px * var(--font-scale))",
                             padding: "3px 8px",
                             borderRadius: "4px",
                             border: "1px solid var(--color-border)",
@@ -861,12 +861,12 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
           padding: isMobile ? "14px" : "20px",
           border: "2px solid var(--color-warning)",
         }}>
-          <h3 style={{ ...sectionTitle, fontSize: "16px", marginBottom: "12px" }}>
+          <h3 style={{ ...sectionTitle, fontSize: "calc(16px * var(--font-scale))", marginBottom: "calc(12px * var(--font-scale))" }}>
             Purge: {TABLE_LABELS[purgeTarget] ?? purgeTarget}
           </h3>
 
           <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
-            <label style={{ ...radioLabel, fontSize: "13px" }}>
+            <label style={{ ...radioLabel, fontSize: "calc(13px * var(--font-scale))" }}>
               <input
                 type="radio"
                 checked={purgeMode === "date"}
@@ -874,7 +874,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
               />
               By date range
             </label>
-            <label style={{ ...radioLabel, fontSize: "13px" }}>
+            <label style={{ ...radioLabel, fontSize: "calc(13px * var(--font-scale))" }}>
               <input
                 type="radio"
                 checked={purgeMode === "full"}
@@ -897,7 +897,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
           ) : (
             <div style={fieldGroup}>
               <div style={{
-                fontSize: "13px",
+                fontSize: "calc(13px * var(--font-scale))",
                 color: "var(--color-danger)",
                 fontFamily: "var(--font-body)",
                 marginBottom: "8px",
@@ -942,11 +942,11 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
       {/* Compact Card */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Compact Sensor Readings</h3>
-        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", fontFamily: "var(--font-body)", margin: "0 0 12px 0", lineHeight: "1.5" }}>
+        <p style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-secondary)", fontFamily: "var(--font-body)", margin: "0 0 12px 0", lineHeight: "1.5" }}>
           Reduce storage by replacing raw sensor readings (every ~10s) with 5-minute averages.
           Charts and exports work identically on compacted data.
           {sensorRowCount > 0 && (
-            <span style={{ display: "block", marginTop: "4px", color: "var(--color-text-muted)", fontSize: "12px" }}>
+            <span style={{ display: "block", marginTop: "calc(4px * var(--font-scale))", color: "var(--color-text-muted)", fontSize: "calc(12px * var(--font-scale))" }}>
               Current: {sensorRowCount.toLocaleString()} readings. After full compaction: ~{estimatedCompacted.toLocaleString()} rows.
             </span>
           )}
@@ -1014,7 +1014,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
       {/* Backup Card */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Backup</h3>
-        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", fontFamily: "var(--font-body)", margin: "0 0 12px 0" }}>
+        <p style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-secondary)", fontFamily: "var(--font-body)", margin: "0 0 12px 0" }}>
           Complete SQLite database snapshot. Can be restored by replacing the database file.
         </p>
         <a
@@ -1040,7 +1040,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
 
         {!showPurgeAll ? (
           <>
-            <p style={{ fontSize: "13px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0 0 12px 0" }}>
+            <p style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0 0 12px 0" }}>
               Permanently delete all sensor readings, archives, nowcasts, knowledge base entries, and spray history.
               Configuration and product definitions are preserved.
             </p>
@@ -1059,7 +1059,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
         ) : (
           <>
             <div style={{
-              fontSize: "14px",
+              fontSize: "calc(14px * var(--font-scale))",
               color: "var(--color-danger)",
               fontFamily: "var(--font-body)",
               fontWeight: 600,
@@ -1231,7 +1231,7 @@ function BackupTab({ val, updateField, isMobile }: {
               value={String(val("backup_schedule_time") || "")}
               onChange={(e) => updateField("backup_schedule_time", e.target.value)}
             />
-            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(4px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
               HH:MM — run backup at this time daily. Leave blank for interval-from-boot.
             </span>
           </div>
@@ -1241,7 +1241,7 @@ function BackupTab({ val, updateField, isMobile }: {
       {/* Status & Manual Backup */}
       <div style={cardStyle}>
         <h3 style={sectionTitle}>Backup Status</h3>
-        <div style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginBottom: "12px" }}>
+        <div style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginBottom: "calc(12px * var(--font-scale))" }}>
           <div>Last successful backup: {lastSuccess ? new Date(lastSuccess).toLocaleString() : "Never"}</div>
           {lastError && (
             <div style={{ color: "var(--color-danger)", marginTop: "4px" }}>Last error: {lastError}</div>
@@ -1259,7 +1259,7 @@ function BackupTab({ val, updateField, isMobile }: {
             marginTop: "8px",
             padding: "8px 12px",
             borderRadius: "6px",
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
             fontFamily: "var(--font-body)",
             background: backupResult.startsWith("Error") ? "rgba(211,47,47,0.1)" : "rgba(46,125,50,0.1)",
             border: backupResult.startsWith("Error") ? "1px solid var(--color-danger)" : "1px solid var(--color-success)",
@@ -1274,15 +1274,15 @@ function BackupTab({ val, updateField, isMobile }: {
       <div style={cardStyle}>
         <h3 style={sectionTitle}>Existing Backups</h3>
         {loading ? (
-          <div style={{ color: "var(--color-text-muted)", fontSize: "13px", fontFamily: "var(--font-body)" }}>Loading...</div>
+          <div style={{ color: "var(--color-text-muted)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>Loading...</div>
         ) : backups.length === 0 ? (
-          <div style={{ color: "var(--color-text-muted)", fontSize: "13px", fontFamily: "var(--font-body)" }}>No backups found.</div>
+          <div style={{ color: "var(--color-text-muted)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>No backups found.</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{
               width: "100%",
               borderCollapse: "collapse",
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontFamily: "var(--font-body)",
             }}>
               <thead>
@@ -1310,13 +1310,13 @@ function BackupTab({ val, updateField, isMobile }: {
                         <span>
                           <button
                             onClick={() => handleDelete(b.name)}
-                            style={{ background: "var(--color-danger)", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 10px", cursor: "pointer", fontSize: "12px", marginRight: "4px" }}
+                            style={{ background: "var(--color-danger)", color: "#fff", border: "none", borderRadius: "calc(4px * var(--font-scale))", padding: "4px 10px", cursor: "pointer", fontSize: "calc(12px * var(--font-scale))", marginRight: "calc(4px * var(--font-scale))" }}
                           >
                             Confirm
                           </button>
                           <button
                             onClick={() => setDeleteConfirm(null)}
-                            style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", borderRadius: "4px", padding: "4px 10px", cursor: "pointer", fontSize: "12px" }}
+                            style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", borderRadius: "calc(4px * var(--font-scale))", padding: "4px 10px", cursor: "pointer", fontSize: "calc(12px * var(--font-scale))" }}
                           >
                             Cancel
                           </button>
@@ -1324,7 +1324,7 @@ function BackupTab({ val, updateField, isMobile }: {
                       ) : (
                         <button
                           onClick={() => setDeleteConfirm(b.name)}
-                          style={{ background: "none", border: "none", color: "var(--color-danger)", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}
+                          style={{ background: "none", border: "none", color: "var(--color-danger)", cursor: "pointer", fontWeight: 600, fontSize: "calc(13px * var(--font-scale))" }}
                         >
                           Delete
                         </button>
@@ -1332,7 +1332,7 @@ function BackupTab({ val, updateField, isMobile }: {
                       {restoreTarget !== b.name && (
                         <button
                           onClick={() => { setRestoreTarget(b.name); setRestoreConfirm(""); setRestoreResult(null); }}
-                          style={{ background: "none", border: "none", color: "var(--color-warning, #f59e0b)", cursor: "pointer", fontWeight: 600, fontSize: "13px", marginLeft: "12px" }}
+                          style={{ background: "none", border: "none", color: "var(--color-warning, #f59e0b)", cursor: "pointer", fontWeight: 600, fontSize: "calc(13px * var(--font-scale))", marginLeft: "calc(12px * var(--font-scale))" }}
                         >
                           Restore
                         </button>
@@ -1354,10 +1354,10 @@ function BackupTab({ val, updateField, isMobile }: {
             border: "2px solid var(--color-warning, #f59e0b)",
             background: "rgba(245,158,11,0.05)",
           }}>
-            <div style={{ fontWeight: 600, fontSize: "14px", fontFamily: "var(--font-body)", color: "var(--color-text)", marginBottom: "8px" }}>
+            <div style={{ fontWeight: 600, fontSize: "calc(14px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text)", marginBottom: "calc(8px * var(--font-scale))" }}>
               Restore from {restoreTarget}
             </div>
-            <div style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginBottom: "12px" }}>
+            <div style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginBottom: "calc(12px * var(--font-scale))" }}>
               This will replace the current database. A .pre-restore copy will be created as a safety net.
               You must restart both the web app and logger daemon after restore.
             </div>
@@ -1396,7 +1396,7 @@ function BackupTab({ val, updateField, isMobile }: {
                 marginTop: "8px",
                 padding: "8px 12px",
                 borderRadius: "6px",
-                fontSize: "13px",
+                fontSize: "calc(13px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 background: restoreResult.startsWith("Error") ? "rgba(211,47,47,0.1)" : "rgba(46,125,50,0.1)",
                 border: restoreResult.startsWith("Error") ? "1px solid var(--color-danger)" : "1px solid var(--color-success)",
@@ -1456,7 +1456,7 @@ function ChangePasswordCard() {
           <label style={labelStyle}>New Password</label>
           <input style={inputStyle} type="password" value={newPw}
             onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" />
-          <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginTop: "4px", display: "block" }}>
+          <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "calc(4px * var(--font-scale))", display: "block" }}>
             At least 8 characters
           </span>
         </div>
@@ -1468,7 +1468,7 @@ function ChangePasswordCard() {
           }} type="password" value={confirmPw}
             onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" />
           {mismatch && (
-            <span style={{ fontSize: "12px", color: "var(--color-danger)", marginTop: "4px", display: "block" }}>
+            <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-danger)", marginTop: "calc(4px * var(--font-scale))", display: "block" }}>
               Passwords do not match
             </span>
           )}
@@ -1479,7 +1479,7 @@ function ChangePasswordCard() {
           </button>
           {result && (
             <span style={{
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: result.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
             }}>
@@ -1556,7 +1556,7 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
               disabled={loading}
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "13px",
+                fontSize: "calc(13px * var(--font-scale))",
                 padding: "6px 14px",
                 borderRadius: "6px",
                 border: "1px solid var(--color-border)",
@@ -1574,7 +1574,7 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
         {entries.length === 0 && !loading && (
           <p style={{
             fontFamily: "var(--font-body)",
-            fontSize: "14px",
+            fontSize: "calc(14px * var(--font-scale))",
             color: "var(--color-text-muted)",
             textAlign: "center",
             padding: "32px 0",
@@ -1598,7 +1598,7 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
                   padding: "8px 12px",
                   borderBottom: i < entries.length - 1 ? "1px solid var(--color-border)" : undefined,
                   fontFamily: "var(--font-mono)",
-                  fontSize: "12px",
+                  fontSize: "calc(12px * var(--font-scale))",
                   lineHeight: 1.5,
                 }}
               >
@@ -1614,7 +1614,7 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
                   <span style={{
                     color: levelColor(entry.level),
                     fontWeight: 600,
-                    fontSize: "11px",
+                    fontSize: "calc(11px * var(--font-scale))",
                     padding: "1px 6px",
                     borderRadius: "3px",
                     background: `${levelColor(entry.level)}22`,
@@ -1644,16 +1644,16 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
       <div style={cardStyle}>
         <h3 style={{
           margin: "0 0 12px 0",
-          fontSize: "16px",
+          fontSize: "calc(16px * var(--font-scale))",
           fontFamily: "var(--font-heading)",
           color: "var(--color-text)",
         }}>
           Service Management
         </h3>
-        <p style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginTop: 0, lineHeight: 1.5 }}>
+        <p style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginTop: 0, lineHeight: 1.5 }}>
           Most settings take effect immediately or on the next cycle. To apply driver or connection changes, use <strong>Save &amp; Reconnect</strong> on the Station tab.
         </p>
-        <p style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginTop: "8px", lineHeight: 1.5 }}>
+        <p style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginTop: "calc(8px * var(--font-scale))", lineHeight: 1.5 }}>
           If a full service restart is needed:
         </p>
         <div style={{
@@ -1661,17 +1661,17 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
           borderRadius: "6px",
           padding: "12px",
           fontFamily: "'JetBrains Mono', monospace",
-          fontSize: "12px",
+          fontSize: "calc(12px * var(--font-scale))",
           color: "var(--color-text)",
           marginTop: "8px",
           lineHeight: 1.6,
         }}>
-          <div style={{ marginBottom: "8px", color: "var(--color-text-muted)", fontSize: "11px" }}>Windows (services):</div>
+          <div style={{ marginBottom: "calc(8px * var(--font-scale))", color: "var(--color-text-muted)", fontSize: "calc(11px * var(--font-scale))" }}>Windows (services):</div>
           <div>net stop KanfeiWeb &amp;&amp; net stop KanfeiLogger</div>
           <div>net start KanfeiLogger &amp;&amp; net start KanfeiWeb</div>
-          <div style={{ marginTop: "12px", marginBottom: "8px", color: "var(--color-text-muted)", fontSize: "11px" }}>Linux (systemd):</div>
+          <div style={{ marginTop: "calc(12px * var(--font-scale))", marginBottom: "calc(8px * var(--font-scale))", color: "var(--color-text-muted)", fontSize: "calc(11px * var(--font-scale))" }}>Linux (systemd):</div>
           <div>sudo systemctl restart kanfei-logger kanfei-web</div>
-          <div style={{ marginTop: "12px", marginBottom: "8px", color: "var(--color-text-muted)", fontSize: "11px" }}>Manual (dev mode):</div>
+          <div style={{ marginTop: "calc(12px * var(--font-scale))", marginBottom: "calc(8px * var(--font-scale))", color: "var(--color-text-muted)", fontSize: "calc(11px * var(--font-scale))" }}>Manual (dev mode):</div>
           <div>Ctrl+C both terminals, then restart</div>
         </div>
       </div>
@@ -2059,7 +2059,7 @@ export default function Settings() {
         <h2
           style={{
             margin: "0 0 16px 0",
-            fontSize: "24px",
+            fontSize: "calc(24px * var(--font-scale))",
             fontFamily: "var(--font-heading)",
             color: "var(--color-text)",
           }}
@@ -2100,7 +2100,7 @@ export default function Settings() {
       <h2
         style={{
           margin: "0 0 12px 0",
-          fontSize: "24px",
+          fontSize: "calc(24px * var(--font-scale))",
           fontFamily: "var(--font-heading)",
           color: "var(--color-text)",
         }}
@@ -2132,7 +2132,7 @@ export default function Settings() {
             onClick={() => setActiveTab(key)}
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "14px",
+              fontSize: "calc(14px * var(--font-scale))",
               padding: isMobile ? "8px 14px" : "8px 20px",
               borderRadius: "6px",
               border: "1px solid var(--color-border)",
@@ -2149,17 +2149,17 @@ export default function Settings() {
         <span style={{ flex: 1 }} />
 
         {saveSuccess && (
-          <span style={{ color: "var(--color-success)", fontSize: "13px", fontFamily: "var(--font-body)" }}>
+          <span style={{ color: "var(--color-success)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
             Saved.
           </span>
         )}
         {reconnectMsg && (
-          <span style={{ color: "var(--color-success)", fontSize: "13px", fontFamily: "var(--font-body)" }}>
+          <span style={{ color: "var(--color-success)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
             {reconnectMsg}
           </span>
         )}
         {error && (
-          <span style={{ color: "var(--color-danger)", fontSize: "13px", fontFamily: "var(--font-body)" }}>
+          <span style={{ color: "var(--color-danger)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
             Error: {error}
           </span>
         )}
@@ -2167,7 +2167,7 @@ export default function Settings() {
         <button
           style={{
             ...btnPrimary,
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
             padding: "8px 16px",
             opacity: saving ? 0.6 : 1,
             cursor: saving ? "wait" : "pointer",
@@ -2181,7 +2181,7 @@ export default function Settings() {
         <button
           style={{
             ...btnPrimary,
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
             padding: "8px 16px",
             background: "var(--color-bg-secondary)",
             color: "var(--color-text)",
@@ -2205,7 +2205,7 @@ export default function Settings() {
       {/* Optional Features */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Optional Features</h3>
-        <p style={{ fontSize: "13px", color: "var(--color-text-muted)", marginBottom: "16px", fontFamily: "var(--font-body)", marginTop: 0 }}>
+        <p style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-muted)", marginBottom: "calc(16px * var(--font-scale))", fontFamily: "var(--font-body)", marginTop: 0 }}>
           Enable optional features to add their pages and settings tabs.
         </p>
         <div style={fieldGroup}>
@@ -2223,7 +2223,7 @@ export default function Settings() {
             />
             AI Nowcast
           </label>
-          <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px", fontFamily: "var(--font-body)" }}>
+          <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
             Hyper-local AI-powered weather forecasting using Claude. Requires an Anthropic API key.
           </span>
         </div>
@@ -2236,7 +2236,7 @@ export default function Settings() {
             />
             Spray Advisor
           </label>
-          <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px", fontFamily: "var(--font-body)" }}>
+          <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
             Agricultural spray application recommendations based on weather conditions and product constraints.
           </span>
         </div>
@@ -2272,7 +2272,7 @@ export default function Settings() {
             <h3
               style={{
                 margin: "0 0 16px 0",
-                fontSize: "18px",
+                fontSize: "calc(18px * var(--font-scale))",
                 fontFamily: "var(--font-heading)",
                 color: "var(--color-text)",
               }}
@@ -2281,7 +2281,7 @@ export default function Settings() {
             </h3>
             <div
               style={{
-                fontSize: "13px",
+                fontSize: "calc(13px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-secondary)",
                 lineHeight: "1.6",
@@ -2319,7 +2319,7 @@ export default function Settings() {
               <button
                 style={{
                   fontFamily: "var(--font-body)",
-                  fontSize: "14px",
+                  fontSize: "calc(14px * var(--font-scale))",
                   padding: "10px 20px",
                   borderRadius: "6px",
                   border: "1px solid var(--color-border)",
@@ -2374,7 +2374,7 @@ export default function Settings() {
               <option value="tempest">WeatherFlow Tempest (UDP)</option>
               <option value="ambient">Ambient Weather (HTTP push)</option>
             </select>
-            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(4px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
               Click <strong>Save &amp; Reconnect</strong> after changing to apply the new driver.
             </span>
           </div>
@@ -2397,7 +2397,7 @@ export default function Settings() {
                 Serial Port
                 <button
                   style={{
-                    fontSize: "11px",
+                    fontSize: "calc(11px * var(--font-scale))",
                     padding: "2px 8px",
                     marginLeft: "8px",
                     borderRadius: "4px",
@@ -2487,7 +2487,7 @@ export default function Settings() {
                 value={String(val("tempest_hub_sn") || "")}
                 onChange={(e) => updateField("tempest_hub_sn", e.target.value)}
               />
-              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(4px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
                 The Tempest hub broadcasts on your local network automatically.
               </span>
             </div>
@@ -2505,7 +2505,7 @@ export default function Settings() {
                 value={String(val("ambient_listen_port") || 8080)}
                 onChange={(e) => updateField("ambient_listen_port", parseInt(e.target.value) || 8080)}
               />
-              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(4px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
                 Configure your station to push data to this computer's IP on this port.
               </span>
             </div>
@@ -2521,7 +2521,7 @@ export default function Settings() {
           {wlLoadStatus === "loading" && (
             <span style={{
               marginLeft: "12px",
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontWeight: 400,
               color: "var(--color-text-muted, #888)",
               fontStyle: "italic",
@@ -2532,7 +2532,7 @@ export default function Settings() {
           {wlLoadStatus === "error" && (
             <span style={{
               marginLeft: "12px",
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontWeight: 400,
               color: "var(--color-danger, #d33)",
             }}>
@@ -2564,7 +2564,7 @@ export default function Settings() {
             color: "var(--color-danger, #b00)",
             border: "1px solid var(--color-danger, #d33)",
             borderRadius: "4px",
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
           }}>
             {wlLoadError} The inputs below are locked until a successful read —
             saving stale placeholder values would overwrite your real settings.
@@ -2686,7 +2686,7 @@ export default function Settings() {
               ...btnPrimary,
               opacity: (wlSaving || wlLoadStatus !== "loaded") ? 0.6 : 1,
               cursor: wlSaving ? "wait" : (wlLoadStatus !== "loaded" ? "not-allowed" : "pointer"),
-              ...(isMobile ? { gridColumn: "1 / -1", fontSize: "13px", padding: "8px 12px" } : {}),
+              ...(isMobile ? { gridColumn: "1 / -1", fontSize: "calc(13px * var(--font-scale))", padding: "8px 12px" } : {}),
             }}
             onClick={handleWlSave}
             disabled={wlSaving || wlLoadStatus !== "loaded"}
@@ -2713,7 +2713,7 @@ export default function Settings() {
               background: "var(--color-bg-secondary)",
               color: "var(--color-text)",
               border: "1px solid var(--color-border)",
-              ...(isMobile ? { fontSize: "13px", padding: "8px 12px" } : {}),
+              ...(isMobile ? { fontSize: "calc(13px * var(--font-scale))", padding: "8px 12px" } : {}),
             }}
             onClick={handleForceArchive}
             title="Immediately write current conditions to the archive buffer, regardless of the archive timer"
@@ -2727,7 +2727,7 @@ export default function Settings() {
               background: "var(--color-bg-secondary)",
               color: "var(--color-text)",
               border: "1px solid var(--color-border)",
-              ...(isMobile ? { fontSize: "13px", padding: "8px 12px" } : {}),
+              ...(isMobile ? { fontSize: "calc(13px * var(--font-scale))", padding: "8px 12px" } : {}),
             }}
             onClick={handleClearRainDaily}
             title="Reset the daily rain accumulator to zero"
@@ -2741,7 +2741,7 @@ export default function Settings() {
               background: "var(--color-bg-secondary)",
               color: "var(--color-text)",
               border: "1px solid var(--color-border)",
-              ...(isMobile ? { fontSize: "13px", padding: "8px 12px" } : {}),
+              ...(isMobile ? { fontSize: "calc(13px * var(--font-scale))", padding: "8px 12px" } : {}),
             }}
             onClick={handleClearRainYearly}
             title="Reset the yearly rain accumulator to zero"
@@ -2750,12 +2750,12 @@ export default function Settings() {
           </button>
 
           {wlMsg && (
-            <span style={{ color: "var(--color-success)", fontSize: "14px", fontFamily: "var(--font-body)", gridColumn: "1 / -1" }}>
+            <span style={{ color: "var(--color-success)", fontSize: "calc(14px * var(--font-scale))", fontFamily: "var(--font-body)", gridColumn: "1 / -1" }}>
               {wlMsg}
             </span>
           )}
           {wlError && (
-            <span style={{ color: "var(--color-danger)", fontSize: "14px", fontFamily: "var(--font-body)", gridColumn: "1 / -1" }}>
+            <span style={{ color: "var(--color-danger)", fontSize: "calc(14px * var(--font-scale))", fontFamily: "var(--font-body)", gridColumn: "1 / -1" }}>
               Error: {wlError}
             </span>
           )}
@@ -2981,7 +2981,7 @@ export default function Settings() {
                           }} />
                           <div style={{ padding: "8px" }}>
                             <div style={{
-                              fontSize: "13px",
+                              fontSize: "calc(13px * var(--font-scale))",
                               fontFamily: "var(--font-body)",
                               color: "var(--color-text)",
                               marginBottom: "6px",
@@ -2991,7 +2991,7 @@ export default function Settings() {
                             </div>
                             <div style={{ display: "flex", gap: "6px" }}>
                               <label style={{
-                                fontSize: "11px",
+                                fontSize: "calc(11px * var(--font-scale))",
                                 padding: "3px 8px",
                                 borderRadius: "4px",
                                 border: "1px solid var(--color-border)",
@@ -3015,7 +3015,7 @@ export default function Settings() {
                               {customUrl && (
                                 <button
                                   style={{
-                                    fontSize: "11px",
+                                    fontSize: "calc(11px * var(--font-scale))",
                                     padding: "3px 8px",
                                     borderRadius: "4px",
                                     border: "1px solid var(--color-border)",
@@ -3143,7 +3143,7 @@ export default function Settings() {
             />
             Enable Interactive Map
           </label>
-          <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px", fontFamily: "var(--font-body)" }}>
+          <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
             Full-page weather map showing nearby stations, pressure isobars, and NWS alert polygons.
           </span>
         </div>
@@ -3186,7 +3186,7 @@ export default function Settings() {
                 <option value="300">300 miles</option>
                 <option value="450">450 miles</option>
               </select>
-              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(4px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
                 Maximum radius at full zoom-out. Larger values show more stations but take longer to load.
               </span>
             </div>
@@ -3239,7 +3239,7 @@ export default function Settings() {
         <p style={{
           marginTop: 0,
           marginBottom: 12,
-          fontSize: 12,
+          fontSize: "calc(12px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-muted)",
         }}>
@@ -3310,7 +3310,7 @@ export default function Settings() {
               value={String(val("bot_telegram_chat_id") || "")}
               onChange={(e) => updateField("bot_telegram_chat_id", e.target.value)}
             />
-            <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginTop: "4px", display: "block" }}>
+            <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "calc(4px * var(--font-scale))", display: "block" }}>
               Comma-separated for multiple chats
             </span>
           </div>
@@ -3373,7 +3373,7 @@ export default function Settings() {
               Push current conditions
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)" }}>every</span>
+              <span style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)" }}>every</span>
               <select
                 style={{ ...selectStyle, width: "auto", minWidth: "80px" }}
                 value={String(val("bot_telegram_conditions_interval") || 30)}
@@ -3421,7 +3421,7 @@ export default function Settings() {
           </button>
           {telegramTestResult && (
             <span style={{
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: telegramTestResult.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
             }}>
@@ -3435,7 +3435,7 @@ export default function Settings() {
             marginTop: "12px",
             padding: "8px 12px",
             borderRadius: "6px",
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
             fontFamily: "var(--font-body)",
             background: "rgba(211,47,47,0.1)",
             border: "1px solid var(--color-danger)",
@@ -3491,7 +3491,7 @@ export default function Settings() {
             value={String(val("bot_discord_channel_id") || "")}
             onChange={(e) => updateField("bot_discord_channel_id", e.target.value)}
           />
-          <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginTop: "4px", display: "block" }}>
+          <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "calc(4px * var(--font-scale))", display: "block" }}>
             Comma-separated for multiple channels
           </span>
         </div>
@@ -3553,7 +3553,7 @@ export default function Settings() {
               Push current conditions
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)" }}>every</span>
+              <span style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)" }}>every</span>
               <select
                 style={{ ...selectStyle, width: "auto", minWidth: "80px" }}
                 value={String(val("bot_discord_conditions_interval") || 30)}
@@ -3601,7 +3601,7 @@ export default function Settings() {
           </button>
           {discordTestResult && (
             <span style={{
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: discordTestResult.startsWith("Error") ? "var(--color-danger)" : "var(--color-success)",
             }}>
@@ -3615,7 +3615,7 @@ export default function Settings() {
             marginTop: "12px",
             padding: "8px 12px",
             borderRadius: "6px",
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
             fontFamily: "var(--font-body)",
             background: "rgba(211,47,47,0.1)",
             border: "1px solid var(--color-danger)",
@@ -3656,10 +3656,10 @@ export default function Settings() {
                     setAlertSuccess(false);
                   }}
                 />
-                <span style={{ flex: 1, minWidth: 0, fontSize: isMobile ? "13px" : "14px", fontFamily: "var(--font-body)", color: t.enabled ? "var(--color-text)" : "var(--color-text-muted)" }}>
+                <span style={{ flex: 1, minWidth: 0, fontSize: isMobile ? "calc(13px * var(--font-scale))" : "calc(14px * var(--font-scale))", fontFamily: "var(--font-body)", color: t.enabled ? "var(--color-text)" : "var(--color-text-muted)" }}>
                   <strong>{t.label}</strong> — {t.sensor} {t.operator} {t.value}
                 </span>
-                <span style={{ fontSize: "12px", color: "var(--color-text-muted)", whiteSpace: "nowrap" }}>
+                <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", whiteSpace: "nowrap" }}>
                   {t.cooldown_min}m cooldown
                 </span>
                 <button
@@ -3672,7 +3672,7 @@ export default function Settings() {
                     border: "none",
                     color: "var(--color-danger)",
                     cursor: "pointer",
-                    fontSize: "16px",
+                    fontSize: "calc(16px * var(--font-scale))",
                     padding: "4px 8px",
                     flexShrink: 0,
                   }}
@@ -3686,7 +3686,7 @@ export default function Settings() {
         )}
 
         {alertThresholds.length === 0 && !showAddAlert && (
-          <p style={{ fontSize: "14px", color: "var(--color-text-muted)", marginBottom: "12px", fontFamily: "var(--font-body)" }}>
+          <p style={{ fontSize: "calc(14px * var(--font-scale))", color: "var(--color-text-muted)", marginBottom: "calc(12px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
             No alerts configured. Add one to get notified when conditions exceed a threshold.
           </p>
         )}
@@ -3817,7 +3817,7 @@ export default function Settings() {
           </button>
 
           {alertSuccess && (
-            <span style={{ color: "var(--color-success)", fontSize: "14px", fontFamily: "var(--font-body)" }}>
+            <span style={{ color: "var(--color-success)", fontSize: "calc(14px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
               Alerts saved.
             </span>
           )}
@@ -3853,7 +3853,7 @@ export default function Settings() {
             <div style={fieldGroup}>
               <label style={labelStyle}>
                 Remote Endpoint URL
-                <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+                <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
                   kanfei-nowcast server address
                 </span>
               </label>
@@ -3873,7 +3873,7 @@ export default function Settings() {
           <div style={fieldGroup}>
             <label style={labelStyle}>
               API Key
-              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
                 Provided with your kanfei-nowcast subscription
               </span>
             </label>
@@ -3888,7 +3888,7 @@ export default function Settings() {
           <div style={fieldGroup}>
             <label style={labelStyle}>
               Quality Preset
-              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
                 Controls which AI model is used. During severe weather, the system automatically
                 uses the best available model regardless of this setting.
               </span>
@@ -3910,7 +3910,7 @@ export default function Settings() {
               }
             </select>
           </div>
-          <p style={{ fontSize: "12px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0", lineHeight: 1.5 }}>
+          <p style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0", lineHeight: 1.5 }}>
             Data sources, radar, and nearby stations are configured on the remote server.
             The quality preset and update interval are the only engine settings managed here.
           </p>
@@ -3918,7 +3918,7 @@ export default function Settings() {
 
         {/* Local mode — full engine configuration */}
         {String(val("nowcast_mode") || "local") !== "remote" && (<>
-        <p style={{ fontSize: "12px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0 0 16px 0", lineHeight: 1.5 }}>
+        <p style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0 0 16px 0", lineHeight: 1.5 }}>
           Requires the kanfei-nowcast package. NWS alerts, forecast integration, NEXRAD radar, and nearby
           ASOS/AWOS stations require a US location. International stations can still use the base nowcast
           with local sensor data and CWOP/APRS-IS neighbors.
@@ -3928,7 +3928,7 @@ export default function Settings() {
         <div style={fieldGroup}>
           <label style={labelStyle}>
             Anthropic API Key
-            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
               Or set ANTHROPIC_API_KEY environment variable
             </span>
           </label>
@@ -3944,7 +3944,7 @@ export default function Settings() {
         <div style={fieldGroup}>
           <label style={labelStyle}>
             Quality Preset
-            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
               Controls which AI model is used for routine weather. During severe weather,
               the system automatically escalates to the best available model.
             </span>
@@ -3996,7 +3996,7 @@ export default function Settings() {
               onChange={(e) => updateField("nowcast_radar_enabled", e.target.checked)}
             />
             Include NEXRAD radar imagery
-            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))" }}>
               Sends radar image to Claude for precipitation analysis (~250 extra tokens/call)
             </span>
           </label>
@@ -4004,10 +4004,10 @@ export default function Settings() {
 
         {/* Nearby Stations sub-section */}
         <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "16px", marginTop: "8px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "15px", fontFamily: "var(--font-heading)", color: "var(--color-text)", marginBottom: "8px" }}>
+          <div style={{ fontSize: "calc(15px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", marginBottom: "calc(8px * var(--font-scale))" }}>
             Nearby Stations
           </div>
-          <div style={{ fontSize: "12px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "12px" }}>
+          <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "calc(12px * var(--font-scale))" }}>
             Adds observations from nearby weather stations so the AI can detect approaching weather patterns and spatial differences.
           </div>
 
@@ -4019,7 +4019,7 @@ export default function Settings() {
                 onChange={(e) => updateField("nowcast_nearby_iem_enabled", e.target.checked)}
               />
               ASOS/AWOS stations (IEM Mesonet)
-              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))" }}>
                 Official NWS airport stations — free, no API key needed
               </span>
             </label>
@@ -4033,7 +4033,7 @@ export default function Settings() {
                 onChange={(e) => updateField("nowcast_nearby_wu_enabled", e.target.checked)}
               />
               Weather Underground PWS
-              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))" }}>
                 Personal weather stations — requires WU API key
               </span>
             </label>
@@ -4047,7 +4047,7 @@ export default function Settings() {
                 onChange={(e) => updateField("nowcast_nearby_aprs_enabled", e.target.checked)}
               />
               CWOP / APRS-IS stations
-              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))" }}>
                 Citizen weather stations via APRS-IS — free, no API key needed
               </span>
             </label>
@@ -4121,10 +4121,10 @@ export default function Settings() {
 
         {/* Fallback Providers (local mode only) */}
         <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "16px", marginTop: "16px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "15px", fontFamily: "var(--font-heading)", color: "var(--color-text)", marginBottom: "4px" }}>
+          <div style={{ fontSize: "calc(15px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", marginBottom: "calc(4px * var(--font-scale))" }}>
             Fallback Providers
           </div>
-          <div style={{ fontSize: "12px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "12px" }}>
+          <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "calc(12px * var(--font-scale))" }}>
             When Claude is unavailable (overloaded, rate limited), automatically retry with an alternative provider.
             All providers share conversation history and receive radar imagery.
           </div>
@@ -4139,7 +4139,7 @@ export default function Settings() {
               <div style={fieldGroup}>
                 <label style={labelStyle}>
                   Grok (xAI) API Key
-                  <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+                  <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
                     Or set XAI_API_KEY environment variable
                   </span>
                 </label>
@@ -4173,7 +4173,7 @@ export default function Settings() {
               <div style={fieldGroup}>
                 <label style={labelStyle}>
                   OpenAI API Key
-                  <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+                  <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
                     Or set OPENAI_API_KEY environment variable
                   </span>
                 </label>
@@ -4227,7 +4227,7 @@ export default function Settings() {
           <div style={fieldGroup}>
             <label style={labelStyle}>
               Max Output Tokens
-              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
                 Increase if responses get truncated
               </span>
             </label>
@@ -4265,7 +4265,7 @@ export default function Settings() {
           <div style={fieldGroup}>
             <label style={labelStyle}>
               Knowledge Auto-Accept (hours)
-              <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
                 0 = manual approval only
               </span>
             </label>
@@ -4296,7 +4296,7 @@ export default function Settings() {
               onChange={(e) => updateField("spray_ai_enabled", e.target.checked)}
             />
             Enable AI-enhanced spray recommendations
-            <span style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))" }}>
               Uses the Nowcast AI to provide detailed commentary on spray windows, beyond rule-based go/no-go checks.
               Requires AI Nowcast to be enabled with a valid API key.
             </span>

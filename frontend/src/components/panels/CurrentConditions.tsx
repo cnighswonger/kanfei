@@ -45,7 +45,7 @@ export default function CurrentConditions() {
     >
       <div
         style={{
-          fontSize: "12px",
+          fontSize: "calc(12px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-secondary)",
           textTransform: "uppercase",
@@ -68,7 +68,7 @@ export default function CurrentConditions() {
           <div key={item.label} style={{ textAlign: "center" }}>
             <div
               style={{
-                fontSize: "10px",
+                fontSize: "calc(10px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-muted)",
                 textTransform: "uppercase",
@@ -79,7 +79,7 @@ export default function CurrentConditions() {
             </div>
             <div
               style={{
-                fontSize: isMobile ? "14px" : "16px",
+                fontSize: isMobile ? "calc(14px * var(--font-scale))" : "calc(16px * var(--font-scale))",
                 fontFamily: "var(--font-gauge)",
                 fontWeight: "bold",
                 color: item.data

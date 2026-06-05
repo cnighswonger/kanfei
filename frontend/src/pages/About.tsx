@@ -16,14 +16,14 @@ const cardStyle: React.CSSProperties = {
 
 const sectionTitle: React.CSSProperties = {
   margin: "0 0 12px 0",
-  fontSize: "18px",
+  fontSize: "calc(18px * var(--font-scale))",
   fontFamily: "var(--font-heading)",
   color: "var(--color-text)",
 };
 
 const bodyText: React.CSSProperties = {
   color: "var(--color-text-secondary)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   lineHeight: "1.6",
   margin: 0,
@@ -31,7 +31,7 @@ const bodyText: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
   color: MUTED,
-  fontSize: "12px",
+  fontSize: "calc(12px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   textTransform: "uppercase",
   letterSpacing: "0.5px",
@@ -40,7 +40,7 @@ const labelStyle: React.CSSProperties = {
 
 const valueStyle: React.CSSProperties = {
   color: "var(--color-text)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   fontWeight: 500,
 };
@@ -71,11 +71,11 @@ function SupportCard({ isMobile }: { isMobile: boolean }) {
         border: "2px solid var(--color-accent-muted)",
       }}
     >
-      <div style={{ fontSize: "28px", marginBottom: "8px" }}>{'\u2615'}</div>
+      <div style={{ fontSize: "calc(28px * var(--font-scale))", marginBottom: "calc(8px * var(--font-scale))" }}>{'\u2615'}</div>
       <h3
         style={{
           ...sectionTitle,
-          fontSize: "16px",
+          fontSize: "calc(16px * var(--font-scale))",
           marginBottom: "8px",
         }}
       >
@@ -84,7 +84,7 @@ function SupportCard({ isMobile }: { isMobile: boolean }) {
       <p
         style={{
           ...bodyText,
-          fontSize: "13px",
+          fontSize: "calc(13px * var(--font-scale))",
           color: MUTED,
           marginBottom: "16px",
           maxWidth: "380px",
@@ -106,7 +106,7 @@ function SupportCard({ isMobile }: { isMobile: boolean }) {
           background: "var(--color-accent)",
           color: "#fff",
           fontFamily: "var(--font-body)",
-          fontSize: "14px",
+          fontSize: "calc(14px * var(--font-scale))",
           fontWeight: 600,
           textDecoration: "none",
           transition: "opacity 0.15s ease",
@@ -142,7 +142,7 @@ export default function About() {
         <h2
           style={{
             fontFamily: "var(--font-heading)",
-            fontSize: isMobile ? "22px" : "26px",
+            fontSize: isMobile ? "calc(22px * var(--font-scale))" : "calc(26px * var(--font-scale))",
             color: "var(--color-text)",
             margin: "0 0 4px 0",
           }}
@@ -152,7 +152,7 @@ export default function About() {
         <p
           style={{
             ...bodyText,
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
             color: MUTED,
             marginBottom: "20px",
           }}
@@ -167,7 +167,7 @@ export default function About() {
           marginBottom: "14px",
         }}>
           <div style={{
-            fontSize: "42px",
+            fontSize: "calc(42px * var(--font-scale))",
             fontFamily: "serif",
             lineHeight: 1,
             color: "var(--color-text)",
@@ -178,7 +178,7 @@ export default function About() {
           </div>
           <div>
             <div style={{
-              fontSize: "14px",
+              fontSize: "calc(14px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-secondary)",
               fontStyle: "italic",
@@ -187,7 +187,7 @@ export default function About() {
               kanfei ruach {'\u2014'} "wings of the wind"
             </div>
             <div style={{
-              fontSize: "12px",
+              fontSize: "calc(12px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: MUTED,
             }}>
@@ -226,7 +226,7 @@ export default function About() {
       {/* Credits */}
       <div style={{ ...cardStyle, padding: isMobile ? "14px" : "20px" }}>
         <h3 style={sectionTitle}>Credits</h3>
-        <p style={{ ...bodyText, fontSize: "13px" }}>
+        <p style={{ ...bodyText, fontSize: "calc(13px * var(--font-scale))" }}>
           Built with open-source software. Weather data from the National
           Weather Service, Open-Meteo, and NOAA. AI nowcasting powered by
           Anthropic Claude.

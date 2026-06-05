@@ -31,7 +31,7 @@ const cardStyle: React.CSSProperties = {
 
 const sectionTitle: React.CSSProperties = {
   margin: "0 0 12px 0",
-  fontSize: "16px",
+  fontSize: "calc(16px * var(--font-scale))",
   fontFamily: "var(--font-heading)",
   color: "var(--color-text)",
 };
@@ -63,7 +63,7 @@ function ConfidenceBadge({ level }: { level: string }) {
     <span
       style={{
         display: "inline-block",
-        fontSize: "11px",
+        fontSize: "calc(11px * var(--font-scale))",
         fontFamily: "var(--font-body)",
         fontWeight: 600,
         padding: "2px 8px",
@@ -126,7 +126,7 @@ function RadarImg({ src, alt, label, isMobile }: { src: string; alt: string; lab
       </div>
       <div
         style={{
-          fontSize: "11px",
+          fontSize: "calc(11px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-muted)",
           marginTop: "4px",
@@ -182,7 +182,7 @@ function ElementCard({
       <p
         style={{
           margin: 0,
-          fontSize: "14px",
+          fontSize: "calc(14px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text)",
           lineHeight: 1.5,
@@ -194,7 +194,7 @@ function ElementCard({
         <p
           style={{
             margin: "8px 0 0 0",
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
             fontFamily: "var(--font-mono)",
             color: "var(--color-text-secondary)",
           }}
@@ -240,7 +240,7 @@ function CollapsibleSection({
         <h4 style={{ ...sectionTitle, margin: 0 }}>{title}</h4>
         <span
           style={{
-            fontSize: "12px",
+            fontSize: "calc(12px * var(--font-scale))",
             color: "var(--color-text-muted)",
             transition: "transform 0.2s",
             transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
@@ -286,7 +286,7 @@ function CategoryBadge({ category }: { category: string }) {
     <span
       style={{
         display: "inline-block",
-        fontSize: "11px",
+        fontSize: "calc(11px * var(--font-scale))",
         fontFamily: "var(--font-body)",
         padding: "2px 6px",
         borderRadius: "3px",
@@ -398,7 +398,7 @@ export default function Nowcast() {
           <h2
             style={{
               margin: "0 0 16px 0",
-              fontSize: "24px",
+              fontSize: "calc(24px * var(--font-scale))",
               fontFamily: "var(--font-heading)",
               color: "var(--color-text)",
             }}
@@ -413,7 +413,7 @@ export default function Nowcast() {
               padding: "32px 0",
               textAlign: "center",
               color: "var(--color-text-muted)",
-              fontSize: "14px",
+              fontSize: "calc(14px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               lineHeight: 1.6,
             }}
@@ -446,7 +446,7 @@ export default function Nowcast() {
         <h2
           style={{
             margin: 0,
-            fontSize: "24px",
+            fontSize: "calc(24px * var(--font-scale))",
             fontFamily: "var(--font-heading)",
             color: "var(--color-text)",
           }}
@@ -462,7 +462,7 @@ export default function Nowcast() {
         >
           <span
             style={{
-              fontSize: "12px",
+              fontSize: "calc(12px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-muted)",
             }}
@@ -475,7 +475,7 @@ export default function Nowcast() {
             onClick={triggerNowcast}
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               padding: "6px 14px",
               borderRadius: "6px",
               border: "1px solid var(--color-border)",
@@ -511,7 +511,7 @@ export default function Nowcast() {
               padding: isMobile ? "10px 12px" : "12px 16px",
               marginBottom: "12px",
               cursor: "pointer",
-              fontSize: "14px",
+              fontSize: "calc(14px * var(--font-scale))",
               fontFamily: "var(--font-body)",
             }}
             onClick={() => setAlertsExpanded((prev) => {
@@ -522,31 +522,31 @@ export default function Nowcast() {
             })}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontWeight: 700, fontSize: "15px" }}>
+              <span style={{ fontWeight: 700, fontSize: "calc(15px * var(--font-scale))" }}>
                 {alert.event}
               </span>
-              <span style={{ fontSize: "11px", opacity: 0.85 }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", opacity: 0.85 }}>
                 {alert.sender_name}
               </span>
             </div>
-            <div style={{ fontSize: "13px", marginTop: "4px", opacity: 0.95 }}>
+            <div style={{ fontSize: "calc(13px * var(--font-scale))", marginTop: "calc(4px * var(--font-scale))", opacity: 0.95 }}>
               {alert.headline}
             </div>
             {expanded && (
-              <div style={{ marginTop: "10px", fontSize: "13px", lineHeight: 1.5, opacity: 0.95 }}>
+              <div style={{ marginTop: "calc(10px * var(--font-scale))", fontSize: "calc(13px * var(--font-scale))", lineHeight: 1.5, opacity: 0.95 }}>
                 {alert.instruction && (
                   <div style={{ marginBottom: "8px" }}>
                     <strong>Action:</strong> {alert.instruction}
                   </div>
                 )}
                 <div style={{ whiteSpace: "pre-wrap" }}>{alert.description}</div>
-                <div style={{ marginTop: "8px", fontSize: "11px", opacity: 0.7 }}>
+                <div style={{ marginTop: "calc(8px * var(--font-scale))", fontSize: "calc(11px * var(--font-scale))", opacity: 0.7 }}>
                   Onset: {new Date(alert.onset).toLocaleString()} | Expires: {new Date(alert.expires).toLocaleString()}
                 </div>
               </div>
             )}
             {!expanded && (
-              <div style={{ fontSize: "11px", marginTop: "4px", opacity: 0.7 }}>
+              <div style={{ fontSize: "calc(11px * var(--font-scale))", marginTop: "calc(4px * var(--font-scale))", opacity: 0.7 }}>
                 Tap for details
               </div>
             )}
@@ -581,7 +581,7 @@ export default function Nowcast() {
               borderRadius: "var(--gauge-border-radius)",
               padding: isMobile ? "14px 14px" : "16px 20px",
               marginBottom: "16px",
-              fontSize: "14px",
+              fontSize: "calc(14px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               lineHeight: 1.5,
             }}
@@ -596,7 +596,7 @@ export default function Nowcast() {
             >
               <span
                 style={{
-                  fontSize: "12px",
+                  fontSize: "calc(12px * var(--font-scale))",
                   fontWeight: 700,
                   padding: "2px 8px",
                   borderRadius: "4px",
@@ -606,7 +606,7 @@ export default function Nowcast() {
               >
                 {level}
               </span>
-              <span style={{ fontWeight: 700, fontSize: "16px" }}>
+              <span style={{ fontWeight: 700, fontSize: "calc(16px * var(--font-scale))" }}>
                 {sw.primary_threat}
               </span>
             </div>
@@ -614,7 +614,7 @@ export default function Nowcast() {
             {(sw.distance_miles != null || sw.estimated_arrival) && (
               <div
                 style={{
-                  fontSize: "13px",
+                  fontSize: "calc(13px * var(--font-scale))",
                   marginBottom: "8px",
                   opacity: 0.9,
                 }}
@@ -629,7 +629,7 @@ export default function Nowcast() {
               </div>
             )}
             {sw.local_evidence && sw.local_evidence.length > 0 && (
-              <div style={{ fontSize: "13px", marginBottom: "10px" }}>
+              <div style={{ fontSize: "calc(13px * var(--font-scale))", marginBottom: "calc(10px * var(--font-scale))" }}>
                 <div style={{ fontWeight: 600, marginBottom: "4px", opacity: 0.85 }}>
                   Local Evidence:
                 </div>
@@ -644,7 +644,7 @@ export default function Nowcast() {
               <div
                 style={{
                   fontWeight: 700,
-                  fontSize: "15px",
+                  fontSize: "calc(15px * var(--font-scale))",
                   borderTop: "1px solid rgba(255,255,255,0.3)",
                   paddingTop: "10px",
                   marginTop: "4px",
@@ -662,7 +662,7 @@ export default function Nowcast() {
         <p
           style={{
             margin: 0,
-            fontSize: "16px",
+            fontSize: "calc(16px * var(--font-scale))",
             fontFamily: "var(--font-body)",
             color: "var(--color-text)",
             lineHeight: 1.6,
@@ -726,7 +726,7 @@ export default function Nowcast() {
               <p
                 style={{
                   margin: 0,
-                  fontSize: "14px",
+                  fontSize: "calc(14px * var(--font-scale))",
                   fontFamily: "var(--font-body)",
                   color: "var(--color-text)",
                   lineHeight: 1.5,
@@ -754,7 +754,7 @@ export default function Nowcast() {
           <p
             style={{
               margin: 0,
-              fontSize: "14px",
+              fontSize: "calc(14px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text)",
               lineHeight: 1.5,
@@ -772,7 +772,7 @@ export default function Nowcast() {
           <p
             style={{
               margin: 0,
-              fontSize: "14px",
+              fontSize: "calc(14px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text)",
               lineHeight: 1.5,
@@ -790,7 +790,7 @@ export default function Nowcast() {
           <p
             style={{
               margin: 0,
-              fontSize: "14px",
+              fontSize: "calc(14px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-secondary)",
               lineHeight: 1.5,
@@ -811,7 +811,7 @@ export default function Nowcast() {
           <p
             style={{
               margin: 0,
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-muted)",
             }}
@@ -822,7 +822,7 @@ export default function Nowcast() {
           <p
             style={{
               margin: 0,
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-muted)",
             }}
@@ -840,7 +840,7 @@ export default function Nowcast() {
               <div key={id} style={{ marginBottom: "12px" }}>
                 <div
                   style={{
-                    fontSize: "12px",
+                    fontSize: "calc(12px * var(--font-scale))",
                     fontFamily: "var(--font-body)",
                     color: "var(--color-text-muted)",
                     marginBottom: "6px",
@@ -860,7 +860,7 @@ export default function Nowcast() {
                         alignItems: "center",
                         gap: "10px",
                         padding: "4px 0",
-                        fontSize: "13px",
+                        fontSize: "calc(13px * var(--font-scale))",
                         fontFamily: "var(--font-body)",
                       }}
                     >
@@ -880,7 +880,7 @@ export default function Nowcast() {
                           width: "36px",
                           flexShrink: 0,
                           fontFamily: "var(--font-mono)",
-                          fontSize: "12px",
+                          fontSize: "calc(12px * var(--font-scale))",
                           color: accuracyColor(v.accuracy_score),
                           fontWeight: 600,
                         }}
@@ -891,7 +891,7 @@ export default function Nowcast() {
                       </span>
                       <span
                         style={{
-                          fontSize: "12px",
+                          fontSize: "calc(12px * var(--font-scale))",
                           color: "var(--color-text-muted)",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -905,7 +905,7 @@ export default function Nowcast() {
                 {items.find((v) => v.element === "system") && (
                   <div
                     style={{
-                      fontSize: "12px",
+                      fontSize: "calc(12px * var(--font-scale))",
                       fontFamily: "var(--font-body)",
                       color: "var(--color-text-muted)",
                       fontStyle: "italic",
@@ -932,7 +932,7 @@ export default function Nowcast() {
           <p
             style={{
               margin: 0,
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-muted)",
             }}
@@ -943,7 +943,7 @@ export default function Nowcast() {
           <p
             style={{
               margin: 0,
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-muted)",
             }}
@@ -978,7 +978,7 @@ export default function Nowcast() {
                     <CategoryBadge category={entry.category} />
                     <span
                       style={{
-                        fontSize: "11px",
+                        fontSize: "calc(11px * var(--font-scale))",
                         fontFamily: "var(--font-body)",
                         color: "var(--color-text-muted)",
                       }}
@@ -990,7 +990,7 @@ export default function Nowcast() {
                   <p
                     style={{
                       margin: "0 0 8px 0",
-                      fontSize: "13px",
+                      fontSize: "calc(13px * var(--font-scale))",
                       fontFamily: "var(--font-body)",
                       color: "var(--color-text)",
                       lineHeight: 1.4,
@@ -1002,7 +1002,7 @@ export default function Nowcast() {
                     <p
                       style={{
                         margin: "0 0 8px 0",
-                        fontSize: "12px",
+                        fontSize: "calc(12px * var(--font-scale))",
                         fontFamily: "var(--font-body)",
                         fontStyle: "italic",
                         color: "var(--color-text-secondary)",
@@ -1018,7 +1018,7 @@ export default function Nowcast() {
                         handleKnowledgeAction(entry.id, "accepted")
                       }
                       style={{
-                        fontSize: "12px",
+                        fontSize: "calc(12px * var(--font-scale))",
                         fontFamily: "var(--font-body)",
                         padding: "3px 10px",
                         borderRadius: "4px",
@@ -1035,7 +1035,7 @@ export default function Nowcast() {
                         handleKnowledgeAction(entry.id, "rejected")
                       }
                       style={{
-                        fontSize: "12px",
+                        fontSize: "calc(12px * var(--font-scale))",
                         fontFamily: "var(--font-body)",
                         padding: "3px 10px",
                         borderRadius: "4px",
@@ -1076,7 +1076,7 @@ export default function Nowcast() {
                     <CategoryBadge category={entry.category} />
                     <span
                       style={{
-                        fontSize: "11px",
+                        fontSize: "calc(11px * var(--font-scale))",
                         fontFamily: "var(--font-body)",
                         color: "var(--color-text-muted)",
                       }}
@@ -1089,7 +1089,7 @@ export default function Nowcast() {
                   <p
                     style={{
                       margin: 0,
-                      fontSize: "13px",
+                      fontSize: "calc(13px * var(--font-scale))",
                       fontFamily: "var(--font-body)",
                       color: "var(--color-text-secondary)",
                       lineHeight: 1.4,
@@ -1112,7 +1112,7 @@ export default function Nowcast() {
           flexWrap: "wrap",
           gap: "8px",
           marginTop: "8px",
-          fontSize: "12px",
+          fontSize: "calc(12px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-muted)",
         }}

@@ -90,10 +90,10 @@ export default function BarometerDial({ value, unit, trend, high, low, highAt, l
           </>
         }
       >
-        <span style={{ fontSize: "28px", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: "var(--color-text)" }}>
+        <span style={{ fontSize: "calc(28px * var(--font-scale))", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: "var(--color-text)" }}>
           {value !== null ? value.toFixed(decimals) : "--"}
         </span>
-        <span style={{ fontSize: "12px", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "2px" }}>
+        <span style={{ fontSize: "calc(12px * var(--font-scale))", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "calc(2px * var(--font-scale))" }}>
           {unit}
         </span>
       </CompactCard>
@@ -115,7 +115,7 @@ export default function BarometerDial({ value, unit, trend, high, low, highAt, l
       boxSizing: 'border-box',
     }}>
       <div style={{
-        fontSize: '12px',
+        fontSize: 'calc(12px * var(--font-scale))',
         fontFamily: 'var(--font-body)',
         color: 'var(--color-text-secondary)',
         marginBottom: '4px',
@@ -242,7 +242,7 @@ export default function BarometerDial({ value, unit, trend, high, low, highAt, l
 
       {(high != null || low != null) && (
         <div style={{
-          fontSize: '12px',
+          fontSize: 'calc(12px * var(--font-scale))',
           fontFamily: 'var(--font-gauge)',
           color: 'var(--color-text-secondary)',
           marginTop: '-4px',
@@ -255,7 +255,7 @@ export default function BarometerDial({ value, unit, trend, high, low, highAt, l
             L {low != null ? low.toFixed(decimals) : '--'}
           </div>
           {(highAt || lowAt) && (
-            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+            <div style={{ fontSize: 'calc(10px * var(--font-scale))', color: 'var(--color-text-muted)' }}>
               {highAt && <>H {formatTimestamp(highAt)}</>}
               {highAt && lowAt && ' · '}
               {lowAt && <>L {formatTimestamp(lowAt)}</>}

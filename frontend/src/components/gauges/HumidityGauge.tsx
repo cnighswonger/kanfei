@@ -149,7 +149,7 @@ export default function HumidityGauge({ value, label, high, low, highAt, lowAt }
           ) : undefined
         }
       >
-        <span style={{ fontSize: "28px", fontFamily: "var(--font-gauge)", fontWeight: "bold", color }}>
+        <span style={{ fontSize: "calc(28px * var(--font-scale))", fontFamily: "var(--font-gauge)", fontWeight: "bold", color }}>
           {value !== null ? `${value}%` : "--%"}
         </span>
       </CompactCard>
@@ -174,7 +174,7 @@ export default function HumidityGauge({ value, label, high, low, highAt, lowAt }
     }}>
       {label && (
         <div style={{
-          fontSize: '12px',
+          fontSize: 'calc(12px * var(--font-scale))',
           fontFamily: 'var(--font-body)',
           color: 'var(--color-text-secondary)',
           marginBottom: '4px',
@@ -250,7 +250,7 @@ export default function HumidityGauge({ value, label, high, low, highAt, lowAt }
 
       {(high != null || low != null) && (
         <div style={{
-          fontSize: '12px',
+          fontSize: 'calc(12px * var(--font-scale))',
           fontFamily: 'var(--font-gauge)',
           color: 'var(--color-text-secondary)',
           marginTop: '-4px',
@@ -263,7 +263,7 @@ export default function HumidityGauge({ value, label, high, low, highAt, lowAt }
             L {low != null ? `${low}%` : '--%'}
           </div>
           {(highAt || lowAt) && (
-            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+            <div style={{ fontSize: 'calc(10px * var(--font-scale))', color: 'var(--color-text-muted)' }}>
               {highAt && <>H {formatTimestamp(highAt)}</>}
               {highAt && lowAt && ' · '}
               {lowAt && <>L {formatTimestamp(lowAt)}</>}

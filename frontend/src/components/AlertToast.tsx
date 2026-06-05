@@ -65,7 +65,7 @@ export default function AlertToast() {
                 style={{
                   fontFamily: "var(--font-heading)",
                   fontWeight: 600,
-                  fontSize: "14px",
+                  fontSize: "calc(14px * var(--font-scale))",
                   marginBottom: "4px",
                 }}
               >
@@ -73,7 +73,7 @@ export default function AlertToast() {
               </div>
               <div
                 style={{
-                  fontSize: "12px",
+                  fontSize: "calc(12px * var(--font-scale))",
                   opacity: 0.9,
                   fontFamily: "var(--font-body)",
                 }}
@@ -87,7 +87,7 @@ export default function AlertToast() {
                 background: "none",
                 border: "none",
                 color: "#fff",
-                fontSize: "18px",
+                fontSize: "calc(18px * var(--font-scale))",
                 cursor: "pointer",
                 padding: "0 4px",
                 lineHeight: 1,

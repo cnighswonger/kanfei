@@ -32,10 +32,10 @@ export default function WindCompass({ direction, speed, gust, peak, peakAt, unit
           </>
         }
       >
-        <span style={{ fontSize: "28px", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: "var(--color-wind-arrow, #3b82f6)" }}>
+        <span style={{ fontSize: "calc(28px * var(--font-scale))", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: "var(--color-wind-arrow, #3b82f6)" }}>
           {speed !== null ? speed.toFixed(0) : "--"}
         </span>
-        <span style={{ fontSize: "12px", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "2px" }}>
+        <span style={{ fontSize: "calc(12px * var(--font-scale))", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "calc(2px * var(--font-scale))" }}>
           {unit}
         </span>
       </CompactCard>
@@ -66,7 +66,7 @@ export default function WindCompass({ direction, speed, gust, peak, peakAt, unit
       boxSizing: 'border-box',
     }}>
       <div style={{
-        fontSize: '12px',
+        fontSize: 'calc(12px * var(--font-scale))',
         fontFamily: 'var(--font-body)',
         color: 'var(--color-text-secondary)',
         marginBottom: '4px',
@@ -177,7 +177,7 @@ export default function WindCompass({ direction, speed, gust, peak, peakAt, unit
       <div style={{
         display: 'flex',
         gap: '16px',
-        fontSize: '13px',
+        fontSize: 'calc(13px * var(--font-scale))',
         fontFamily: 'var(--font-gauge)',
         color: 'var(--color-text-secondary)',
         marginTop: '-4px',
@@ -195,7 +195,7 @@ export default function WindCompass({ direction, speed, gust, peak, peakAt, unit
           <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
             <span>Peak {peak.toFixed(0)} {unit}</span>
             {peakAt && (
-              <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+              <span style={{ fontSize: 'calc(10px * var(--font-scale))', color: 'var(--color-text-muted)' }}>
                 at {formatTimestamp(peakAt)}
               </span>
             )}

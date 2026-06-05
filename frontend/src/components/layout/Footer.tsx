@@ -20,7 +20,7 @@ export default function Footer({ lastUpdate }: FooterProps) {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        fontSize: '12px',
+        fontSize: 'calc(12px * var(--font-scale))',
         color: 'var(--color-text-muted)',
         fontFamily: 'var(--font-body)',
         flexShrink: 0,

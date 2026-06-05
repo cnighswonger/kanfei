@@ -44,7 +44,7 @@ const cardStyle: React.CSSProperties = {
 
 const sectionTitle: React.CSSProperties = {
   margin: "0 0 12px 0",
-  fontSize: "16px",
+  fontSize: "calc(16px * var(--font-scale))",
   fontFamily: "var(--font-heading)",
   color: "var(--color-text)",
 };
@@ -56,7 +56,7 @@ const btnStyle: React.CSSProperties = {
   background: "var(--color-bg-secondary)",
   color: "var(--color-text)",
   cursor: "pointer",
-  fontSize: 13,
+  fontSize: "calc(13px * var(--font-scale))",
   fontFamily: "var(--font-body)",
 };
 
@@ -75,11 +75,11 @@ const inputStyle: React.CSSProperties = {
   background: "var(--color-bg-secondary)",
   color: "var(--color-text)",
   fontFamily: "var(--font-body)",
-  fontSize: 13,
+  fontSize: "calc(13px * var(--font-scale))",
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: "calc(12px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text-secondary)",
   marginBottom: 4,
@@ -165,7 +165,7 @@ function ConditionsStrip({ conditions }: { conditions: SprayConditions | null })
     >
       <span
         style={{
-          fontSize: 13,
+          fontSize: "calc(13px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           fontWeight: 600,
           color: conditions.overall_spray_ok
@@ -180,7 +180,7 @@ function ConditionsStrip({ conditions }: { conditions: SprayConditions | null })
         <span
           key={item.label}
           style={{
-            fontSize: 13,
+            fontSize: "calc(13px * var(--font-scale))",
             fontFamily: "var(--font-mono)",
             color: item.ok ? "var(--color-text)" : "var(--color-danger)",
           }}
@@ -207,11 +207,11 @@ function ConstraintRow({ check }: { check: ConstraintCheck }) {
         alignItems: "center",
         gap: 8,
         padding: "4px 0",
-        fontSize: 13,
+        fontSize: "calc(13px * var(--font-scale))",
         fontFamily: "var(--font-body)",
       }}
     >
-      <span style={{ fontSize: 14 }}>{check.passed ? "\u2705" : "\u274C"}</span>
+      <span style={{ fontSize: "calc(14px * var(--font-scale))" }}>{check.passed ? "\u2705" : "\u274C"}</span>
       <span
         style={{
           fontWeight: 600,
@@ -245,7 +245,7 @@ function GoNoGoBadge({ go, confidence }: { go: boolean; confidence?: string }) {
         gap: 6,
         padding: "3px 10px",
         borderRadius: 12,
-        fontSize: 12,
+        fontSize: "calc(12px * var(--font-scale))",
         fontWeight: 700,
         fontFamily: "var(--font-body)",
         background: go
@@ -316,7 +316,7 @@ function ScheduleCard({
       >
         <strong
           style={{
-            fontSize: 14,
+            fontSize: "calc(14px * var(--font-scale))",
             fontFamily: "var(--font-body)",
             color: "var(--color-text)",
           }}
@@ -325,7 +325,7 @@ function ScheduleCard({
         </strong>
         <span
           style={{
-            fontSize: 13,
+            fontSize: "calc(13px * var(--font-scale))",
             fontFamily: "var(--font-mono)",
             color: "var(--color-text-secondary)",
           }}
@@ -336,7 +336,7 @@ function ScheduleCard({
         {isPast && (
           <span
             style={{
-              fontSize: 11,
+              fontSize: "calc(11px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-muted)",
               textTransform: "uppercase",
@@ -348,7 +348,7 @@ function ScheduleCard({
         <span style={{ flex: 1 }} />
         {ev && (
           <button
-            style={{ ...btnStyle, padding: "3px 8px", fontSize: 12 }}
+            style={{ ...btnStyle, padding: "3px 8px", fontSize: "calc(12px * var(--font-scale))" }}
             onClick={() => setExpanded(!expanded)}
           >
             {expanded ? "Hide Details" : "Details"}
@@ -360,7 +360,7 @@ function ScheduleCard({
         <p
           style={{
             margin: "8px 0 0",
-            fontSize: 13,
+            fontSize: "calc(13px * var(--font-scale))",
             fontFamily: "var(--font-body)",
             color: "var(--color-text-secondary)",
             lineHeight: 1.5,
@@ -377,7 +377,7 @@ function ScheduleCard({
             padding: "6px 10px",
             background: "var(--color-bg-secondary)",
             borderRadius: 6,
-            fontSize: 12,
+            fontSize: "calc(12px * var(--font-scale))",
             fontFamily: "var(--font-mono)",
             color: "var(--color-accent)",
           }}
@@ -405,13 +405,13 @@ function ScheduleCard({
                   background: "var(--color-bg-secondary)",
                   borderRadius: 6,
                   borderLeft: "3px solid var(--color-accent)",
-                  fontSize: 13,
+                  fontSize: "calc(13px * var(--font-scale))",
                   fontFamily: "var(--font-body)",
                   color: "var(--color-text)",
                   lineHeight: 1.5,
                 }}
               >
-                <span style={{ fontWeight: 600, fontSize: 11, color: "var(--color-accent)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                <span style={{ fontWeight: 600, fontSize: "calc(11px * var(--font-scale))", color: "var(--color-accent)", textTransform: "uppercase", letterSpacing: "calc(0.5px * var(--font-scale))" }}>
                   AI Advisory
                 </span>
                 <p style={{ margin: "4px 0 0" }}>{ai.detail}</p>
@@ -537,7 +537,7 @@ function OutcomeForm({
   };
 
   const labelStyle: React.CSSProperties = {
-    fontSize: 12,
+    fontSize: "calc(12px * var(--font-scale))",
     fontFamily: "var(--font-body)",
     color: "var(--color-text-secondary)",
     display: "block",
@@ -546,7 +546,7 @@ function OutcomeForm({
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "4px 8px",
-    fontSize: 13,
+    fontSize: "calc(13px * var(--font-scale))",
     fontFamily: "var(--font-mono)",
     background: "var(--color-bg-card)",
     color: "var(--color-text)",
@@ -565,7 +565,7 @@ function OutcomeForm({
         marginTop: 8,
       }}
     >
-      <strong style={{ fontSize: 13, fontFamily: "var(--font-body)", color: "var(--color-text)" }}>
+      <strong style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text)" }}>
         Log Outcome
       </strong>
 
@@ -586,7 +586,7 @@ function OutcomeForm({
           style={{
             display: "flex",
             justifyContent: "space-between",
-            fontSize: 10,
+            fontSize: "calc(10px * var(--font-scale))",
             fontFamily: "var(--font-body)",
             color: "var(--color-text-muted)",
           }}
@@ -706,7 +706,7 @@ function ProductStatsBadge({ productId }: { productId: number }) {
         padding: "8px 12px",
         background: "var(--color-bg-card)",
         borderRadius: 6,
-        fontSize: 12,
+        fontSize: "calc(12px * var(--font-scale))",
         fontFamily: "var(--font-mono)",
         color: "var(--color-text-secondary)",
       }}
@@ -732,7 +732,7 @@ function ProductStatsBadge({ productId }: { productId: number }) {
         )}
       </div>
       {stats.tuned_thresholds.length > 0 && (
-        <div style={{ marginTop: 6, fontSize: 11, color: "var(--color-text-muted)" }}>
+        <div style={{ marginTop: 6, fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)" }}>
           {stats.tuned_thresholds.map((t) => (
             <div key={t.name}>{t.annotation}</div>
           ))}
@@ -765,13 +765,13 @@ function ProductCard({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <strong style={{ fontSize: 14, fontFamily: "var(--font-body)", color: "var(--color-text)" }}>
+        <strong style={{ fontSize: "calc(14px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text)" }}>
           {product.name}
         </strong>
         {product.is_preset && (
           <span
             style={{
-              fontSize: 10,
+              fontSize: "calc(10px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-muted)",
               textTransform: "uppercase",
@@ -784,11 +784,11 @@ function ProductCard({
           </span>
         )}
         <span style={{ flex: 1 }} />
-        <button style={{ ...btnStyle, padding: "2px 8px", fontSize: 11 }} onClick={onEdit}>
+        <button style={{ ...btnStyle, padding: "2px 8px", fontSize: "calc(11px * var(--font-scale))" }} onClick={onEdit}>
           Edit
         </button>
         <button
-          style={{ ...btnStyle, padding: "2px 8px", fontSize: 11, color: "var(--color-danger)" }}
+          style={{ ...btnStyle, padding: "2px 8px", fontSize: "calc(11px * var(--font-scale))", color: "var(--color-danger)" }}
           onClick={onDelete}
         >
           Delete
@@ -799,7 +799,7 @@ function ProductCard({
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
           gap: "4px 16px",
-          fontSize: 12,
+          fontSize: "calc(12px * var(--font-scale))",
           fontFamily: "var(--font-mono)",
           color: "var(--color-text-secondary)",
         }}
@@ -820,7 +820,7 @@ function ProductCard({
         <p
           style={{
             margin: "6px 0 0",
-            fontSize: 12,
+            fontSize: "calc(12px * var(--font-scale))",
             fontFamily: "var(--font-body)",
             color: "var(--color-text-muted)",
             fontStyle: "italic",
@@ -1103,7 +1103,7 @@ function QuickCheck({ products }: { products: SprayProduct[] }) {
             <GoNoGoBadge go={result.go} confidence={result.confidence} />
             <span
               style={{
-                fontSize: 13,
+                fontSize: "calc(13px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-secondary)",
               }}
@@ -1123,7 +1123,7 @@ function QuickCheck({ products }: { products: SprayProduct[] }) {
                 padding: "8px 12px",
                 background: "var(--color-bg-secondary)",
                 borderRadius: 6,
-                fontSize: 13,
+                fontSize: "calc(13px * var(--font-scale))",
                 fontFamily: "var(--font-mono)",
                 color: "var(--color-accent)",
               }}
@@ -1295,7 +1295,7 @@ export default function Spray() {
           <h2
             style={{
               margin: "0 0 16px 0",
-              fontSize: 24,
+              fontSize: "calc(24px * var(--font-scale))",
               fontFamily: "var(--font-heading)",
               color: "var(--color-text)",
             }}
@@ -1316,7 +1316,7 @@ export default function Spray() {
         <h2
           style={{
             margin: "0 0 16px 0",
-            fontSize: 24,
+            fontSize: "calc(24px * var(--font-scale))",
             fontFamily: "var(--font-heading)",
             color: "var(--color-text)",
           }}
@@ -1333,11 +1333,11 @@ export default function Spray() {
       {nowcast?.spray_advisory && (
         <div style={{ ...cardStyle, borderLeft: "4px solid var(--color-accent)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <span style={{ fontWeight: 600, fontSize: 11, color: "var(--color-accent)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            <span style={{ fontWeight: 600, fontSize: "calc(11px * var(--font-scale))", color: "var(--color-accent)", textTransform: "uppercase", letterSpacing: "calc(0.5px * var(--font-scale))" }}>
               AI Spray Analysis
             </span>
           </div>
-          <p style={{ margin: 0, fontSize: 13, fontFamily: "var(--font-body)", color: "var(--color-text)", lineHeight: 1.5 }}>
+          <p style={{ margin: 0, fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text)", lineHeight: 1.5 }}>
             {nowcast.spray_advisory.summary}
           </p>
         </div>
@@ -1375,7 +1375,7 @@ export default function Spray() {
             style={{
               color: "var(--color-text-muted)",
               fontFamily: "var(--font-body)",
-              fontSize: 14,
+              fontSize: "calc(14px * var(--font-scale))",
             }}
           >
             No upcoming sprays scheduled.
@@ -1399,7 +1399,7 @@ export default function Spray() {
             <summary
               style={{
                 cursor: "pointer",
-                fontSize: 13,
+                fontSize: "calc(13px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-secondary)",
                 marginBottom: 8,
@@ -1441,7 +1441,7 @@ export default function Spray() {
           }}
           onClick={() => setProductsExpanded(!productsExpanded)}
         >
-          <span style={{ fontSize: 14, color: "var(--color-text-muted)" }}>
+          <span style={{ fontSize: "calc(14px * var(--font-scale))", color: "var(--color-text-muted)" }}>
             {productsExpanded ? "\u25BC" : "\u25B6"}
           </span>
           <h3 style={{ ...sectionTitle, margin: 0 }}>
