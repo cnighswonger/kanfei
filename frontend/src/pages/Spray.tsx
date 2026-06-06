@@ -411,7 +411,7 @@ function ScheduleCard({
                   lineHeight: 1.5,
                 }}
               >
-                <span style={{ fontWeight: 600, fontSize: "calc(11px * var(--font-scale))", color: "var(--color-accent)", textTransform: "uppercase", letterSpacing: "calc(0.5px * var(--font-scale))" }}>
+                <span style={{ fontWeight: 600, fontSize: "calc(11px * var(--font-scale))", color: "var(--color-accent)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                   AI Advisory
                 </span>
                 <p style={{ margin: "4px 0 0" }}>{ai.detail}</p>
@@ -1333,7 +1333,7 @@ export default function Spray() {
       {nowcast?.spray_advisory && (
         <div style={{ ...cardStyle, borderLeft: "4px solid var(--color-accent)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <span style={{ fontWeight: 600, fontSize: "calc(11px * var(--font-scale))", color: "var(--color-accent)", textTransform: "uppercase", letterSpacing: "calc(0.5px * var(--font-scale))" }}>
+            <span style={{ fontWeight: 600, fontSize: "calc(11px * var(--font-scale))", color: "var(--color-accent)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
               AI Spray Analysis
             </span>
           </div>

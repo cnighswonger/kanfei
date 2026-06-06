@@ -74,7 +74,7 @@ export default function SolarUVGauge({ solarRadiation, uvIndex }: SolarUVGaugePr
         <span style={{ fontSize: "calc(28px * var(--font-scale))", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: uvCol }}>
           {uvIndex !== null ? uvIndex.toFixed(1) : "--"}
         </span>
-        <span style={{ fontSize: "calc(12px * var(--font-scale))", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "calc(2px * var(--font-scale))" }}>
+        <span style={{ fontSize: "calc(12px * var(--font-scale))", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "2px" }}>
           UV
         </span>
       </CompactCard>

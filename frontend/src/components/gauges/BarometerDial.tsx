@@ -93,7 +93,7 @@ export default function BarometerDial({ value, unit, trend, high, low, highAt, l
         <span style={{ fontSize: "calc(28px * var(--font-scale))", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: "var(--color-text)" }}>
           {value !== null ? value.toFixed(decimals) : "--"}
         </span>
-        <span style={{ fontSize: "calc(12px * var(--font-scale))", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "calc(2px * var(--font-scale))" }}>
+        <span style={{ fontSize: "calc(12px * var(--font-scale))", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "2px" }}>
           {unit}
         </span>
       </CompactCard>

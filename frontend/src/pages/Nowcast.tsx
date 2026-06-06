@@ -529,24 +529,24 @@ export default function Nowcast() {
                 {alert.sender_name}
               </span>
             </div>
-            <div style={{ fontSize: "calc(13px * var(--font-scale))", marginTop: "calc(4px * var(--font-scale))", opacity: 0.95 }}>
+            <div style={{ fontSize: "calc(13px * var(--font-scale))", marginTop: "4px", opacity: 0.95 }}>
               {alert.headline}
             </div>
             {expanded && (
-              <div style={{ marginTop: "calc(10px * var(--font-scale))", fontSize: "calc(13px * var(--font-scale))", lineHeight: 1.5, opacity: 0.95 }}>
+              <div style={{ marginTop: "10px", fontSize: "calc(13px * var(--font-scale))", lineHeight: 1.5, opacity: 0.95 }}>
                 {alert.instruction && (
                   <div style={{ marginBottom: "8px" }}>
                     <strong>Action:</strong> {alert.instruction}
                   </div>
                 )}
                 <div style={{ whiteSpace: "pre-wrap" }}>{alert.description}</div>
-                <div style={{ marginTop: "calc(8px * var(--font-scale))", fontSize: "calc(11px * var(--font-scale))", opacity: 0.7 }}>
+                <div style={{ marginTop: "8px", fontSize: "calc(11px * var(--font-scale))", opacity: 0.7 }}>
                   Onset: {new Date(alert.onset).toLocaleString()} | Expires: {new Date(alert.expires).toLocaleString()}
                 </div>
               </div>
             )}
             {!expanded && (
-              <div style={{ fontSize: "calc(11px * var(--font-scale))", marginTop: "calc(4px * var(--font-scale))", opacity: 0.7 }}>
+              <div style={{ fontSize: "calc(11px * var(--font-scale))", marginTop: "4px", opacity: 0.7 }}>
                 Tap for details
               </div>
             )}
@@ -629,7 +629,7 @@ export default function Nowcast() {
               </div>
             )}
             {sw.local_evidence && sw.local_evidence.length > 0 && (
-              <div style={{ fontSize: "calc(13px * var(--font-scale))", marginBottom: "calc(10px * var(--font-scale))" }}>
+              <div style={{ fontSize: "calc(13px * var(--font-scale))", marginBottom: "10px" }}>
                 <div style={{ fontWeight: 600, marginBottom: "4px", opacity: 0.85 }}>
                   Local Evidence:
                 </div>

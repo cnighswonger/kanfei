@@ -446,7 +446,7 @@ export default function History() {
         >
           {summary.max != null && (
             <div>
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "calc(0.5px * var(--font-scale))" }}>High </span>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>High </span>
               <span style={{ fontSize: "calc(16px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", fontWeight: "bold" }}>
                 {summary.max}{(UNIT_LABELS[SENSOR_UNITS[sensor] ?? ""] ?? "").trim()}
               </span>
@@ -454,7 +454,7 @@ export default function History() {
           )}
           {summary.min != null && (
             <div>
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "calc(0.5px * var(--font-scale))" }}>Low </span>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Low </span>
               <span style={{ fontSize: "calc(16px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", fontWeight: "bold" }}>
                 {summary.min}{(UNIT_LABELS[SENSOR_UNITS[sensor] ?? ""] ?? "").trim()}
               </span>
@@ -462,7 +462,7 @@ export default function History() {
           )}
           {summary.avg != null && (
             <div>
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "calc(0.5px * var(--font-scale))" }}>Avg </span>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Avg </span>
               <span style={{ fontSize: "calc(16px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", fontWeight: "bold" }}>
                 {summary.avg}{(UNIT_LABELS[SENSOR_UNITS[sensor] ?? ""] ?? "").trim()}
               </span>

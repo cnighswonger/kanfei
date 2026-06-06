@@ -752,7 +752,7 @@ export default function MapView() {
           const icon = L.divIcon({
             className: "",
             html: `<div style="
-              font-size:11px;font-weight:700;font-family:var(--font-gauge);
+              font-size:calc(11px * var(--font-scale, 1));font-weight:700;font-family:var(--font-gauge);
               color:#fff;background:${color};
               padding:1px 3px;border-radius:3px;display:inline-block;
               white-space:nowrap;pointer-events:auto;
@@ -834,7 +834,7 @@ export default function MapView() {
                   interactive={false}
                   icon={L.divIcon({
                     className: "",
-                    html: `<span style="font-size:10px;font-weight:600;color:${isDark ? "#c8dcff" : "#14287a"};background:${isDark ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.85)"};padding:1px 4px;border-radius:2px;white-space:nowrap;text-shadow:${isDark ? "0 0 3px rgba(0,0,0,0.8)" : "0 0 3px rgba(255,255,255,0.9)"}">${iso.label}</span>`,
+                    html: `<span style="font-size:calc(10px * var(--font-scale, 1));font-weight:600;color:${isDark ? "#c8dcff" : "#14287a"};background:${isDark ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.85)"};padding:1px 4px;border-radius:2px;white-space:nowrap;text-shadow:${isDark ? "0 0 3px rgba(0,0,0,0.8)" : "0 0 3px rgba(255,255,255,0.9)"}">${iso.label}</span>`,
                     iconSize: [0, 0],
                     iconAnchor: [0, 6],
                   })}

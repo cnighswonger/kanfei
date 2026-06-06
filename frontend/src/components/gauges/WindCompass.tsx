@@ -35,7 +35,7 @@ export default function WindCompass({ direction, speed, gust, peak, peakAt, unit
         <span style={{ fontSize: "calc(28px * var(--font-scale))", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: "var(--color-wind-arrow, #3b82f6)" }}>
           {speed !== null ? speed.toFixed(0) : "--"}
         </span>
-        <span style={{ fontSize: "calc(12px * var(--font-scale))", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "calc(2px * var(--font-scale))" }}>
+        <span style={{ fontSize: "calc(12px * var(--font-scale))", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "2px" }}>
           {unit}
         </span>
       </CompactCard>

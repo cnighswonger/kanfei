@@ -295,7 +295,7 @@ function UsageTab({
             <strong style={{ color: "var(--color-warning)", fontFamily: "var(--font-body)", fontSize: "calc(14px * var(--font-scale))" }}>
               Nowcast Paused {'\u2014'} Budget Limit Reached
             </strong>
-            <div style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-secondary)", fontFamily: "var(--font-body)", marginTop: "calc(4px * var(--font-scale))" }}>
+            <div style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-secondary)", fontFamily: "var(--font-body)", marginTop: "4px" }}>
               Monthly budget of ${budget.limit_usd.toFixed(2)} reached (${budget.current_usd.toFixed(2)} used).
               Nowcast generation has been automatically paused.
             </div>
@@ -329,7 +329,7 @@ function UsageTab({
           <div style={statCardStyle}>
             <div style={statValueStyle}>${today?.estimated_cost_usd.toFixed(2) ?? "0.00"}</div>
             <div style={statLabelStyle}>Today</div>
-            <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "calc(4px * var(--font-scale))" }}>
+            <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "4px" }}>
               {today?.calls ?? 0} calls {'\u00B7'} {formatTokens((today?.input_tokens ?? 0) + (today?.output_tokens ?? 0))} tokens
             </div>
           </div>
@@ -338,7 +338,7 @@ function UsageTab({
           <div style={statCardStyle}>
             <div style={statValueStyle}>${month?.estimated_cost_usd.toFixed(2) ?? "0.00"}</div>
             <div style={statLabelStyle}>This Month</div>
-            <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "calc(4px * var(--font-scale))" }}>
+            <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "4px" }}>
               {month?.calls ?? 0} calls {'\u00B7'} {formatTokens((month?.input_tokens ?? 0) + (month?.output_tokens ?? 0))} tokens
             </div>
             {/* Budget progress bar */}
@@ -358,7 +358,7 @@ function UsageTab({
                     transition: "width 0.3s ease",
                   }} />
                 </div>
-                <div style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "calc(3px * var(--font-scale))" }}>
+                <div style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "3px" }}>
                   ${budget.current_usd.toFixed(2)} / ${budget.limit_usd.toFixed(2)} budget
                 </div>
               </div>
@@ -369,7 +369,7 @@ function UsageTab({
           <div style={statCardStyle}>
             <div style={statValueStyle}>${allTime?.estimated_cost_usd.toFixed(2) ?? "0.00"}</div>
             <div style={statLabelStyle}>All Time</div>
-            <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "calc(4px * var(--font-scale))" }}>
+            <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "4px" }}>
               {allTime?.calls ?? 0} calls {'\u00B7'} {formatTokens((allTime?.input_tokens ?? 0) + (allTime?.output_tokens ?? 0))} tokens
             </div>
           </div>
@@ -454,7 +454,7 @@ function UsageTab({
         <div style={fieldGroup}>
           <label style={labelStyle}>
             Anthropic Admin API Key
-            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
               Optional. Enables real-time cost data from your Anthropic account.
               Requires an Admin API key (sk-ant-admin...) from the Claude Console.
             </span>
@@ -480,7 +480,7 @@ function UsageTab({
               step={1}
               placeholder="0 = unlimited"
             />
-            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "calc(2px * var(--font-scale))", display: "block" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "2px", display: "block" }}>
               Set to 0 for no limit
             </span>
           </div>
@@ -538,7 +538,7 @@ function UsageTab({
             </tbody>
           </table>
         </div>
-        <div style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "calc(8px * var(--font-scale))" }}>
+        <div style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginTop: "8px" }}>
           Local cost estimates are based on these rates. For actual billing, configure the Admin API key above.
         </div>
       </div>
@@ -742,7 +742,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
         <h3 style={sectionTitle}>Database Overview</h3>
         <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontSize: "calc(11px * var(--font-scale))", textTransform: "uppercase", letterSpacing: "calc(0.5px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "calc(2px * var(--font-scale))" }}>
+            <div style={{ fontSize: "calc(11px * var(--font-scale))", textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "2px" }}>
               File Size
             </div>
             <div style={{ fontSize: "calc(20px * var(--font-scale))", fontWeight: 700, fontFamily: "var(--font-heading)", color: "var(--color-text)" }}>
@@ -750,7 +750,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
             </div>
           </div>
           <div>
-            <div style={{ fontSize: "calc(11px * var(--font-scale))", textTransform: "uppercase", letterSpacing: "calc(0.5px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "calc(2px * var(--font-scale))" }}>
+            <div style={{ fontSize: "calc(11px * var(--font-scale))", textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "2px" }}>
               Total Rows
             </div>
             <div style={{ fontSize: "calc(20px * var(--font-scale))", fontWeight: 700, fontFamily: "var(--font-heading)", color: "var(--color-text)" }}>
@@ -861,7 +861,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
           padding: isMobile ? "14px" : "20px",
           border: "2px solid var(--color-warning)",
         }}>
-          <h3 style={{ ...sectionTitle, fontSize: "calc(16px * var(--font-scale))", marginBottom: "calc(12px * var(--font-scale))" }}>
+          <h3 style={{ ...sectionTitle, fontSize: "calc(16px * var(--font-scale))", marginBottom: "12px" }}>
             Purge: {TABLE_LABELS[purgeTarget] ?? purgeTarget}
           </h3>
 
@@ -946,7 +946,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
           Reduce storage by replacing raw sensor readings (every ~10s) with 5-minute averages.
           Charts and exports work identically on compacted data.
           {sensorRowCount > 0 && (
-            <span style={{ display: "block", marginTop: "calc(4px * var(--font-scale))", color: "var(--color-text-muted)", fontSize: "calc(12px * var(--font-scale))" }}>
+            <span style={{ display: "block", marginTop: "4px", color: "var(--color-text-muted)", fontSize: "calc(12px * var(--font-scale))" }}>
               Current: {sensorRowCount.toLocaleString()} readings. After full compaction: ~{estimatedCompacted.toLocaleString()} rows.
             </span>
           )}
@@ -1231,7 +1231,7 @@ function BackupTab({ val, updateField, isMobile }: {
               value={String(val("backup_schedule_time") || "")}
               onChange={(e) => updateField("backup_schedule_time", e.target.value)}
             />
-            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(4px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
               HH:MM — run backup at this time daily. Leave blank for interval-from-boot.
             </span>
           </div>
@@ -1241,7 +1241,7 @@ function BackupTab({ val, updateField, isMobile }: {
       {/* Status & Manual Backup */}
       <div style={cardStyle}>
         <h3 style={sectionTitle}>Backup Status</h3>
-        <div style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginBottom: "calc(12px * var(--font-scale))" }}>
+        <div style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginBottom: "12px" }}>
           <div>Last successful backup: {lastSuccess ? new Date(lastSuccess).toLocaleString() : "Never"}</div>
           {lastError && (
             <div style={{ color: "var(--color-danger)", marginTop: "4px" }}>Last error: {lastError}</div>
@@ -1310,13 +1310,13 @@ function BackupTab({ val, updateField, isMobile }: {
                         <span>
                           <button
                             onClick={() => handleDelete(b.name)}
-                            style={{ background: "var(--color-danger)", color: "#fff", border: "none", borderRadius: "calc(4px * var(--font-scale))", padding: "4px 10px", cursor: "pointer", fontSize: "calc(12px * var(--font-scale))", marginRight: "calc(4px * var(--font-scale))" }}
+                            style={{ background: "var(--color-danger)", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 10px", cursor: "pointer", fontSize: "calc(12px * var(--font-scale))", marginRight: "4px" }}
                           >
                             Confirm
                           </button>
                           <button
                             onClick={() => setDeleteConfirm(null)}
-                            style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", borderRadius: "calc(4px * var(--font-scale))", padding: "4px 10px", cursor: "pointer", fontSize: "calc(12px * var(--font-scale))" }}
+                            style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", borderRadius: "4px", padding: "4px 10px", cursor: "pointer", fontSize: "calc(12px * var(--font-scale))" }}
                           >
                             Cancel
                           </button>
@@ -1332,7 +1332,7 @@ function BackupTab({ val, updateField, isMobile }: {
                       {restoreTarget !== b.name && (
                         <button
                           onClick={() => { setRestoreTarget(b.name); setRestoreConfirm(""); setRestoreResult(null); }}
-                          style={{ background: "none", border: "none", color: "var(--color-warning, #f59e0b)", cursor: "pointer", fontWeight: 600, fontSize: "calc(13px * var(--font-scale))", marginLeft: "calc(12px * var(--font-scale))" }}
+                          style={{ background: "none", border: "none", color: "var(--color-warning, #f59e0b)", cursor: "pointer", fontWeight: 600, fontSize: "calc(13px * var(--font-scale))", marginLeft: "12px" }}
                         >
                           Restore
                         </button>
@@ -1354,10 +1354,10 @@ function BackupTab({ val, updateField, isMobile }: {
             border: "2px solid var(--color-warning, #f59e0b)",
             background: "rgba(245,158,11,0.05)",
           }}>
-            <div style={{ fontWeight: 600, fontSize: "calc(14px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text)", marginBottom: "calc(8px * var(--font-scale))" }}>
+            <div style={{ fontWeight: 600, fontSize: "calc(14px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text)", marginBottom: "8px" }}>
               Restore from {restoreTarget}
             </div>
-            <div style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginBottom: "calc(12px * var(--font-scale))" }}>
+            <div style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginBottom: "12px" }}>
               This will replace the current database. A .pre-restore copy will be created as a safety net.
               You must restart both the web app and logger daemon after restore.
             </div>
@@ -1456,7 +1456,7 @@ function ChangePasswordCard() {
           <label style={labelStyle}>New Password</label>
           <input style={inputStyle} type="password" value={newPw}
             onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" />
-          <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "calc(4px * var(--font-scale))", display: "block" }}>
+          <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "4px", display: "block" }}>
             At least 8 characters
           </span>
         </div>
@@ -1468,7 +1468,7 @@ function ChangePasswordCard() {
           }} type="password" value={confirmPw}
             onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" />
           {mismatch && (
-            <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-danger)", marginTop: "calc(4px * var(--font-scale))", display: "block" }}>
+            <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-danger)", marginTop: "4px", display: "block" }}>
               Passwords do not match
             </span>
           )}
@@ -1653,7 +1653,7 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
         <p style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginTop: 0, lineHeight: 1.5 }}>
           Most settings take effect immediately or on the next cycle. To apply driver or connection changes, use <strong>Save &amp; Reconnect</strong> on the Station tab.
         </p>
-        <p style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginTop: "calc(8px * var(--font-scale))", lineHeight: 1.5 }}>
+        <p style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", marginTop: "8px", lineHeight: 1.5 }}>
           If a full service restart is needed:
         </p>
         <div style={{
@@ -1666,12 +1666,12 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
           marginTop: "8px",
           lineHeight: 1.6,
         }}>
-          <div style={{ marginBottom: "calc(8px * var(--font-scale))", color: "var(--color-text-muted)", fontSize: "calc(11px * var(--font-scale))" }}>Windows (services):</div>
+          <div style={{ marginBottom: "8px", color: "var(--color-text-muted)", fontSize: "calc(11px * var(--font-scale))" }}>Windows (services):</div>
           <div>net stop KanfeiWeb &amp;&amp; net stop KanfeiLogger</div>
           <div>net start KanfeiLogger &amp;&amp; net start KanfeiWeb</div>
-          <div style={{ marginTop: "calc(12px * var(--font-scale))", marginBottom: "calc(8px * var(--font-scale))", color: "var(--color-text-muted)", fontSize: "calc(11px * var(--font-scale))" }}>Linux (systemd):</div>
+          <div style={{ marginTop: "12px", marginBottom: "8px", color: "var(--color-text-muted)", fontSize: "calc(11px * var(--font-scale))" }}>Linux (systemd):</div>
           <div>sudo systemctl restart kanfei-logger kanfei-web</div>
-          <div style={{ marginTop: "calc(12px * var(--font-scale))", marginBottom: "calc(8px * var(--font-scale))", color: "var(--color-text-muted)", fontSize: "calc(11px * var(--font-scale))" }}>Manual (dev mode):</div>
+          <div style={{ marginTop: "12px", marginBottom: "8px", color: "var(--color-text-muted)", fontSize: "calc(11px * var(--font-scale))" }}>Manual (dev mode):</div>
           <div>Ctrl+C both terminals, then restart</div>
         </div>
       </div>
@@ -2205,7 +2205,7 @@ export default function Settings() {
       {/* Optional Features */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Optional Features</h3>
-        <p style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-muted)", marginBottom: "calc(16px * var(--font-scale))", fontFamily: "var(--font-body)", marginTop: 0 }}>
+        <p style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-muted)", marginBottom: "16px", fontFamily: "var(--font-body)", marginTop: 0 }}>
           Enable optional features to add their pages and settings tabs.
         </p>
         <div style={fieldGroup}>
@@ -2223,7 +2223,7 @@ export default function Settings() {
             />
             AI Nowcast
           </label>
-          <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
+          <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px", fontFamily: "var(--font-body)" }}>
             Hyper-local AI-powered weather forecasting using Claude. Requires an Anthropic API key.
           </span>
         </div>
@@ -2236,7 +2236,7 @@ export default function Settings() {
             />
             Spray Advisor
           </label>
-          <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
+          <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px", fontFamily: "var(--font-body)" }}>
             Agricultural spray application recommendations based on weather conditions and product constraints.
           </span>
         </div>
@@ -2374,7 +2374,7 @@ export default function Settings() {
               <option value="tempest">WeatherFlow Tempest (UDP)</option>
               <option value="ambient">Ambient Weather (HTTP push)</option>
             </select>
-            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(4px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
               Click <strong>Save &amp; Reconnect</strong> after changing to apply the new driver.
             </span>
           </div>
@@ -2487,7 +2487,7 @@ export default function Settings() {
                 value={String(val("tempest_hub_sn") || "")}
                 onChange={(e) => updateField("tempest_hub_sn", e.target.value)}
               />
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(4px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
                 The Tempest hub broadcasts on your local network automatically.
               </span>
             </div>
@@ -2505,7 +2505,7 @@ export default function Settings() {
                 value={String(val("ambient_listen_port") || 8080)}
                 onChange={(e) => updateField("ambient_listen_port", parseInt(e.target.value) || 8080)}
               />
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(4px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
                 Configure your station to push data to this computer's IP on this port.
               </span>
             </div>
@@ -3143,7 +3143,7 @@ export default function Settings() {
             />
             Enable Interactive Map
           </label>
-          <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
+          <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px", fontFamily: "var(--font-body)" }}>
             Full-page weather map showing nearby stations, pressure isobars, and NWS alert polygons.
           </span>
         </div>
@@ -3186,7 +3186,7 @@ export default function Settings() {
                 <option value="300">300 miles</option>
                 <option value="450">450 miles</option>
               </select>
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(4px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
                 Maximum radius at full zoom-out. Larger values show more stations but take longer to load.
               </span>
             </div>
@@ -3310,7 +3310,7 @@ export default function Settings() {
               value={String(val("bot_telegram_chat_id") || "")}
               onChange={(e) => updateField("bot_telegram_chat_id", e.target.value)}
             />
-            <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "calc(4px * var(--font-scale))", display: "block" }}>
+            <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "4px", display: "block" }}>
               Comma-separated for multiple chats
             </span>
           </div>
@@ -3491,7 +3491,7 @@ export default function Settings() {
             value={String(val("bot_discord_channel_id") || "")}
             onChange={(e) => updateField("bot_discord_channel_id", e.target.value)}
           />
-          <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "calc(4px * var(--font-scale))", display: "block" }}>
+          <span style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "4px", display: "block" }}>
             Comma-separated for multiple channels
           </span>
         </div>
@@ -3686,7 +3686,7 @@ export default function Settings() {
         )}
 
         {alertThresholds.length === 0 && !showAddAlert && (
-          <p style={{ fontSize: "calc(14px * var(--font-scale))", color: "var(--color-text-muted)", marginBottom: "calc(12px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
+          <p style={{ fontSize: "calc(14px * var(--font-scale))", color: "var(--color-text-muted)", marginBottom: "12px", fontFamily: "var(--font-body)" }}>
             No alerts configured. Add one to get notified when conditions exceed a threshold.
           </p>
         )}
@@ -3853,7 +3853,7 @@ export default function Settings() {
             <div style={fieldGroup}>
               <label style={labelStyle}>
                 Remote Endpoint URL
-                <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
+                <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
                   kanfei-nowcast server address
                 </span>
               </label>
@@ -3873,7 +3873,7 @@ export default function Settings() {
           <div style={fieldGroup}>
             <label style={labelStyle}>
               API Key
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
                 Provided with your kanfei-nowcast subscription
               </span>
             </label>
@@ -3888,7 +3888,7 @@ export default function Settings() {
           <div style={fieldGroup}>
             <label style={labelStyle}>
               Quality Preset
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
                 Controls which AI model is used. During severe weather, the system automatically
                 uses the best available model regardless of this setting.
               </span>
@@ -3928,7 +3928,7 @@ export default function Settings() {
         <div style={fieldGroup}>
           <label style={labelStyle}>
             Anthropic API Key
-            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
               Or set ANTHROPIC_API_KEY environment variable
             </span>
           </label>
@@ -3944,7 +3944,7 @@ export default function Settings() {
         <div style={fieldGroup}>
           <label style={labelStyle}>
             Quality Preset
-            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
               Controls which AI model is used for routine weather. During severe weather,
               the system automatically escalates to the best available model.
             </span>
@@ -3996,7 +3996,7 @@ export default function Settings() {
               onChange={(e) => updateField("nowcast_radar_enabled", e.target.checked)}
             />
             Include NEXRAD radar imagery
-            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px" }}>
               Sends radar image to Claude for precipitation analysis (~250 extra tokens/call)
             </span>
           </label>
@@ -4004,10 +4004,10 @@ export default function Settings() {
 
         {/* Nearby Stations sub-section */}
         <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "16px", marginTop: "8px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "calc(15px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", marginBottom: "calc(8px * var(--font-scale))" }}>
+          <div style={{ fontSize: "calc(15px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", marginBottom: "8px" }}>
             Nearby Stations
           </div>
-          <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "calc(12px * var(--font-scale))" }}>
+          <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "12px" }}>
             Adds observations from nearby weather stations so the AI can detect approaching weather patterns and spatial differences.
           </div>
 
@@ -4019,7 +4019,7 @@ export default function Settings() {
                 onChange={(e) => updateField("nowcast_nearby_iem_enabled", e.target.checked)}
               />
               ASOS/AWOS stations (IEM Mesonet)
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px" }}>
                 Official NWS airport stations — free, no API key needed
               </span>
             </label>
@@ -4033,7 +4033,7 @@ export default function Settings() {
                 onChange={(e) => updateField("nowcast_nearby_wu_enabled", e.target.checked)}
               />
               Weather Underground PWS
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px" }}>
                 Personal weather stations — requires WU API key
               </span>
             </label>
@@ -4047,7 +4047,7 @@ export default function Settings() {
                 onChange={(e) => updateField("nowcast_nearby_aprs_enabled", e.target.checked)}
               />
               CWOP / APRS-IS stations
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px" }}>
                 Citizen weather stations via APRS-IS — free, no API key needed
               </span>
             </label>
@@ -4121,10 +4121,10 @@ export default function Settings() {
 
         {/* Fallback Providers (local mode only) */}
         <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "16px", marginTop: "16px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "calc(15px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", marginBottom: "calc(4px * var(--font-scale))" }}>
+          <div style={{ fontSize: "calc(15px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", marginBottom: "4px" }}>
             Fallback Providers
           </div>
-          <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "calc(12px * var(--font-scale))" }}>
+          <div style={{ fontSize: "calc(12px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", marginBottom: "12px" }}>
             When Claude is unavailable (overloaded, rate limited), automatically retry with an alternative provider.
             All providers share conversation history and receive radar imagery.
           </div>
@@ -4139,7 +4139,7 @@ export default function Settings() {
               <div style={fieldGroup}>
                 <label style={labelStyle}>
                   Grok (xAI) API Key
-                  <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
+                  <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
                     Or set XAI_API_KEY environment variable
                   </span>
                 </label>
@@ -4173,7 +4173,7 @@ export default function Settings() {
               <div style={fieldGroup}>
                 <label style={labelStyle}>
                   OpenAI API Key
-                  <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
+                  <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
                     Or set OPENAI_API_KEY environment variable
                   </span>
                 </label>
@@ -4227,7 +4227,7 @@ export default function Settings() {
           <div style={fieldGroup}>
             <label style={labelStyle}>
               Max Output Tokens
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
                 Increase if responses get truncated
               </span>
             </label>
@@ -4265,7 +4265,7 @@ export default function Settings() {
           <div style={fieldGroup}>
             <label style={labelStyle}>
               Knowledge Auto-Accept (hours)
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px" }}>
                 0 = manual approval only
               </span>
             </label>
@@ -4296,7 +4296,7 @@ export default function Settings() {
               onChange={(e) => updateField("spray_ai_enabled", e.target.checked)}
             />
             Enable AI-enhanced spray recommendations
-            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "calc(2px * var(--font-scale))", marginLeft: "calc(24px * var(--font-scale))" }}>
+            <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "2px", marginLeft: "24px" }}>
               Uses the Nowcast AI to provide detailed commentary on spray windows, beyond rule-based go/no-go checks.
               Requires AI Nowcast to be enabled with a valid API key.
             </span>

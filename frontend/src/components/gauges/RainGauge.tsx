@@ -42,7 +42,7 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
         <span style={{ fontSize: "calc(28px * var(--font-scale))", fontFamily: "var(--font-gauge)", fontWeight: "bold", color }}>
           {rateStr}
         </span>
-        <span style={{ fontSize: "calc(12px * var(--font-scale))", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "calc(2px * var(--font-scale))" }}>
+        <span style={{ fontSize: "calc(12px * var(--font-scale))", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "2px" }}>
           {unit}/hr
         </span>
       </CompactCard>

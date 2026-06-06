@@ -7,6 +7,14 @@
   padding: 0;
 }
 
+:root {
+  /* Static default so `calc(Npx * var(--font-scale))` declarations are valid
+     on first paint before ThemeContext.applyThemeToDOM() runs in useEffect.
+     Without this, every inline-style fontSize falls back to UA defaults
+     until React mounts, causing a visible text-size flash. */
+  --font-scale: 1;
+}
+
 html {
   font-synthesis: none;
   text-rendering: optimizeLegibility;

@@ -468,7 +468,7 @@ export default function StepStation({
             Station Found: {stationType}
           </div>
           {isSerial && (
-            <div style={{ fontSize: "calc(13px * var(--font-scale))", marginTop: "calc(4px * var(--font-scale))", opacity: 0.85 }}>
+            <div style={{ fontSize: "calc(13px * var(--font-scale))", marginTop: "4px", opacity: 0.85 }}>
               {serialPort} at {baudRate} baud
             </div>
           )}

@@ -71,7 +71,7 @@ function SupportCard({ isMobile }: { isMobile: boolean }) {
         border: "2px solid var(--color-accent-muted)",
       }}
     >
-      <div style={{ fontSize: "calc(28px * var(--font-scale))", marginBottom: "calc(8px * var(--font-scale))" }}>{'\u2615'}</div>
+      <div style={{ fontSize: "calc(28px * var(--font-scale))", marginBottom: "8px" }}>{'\u2615'}</div>
       <h3
         style={{
           ...sectionTitle,

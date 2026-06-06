@@ -1432,7 +1432,7 @@ function CompassRose({ bearing, isDark }: { bearing: number; isDark: boolean }) 
             return (
               <text key={c.label} x={lx} y={ly}
                 textAnchor="middle" dominantBaseline="central"
-                fontSize={c.primary ? 13 : 11}
+                style={{ fontSize: `calc(${c.primary ? 13 : 11}px * var(--font-scale))` }}
                 fontWeight={c.primary ? 700 : 600}
                 fill={c.primary ? "#e74c3c" : (isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.5)")}
               >
