@@ -425,11 +425,11 @@ export default function ThemeEditor({ onClose }: ThemeEditorProps) {
               <div style={{ width: "110px", flexShrink: 0 }}>Font Scale</div>
               <input
                 type="range"
-                min={0.85}
-                max={1.25}
-                step={0.05}
-                value={draft.fontScale}
-                onChange={(e) => updateFontScale(parseFloat(e.target.value))}
+                min={85}
+                max={175}
+                step={1}
+                value={Math.round(draft.fontScale * 100)}
+                onChange={(e) => updateFontScale(parseInt(e.target.value, 10) / 100)}
                 style={{ flex: 1 }}
                 aria-label="Font scale"
               />

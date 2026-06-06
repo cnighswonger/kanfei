@@ -133,12 +133,11 @@ export default function SolarUVGauge({ solarRadiation, uvIndex }: SolarUVGaugePr
         <text
           x={cx}
           y={cy + 5}
-          fontSize="24"
+          style={{ fontSize: "calc(24px * var(--font-scale))", transition: 'fill 0.6s ease' }}
           fontFamily="var(--font-gauge)"
           fontWeight="bold"
           fill={uvCol}
           textAnchor="middle"
-          style={{ transition: 'fill 0.6s ease' }}
         >
           {uvIndex !== null ? uvIndex.toFixed(1) : '--'}
         </text>

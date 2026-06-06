@@ -146,7 +146,7 @@ function SunArc({ sunrise, sunset }: { sunrise: string; sunset: string }) {
         y={cy + 14}
         textAnchor="middle"
         fill="var(--color-text-muted)"
-        fontSize="10"
+        style={{ fontSize: "calc(10px * var(--font-scale))" }}
         fontFamily="var(--font-body)"
       >
         Rise
@@ -158,7 +158,7 @@ function SunArc({ sunrise, sunset }: { sunrise: string; sunset: string }) {
         y={cy + 14}
         textAnchor="middle"
         fill="var(--color-text-muted)"
-        fontSize="10"
+        style={{ fontSize: "calc(10px * var(--font-scale))" }}
         fontFamily="var(--font-body)"
       >
         Set

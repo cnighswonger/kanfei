@@ -222,7 +222,7 @@ export default function HumidityGauge({ value, label, high, low, highAt, lowAt }
               />
               <text
                 x={labelPt.x} y={labelPt.y + 3}
-                fontSize="10"
+                style={{ fontSize: "calc(10px * var(--font-scale))" }}
                 fill="var(--color-text-secondary)"
                 fontFamily="var(--font-gauge)"
                 textAnchor="middle"
@@ -237,12 +237,11 @@ export default function HumidityGauge({ value, label, high, low, highAt, lowAt }
         <text
           x={cx}
           y={cy + 5}
-          fontSize="32"
+          style={{ fontSize: "calc(32px * var(--font-scale))", transition: 'fill 0.8s ease' }}
           fontFamily="var(--font-gauge)"
           fontWeight="bold"
           fill={color}
           textAnchor="middle"
-          style={{ transition: 'fill 0.8s ease' }}
         >
           {value !== null ? `${value}%` : '--%'}
         </text>

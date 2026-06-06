@@ -226,7 +226,7 @@ export default function TemperatureGauge({
               <text
                 x={tubeX + tubeW / 2 + 16}
                 y={y + 3}
-                fontSize="10"
+                style={{ fontSize: "calc(10px * var(--font-scale))" }}
                 fill="var(--color-text-secondary)"
                 fontFamily="var(--font-gauge)"
               >
@@ -250,7 +250,7 @@ export default function TemperatureGauge({
             <text
               x={tubeX - tubeW / 2 - 17}
               y={yForTemp(high) + 3}
-              fontSize="9"
+              style={{ fontSize: "calc(9px * var(--font-scale))" }}
               fill="var(--color-temp-hot)"
               fontFamily="var(--font-gauge)"
               textAnchor="end"
@@ -274,7 +274,7 @@ export default function TemperatureGauge({
             <text
               x={tubeX - tubeW / 2 - 17}
               y={yForTemp(low) + 3}
-              fontSize="9"
+              style={{ fontSize: "calc(9px * var(--font-scale))" }}
               fill="var(--color-temp-cold)"
               fontFamily="var(--font-gauge)"
               textAnchor="end"

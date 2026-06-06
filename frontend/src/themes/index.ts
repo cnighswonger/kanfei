@@ -43,7 +43,7 @@ export interface Theme {
     borderRadius: string;
   };
   /** Global font-size multiplier applied via the `--font-scale` CSS variable.
-   *  Editor clamps to 0.85–1.25; 1.0 = preset baseline. */
+   *  Editor clamps to 0.85–1.75; 1.0 = preset baseline. */
   fontScale: number;
 }
 

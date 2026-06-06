@@ -103,7 +103,7 @@ export default function WindCompass({ direction, speed, gust, peak, peakAt, unit
                 <text
                   x={cx + labelR * Math.cos(rad)}
                   y={cy + labelR * Math.sin(rad) + 3}
-                  fontSize={major ? '12' : '8'}
+                  style={{ fontSize: `calc(${major ? 12 : 8}px * var(--font-scale))` }}
                   fontFamily="var(--font-body)"
                   fontWeight={major ? 'bold' : 'normal'}
                   fill={major ? 'var(--color-text)' : 'var(--color-text-muted)'}
@@ -152,7 +152,7 @@ export default function WindCompass({ direction, speed, gust, peak, peakAt, unit
         <text
           x={cx}
           y={cy + 2}
-          fontSize="22"
+          style={{ fontSize: "calc(22px * var(--font-scale))" }}
           fontFamily="var(--font-gauge)"
           fontWeight="bold"
           fill="var(--color-text)"
@@ -164,7 +164,7 @@ export default function WindCompass({ direction, speed, gust, peak, peakAt, unit
         <text
           x={cx}
           y={cy + 16}
-          fontSize="8"
+          style={{ fontSize: "calc(8px * var(--font-scale))" }}
           fontFamily="var(--font-body)"
           fill="var(--color-text-muted)"
           textAnchor="middle"

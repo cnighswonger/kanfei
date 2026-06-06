@@ -162,7 +162,7 @@ export default function BarometerDial({ value, unit, trend, high, low, highAt, l
               {tick.major && (
                 <text
                   x={labelPos.x} y={labelPos.y + 3}
-                  fontSize="9"
+                  style={{ fontSize: "calc(9px * var(--font-scale))" }}
                   fill="var(--color-text-secondary)"
                   fontFamily="var(--font-gauge)"
                   textAnchor="middle"
@@ -181,7 +181,7 @@ export default function BarometerDial({ value, unit, trend, high, low, highAt, l
             <text
               key={i}
               x={pos.x} y={pos.y + 2}
-              fontSize="6"
+              style={{ fontSize: "calc(6px * var(--font-scale))" }}
               fill="var(--color-text-muted)"
               fontFamily="var(--font-body)"
               textAnchor="middle"
@@ -208,7 +208,7 @@ export default function BarometerDial({ value, unit, trend, high, low, highAt, l
         {/* Digital readout at bottom of dial */}
         <text
           x={cx} y={cy + 35}
-          fontSize="18"
+          style={{ fontSize: "calc(18px * var(--font-scale))" }}
           fontFamily="var(--font-gauge)"
           fontWeight="bold"
           fill="var(--color-text)"
@@ -218,7 +218,7 @@ export default function BarometerDial({ value, unit, trend, high, low, highAt, l
         </text>
         <text
           x={cx} y={cy + 48}
-          fontSize="10"
+          style={{ fontSize: "calc(10px * var(--font-scale))" }}
           fontFamily="var(--font-body)"
           fill="var(--color-text-secondary)"
           textAnchor="middle"
@@ -230,7 +230,7 @@ export default function BarometerDial({ value, unit, trend, high, low, highAt, l
         {trend && (
           <text
             x={cx + 40} y={cy + 40}
-            fontSize="20"
+            style={{ fontSize: "calc(20px * var(--font-scale))" }}
             fill={trend === 'rising' ? 'var(--color-success)' : trend === 'falling' ? 'var(--color-danger)' : 'var(--color-text-secondary)'}
             textAnchor="middle"
             fontWeight="bold"
