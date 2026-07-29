@@ -78,7 +78,12 @@ from .commands import (
     cmd_calfix,
     cmd_clrcal,
     cmd_clrlog,
+    cmd_clrvar,
     cmd_setper,
+    CLRVAR_VARIABLES,
+    CLRVAR_NAMES,
+    CLRVAR_RAIN_DAILY,
+    CLRVAR_RAIN_YEAR,
     build_dmpaft_timestamp,
     build_settime_payload,
 )
@@ -743,6 +748,53 @@ class VantageDriver(StationDriver):
 
     async def async_set_archive_period(self, minutes: int) -> bool:
         return await self._run_in_executor(self.set_archive_period, minutes)
+
+    def clear_variable(self, variable: int) -> bool:
+        """CLRVAR — clear one rain or ET accumulator.  **IRREVERSIBLE.**
+
+        `variable` must be one of CLRVAR_VARIABLES (manual section IX.6):
+        13 daily rain, 14 storm rain, 16 month rain, 17 year rain,
+        25 month ET, 26 day ET, 27 year ET.  The manual states results are
+        undefined for any other number, so anything else is rejected here
+        rather than sent.
+
+        Verified on a Vantage Vue (fw 2.12): replies with a bare ACK, as
+        documented, and clears only the named accumulator — daily rain went
+        to 0 while year rain stayed at 2848 clicks.
+        """
+        if variable not in CLRVAR_VARIABLES:
+            raise ValueError(
+                f"CLRVAR variable must be one of {sorted(CLRVAR_VARIABLES)} "
+                f"(got {variable})"
+            )
+        name = CLRVAR_NAMES.get(variable, str(variable))
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_clrvar(variable))
+            ok = self._read_status_reply()
+            logger.info(
+                "CLRVAR %d (%s): %s",
+                variable, name, "cleared" if ok else "unexpected response",
+            )
+            return ok
+
+    def clear_rain_daily(self) -> bool:
+        """Clear the daily rain accumulator (CLRVAR 13)."""
+        return self.clear_variable(CLRVAR_RAIN_DAILY)
+
+    def clear_rain_yearly(self) -> bool:
+        """Clear the yearly rain accumulator (CLRVAR 17)."""
+        return self.clear_variable(CLRVAR_RAIN_YEAR)
+
+    async def async_clear_variable(self, variable: int) -> bool:
+        return await self._run_in_executor(self.clear_variable, variable)
+
+    async def async_clear_rain_daily(self) -> bool:
+        return await self._run_in_executor(self.clear_rain_daily)
+
+    async def async_clear_rain_yearly(self) -> bool:
+        return await self._run_in_executor(self.clear_rain_yearly)
 
     def clear_log(self) -> bool:
         """CLRLOG — erase archive memory.  **IRREVERSIBLE.**

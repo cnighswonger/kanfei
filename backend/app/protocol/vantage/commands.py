@@ -153,3 +153,41 @@ def cmd_setper(minutes: int) -> bytes:
     prevents.  Send CLRLOG explicitly if a clean archive is wanted.
     """
     return f"SETPER {minutes}\n".encode()
+
+
+# --------------- CLRVAR data-variable numbers ---------------
+# Manual section IX.6.  "Results are undefined if you use a number not on
+# this list", so callers must be restricted to exactly these values.
+# Note 15 is deliberately absent — the documented set is not contiguous.
+CLRVAR_RAIN_DAILY = 13
+CLRVAR_RAIN_STORM = 14
+CLRVAR_RAIN_MONTH = 16
+CLRVAR_RAIN_YEAR = 17
+CLRVAR_ET_MONTH = 25
+CLRVAR_ET_DAY = 26
+CLRVAR_ET_YEAR = 27
+
+CLRVAR_VARIABLES: frozenset[int] = frozenset({
+    CLRVAR_RAIN_DAILY, CLRVAR_RAIN_STORM, CLRVAR_RAIN_MONTH, CLRVAR_RAIN_YEAR,
+    CLRVAR_ET_MONTH, CLRVAR_ET_DAY, CLRVAR_ET_YEAR,
+})
+
+CLRVAR_NAMES: dict[int, str] = {
+    CLRVAR_RAIN_DAILY: "daily rain",
+    CLRVAR_RAIN_STORM: "storm rain",
+    CLRVAR_RAIN_MONTH: "month rain",
+    CLRVAR_RAIN_YEAR: "year rain",
+    CLRVAR_ET_MONTH: "month ET",
+    CLRVAR_ET_DAY: "day ET",
+    CLRVAR_ET_YEAR: "year ET",
+}
+
+
+def cmd_clrvar(variable: int) -> bytes:
+    """CLRVAR — clear a single rain or ET accumulator.
+
+    `variable` must be one of CLRVAR_VARIABLES; the manual warns that any
+    other number produces undefined behaviour, so this is not a value to
+    pass through from user input unchecked.
+    """
+    return f"CLRVAR {variable}\n".encode()
