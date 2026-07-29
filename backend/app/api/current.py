@@ -11,7 +11,7 @@ from ..models.sensor_reading import SensorReadingModel
 from ..models.station_config import StationConfigModel
 from ..models.sensor_meta import convert, SENSOR_DIVISORS, SENSOR_UNITS
 from ..services.daily_extremes import get_daily_extremes
-from ..protocol.constants import STATION_NAMES, StationModel
+from ..services.station_naming import resolve_station_name
 
 router = APIRouter()
 
@@ -67,10 +67,7 @@ def get_current(db: Session = Depends(get_db)):
     if reading is None:
         return {"error": "No data available", "timestamp": datetime.now(timezone.utc).isoformat()}
 
-    try:
-        station_name = STATION_NAMES.get(StationModel(reading.station_type), "Unknown")
-    except ValueError:
-        station_name = "Unknown"
+    station_name = resolve_station_name(reading.station_type, db)
 
     return {
         "timestamp": reading.timestamp.isoformat() if reading.timestamp else None,

@@ -42,6 +42,29 @@ logger = logging.getLogger("davis.logger")
 
 # --------------- Driver Factory ---------------
 
+# Persisted in sensor_readings.station_type for drivers that have no numeric
+# model code of their own (IP/cloud drivers, or a driver whose detection
+# failed).  Deliberately outside both StationModel (0-15) and VantageModel
+# (16-17) so it can never be mistaken for a real station.
+STATION_TYPE_UNKNOWN = -1
+
+
+def _driver_model_code(driver: StationDriver) -> int:
+    """Numeric model code to persist alongside each reading.
+
+    Serial drivers expose a station type they detected from the hardware;
+    everything else has no meaningful code.  Return STATION_TYPE_UNKNOWN
+    rather than 0 in that case — 0 is Weather Wizard III, so defaulting to
+    it makes an unknown station claim to be a specific real one (#215).
+    """
+    hw = getattr(driver, "hw_config", None)
+    model = getattr(hw, "station_type", None) if hw is not None else None
+    value = getattr(model, "value", None)
+    if isinstance(value, int):
+        return value
+    return STATION_TYPE_UNKNOWN
+
+
 def _create_driver(driver_type: str, config: dict) -> StationDriver:
     """Create a StationDriver instance based on config.
 
@@ -182,7 +205,13 @@ class LoggerDaemon:
 
         # LinkDriver-specific post-connect: cache hardware config, clock sync, archive sync
         link = self._link
-        station_type_code = 0
+        # Default to the driver's own model code where it has one.  This used
+        # to be a bare `= 0`, only overwritten inside the `link is not None`
+        # branch below — i.e. only for legacy stations.  Vantage stations
+        # therefore persisted station_type=0, which is a *valid* legacy enum
+        # member (Weather Wizard III), so /api/current reported a
+        # confidently wrong model rather than an unknown one (#215).
+        station_type_code = _driver_model_code(self.driver)
         if link is not None:
             self._archive_period = await link.async_read_archive_period()
             self._sample_period = await link.async_read_sample_period()
