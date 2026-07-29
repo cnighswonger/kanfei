@@ -1,0 +1,3070 @@
+Vantage ProTM, Vantage Pro2TM and Vantage VueTM
+Serial Communication Reference Manual
+For Vantage ProTM, Vantage Pro2TM, Vantage Pro PlusTM Vantage Pro2 PlusTM and
+Vantage VueTM Weather Stations
+
+
+
+
+Davis Instruments Corp.
+
+
+
+Rev 2.6.1                                                      March 29, 2013
+Vantage Pro, Vantage Pro2, and Vantage Vue Serial Communication Reference Manual
+Rev 2.6.1 (03/29/2013)
+Davis Instruments Part Number: 07395.801
+© Davis Instruments Corp. 2013. All rights reserved.
+
+Note: This document will be periodically updated along with our product development.
+Please check Davis Instruments’ website (www.davisnet.com) for the latest version.
+
+Vantage Pro is a registered trademark of Davis Instruments Corp. Vantage Pro2 is a
+registered trademark of Davis Instruments Corp. Vantage Vue is a registered trademark of
+Davis Instruments Corp.
+
+
+
+
+                                 Davis Instruments Corp.
+                      3465 Diablo Avenue, Hayward, CA 94545-2778 U.S.A.
+                               510-732-9229 • Fax: 510-732-9188
+                         E-mail: info@davisnet.com • www.davisnet.com
+
+
+
+
+   Rev 2.6.1                            Page 2 of 60                      March 29, 2013
+                                Revision History
+
+Revision          Date                                 Changes
+ 2.3.0      February 9, 2009     1. Fix default value errors in the document
+ 2.5.0        July 30, 2012      1. Add section for new command “LPS” to support
+                                    new loop packet type
+                                 2. Added section to document Vue EEPOM layout.
+                                 3. Added references to the Vantage Vue product as
+                                    appropriate.
+ 2.6.0      November 30, 2012    1. Removed unused STRMON and STRMOFF
+                                    commands
+                                 2. Added RXTEST command to get console out of
+                                    “Receiving from” screen
+                                 3. Add section for web download protocol
+                                 4. Added Wind Cup Size EEPROM location for
+                                    Vantage Vue & VP2 station.
+                                 5. Corrected data formats in LOOP2 packet
+                                    definition
+                                 6. Corrected unit description of rain alarm and
+                                    high/low values (i.e. rain clicks, not 1/100 inch)
+                                    and Daily ET (1/1000 in)
+ 2.6.1       March 29, 2013      1. Documented how to configure reception through
+                                    repeaters.
+                                 2. Added Document revision and date to footers on
+                                    all pages.
+                                 3. Corrected the response of the BAR= command
+                                    from <ACK> to "OK"
+                                 4. Fixed offset of Leaf data in HILOW format table.
+                                 5. Corrected descriptions of dew point, wind chill,
+                                    heat index, and THSW index in LOOP 2 format
+                                    table.
+
+
+
+
+Rev 2.6.1                         Page 3 of 60                     March 29, 2013
+                                                           Table of Contents
+
+I. Introduction ................................................................................................................................. 5
+II. Additonal Commands Not in Monitor II .................................................................................... 5
+III. Differences between Vantage Pro and Vantage Pro 2 .............................................................. 6
+IV. Differences between Vantage Pro 2 and Vantage Vue ............................................................. 6
+V. Waking up the Console .............................................................................................................. 6
+VI. Blackout Periods ....................................................................................................................... 7
+VII. Command Formats .................................................................................................................. 7
+VIII. Command Summary .............................................................................................................. 8
+   1. Testing commands .................................................................................................................. 8
+   2. Current Data commands ......................................................................................................... 8
+   3. Download Commands ............................................................................................................. 8
+   4. EEPROM Commands ............................................................................................................. 8
+   5. Calibration Commands ........................................................................................................... 9
+   6. Clearing Commands................................................................................................................ 9
+   7. Configuration Commands ....................................................................................................... 9
+IX. Command Details ................................................................................................................... 10
+   1. Testing commands ................................................................................................................ 10
+   2. Current Data commands ....................................................................................................... 12
+   3. Download Commands ........................................................................................................... 14
+   4. EEPROM Commands ........................................................................................................... 14
+   5. Calibration Commands ......................................................................................................... 15
+   6. Clearing Commands.............................................................................................................. 17
+   7. Configuration Commands ..................................................................................................... 19
+X. Data Formats ............................................................................................................................ 21
+   1. LOOP data format ................................................................................................................. 21
+   2. LOOP2 Packet Format .......................................................................................................... 25
+   3. HILOW data format .............................................................................................................. 27
+   4. DMP and DMPAFT data format........................................................................................... 30
+   5. Alarm thresholds data format................................................................................................ 33
+   6. CALED and CALFIX data format ........................................................................................ 34
+XI. Download Protocol ................................................................................................................. 34
+   1. Serial Download Protocol ..................................................................................................... 34
+   2. Web Download protocol ....................................................................................................... 36
+XII. CRC calculation .................................................................................................................... 37
+XIII. EEPROM configuration settings .......................................................................................... 39
+XIV. Common Tasks .................................................................................................................... 43
+   1. Setting Temperature and Humidity Calibration Values........................................................ 43
+   2. Setting the Time, Time Zone, and Daylight savings ............................................................ 43
+   3. Setting the Rain Collector type ............................................................................................. 45
+   4. Setting up transmitter station ID's and retransmit function. ................................................. 45
+   5. Setting Alarm Thresholds ..................................................................................................... 48
+   6. Calculating ISS reception ..................................................................................................... 51
+XV. EEPROM Graph data locations for Vantage Pro .................................................................. 52
+XVI. EEPROM Graph data locations for VP2 ............................................................................. 55
+XVII. EEPROM Graph data locations for Vue ............................................................................ 58
+
+Rev 2.6.1                                                                                                      March 29, 2013
+Important Note:
+
+Please note, this information is provided as is, and we do not provide application engineering or comprehensive
+technical support. Also, we do not guarantee our station will meet the needs of your specific application. If you have
+questions, they should be submitted through email and they will be answered when resources are available. Also,
+although we would not do so without good reason, we reserve the right to modify our weather station design without
+warning at any time.
+
+I. Introduction
+Thank you for choosing Davis Instruments for your weather application. This document
+explains the serial data protocol between the Vantage Pro, Vantage Pro2, Vantage Vue consoles
+(or Envoys) and a PC. This requires a WeatherLink with Standard Data Logger
+
+Note, the serial communication between Vantage Pro and Vantage Pro2 are very similar except
+in a few places noted in this document. Important differences are described in section III.
+
+Serial communication parameters are:
+8 data bits, 1 start bit, 1 stop bit, and no parity.
+Default baud rate is 19200. User selectable between 1200, 2400, 4800, 9600, 14400, and 19200
+baud.
+
+The console with a WeatherLink data logger has 3 types of memory:
+    132 KB archive memory, which stores up to 2560 archive records
+    4 KB EEPROM memory, which is used for calibration numbers, station
+       latitude/longitude/elevation/timezone values, transmitter configuration, and Console
+       graph points
+    4 KB of processor memory, which is used to store the current sensor data, today’s
+       high/low values, and other real-time values. This memory is not directly available to
+       the PC! Commands such as LOOP and LPS, provide access to the most useful and
+       important of these data values.
+
+Commands are primarily ASCII strings. Letters should be in ALL CAPS. Please note that in
+some strings numeric values are in decimal, while in others are in hexadecimal.
+
+Multi-byte binary values are generally stored and sent least significant byte first. Negative
+numbers use 2's complement notation. CRC values are sent and received most significant byte
+first.
+
+II. Additonal Commands Not in Monitor II
+    1. An expanded LOOP packet is the only way to receive the current weather data. There is
+       no command to get a single parameter (such as outside temperature).
+    2. Similarly there is a HILOWS command to receive all of the current daily, monthly, and
+       yearly high/low values with corresponding dates and times.
+    3. A special DMPAFT command allows you to specify the last record you have previously
+       downloaded so that only the records after that one are downloaded. There is no need to
+
+
+
+    Rev 2.6.1                                      Page 5 of 60                               March 29, 2013
+      clear the archive memory to keep download times short. The downloaded records are pre-
+      sorted, so you do not have to determine where the first record is.
+   4. You can not reset individual high or low values. Instead there are commands to clear all
+      the high values or all the low values.
+   5. You must make sure that the console is awake before sending commands to it.
+
+III. Differences between Vantage Pro and Vantage Pro 2
+The Vantage Pro2 serial support is almost the same as the Vantage Pro, but there are some
+important differences listed below.
+   1. Serial commands for Vantage Pro2 must be terminated by a single line feed or a single
+       carriage return character, but not both. Older code that terminates commands with both a
+       line feed and a carriage return will not work or will work intermittently. Beware that
+       some communciation programs translate a line feed to both a line feed and a carriage
+       return.
+   2. The locations of the graph data has changed in Vantage Pro2.
+   3. The transmission packet interval of the Vantage Pro2 ISS is 1/16 of a second longer for
+       every station ID number. For example, ID 1 transmits at an interval of every 2.5625
+       seconds rather than 2.5 seconds.
+   4. “GAIN” command is supported in Vantage Pro but not in Vantage Pro2.
+   5. Vantage Pro2 does not support different transmitting period. It only supports the normal
+       ISS transmit period.
+   6. Vantage Pro2 does not support SensorLink station type.
+   7. Vantage Pro2 with firmware 1.90 or later supports “LPS” command, but Vantage Pro
+       does not.
+
+IV. Differences between Vantage Pro 2 and Vantage Vue
+The Vantage Vue command protocol is substantially the same as the Vantage Pro 2. The primary
+differences are: the "console type" value returned by the "WRD"… command is 17 instead of 16
+for the Vantage Pro, the list of supported sensors and transmitter types is smaller, and the
+EEPROM graph memory layout is different.
+
+V. Waking up the Console
+In order to conserve battery power, the console spends as much time “asleep” as possible,
+waking up only when required. Receiving a character on the serial port will cause the console to
+wake up, but it might not wake up fast enough to read the first character correctly. Because of
+this, you should always perform a wakeup procedure before sending commands to the console:
+
+Console Wakeup procedure:
+   1. Send a Line Feed character, ‘\n’ (decimal 10, hex 0x0A).
+   2. Listen for a returned response of Line Feed and Carriage Return characters, (‘\n\r’).
+   3. If there is no response within a reasonable interval (say 1.2 seconds), then try steps 1 and
+      2 again up to a total of 3 attempts.
+   4. If the console has not woken up after 3 attempts, then signal a connection error
+
+After the console has woken up, it will remain awake for 2 minutes. Every time the Vantage
+receives another character, the 2 minute timer will be reset.
+
+   Rev 2.6.1                               Page 6 of 60                        March 29, 2013
+Please note that this is NOT TRUE for the LOOP command. In the LOOP mode, we expect that
+the Vantage will be sending LOOP packets over time, so it will go to sleep immediately between
+each packet.
+
+VI. Blackout Periods
+The console will not process commands when it is in any of the Setup screens (except the first:
+"Receiving From…"). It will also not process commands when the console is in a number entry
+mode (e.g. setting an alarm value).
+
+Similarly, when a Download is in progress, the console will not respond to key presses and will
+not receive data packets from remote sensors.
+
+VII. Command Formats
+The command strings given in the following sections must be followed by a Line Feed characters
+(‘\n’ or 0x0A or decimal 10) before the console will execute the command.
+
+There are 3 different types of numbers that can be used as command parameters: decimal,
+hexadecimal and binary. Command parameters are shown with “<parameter name-decimal>”,
+“<parameter name-hex>”, or “<parameter name-binary>” to indicate which format should be
+used in each case.
+
+Please note that using the correct number of spaces is very important. For example the command
+"LOOP <number of LOOP packets to send-decimal>" should be realized with
+the string "LOOP 4" (i.e. a single space between the "P" and the "4").
+
+There are several different types of command responses. These responses come before any other
+returned data values.
+
+   1. ACK response: when this command is recognized, the console responds with an ASCII
+      ACK (0x06) character. If the command parameters are invalid, a Not Acknowledge
+      response of (0x21) is used. If a block of data is sent with a CRC code, the response
+      CANCEL (0x18) means that the data did not pass the CRC check.
+       Note: The DMP and DMPAFT commands can use the character <0x15> for negative
+       acknoledgements. See the detailed documentation of these commands in Section XI
+       Download Protocol below for more details.
+   2. “OK” response: when this command is recognized, the console responds with the
+      character string “\n\rOK\n\r”.
+   3. “DONE” response: Some commands take some time to complete their operation. For
+      example the command “CLRGRA” will clear all the console graph points. The Vantage
+      will respond with an “OK” when it receives the command, and “DONE” when it is
+      finished. Do not attempt to send any commands to the console until the “DONE\n\r”
+      response has been received.
+
+
+
+
+   Rev 2.6.1                              Page 7 of 60                       March 29, 2013
+VIII. Command Summary
+1. Testing commands
+"TEST"
+         Sends the string “TEST\n” back.
+"WRD"<0x12><0x4d>, ACK
+         Responds with a weather station type that is backward compatible with earlier Davis weather products.
+"RXCHECK"
+         Sends the Console Diagnostics report.
+"RXTEST"
+         Moves the console from the “Receiving from” screen to the main current conditions screen.
+"VER"
+         Sends the firmware date code as a text string.
+"RECEIVERS"
+         Sends the bit map of station IDs that the console can hear, This is not the byte for indicating what the
+console selects to listen from.
+"NVER"
+         Sends the firmware version number as a text string. This command is only supported by Vantage Pro2
+(Firmware 1.90 or later) and Vantage Vue.
+
+
+
+2. Current Data commands
+"LOOP <number of LOOP packets to send-decimal>"
+         Sends the specified number of LOOP packets, 1 every 2 seconds. Console sleeps between packets.
+"LPS <loop packet type bit mask-hex> <number of packets to send-decimal>"
+         Sends the specified number of the different loop packet(s), 1 every 2 seconds. Console sleeps between
+packets.
+"HILOWS"
+         Sends all the current high/low data in a single 436 byte data block, plus 2 CRC bytes.
+"PUTRAIN <Yearly Rain in rain clicks-decimal>"
+         Set the Yearly rainfall amount on the Vantage Console.
+"PUTET <Yearly ET in 100th inch-decimal>"
+         Set the Yearly ET amount on the Vantage Console.
+
+
+3. Download Commands
+"DMP"
+      Downloads the entire archive memory. See the sections X.6 and X.4 for more details.
+"DMPAFT"
+      Downloads the records after a specified date and time. See the sections X.6 and X.4 for more details.
+
+
+4. EEPROM Commands
+"GETEE"
+      Reads the full 4K EEPROM in one data block.
+"EEWR <EE address-hex> <EE data-hex>"
+      Writes one byte of data to the specified address in the EEPROM.
+"EERD <EE address-hex> <number of bytes to read-hex>"
+      Reads the specified number of bytes starting at the specified address. Results are given as hex strings, one
+      byte per line.
+
+
+
+    Rev 2.6.1                                      Page 8 of 60                               March 29, 2013
+"EEBWR <EE address-hex> <number of bytes to write-hex>"
+      Writes data to the EEPROM. The data and CRC are given in binary format following an ACK response.
+"EEBRD <EE address-hex> <number of bytes to read-hex>"
+      Reads data from the EEPROM. The data and CRC are given in binary format following an ACK response.
+
+
+5. Calibration Commands
+"CALED"
+      Sends a block of data with the current temperature and humidity values for setting calibration values.
+"CALFIX"
+      Updates the display when calibration numbers have been changed.
+"BAR=<bar value to display (in Hg * 1000)-decimal> <elevation (ft)-decimal>"
+      Sets the elevation and barometer offset values when setting the barometer for a new location.
+"BARDATA"
+      Displays of the current barometer calibration parameters in text.
+
+
+6. Clearing Commands
+"CLRLOG"
+      Clears the archive data.
+"CLRALM"
+      Clears all the alarm thresholds.
+"CLRCAL"
+      Clears all the Temperature and Humidity calibration offsets.
+"CLRGRA"
+      Clears all of the graph points on the Vantage console.
+"CLRVAR <Data variable-decimal>"
+      Clears a rain or ET data value.
+"CLRHIGHS <0, 1, or 2>"
+      Clears all of the daily (0), monthly (1), or yearly (2) high values.
+"CLRLOWS <0, 1, or 2>"
+      Clears all of the daily (0), monthly (1), or yearly (2) low values.
+"CLRBITS"
+      Clears the active alarm bits. Alarms will be reactivated if the alarm condition is still present.
+"CLRDATA"
+      Clears all current data values to dashes.
+
+
+7. Configuration Commands
+"BAUD <New baud rate-decimal>"
+      Sets the console to a new baud rate. Valid values are 1200, 2400, 4800, 9600, 14400, and 19200.
+"SETTIME"
+      Sets the time and date on the Vantage console. Data in a binary format is sent after ACK.
+"GAIN <Gain State: '0' (off) or '1' (on)>"
+      Sets the gain of the radio receiver. This command is currently not supported in Vantage Pro2.
+"GETTIME"
+      Retrieves the current time and date on the Vantage console. Data is sent in a binary format.
+"SETPER <Archive interval in minutes-decimal>"
+      Sets the Vantage archive interval. Valid values are (1, 5, 10, 15, 30, 60, and 120).
+"STOP"
+      Disables the creation of archive records.
+
+
+    Rev 2.6.1                                      Page 9 of 60                                March 29, 2013
+"START"
+      Enables the creation of archive records, if they have been halted with the STOP command.
+"NEWSETUP"
+      Re-initialize the Vantage console after making certain configuration changes.
+"LAMPS <Lamp state: '0' (off) or '1' (on)>"
+      Turns the lamps on the Vantage console on or off.
+
+IX. Command Details
+All commands must be terminated by a single line feed character (‘\n’) or a single carriage return
+character (‘\r’). These are not shown in the command syntax, but are shown in the examples.
+Beware that some systems may translate a new line character into both a new line and a carriage
+return which will cause intermittent operation when using a Vantage Pro2 console.
+
+In the following command examples, lines starting with “>” are set to the console, and lines
+starting with “<” are received from the console.
+
+Character symbols
+  Symbol       Value         Name
+  <CR>         0x0D          Carriage return, “\r”
+  <LF>         0x0A          Line Feed, “\n”
+  <ACK>        0x06          Acknowledge
+  <NAK>        0x21          Not Acknowledge
+  <CANCEL> 0x18              Bad CRC code
+  <0xdd>       0xdd          Character code specified in hex.
+
+1. Testing commands
+"TEST"
+    It sends the string “TEST\n” back. Mostly useful when using HyperTerminal for testing a
+    connection to the console.
+
+    Example:
+    >"TEST"<LF>
+    <"TEST"<LF><CR>
+
+"WRD"<0x12><0x4d>
+    This is the same command sequence used by earlier Davis weather stations to read the
+    Station Type value. The station will respond with an <ACK> and then a one byte identifier,
+    which can be one of these values:
+
+
+
+
+    Rev 2.6.1                                  Page 10 of 60                            March 29, 2013
+   Value      Station                 Value      Station
+   0          Wizard III              5          Energy Enviromontor
+   1          Wizard II               6          Health Enviromonitor
+   2          Monitor
+   3          Perception              16         Vantage Pro, Vantage Pro 2
+   4          GroWeather              17         Vantage Vue
+
+  Example:
+  >"WRD"<0x12><0x4D><LF>
+  <<ACK><16>
+
+"RXCHECK"
+  It sends the Console Diagnostics report. The following values are sent on one line as a text
+  string: total packets received, total packets missed, number of resynchronizations, the largest
+  number of packets received in a row., and the number of CRC errors detected.
+
+  All values are recorded since midnight, or since the diagnostics are cleared manually.
+
+  Example:
+  >"RXCHECK"<LF>
+  <<LF><CR>”OK”<LF><CR>" 21629 15 0 3204 128"<LF><CR>
+
+  It shows we received 21,629 packets, missed 15 packets, there were no resynchronizations,
+  the maximum number of packets received in a row without an error was 3204, and there were
+  128 CRC errors detected.
+
+"RXTEST"
+  It moves the console from the “Receiving from” screen to the main current conditions screen.
+  This command is useful to programmatically recover from a powerloss when the console
+  boots into the “receiving from” screen. RXTEST also clears the count of CRC errors seen in
+  RXCHECK.
+
+"VER"
+  It sends the firmware date code as a text string. Some functions on the console are
+  implemented differently in different firmware versions. See the separate file "Vantage
+  Console Firmware Release History.doc" or "Envoy Firmware Release History.doc" to
+  determine which functions are available with each firmware version.
+
+  The date code is sent in the following format:
+  “Mmm dd yyyy”
+  Mmm is the three-letter English month abbreviation
+  dd is the day of the month
+  yyyy is the year.
+
+
+
+
+  Rev 2.6.1                              Page 11 of 60                        March 29, 2013
+   Example:
+   >"VER"<LF>
+   <<LF><CR>”OK”<LF><CR>"Apr 24 2002"<LF><CR>
+
+"RECEIVERS"
+   It sends a byte that contains the stations received in the "Receiving From …" setup screen.
+   The station responds with “OK” followed by the bit map. For each bit position, a value of 1
+   indicates that that transmitter was received. Bit position 0 (least significant bit) corresponds
+   with Tx ID 1 in the Davis Talk protocol.
+
+   Example:
+   >"RECEIVERS"<LF>
+   <<LF><CR>"OK"<LF><CR><0x01>
+"NVER"
+   It sends the firmware version as a text string. Some functions on the console are implemented
+   differently in different firmware versions. See the separate file "Vantage Console Firmware
+   Release History.doc" or "Envoy Firmware Release History.doc" to determine which
+   functions are available with each firmware version.
+
+   The version sent in the following format:
+   x.xx
+
+   Example:
+   >"NVER"<LF>
+   <<LF><CR>”OK”<LF><CR>"1.73"<LF><CR>
+
+2. Current Data commands
+"LOOP <number of LOOP packets to send-decimal>"
+   It sends the specified number of LOOP packets, 1 every 2 seconds. Console sleeps between
+   each packet sent. The station responds with an <ACK> then with binary data packet every 2
+   seconds.
+
+   To halt the sending of LOOP packets before receiving all of the requested packets, send a
+   <CR> by itself. Note that this is the same as the Wakeup sequence.
+
+   Each data packet is 99 bytes long and contains most of the current data values shown on the
+   vantage console. In addition, the state of alarms, the battery status of the console and the
+   transmitters, the weather forecast icon, and the sunrise and sunset times are included. Rev B
+   and Vantage Pro2 firmware also have the 3 hour barometer trend value. A CRC value is
+   calculated and transmitted so that the PC can validate the transmission accuracy of the data.
+   The data format is described in detail in section X.1
+
+
+
+
+   Rev 2.6.1                              Page 12 of 60                         March 29, 2013
+  Example (request 4 LOOP packets):
+  >"LOOP 4"<LF>
+  <<ACK>
+  <<99 byte LOOP packet> . . .
+
+"LPS <loop packet type bit mask-decimal><number of packets to send-decimal>"
+  It sends the specified number of the different type LOOP packets, 1 every 2.5 seconds. It
+  supports up to 8 different types of loop packets, with each bit maps to one type. So far only
+  two types are supported, bit 0 for LOOP packet, bit 1 for LOOP2 packet. If both bits are set
+  to 1s, the LOOP and the LOOP2 packet will be sent one after another. If more than one type
+  of loop packet is selected, the number of packets to send is the total number of all the
+  different type of loop packets. Console sleeps between each packet sent. The station
+  responds with an <ACK> then with binary data packet every 2.5 seconds.
+
+  To halt the sending of LOOP packets before receiving all of the requested packets, send a
+  <CR> by itself. Note that this is the same as the Wakeup sequence.
+
+  All the loop packets are 99 bytes long and contain most of the current data values shown on
+  the Vantage Pro, Vantage Pro2 and Vantage Vue consoles. See the previous section for
+  LOOP packet details.
+
+  Example (request 2 LOOP and 2 LOOP2 packets):
+  >"LPS 3 4"<LF>
+  <<ACK>
+  <<99 byte LOOP packet>…
+  Wait 2.0 seconds
+  <<99 byte LOOP2 packet>…
+  Wait 2.0 seconds
+  <<99 byte LOOP packet>…
+  Wait 2.0 seconds
+  <<99 byte LOOP2 packet>…
+
+  Example (request 1 LOOP2 packets):
+  >"LPS 2 1"<LF>
+  <<ACK>
+  <<99 byte LOOP2 packet>…
+
+"HILOWS"
+  It sends all the current high/low data in a single data block. The station responds with an
+  <ACK> then a 436 byte data block that includes all the daily, monthly, and yearly high and
+  low values on the Vantage console, and then a 2 byte CRC value. This is so that the PC can
+  validate the transmission accuracy of the data. The data format is described in detail in
+  section X.2 .
+
+
+
+
+  Rev 2.6.1                             Page 13 of 60                       March 29, 2013
+   Example:
+   >"HILOWS"<LF>
+   <<ACK>
+   <<436 byte hi/low packet><2-Byte CRC>
+
+"PUTRAIN <Yearly Rain in rain clicks-decimal>"
+    It sets the Yearly rainfall amount on the console.
+
+    Example (set the Yearly rain to 24.83 inches):
+    >"PUTRAIN 2483"<LF>
+    <<ACK>
+
+   The console shows yearly rain of 24.83 inches (assuming that the rain collector is configured
+   for a 0.01" collector).
+
+"PUTET <Yearly ET in 100th inch-decimal"
+   It sets the Yearly ET amount on the console
+
+   Example (set the Yearly ET to 24.83 inchex):
+   >"PUTET 2483"<LF>
+   <<ACK>
+
+   The console display shows yearly ET 24.83 inches.
+
+3. Download Commands
+"DMP"
+   It downloads the entire archive memory. See the sections X.6 and X.4 for more details on
+   downloading data.
+
+"DMPAFT"
+   It downloads the records after a specified date and time. See the sections X.6 and X.4 for
+   more details on downloading data.
+
+4. EEPROM Commands
+"GETEE"
+   It reads the full 4K EEPROM in one data block. There is also a 2 byte CRC.
+
+   Example:
+   >"GETEE"<LF>
+   <<ACK>
+   <<4096 byte block of EEPROM data>
+   <<2-Byte CRC>
+
+
+
+
+   Rev 2.6.1                             Page 14 of 60                       March 29, 2013
+"EERD <EE address-hex> <number of bytes to read-hex>"
+   It reads the specified number of bytes starting at the specified address. Results are given as
+   hex strings, one byte per line. See section XIII for more details on accessing EEPROM data.
+
+   Example (Read the station Longitude [-122.1]):
+   >"EERD 0D 02"<LF>
+   <"OK"<LF><CR>
+   <"3B"<LF><CR>
+   <"FB"<LF><CR>
+   -- 0xFB3B = -1221
+
+"EEWR <EE address-hex> <EE data-hex>"
+   It writes one byte of data to the specified address in the EEPROM. See section XIII for more
+   details on accessing EEPROM data.
+
+   Example (It writes 0x87 to EEPROM address 0x58.):
+   >"EEWR 58 87"<LF>
+   <<LF><CR>"OK"<LF><CR>
+
+"EEBRD <EE address-hex> < number of bytes to read-hex>"
+   Reads data in binary format from the EEPROM. The data and CRC is given in binary format
+   following an ACK response. See section XIII for more details on accessing EEPROM data.
+
+   Example (It reads three bytes from the EEPROM at location 0x32.)
+   >"EEBRD 32 03"<LF>
+   <<ACK>
+   <<0x05><0xFA><0x0E><2-Byte CRC>
+
+
+"EEBWR <EE address-hex> <number of bytes to write-hex>"
+   It writes data to the EEPROM. The data and CRC is given in binary format following an
+   ACK response. See section XIII for more details on accessing EEPROM data.
+
+   Example (Set the time alarm to 7:15 am, the TIME_COMP field must also be set):
+   >"EEBWR 54 04"<LF>
+   <<ACK>
+   ><0xCB><0x02><0x34><0xFD><2-Byte CRC>
+
+5. Calibration Commands
+"CALED"
+   It sends a block of data with the current temperature and humidity values for setting
+   calibration values. These values are the current CALIBRATED sensor values. The data
+   format is the same that is used in the "CALFIX" command.
+
+
+
+
+   Rev 2.6.1                             Page 15 of 60                        March 29, 2013
+  Example:
+  >"CALED"<LF>
+  <<ACK>
+  <<43 bytes of data block with current data values><2-Byte CRC>
+
+"CALFIX"
+  It updates the display when temperature and humidity calibration numbers have been
+  changed. The values sent should be UN-CALIBRATED sensor values.
+
+  Example:
+  >"CALFIX"<LF>
+  <<ACK>
+  ><43 bytes of data block with raw sensor values><2-Byte CRC>
+  <<ACK>
+
+"BAR=<bar value to display (in Hg * 1000)-decimal> <elevation (ft)-decimal>"
+  It sets the elevation and barometer offset values when setting the barometer for a new
+  location.
+
+  <bar value to display (in Hg * 1000)-decimal>
+  If you have a current barometer reading from a very reliable nearby reference, you can use
+  this parameter to force the display to an exact setting. The console uses this value to fine-tune
+  its own adjusted barometric pressure calculations. Do not use this setting alone to correct
+  your barometer to sea-level.
+
+  Use a value of zero when you do not have an exact barometer value that you want the
+  Vantage console to display. This also clears out any existing offset value previously set.
+
+  This value should either be zero or between 20.000” Hg and 32500” Hg.
+
+  < elevation (ft)-decimal>
+  This is the primary means to correct the barometer measurement. Negative values for
+  elevation can be used.
+
+  This value should be between -2000 ft and 15000 ft.
+
+  If accepted, the console will respond with an "OK", otherwise it will respond with a Not
+  Acknowledged (0x21 = "!") character.
+
+  Example (No local Barometer value, elevation 132 ft):
+  >"BAR=0 132"<LF>
+  <<LF><CR>"OK"<LF><CR>
+
+  Example (Barometer value = 29.491 in Hg, elevation 0 ft):
+  >"BAR=29491 0"<LF>
+  <<LF><CR>"OK"<LF><CR>
+
+
+  Rev 2.6.1                              Page 16 of 60                        March 29, 2013
+   Example (Barometer value = 29.991 in Hg, elevation -75 ft):
+   >"BAR=29991 -75"<LF>
+   <<LF><CR>"OK"<LF><CR>
+
+"BARDATA"
+   It retrieves the current barometer calibration parameters in text. These tell you what the
+   current elevation setting and barometer offset values are, plus some details on the barometer
+   correction factor being used.
+
+   Example:
+   >"BARDATA"<LF>
+   <<LF><CR>"OK"<LF><CR>
+   <"BAR 29775"<LF><CR>
+   <"ELEVATION 27"<LF><CR>
+   <"DEW POINT 56"<LF><CR>
+   <"VIRTUAL TEMP 63"<LF><CR>
+   <"C 29"<LF><CR>
+   <"R 1001"<LF><CR>
+   <"BARCAL 0"<LF><CR>
+   <"GAIN 1533"<LF><CR>
+   <"OFFSET 18110"<LF><CR>
+
+  Name                  Value in       Explanation
+                        example
+  BAR                   29.775 in Hg   The most recent barometer measurement.
+  ELEVATION             27 ft          Elevation in feet
+  DEW POINT             56 °F          Dew point when the barometer measurement was taken
+  VIRTUAL TEMP          63 °F          Temperature used in correction formula (12 hour average)
+  C                     29             Humidity correction factor used in the formula
+  R                     1.001          Correction ratio. Multiply the raw sensor value by this to
+                                       get the corrected measurement.
+  BARCAL                0.000 in Hg    Constant offset correction factor. See "BAR=" command.
+  GAIN                                 These are the factory set values to calibrate the barometer
+  OFFSET                               sensor on this console.
+
+6. Clearing Commands
+"CLRLOG"
+   It clears the archived data.
+
+   Example:
+   >"CLRLOG"<LF>
+   <<ACK>
+
+
+
+
+   Rev 2.6.1                              Page 17 of 60                       March 29, 2013
+"CLRALM"
+  It clears all the alarm thresholds. Use "CLRBITS" to clear any active alarms.
+
+  This command takes time to perform, so you must wait for the console to send "DONE"
+  before sending any further commands
+
+  Example:
+  >"CLRALM"<LF>
+  <<LF><CR>"OK"<LF><CR>
+  -- After some time passes --
+  <"DONE"<LF><CR>
+
+"CLRCAL"
+  Clears all the Temperature and Humidity calibration offsets to zero.
+
+  Note that the values displayed on the console do not use the new calibration values until a
+  new data packet arrives for that sensor. You must use the procedure from section XIV.1 to
+  force the current display to use the new cal numbers
+
+  Example:
+  >"CLRCAL"<LF>
+  <"OK"<LF><CR>
+  -- After some time passes --
+  <"DONE"<LF><CR>
+
+"CLRGRA"
+  It clears all of the graph points on the Vantage console.
+
+  Example:
+  >"CLRGRA"<LF>
+  <"OK"<LF><CR>
+  -- After some time passes --
+  <"DONE"<LF><CR>
+
+"CLRVAR <Data variable-decimal>"
+  It clears a rain or ET data value from the following table:
+   Rain Variable Name         Number ET Variable Name            Number
+   Daily Rain                 13         Day ET                  26
+   Storm Rain                 14         Month ET                25
+   Month Rain                 16         Year ET                 27
+   Year Rain                  17
+
+  Results are undefined if you use a number not on this list
+
+
+
+
+  Rev 2.6.1                              Page 18 of 60                       March 29, 2013
+   Example (Clear Month Rain value):
+   >"CLRVAR 16"<LF>
+   <<ACK>
+
+"CLRHIGHS <0, 1, or 2>"
+   It clears all of the daily (0), monthly (1), or yearly (2) high values
+
+   Example (Clear Monthly High values):
+   >"CLRHIGHS 1"<LF>
+   <<ACK>
+
+"CLRLOWS <0, 1, or 2>"
+   It clears all of the daily (0), monthly (1), or yearly (2) low values
+
+   Example (Clear Yearly Low values):
+   >"CLRLOWS 2"<LF>
+   <<ACK>
+
+"CLRBITS"
+   It clears the active alarm bits. They will reactivate if the alarm condition is still present.
+
+   Example:
+   >"CLRBITS"<LF>
+   <<ACK>
+
+"CLRDATA"
+   It clears all current data values to dashes.
+
+   Example:
+   >"CLRDATA"<LF>
+   <<ACK>
+
+7. Configuration Commands
+"BAUD <New baud rate-decimal>"
+   It sets the console to a new baud rate. Valid values are 1200, 2400, 4800, 9600, 14400, and
+   19200. If the new baud rate is accepted, an "OK" will be returned at the new baud rate.
+   If it is not, a "NO" will be returned and the baud rate will not be changed.
+
+   Example (to set 9600 baud):
+   >"BAUD 9600"<LF>
+   <<LF><CR>"OK"<LF><CR>
+
+
+
+
+   Rev 2.6.1                               Page 19 of 60                          March 29, 2013
+"SETTIME"
+   It sets the time and date on the console. Data in a binary format is sent after ACK.
+
+   The data is 6 bytes plus a 2 bytes of CRC. The each field is one byte. The fields, in order,
+   are: seconds, minutes, hour (24 hour format), day, month, year – 1900. See section XII for
+   more information on calculating CRC values.
+
+   Example (to set 3:27:00 pm, June 4, 2003):
+   >"SETTIME"<LF>
+   <<ACK>
+   ><0><27><15><4><6><103><2 Bytes of CRC>
+   <<ACK>
+
+"GETTIME"
+   It retrieves the current time and date on the console. Data is sent in a binary format.
+   The format is the same as the SETTIME command.
+
+   Example (Vantage responds with 5:17:42 am, January 28, 1998):
+   >"GETTIME"<LF>
+   <<ACK>
+   ><42><17><5><28><1><98><2 Bytes of CRC>
+
+"GAIN <Gain State: '0' (off) or '1' (on)>"
+This command only works with the VantagePro station and is not currently implemented on the VantagePro
+2 or Vue stations.
+   It sets the gain of the radio receiver, same as pressing the HI/LOW key on the console
+   diagnostics screen. "GAIN 1" turns the gain on. "GAIN <Anything else>" turns the gain off:
+
+   Example (Turn on the Radio Gain):
+   >"GAIN 1"<LF>
+   <<LF><CR>"OK"<LF><CR>
+
+   Example (Turn off the Radio Gain):
+   >"GAIN 0"<LF>
+   <<LF><CR>"OK"<LF><CR>
+
+"SETPER <Archive interval in minutes-decimal>"
+   It sets the console archive interval. This is the interval that archive data records are recorded
+   into the archive memory. The smaller this value is, the faster the archive memory will fill up.
+
+   Valid values are (1, 5, 10, 15, 30, 60, and 120). Results are undefined if you try to select an
+   archive period not on the list.
+
+
+
+
+   Rev 2.6.1                                Page 20 of 60                         March 29, 2013
+   This command automatically clears the archive memory. Use the "CLRLOG" command to clear
+   the archive memory. WeatherLink clears the archive memory so that all archived records in
+   the archive memory use the same archive interval.
+
+   Example (set a 10 minute archive interval):
+   >"SETPER 10"<LF>
+   <<ACK>
+
+"STOP"
+   It disables the creation of archive records.
+
+"START"
+   It enables the creation of archive records, if they have been halted with the STOP command.
+
+   These two commands are not needed for normal operation.
+
+"NEWSETUP"
+   It re-initializes the console after making certain configuration changes.
+
+   Make sure to issue this command after you set the Latitude or Longitude, and after you
+   change any of the Setup bits in the EEPROM (address 43 = 0x2B) especially the Rain
+   collector type,
+
+   Example (set a 10 minute archive interval):
+   >"NEWSETUP"<LF>
+   <<ACK>
+
+"LAMPS <Lamp state: ’0’ (off) or ‘1’ (on)>"
+   It turns the lamps on the Vantage console on or off.
+
+   Example (turn the lamps off):
+   >"LAMPS 0"<LF>
+   <<LF><CR>"OK"<LF><CR>
+
+
+X. Data Formats
+1. LOOP data format
+There are two different LOOP data formats. Rev "A" firmware, dated before April 24, 2002 uses
+the old format. Rev "B" firmware, dated on or after April 24, 2002 uses the new format. The only
+difference between these formats is the inclusion of the current 3 hour barometer trend in place
+of the fixed value "P" in the fourth byte of the data packet.
+
+Only values read directly from sensors are included in the LOOP packet. Desired values (i.e.,
+Dew Point or Wind Chill) must be calculated on the PC. The LOOP packet also contains
+
+
+   Rev 2.6.1                               Page 21 of 60                       March 29, 2013
+information on the current status of all Vantage Alarm conditions, battery status, weather
+forecasts, and sunrise and sunset times.
+
+Contents of the LOOP packet.
+  Field                  Offset Size Explanation
+  "L"                      0        1     Spells out "LOO" for Rev B packets and "LOOP" for Rev A
+  "O"                      1        1     packets. Identifies a LOOP packet
+  "O"                      2        1
+  "P" (Rev A)              3        1     Signed byte that indicates the current 3-hour barometer trend. It
+  Bar Trend (Rev B)                       is one of these values:
+                                              -60 = Falling Rapidly = 196 (as an unsigned byte)
+                                              -20 = Falling Slowly = 236 (as an unsigned byte)
+                                                0 = Steady
+                                               20 = Rising Slowly
+                                               60 = Rising Rapidly
+                                               80 = ASCII "P" = Rev A firmware, no trend info is available
+                                          Any other value means that the Vantage does not have the 3
+                                          hours of bar data needed to determine the bar trend.
+  Packet Type              4        1     0 for LOOP and 1 for LOOP2 packet
+  Next Record              5        2     Location in the archive memory where the next data packet will
+                                          be written. This can be monitored to detect when a new record is
+                                          created.
+  Barometer                7        2     Current Barometer. Units are (in Hg / 1000). The barometric
+                                          value should be between 20 inches and 32.5 inches in Vantage
+                                          Pro and between 20 inches and 32.5 inches in both Vantatge Pro
+                                          Vantage Pro2. Values outside these ranges will not be logged.
+  Inside Temperature       9        2     The value is sent as 10th of a degree in F. For example, 795 is
+                                          returned for 79.5°F.
+  Inside Humidity          11       1     This is the relative humidity in %, such as 50 is returned for 50%.
+  Outside Temperature      12       2     The value is sent as 10th of a degree in F. For example, 795 is
+                                          returned for 79.5°F.
+  Wind Speed               14       1     It is a byte unsigned value in mph. If the wind speed is dashed
+                                          because it lost synchronization with the radio or due to some
+                                          other reason, the wind speed is forced to be 0.
+  10 Min Avg Wind Speed    15       1     It is a byte unsigned value in mph.
+  Wind Direction           16       2     It is a two byte unsigned value from 1 to 360 degrees. (0° is no
+                                          wind data, 90° is East, 180° is South, 270° is West and 360° is
+                                          north)
+  Extra Temperatures       18       7     This field supports seven extra temperature stations.
+                                          Each byte is one extra temperature value in whole degrees F with
+                                          an offset of 90 degrees. For example, a value of 0 = -90°F ; a
+                                          value of 100 = 10°F ; and a value of 169 = 79°F.
+  Soil Temperatures        25       4     This field supports four soil temperature sensors, in the same
+                                          format as the Extra Temperature field above
+  Leaf Temperatures        29       4     This field supports four leaf temperature sensors, in the same
+                                          format as the Extra Temperature field above
+  Outside Humidity         33       1     This is the relative humitiy in %.
+  Extra Humidties          34       7     Relative humidity in % for extra seven humidity stations.
+  Rain Rate                41       2     This value is sent as number of rain clicks (0.2mm or 0.01in).
+                                          For example, 256 can represent 2.56 inches/hour.
+  UV                       43       1     The unit is in UV index.
+  Solar Radiation          44       2     The unit is in watt/meter2.
+  Storm Rain               46       2     The storm is stored as 100th of an inch.
+
+
+
+   Rev 2.6.1                              Page 22 of 60                              March 29, 2013
+  Field                         Offset Size Explanation
+  Start Date of current Storm   48          2       Bit 15 to bit 12 is the month, bit 11 to bit 7 is the day and bit 6 to
+                                                    bit 0 is the year offseted by 2000.
+  Day Rain                      50          2       This value is sent as number of rain clicks. (0.2mm or 0.01in)
+  Month Rain                    52          2       This value is sent as number of rain clicks. (0.2mm or 0.01in)
+  Year Rain                     54          2       This value is sent as number of rain clicks. (0.2mm or 0.01in)
+  Day ET                        56          2       This value is sent as the 1000th of an inch.
+  Month ET                      58          2       This value is sent as the 100th of an inch.
+  Year ET                       60          2       This value is setnt as the 100th of an inch.
+  Soil Moistures                62          4       The unit is in centibar. It supports four soil sensors.
+  Leaf Wetnesses                66          4       This is a scale number from 0 to 15 with 0 meaning very dry and
+                                                    15 meaning very wet. It supports four leaf sensors.
+  Inside Alarms                 70          1       Currently active inside alarms. See the table below
+  Rain Alarms                   71          1       Currently active rain alarms. See the table below
+  Outside Alarms                72          2       Currently active outside alarms. See the table below
+  Extra Temp/Hum Alarms         74          8       Currently active extra temp/hum alarms. See the table below
+  Soil & Leaf Alarms            82          4       Currently active soil/leaf alarms. See the table below
+  Transmitter Battery Status    86          1
+  Console Battery Voltage       87          2       Voltage = ((Data * 300)/512)/100.0
+  Forecast Icons                89          1
+  Forecast Rule number          90          1
+  Time of Sunrise               91          2       The time is stored as hour * 100 + min.
+  Time of Sunset                93          2       The time is stored as hour * 100 + min.
+  "\n" <LF> = 0x0A              95          1
+  "\r" <CR> = 0x0D              96          1
+  CRC                           97          2
+  Total Length                  99
+
+Forecast Icons in LOOP packet
+
+  Field                              Byte       Bit #
+  Forecast Icons                     89                 Bit maps for forecast icons on the console screen.
+  Rain                                          0
+  Cloud                                         1
+  Partly Cloudy                                 2
+  Sun                                           3
+  Snow                                          4
+
+  Forecast Icon Values
+
+ Value Decimal Value Hex              Segments Shown                   Forecast
+        8        0x08                 Sun                              Mostly Clear
+        6        0x06                 Partial Sun + Cloud              Partly Cloudy
+        2        0x02                 Cloud                            Mostly Cloudy
+        3        0x03                 Cloud + Rain                     Mostly Cloudy, Rain within 12 hours
+       18        0x12                 Cloud + Snow                     Mostly Cloudy, Snow within 12 hours
+       19        0x13                 Cloud + Rain + Snow              Mostly Cloudy, Rain or Snow within 12 hours
+        7        0x07                 Partial Sun + Cloud +            Partly Cloudy, Rain within 12 hours
+                                      Rain
+
+
+   Rev 2.6.1                                        Page 23 of 60                                March 29, 2013
+ Value Decimal Value Hex            Segments Shown             Forecast
+       22        0x16               Partial Sun + Cloud +      Partly Cloudy, Snow within 12 hours
+                                    Snow
+        23                 0x17     Partial Sun + Cloud +      Partly Cloudy, Rain or Snow within 12 hours
+                                    Rain + Snow
+
+Currently active alarms in the LOOP packet
+
+This table shows which alarms correspond to each bit in the LOOP alarm fields. Not all bits in
+each field are used. The Outside Alarms field has been split into 2 1-byte sections.
+
+  Field                           Byte   Bit #
+  Inside Alarms                   70             Currently active inside alarms.
+  Falling bar trend alarm                0
+  Rising bar trend alarm                 1
+  Low inside temp alarm                  2
+  High inside temp alarm                 3
+  Low inside hum alarm                   4
+  High inside hum alarm                  5
+  Time alarm                             6
+  Rain Alarms                     71             Currently active rain alarms.
+  High rain rate alarm                   0
+  15 min rain alarm                      1       Flash Flood alarm
+  24 hour rain alarm                     2
+  Storm total rain alarm                 3
+  Daily ET alarm                         4
+  Outside Alarms                  72             Currently active outside alarms.
+  Low outside temp alarm                 0
+  High outside temp alarm                1
+  Wind speed alarm                       2
+  10 min avg speed alarm                 3
+  Low dewpoint alarm                     4
+  High dewpoint alarm                    5
+  High heat alarm                        6
+  Low wind chill alarm                   7
+  Outside Alarms, byte 2          73
+  High THSW alarm                        0
+  High solar rad alarm                   1
+  High UV alarm                          2
+  UV Dose alarm                          3
+  UV Dose alarm Enabled                  4       It is set to 1 when a UV dose alarm threshold has been entered
+                                                 AND the daily UV dose has been manually cleared.
+  Outside Humidity Alarms 74             1       Currently active outside humidity alarms.
+  Low Humidity alarm                     2
+  High Humidity alarm                    3
+
+
+
+
+   Rev 2.6.1                                 Page 24 of 60                              March 29, 2013
+  Field                 Byte    Bit #
+  Extra Temp/Hum Alarms 75 - 81 7     Each byte contains four alarm bits (0 – 3) for a single extra
+                                                   Temp/Hum station. Bits (4 – 7) are not used and reserved for
+                                                   future use.
+                                                   Use the temperature and humidity sensor numbers, as
+                                                   described in Section XIV.4 to locate which byte contains the
+                                                   appropriate alarm bits. In particular, the humidity and
+                                                   temperature alarms for a single station will be found in
+                                                   different bytes.
+  Low temp X alarm                          0
+  High temp X alarm                         1
+  Low hum X alarm                           2
+  High hum X alarm                          3
+  Soil & Leaf Alarms               82 - 85 4       Currently active soil/leaf alarms.
+  Low leaf wetness X alarm                  0
+  High leaf wetness X alarm                 1
+  Low soil moisture X alarm                 2
+  High soil moisture X alarm                3
+  Low leaf temp X alarm                     4
+  High leaf temp X alarm                    5
+  Low soil temp X alarm                     6
+  High soil temp X alarm                    7
+
+
+
+2. LOOP2 Packet Format
+The “LPS” command sends the different types of LOOP packet including the newer LOOP2
+packet. The LOOP2 packet is NOT supported in Vantage Pro and only supported in Vantage
+Pro2 (Firmware 1.90 or later) and Vantage Vue.
+
+Note: Some of the fields are included in both LOOP and LOOP2 packets.
+
+  Field                        Offset Size Explanation
+  "L"                          0        1       Spells out "LOO", identifies a LOOP packet
+  "O"                          1        1
+  "O"                          2        1
+  Bar Trend                    3        1       Signed byte that indicates the current 3-hour barometer trend. It
+                                                is one of these values:
+                                                    -60 = Falling Rapidly = 196 (as an unsigned byte)
+                                                    -20 = Falling Slowly = 236 (as an unsigned byte)
+                                                      0 = Steady
+                                                     20 = Rising Slowly
+                                                     60 = Rising Rapidly
+                                                     80 = ASCII "P" = Rev A firmware, no trend info is available
+                                                Any other value means that the Vantage does not have the 3
+                                                hours of bar data needed to determine the bar trend.
+  Packet Type                  4        1       0 for LOOP and 1 for LOOP2 packet
+  Unused                       5        2       Unused field, filled with 0x7FFF
+  Barometer                    7        2       Current Barometer. Units are (in Hg / 1000). The barometric
+                                                value should be between 20 inches and 32.5 inches. Values
+                                                outside these ranges will not be logged.
+  Inside Temperature           9        2       The value is sent as 10th of a degree in F. For example, 795 is
+                                                returned for 79.5°F.
+
+
+   Rev 2.6.1                                    Page 25 of 60                             March 29, 2013
+Field                         Offset Size Explanation
+Inside Humidity               11     1    This is the relative humidity in %, such as 50 is returned for 50%.
+Outside Temperature           12     2    The value is sent as 10th of a degree in F. For example, 795 is
+                                          returned for 79.5°F.
+Wind Speed                    14     1    It is a byte unsigned value in mph. If the wind speed is dashed
+                                          because it lost synchronization with the radio or due to some
+                                          other reason, the wind speed is forced to be 0.
+Unused                        15     1    Unused field, filled wth 0xFF
+Wind Direction                16     2    It is a two-byte unsigned value from 1 to 360 degrees. (0° is no
+                                          wind data, 90° is East, 180° is South, 270° is West and 360° is
+                                          north)
+10-Min Avg Wind Speed         18     2    It is a two-byte unsigned value in 0.1mph resolution.
+2-Min Avg Wind Speed          20     2    It is a two-byte unsigned value in 0.1mph resolution.
+10-Min Wind Gust              22     2    It is a two-byte unsigned value in 0.1mph resoluation.
+Wind Direction for the 10-    24     2    It is a two-byte unsigned value from 1 to 360 degrees. (0° is no
+Min Wind Guest                            wind data, 90° is East, 180° is South, 270° is West and 360° is
+                                          north)
+Unused                        26     2    Unused field, filled with 0x7FFF
+Unused                        28     2    Unused field, filled with 0x7FFF
+Dew Point                     30     2    The value is a signed two byte value in whole degrees F.
+                                          255 = dashed data
+Unused                        32     1    Unused field, filled with 0xFF
+Outside Humidity              33     1    This is the relative humidity in %, such as 50 is returned for 50%.
+Unused                        34     1    Unused field, filled with 0xFF
+Heat Index                    35     2    The value is a signed two byte value in whole degrees F.
+                                          255 = dashed data
+Wind Chill                    37     2    The value is a signed two byte value in whole degrees F.
+                                          255 = dashed data
+THSW Index                    39     2    The value is a signed two byte value in whole degrees F.
+                                          255 = dashed data
+Rain Rate                     41     2    In rain clicks per hour.
+UV                            43     1    Unit is in UV Index
+Solar Radiation               44     2    The unit is in watt/meter2.
+Storm Rain                    46     2    The storm is stored as number of rain clicks. (0.2mm or 0.01in)
+Start Date of current Storm   48     2    Bit 15 to bit 12 is the month, bit 11 to bit 7 is the day and bit 6 to
+                                          bit 0 is the year offseted by 2000.
+Daily Rain                    50     2    This value is sent as number of rain clicks. (0.2mm or 0.01in)
+Last 15-min Rain              52     2    This value is sent as number of rain clicks. (0.2mm or 0.01in)
+Last Hour Rain                54     2    This value is sent as number of rain clicks. (0.2mm or 0.01in)
+Daily ET                      56     2    This value is sent as the 1000th of an inch.
+Last 24-Hour Rain             58     2    This value is sent as number of rain clicks. (0.2mm or 0.01in)
+Barometric Reduction          60     1    Bar reduction method: 0 - user offset 1- Altimeter Setting 2-
+Method                                    NOAA Bar Reduction. For VP2, this will always be 2.
+User-entered Barometric       61     2    Barometer calibration number in 1000th of an inch
+Offset
+Barometric calibration        63     2    Calibration offset in 1000th of an inch
+number
+Barometric Sensor Raw         65     2    In 1000th of an inch
+Reading
+Absolute Barometric           67     2    In 1000th of an inch, equals to the raw sensor reading plus user
+Pressure                                  entered offset
+Altimeter Setting             69     2    In 1000th of an inch
+Unused                        71     1    Unused field, filled with 0xFF
+Unused                        72     1    Undefined
+
+
+
+ Rev 2.6.1                                Page 26 of 60                                March 29, 2013
+  Field                        Offset Size Explanation
+  Next 10-min Wind Speed       73       1       Points to the next 10-minute wind speed graph point. For current
+  Graph Pointer                                 graph point, just subtract 1 (range from 0 to 23 on VP/VP2
+                                                console and 0 to 24 on Vantage Vue console)
+  Next 15-min Wind Speed       74       1       Points to the next 15-minute wind speed graph point. For current
+  Graph Pointer                                 graph point, just subtract 1 (range from 0 to 23 on VP/VP2
+                                                console and 0 to 24 on Vantage Vue console)
+  Next Hourly Wind Speed       75       1       Points to the next hour wind speed graph point. For current
+  Graph Pointer                                 graph point, just subtract 1 (range from 0 to 23 on VP/VP2
+                                                console and 0 to 24 on Vantage Vue console)
+  Next Daily Wind Speed        76       1       Points to the next daily wind speed graph point. For current
+  Graph Pointer                                 graph point, just subtract 1 (range from 0 to 23 on VP/VP2
+                                                console and 0 to 24 on Vantage Vue console)
+  Next Minute Rain Graph       77       1       Points to the next minute rain graph point. For current graph
+  Pointer                                       point, just subtract 1 (range from 0 to 23 on VP/VP2 console and
+                                                0 to 24 on Vantage Vue console)
+  Next Rain Storm Graph        78       1       Points to the next rain storm graph point. For current graph
+  Pointer                                       point, just subtract 1 (range from 0 to 23 on VP/VP2 console and
+                                                0 to 254on Vantage Vue console)
+  Index to the Minute within   79       1       It keeps track of the minute within an hour for the rain
+  an Hour                                       calculation. (range from 0 to 59)
+  Next Monthly Rain            80       1       Points to the next monthly rain graph point. For current graph
+                                                point, just subtract 1 (range from 0 to 23 on VP/VP2 console and
+                                                0 to 24 on Vantage Vue console)
+  Next Yearly Rain             81       1       Points to the next yearly rain graph point. For current graph
+                                                point, just subtract 1 (range from 0 to 23 on VP/VP2 console and
+                                                0 to 24 on Vantage Vue console)
+  Next Seasonal Rain           82       1       Points to the next seasonal rain graph point. Yearly rain always
+                                                resets at the beginning of the calendar, but seasonal rain resets
+                                                when rain season begins. For current graph point, just subtract 1
+                                                (range from 0 to 23 on VP/VP2 console and 0 to 24 on Vantage
+                                                Vue console)
+  Unused                       83       2       Unused field, filled with 0x7FFF
+  Unused                       85       2       Unused field, filled with 0x7FFF
+  Unused                       87       2       Unused field, filled with 0x7FFF
+  Unused                       89       2       Unused field, filled with 0x7FFF
+  Unused                       91       2       Unused field, filled with 0x7FFF
+  Unused                       93       2       Unused field, filled with 0x7FFF
+  "\n" <LF> = 0x0A             95       1
+  "\r" <CR> = 0x0D             96       1
+  CRC                          97       2
+  Total Length                 99
+3. HILOW data format
+The "HILOWS" command sends a 436 byte data packet and a 2 byte CRC value. The data packet is
+broken up into sections of related data values.
+
+Contents of the HILOW packet.
+  Field                   Offset Size Explanation
+  Barometer Section       0      16
+  Daily Low Barometer               0       2
+  Daily High Barometer              2       2
+  Month Low Bar                     4       2
+
+
+   Rev 2.6.1                                    Page 27 of 60                             March 29, 2013
+Field                     Offset Size Explanation
+Month High Bar            6      2
+Year Low Barometer        8      2
+Year High Barometer       10     2
+Time of Day Low Bar       12     2
+Time of Day High Bar      14     2
+
+Wind Speed Section        16     5
+Daily Hi Wind Speed       16     1
+Time of Hi Speed          17     2
+Month Hi Wind Speed       19     1
+Year Hi Wind Speed        20     1
+
+Inside Temp Section       21     16
+Day Hi Inside Temp        21     2
+Day Low Inside Temp       23     2
+Time Day Hi In Temp       25     2
+Time Day Low In Temp      27     2
+Month Low In Temp         29     2
+Month Hi In Temp          31     2
+Year Low In Temp          33     2
+Year Hi In Temp           35     2
+
+Inside Humidity Section   37     10
+Day Hi In Hum             37     1
+Day Low In Hum            38     1
+Time Day Hi In Hum        39     2
+Time Day Low In Hum       41     2
+Month Hi In Hum           43     1
+Month Low In Hum          44     1
+Year Hi In Hum            45     1
+Year Low In Hum           46     1
+
+Outside Temp Section      47     16
+Day Low Out Temp          47     2
+Day Hi Out Temp           49     2
+Time Day Low Out Temp     51     2
+Time Day Hi Out Temp      53     2
+Month Hi Out Temp         55     2
+Month Low Out Temp        57     2
+Year Hi Out Temp          59     2
+Year Low Out Temp         61     2
+
+Dew Point Section         63     16
+Day Low Dew Point         63     2
+Day Hi Dew Point          65     2
+Time Day Low Dew Point    67     2
+Time Day Hi Dew Point     69     2
+Month Hi Dew Point        71     2
+Month Low Dew Point       73     2
+Year Hi Dew Point         75     2
+Year Low Dew Point        77     2
+
+
+
+ Rev 2.6.1                            Page 28 of 60   March 29, 2013
+Field                        Offset Size Explanation
+Wind Chill Section           79     8
+Day Low Wind Chill           79     2
+Time Day Low Chill           81     2
+Month Low Wind Chill         83     2
+Year Low Wind Chill          85     2
+
+Heat Index Section           87     8
+Day High Heat                87     2
+Time of Day High Heat        89     2
+Month High Heat              91     2
+Year High Heat               93     2
+
+THSW Index Section           95     8
+Day High THSW                95     2
+Time of Day High THSW        97     2
+Month High THSW              99     2
+Year High THSW               101    2
+
+Solar Radiation Section      103    8
+Day High Solar Rad           103    2
+Time of Day High Solar       105    2
+Month High Solar Rad         107    2
+Year High Solar Rad          109    2
+
+UV Section                   111    5
+Day High UV                  111    1
+Time of Day High UV          112    2
+Month High UV                114    1
+Year High UV                 115    1
+
+Rain Rate Section            116    10
+Day High Rain Rate           116    2
+Time of Day High Rain Rate   118    2
+Hour High Rain Rate          120    2
+Month High Rain Rate         122    2
+Year High Rain Rate          124    2
+
+Extra/Leaf/Soil Temps        126    150     Each field has 15 entries.
+                                            Indexes 0 – 6 = Extra Temperatures 2 – 8
+                                            Indexes 7 – 10 = SoilTemperatures 1 – 4
+                                            Indexes 11 – 14 = Leaf Temperatures 1 – 4
+Day Low Temperature          126    15      (15 * 1)
+Day Hi Temperature           141    15      (15 * 1)
+Time Day Low Temperature     156    30      (15 * 2)
+Time Day Hi Temperature      186    30      (15 * 2)
+Month Hi Temperature         216    15      (15 * 1)
+Month Low Temperature        231    15      (15 * 1)
+Year Hi Temperature          246    15      (15 * 1)
+Year Low Temperature         261    15      (15 * 1)
+
+
+
+
+ Rev 2.6.1                               Page 29 of 60                           March 29, 2013
+  Field                        Offset Size Explanation
+  Outside/Extra Hums           276    80   Each field has 8 entries
+                                                Index 0 = Outside Humidity
+                                                Index 1 – 7 = Extra Humidities 2 – 8
+  Day Low Humidity             276      8       (8 * 1)
+  Day Hi Humidity              284      8       (8 * 1)
+  Time Day Low Humidity                 16      (8 * 2)
+  Time Day Hi Humidity                  16      (8 * 2)
+  Month Hi Humidity                     8       (8 * 1)
+  Month Low Humidity                    8       (8 * 1)
+  Year Hi Humidity                      8       (8 * 1)
+  Year Low Humidity                     8       (8 * 1)
+
+  Soil Moisture Section        356      40      Each field has 4 entries.
+                                                Indexes 0 – 3 = Soil Moistures 1 – 4
+  Day Hi Soil Moisture                  4       (4 * 1)
+  Time Day Hi Soil Moisture             8       (4 * 2)
+  Day Low Soil Moisture                 4       (4 * 1)
+  Time Day Low Soil Moisture            8       (4 * 2)
+  Month Low Soil Moisture               4       (4 * 1)
+  Month Hi Soil Moisture                4       (4 * 1)
+  Year Low Soil Moisture                4       (4 * 1)
+  Year Hi Soil Moisture                 4       (4 * 1)
+
+  Leaf Wetness Section         396      40      Each field has 4 entries.
+                                                Indexes 0 – 3 = Leaf Wetness 1 – 4
+  Day Hi Leaf Wetness                   4       (4 * 1)
+  Time Day Hi Leaf Wetness              8       (4 * 2)
+  Day Low Leaf Wetness                  4       (4 * 1)
+  Time Day Low Leaf Wetness             8       (4 * 2)
+  Month Low Leaf Wetness                4       (4 * 1)
+  Month Hi Leaf Wetness                 4       (4 * 1)
+  Year Low Leaf Wetness                 4       (4 * 1)
+  Year Hi Leaf Wetness                  4       (4 * 1)
+
+  CRC                          436      2
+
+4. DMP and DMPAFT data format
+There are two different archived data formats. Rev "A" firmware, dated before April 24, 2002
+uses the old format. Rev "B" firmware dated on or after April 24, 2002 uses the new format. The
+fields up to ET are identical for both formats. The only differences are in the Soil, Leaf, Extra
+Temperature, Extra Humidity, High Solar, High UV, and forecast fields (reedOpen and
+reedClosed fields are removed).
+
+You can use the VER command and parse the date returned to determine the archive data format,
+or you can examine byte 42 in the archive record. In a Rev B record, it will have the value
+0x00. In a Rev A record, this byte is used for "Leaf Wetness 4" which is never assigned a real
+data value, so it will always contain 0xFF. Future record formats may assign different values for
+this field.
+
+
+
+   Rev 2.6.1                                 Page 30 of 60                             March 29, 2013
+Each archive record is 52 bytes. Records are sent to the PC in 264 byte pages. Each page
+contains 5 archive records and 4 unused bytes. See section 6 for more details on performing
+download operations.
+
+The value in the “Dash Value” column is what you will see if that field is not updated at all
+during the archive interval. A dash value can appear for several reasons, and different weather
+variables are treated differently. For example, if you see 32767 for Outside Temperature that
+could be because of a communication problem, the sensor was unplugged, or the sensor has
+failed. Note, a dashed value is not always the sign of a problem. For example, the rainfall
+reading could be 0 if no rain fell in that interval. To determine if a problem exists, often times
+you will need to look at more than one weather variable.
+
+Contents of the Rev "A" archive record.
+  Field                      Offset Size Dash Value             Explanation
+  Date Stamp                   0        2      Not applicable  These 16 bits hold the date that the archive was
+                                                               written in the following format:
+                                                               Year (7 bits) | Month (4 bits) | Day (5 bits) or:
+                                                               day + month*32 + (year-2000)*512)
+  Time Stamp                   2        2      Not applicable Time on the Vantage that the archive record was
+                                                               written:
+                                                               (Hour * 100) + minute.
+  Outside Temperature          4        2      32767           Either the Average Outside Temperature, or the
+                                                               Final Outside Temperature over the archive period.
+                                                               Units are (°F / 10)
+  High Out Temperature         6        2      -32768          Highest Outside Temp over the archive period.
+  Low Out Temperature          8        2      32767           Lowest Outside Temp over the archve period.
+  Rainfall                     10       2      0               Number of rain clicks over the archive period
+  High Rain Rate               12       2      0               Highest rain rate over the archive period, or the rate
+                                                               shown on the console at the end of the period if there
+                                                               was no rain. Units are (rain clicks / hour)
+  Barometer                    14       2      0               Barometer reading at the end of the archive period.
+                                                               Units are (in Hg / 1000)
+  Solar Radiation              16       2      32767           Average Solar Rad over the archive period.
+                                                               Units are (Watts / m2)
+  Number of Wind Samples       18       2      0               Number of packets containing wind speed data
+                                                               received from the ISS or wireless anemometer.
+  Inside Temperature           20       2      32767           Either the Average Inside Temperature, or the Final
+                                                               Inside Temperature over the archive period. Units
+                                                               are (°F / 10)
+  Inside Humidity              22       1      255             Inside Humidity at the end of the archive period
+  Outside Humidity             23       1      255             Outside Humidity at the end of the archive period
+  Average Wind Speed           24       1      255            Average Wind Speed over the archive interval. Units
+                                                              are (MPH)
+  High Wind Speed              25       1      0               Highest Wind Speed over the archive interval. Units
+                                                               are (MPH)
+  Direction of Hi Wind Speed   26       1      32767           Direction code of the High Wind speed. 0 = N, 1 =
+                                                               NNE, 2 = NE, … 14 = NW, 15 = NNW, 255 =
+                                                               Dashed
+
+
+
+
+   Rev 2.6.1                                Page 31 of 60                            March 29, 2013
+  Field                       Offset Size Dash Value         Explanation
+  Prevailing Wind Direction   27     1      32767            Prevailing or Dominant Wind Direction code. 0 = N,
+                                                             1 = NNE, 2 = NE, … 14 = NW, 15 = NNW, 255 =
+                                                             Dashed
+                                                             Firmware before July 8, 2001 does not report
+                                                             direction codes of 255. Software should substitute
+                                                             the dash value whenever the High Wind Speed is
+                                                             zero.
+  Average UV                  28     1      255              Average UV Index. Units are (UV Index / 10)
+  ET                          29     1      0                ET accumulated over the last hour. Only records "on
+                                                             the hour" will have a non-zero value. Units are (in /
+                                                             1000)
+  Invalid data                30     1                       This byte is contains invalid data in Rev A data
+                                                             records
+  Soil Moistures              31     4      255              4 Soil Moisture values. Units are (cb)
+  Soil Temperatures           35     4      255              4 Soil Temperatures. Units are (°F + 90)
+  Leaf Wetnesses              39     4      255              4 Leaf Wetness values. Range is 0 – 15
+  Extra Temperatures          43     2      32767            2 Extra Temperature values. Units are (°F + 90)
+  Extra Humidities            45     2      255              2 Extra Humidity values
+  Reed Closed                 47     2      0                Count of the number of time the anemometer reed switch
+                                                             was closed
+  Reed Opened                 49     2      0                Count of the number of time the anemometer reed switch
+                                                             was opened
+  Unused Byte                 51     1
+
+Contents of the Rev "B" archive record.
+  Field                      Offset Size Dash Value          Explanation
+  Date Stamp                  0      2      Not applicable   These 16 bits hold the date that the archive was
+                                                             written in the following format:
+                                                             Year (7 bits) | Month (4 bits) | Day (5 bits) or:
+                                                             day + month*32 + (year-2000)*512)
+  Time Stamp                  2      2      Not applicable   Time on the Vantage that the archive record was
+                                                             written:
+                                                             (Hour * 100) + minute.
+  Outside Temperature         4      2      32767            Either the Average Outside Temperature, or the
+                                                             Final Outside Temperature over the archive period.
+                                                             Units are (°F / 10)
+  High Out Temperature        6      2      -32768           Highest Outside Temp over the archive period.
+  Low Out Temperature         8      2      32767            Lowest Outside Temp over the archive period.
+  Rainfall                    10     2      0                Number of rain clicks over the archive period
+  High Rain Rate              12     2      0                Highest rain rate over the archive period, or the rate
+                                                             shown on the console at the end of the period if there
+                                                             was no rain. Units are (rain clicks / hour)
+  Barometer                   14     2      0                Barometer reading at the end of the archive period.
+                                                             Units are (in Hg / 1000).
+  Solar Radiation             16     2      32767            Average Solar Rad over the archive period.
+                                                             Units are (Watts / m2)
+  Number of Wind Samples      18     2      0                Number of packets containing wind speed data
+                                                             received from the ISS or wireless anemometer.
+  Inside Temperature          20     2      32767            Either the Average Inside Temperature, or the Final
+                                                             Inside Temperature over the archive period. Units
+                                                             are (°F / 10)
+  Inside Humidity             22     1      255              Inside Humidity at the end of the archive period
+  Outside Humidity            23     1      255              Outside Humidity at the end of the archive period
+
+
+
+   Rev 2.6.1                             Page 32 of 60                             March 29, 2013
+  Field                        Offset   Size Dash Value         Explanation
+  Average Wind Speed           24       1       255            Average Wind Speed over the archive interval. Units
+                                                               are (MPH)
+  High Wind Speed              25       1       0               Highest Wind Speed over the archive interval. Units
+                                                                are (MPH)
+  Direction of Hi Wind Speed   26       1       32767           Direction code of the High Wind speed. 0 = N, 1 =
+                                                                NNE, 2 = NE, … 14 = NW, 15 = NNW, 255 =
+                                                                Dashed
+  Prevailing Wind Direction    27       1       32767           Prevailing or Dominant Wind Direction code. 0 = N,
+                                                                1 = NNE, 2 = NE, … 14 = NW, 15 = NNW, 255 =
+                                                                Dashed
+                                                                Firmware before July 8, 2001 does not report
+                                                                direction code 255
+  Average UV Index             28       1       255             Average UV Index. Units are (UV Index / 10)
+  ET                           29       1       0               ET accumulated over the last hour. Only records "on
+                                                                the hour" will have a non-zero value. Units are (in /
+                                                                1000)
+  High Solar Radiation         30       2       0               Highest Solar Rad value over the archive period.
+                                                                Units are (Watts / m2)
+  High UV Index                32       1       0               Highest UV Index value over the archive period.
+                                                                Units are (Watts / m2)
+  Forecast Rule                33       1       193             Weather forecast rule at the end of the archive
+                                                                period.
+  Leaf Temperature             34       2       255             2 Leaf Temperature values. Units are (°F + 90)
+  Leaf Wetnesses               36       2       255             2 Leaf Wetness values. Range is 0 – 15
+  Soil Temperatures            38       4       255             4 Soil Temperatures. Units are (°F + 90)
+  Download Record Type         42       1                       0xFF = Rev A, 0x00 = Rev B archive record
+  Extra Humidities             43       2       255             2 Extra Humidity values
+  Extra Temperatures           45       3       32767           3 Extra Temperature values. Units are (°F + 90)
+  Soil Moistures               48       4       255             4 Soil Moisture values. Units are (cb)
+
+
+
+5. Alarm thresholds data format
+The alarm thresholds data does not have a dedicated command to set or retrieve the values.
+Instead see section XIII for more information on reading and writing EEPROM data.
+
+  Field                        Offset   Size Explanation
+  ALARM_START                  82=0x52 94      Starting location for the Alarm threshold data. See section 0
+                                               for more details on setting alarm thresholds
+  BAR_RISE_ALARM               0        1      3 hour rising bar trend alarm. Units are in Hg * 1000
+  BAR_FALL_ALARM               1        1      3 hour falling bar trend alarm. Units are in Hg * 1000
+  TIME_ALARM                   2        2      Time alarm. Hours * 100 + minutes
+  TIME_COMP_ALARM              4        2      1's compliment of TIME_ALARM to validate alarm entries
+  LOW_TEMP_IN_ALARM            6        1      Threshold is (data value – 90) °F
+  HIGH_TEMP_IN_ALARM           7        1      Threshold is (data value – 90) °F
+  LOW_TEMP_OUT_ALARM           8        1      Threshold is (data value – 90) °F
+  HIGH_TEMP_OUT_ALARM          9        1      Threshold is (data value – 90) °F
+  LOW_TEMP_ALARM               10       15     7 extra temps, 4 soil temps, 4 leaf temps
+  HIGH_TEMP_ALARM              25       15     7 extra temps, 4 soil temps, 4 leaf temps
+  LOW_HUM_IN_ALARM             40       1      Inside humidity is one byte unsigned number in decimal, such
+                                               as 100 represent 100%.
+  HIGH_HUM_IN_ALARM            41       1      Inside humidity is one byte unsigned number in decimal, such
+
+
+   Rev 2.6.1                                 Page 33 of 60                           March 29, 2013
+  Field                       Offset   Size Explanation
+                                              as 100 represent 100%.
+  LOW_HUM_ALARM               42       8      First entry is the current Outside Humidity setting
+  HIGH_HUM_ALARM              50       8      First entry is the current Outside Humidity setting
+  LOW_DEW_ALARM               58       1      Threshold is (data value – 120) °F
+  HIGH_DEW_ALARM              59       1      Threshold is (data value – 120) °F
+  CHILL_ALARM                 60       1      Threshold is (data value – 120) °F
+  HEAT_ALARM                  61       1      Threshold is (data value – 90) °F
+  THSW_ALARM                  62       1      Threshold is (data value – 90) °F
+  SPEED_ALARM                 63       1      Current Wind Speed alarm. Units are MPH
+  SPEED_10MIN_ALARM           64       1      10 minute average Wind Speed alarm. Units are MPH
+  UV_ALARM                    65       1      Current UV index alarm. Units are (UV Index * 10)
+  UV_DOSE_ALARM               66       1      Daily UV Dose alarm. Units are MEDS * 10
+  LOW_SOIL_ALARM              67       4      Low soil moisture alarm with unit in centibar.
+  HIGH_SOIL_ALARM             71       4      High soil moisture alarm with unit in centibar.
+  LOW_LEAF_ALARM              75       4      Low leaf wetness alarm with index 0 to 15. 0 is very dry and
+                                              15 is very wet.
+  HIGH_LEAF_ALARM             79       4      High leaf wetness alarm with index 0 to 15. 0 is very dry and
+                                              15 is very wet.
+  SOLAR_ALARM                 83       2      Solar energy alarm with unit in watt/meter2.
+  RAIN_RATE_ALARM             85       2      Rain rate alarm is set with rain clicks per hour.
+  RAIN_15MIN_ALARM            87       2      15-minute rain alarm is set with rain clicks. (0.2mm or 0.01in)
+  RAIN_24HR_ALARM             89       2      24-hour rain alarm is set with rain clicks. (0.2mm or 0.01in)
+  RAIN_STORM_ALARM            91       2      Rain storm alarm is set with rain clicks. (0.2mm or 0.01in)
+  ET_DAY_ALARM                93       1      Units are (0.001 inches)
+
+
+
+6. CALED and CALFIX data format
+The "CALED" and "CALFIX" commands send and receive a block of temperature and humidity
+data used to update the current display whenever the calibration offsets are changed. The format
+of this data block is:
+
+  Field                       Offset   Size Explanation
+  Inside Temperature          0        2
+  Outside Temperature         2        2
+  Extra Temperature           4        14     (7 * 2)
+  Soil Temperatures           18       8      (4 * 2)
+  Leaf Temperatures           26       8      (4 * 2)
+  Inside Humidity             34       1
+  Outside Humidity            35       1
+  Extra Humidities            36       7
+
+XI. Download Protocol
+1. Serial Download Protocol
+There are two commands you can use to get archived data records from the console. "DMP"
+downloads all data records, while "DMPAFT" only downloads the records archived "after" a
+selected time and date. The other advantage of the "DMPAFT" command is that the data blocks are
+sorted so that the oldest data downloaded is in the first page sent. The "DMP" command on the
+
+
+
+   Rev 2.6.1                                Page 34 of 60                            March 29, 2013
+other hand always starts with "page zero" which may not be the oldest data if the archive
+memory has filled up.
+
+This section will concentrate on the operation of the "DMPAFT" command. The "DMP" command is
+identical in operation except that you do not send or receive any additional data between sending
+the command and receiving archive records.
+
+In order to use the "DMPAFT" command you need to determine the time and date-stamp of the last
+record that you already have, AND this record should match one of the records already archived
+in the WeatherLink data logger. (if the data is not found, then the entire contents of the data
+archive will be downloaded.)
+
+To calculate the time and date-stamps, use these formulas: (hour is in 24 hour format, both of
+these values are 2-byte values)
+  vantageDateStamp = day + month*32 + (year-2000)*512);
+  vantageTimeStamp = (100*hour + minute);
+
+Use zero for both of these values (and the CRC) to force a full download.
+
+Send the command "DMPAFT" to the Vantage Pro
+When you get an <ACK> back, send the 2 byte vantageDateStamp, the 2 byte
+vantageTimeStamp, and a 2 byte CRC value calculated from them. See section XII for more
+information on calculating CRC values. Send the MSB of the CRC first, then the LSB.
+
+If the CRC is correct, the console will send back another <ACK> the number of "pages" that will
+be send (2 bytes), the location within the first page of the first record, and 2 Byte CRC.
+If the CRC is not correct, the vantage will respond with 0x18. If you do not sent 6 bytes, it will
+respond with 0x21.
+
+Note that while the console tells you which record in the first page it sends contains the first new
+data record, it does not tell you which record in the last page it sends is the last new data record.
+Records after the most recent will either contain all 0xFF bytes (if the archive has never been
+completely filled), or will contain old data records.
+
+At this point you can either send an <ESC> = 0x1B to cancel the download, or an <ACK> to
+start the download.
+
+After receiving each page of data, calculate the CRC value. If the CRC was incorrect, send 0x21
+(really "!" but used as <NAK>) to have the Vantage send the page again.
+Otherwise, send <ACK> to receive the next page (if there is one), or <ESC> to cancel the
+download early.
+
+Each "Page" is 267 bytes and contains 5 records of data. There are a total of 512 pages of archive
+memory for a total of 2560 records. If a "DMPAFT" command results in downloading the entire
+archive, 513 pages will be downloaded. The first and last pages in this case are identical.
+
+
+
+
+   Rev 2.6.1                               Page 35 of 60                         March 29, 2013
+The format of each page is:
+1 Byte sequence number (starts at 0 and wraps from 255 back to 0)
+52 Byte Data record
+52 Byte Data record
+52 Byte Data record
+52 Byte Data record
+52 Byte Data record
+4 Byte unused bytes
+2 Byte CRC
+
+See section X.4 for details on the format of the archive data record.
+
+Example (download records after June 6, 2003 9:30am [270 pages, the first valid record is 2]):
+>"DMPAFT"<LF>
+<<ACK>
+-- Send the Date and Time stamp --
+><0xC6><0xCE><0xA2><0x03>
+-- Send the calculated CRC 0xE2B4 –
+><0xE2><0xB4>
+<<ACK>
+-- Vantage responds with the number of pages it will send --
+<<0x0E><0x01><0x02><0x00><2 Bytes of CRC Data>
+-- Begin the download – Use <ESC> instead to cancel it
+><ACK>
+-- Block sequence number
+<<0x00>
+<<52 byte data record 0>
+<<52 byte data record 1>
+-- The next record is the first record with new data
+<<52 byte data record 2>
+<<52 byte data record 3>
+<<52 byte data record 4>
+<<4 unused bytes>
+<<2 byte CRC>
+-- At this point verify the CRC and send either <ACK>, <0x21>, or <ESC>
+
+
+2. Web Download protocol
+If the console is reporting to weatherlink.com, it is possible to download the archive records
+using the HTTP GET request method. There are two requests required, the first returns the
+number of records available along with some information required to process them and the
+second returns the actual data records.
+
+Note that the requests should be made to http://weatherlink.com and NOT to
+http://www.weatherlink.com. Do not add "www." to the beginning of the URL because there is
+no “www” subdomain on weatherlink.com.
+
+   Rev 2.6.1                              Page 36 of 60                        March 29, 2013
+The initial “headers” request is as follows:
+
+  http://weatherlink.com/webdl.php?timestamp=TimeStamp&user=username&pass=password&a
+  ction=headers
+
+Where:
+TimeStamp is the decimal timestamp of the latest record already downloaded. All newer records
+will be sent. If all records are required, send “0”. This time stamp is in the format defined in
+XI.1 above. Example: 416351713 is 06/17/2012 15:05
+
+username and password are the username and password of the weatherlink.com account to
+download.
+
+The response includes the following fields:
+
+   Model=16<CR><LF>                            Console model. VP2=16;Vue=17
+   Records=2315<CR><LF>                        Number of records newer than timestamp sent
+   MaxRecords=10240 <CR><LF>                   Maximum archive records account will store
+   ArchiveInt=30<CR><LF>                       Console Archive Interval
+   ConsoleVer=Apr 10 2006<CR><LF>              Version of console firmware
+   VantageTX=0 <CR><LF>                        TransmitterID of the anemometer
+
+After the “headers” request is processed, a “data” request is made as follows:
+  http://weatherlink.com/webdl.php?timestamp=TimeStamp&user=username&pass=password&a
+  ction=data
+
+The response is a binary encoded octet stream of the raw 52 byte archive records. These can be
+decoded per the definition in X.4
+
+
+XII. CRC calculation
+The console uses the same CRC calculation that was used by earlier Davis Instruments weather
+stations.
+
+The CRC checking used by the WeatherLink is based on the CRC-CCITT standard. The heart of
+the method involves a CRC-accumulator that uses the following formula on each successive data
+byte. After all the data bytes have been "accumulated", there will be a two byte CRC checksum
+that will get processed in the same manner as the data bytes. If there has been no transmission
+error, then the final CRC-accumulator value will be 0 (assuming it was set to zero before
+accumulating data).
+
+In the following code, "crc" is the crc accumulator (16 bits or 2 bytes), "data" is the data or CRC
+checksum byte to be accumulated, and "crc_table" is the table of CRC value found in the array
+below. The operator "^" is an exclusive-or (XOR), ">> 8" shifts the data right by one byte
+(divides by 256), and "<< 8" shifts the data left by one byte (multiplies by 256).
+
+
+
+   Rev 2.6.1                               Page 37 of 60                         March 29, 2013
+crc = crc_table [(crc >> 8) ^ data] ^ (crc << 8);
+
+unsigned short crc_table [] = {
+
+   0x0,    0x1021,    0x2042,     0x3063,    0x4084,      0x50a5,   0x60c6,    0x70e7,
+0x8108,    0x9129,    0xa14a,     0xb16b,    0xc18c,      0xd1ad,   0xe1ce,    0xf1ef,
+0x1231,     0x210,    0x3273,     0x2252,    0x52b5,      0x4294,   0x72f7,    0x62d6,
+0x9339,    0x8318,    0xb37b,     0xa35a,    0xd3bd,      0xc39c,   0xf3ff,    0xe3de,
+0x2462,    0x3443,     0x420,     0x1401,    0x64e6,      0x74c7,   0x44a4,    0x5485,
+0xa56a,    0xb54b,    0x8528,     0x9509,    0xe5ee,      0xf5cf,   0xc5ac,    0xd58d,
+0x3653,    0x2672,    0x1611,      0x630,    0x76d7,      0x66f6,   0x5695,    0x46b4,
+0xb75b,    0xa77a,    0x9719,     0x8738,    0xf7df,      0xe7fe,   0xd79d,    0xc7bc,
+0x48c4,    0x58e5,    0x6886,     0x78a7,     0x840,      0x1861,   0x2802,    0x3823,
+0xc9cc,    0xd9ed,    0xe98e,     0xf9af,    0x8948,      0x9969,   0xa90a,    0xb92b,
+0x5af5,    0x4ad4,    0x7ab7,     0x6a96,    0x1a71,       0xa50,   0x3a33,    0x2a12,
+0xdbfd,    0xcbdc,    0xfbbf,     0xeb9e,    0x9b79,      0x8b58,   0xbb3b,    0xab1a,
+0x6ca6,    0x7c87,    0x4ce4,     0x5cc5,    0x2c22,      0x3c03,    0xc60,    0x1c41,
+0xedae,    0xfd8f,    0xcdec,     0xddcd,    0xad2a,      0xbd0b,   0x8d68,    0x9d49,
+0x7e97,    0x6eb6,    0x5ed5,     0x4ef4,    0x3e13,      0x2e32,   0x1e51,     0xe70,
+0xff9f,    0xefbe,    0xdfdd,     0xcffc,    0xbf1b,      0xaf3a,   0x9f59,    0x8f78,
+0x9188,    0x81a9,    0xb1ca,     0xa1eb,    0xd10c,      0xc12d,   0xf14e,    0xe16f,
+0x1080,      0xa1,    0x30c2,     0x20e3,    0x5004,      0x4025,   0x7046,    0x6067,
+0x83b9,    0x9398,    0xa3fb,     0xb3da,    0xc33d,      0xd31c,   0xe37f,    0xf35e,
+ 0x2b1,    0x1290,    0x22f3,     0x32d2,    0x4235,      0x5214,   0x6277,    0x7256,
+0xb5ea,    0xa5cb,    0x95a8,     0x8589,    0xf56e,      0xe54f,   0xd52c,    0xc50d,
+0x34e2,    0x24c3,    0x14a0,      0x481,    0x7466,      0x6447,   0x5424,    0x4405,
+0xa7db,    0xb7fa,    0x8799,     0x97b8,    0xe75f,      0xf77e,   0xc71d,    0xd73c,
+0x26d3,    0x36f2,     0x691,     0x16b0,    0x6657,      0x7676,   0x4615,    0x5634,
+0xd94c,    0xc96d,    0xf90e,     0xe92f,    0x99c8,      0x89e9,   0xb98a,    0xa9ab,
+0x5844,    0x4865,    0x7806,     0x6827,    0x18c0,       0x8e1,   0x3882,    0x28a3,
+0xcb7d,    0xdb5c,    0xeb3f,     0xfb1e,    0x8bf9,      0x9bd8,   0xabbb,    0xbb9a,
+0x4a75,    0x5a54,    0x6a37,     0x7a16,     0xaf1,      0x1ad0,   0x2ab3,    0x3a92,
+0xfd2e,    0xed0f,    0xdd6c,     0xcd4d,    0xbdaa,      0xad8b,   0x9de8,    0x8dc9,
+0x7c26,    0x6c07,    0x5c64,     0x4c45,    0x3ca2,      0x2c83,   0x1ce0,     0xcc1,
+0xef1f,    0xff3e,    0xcf5d,     0xdf7c,    0xaf9b,      0xbfba,   0x8fd9,    0x9ff8,
+0x6e17,    0x7e36,    0x4e55,     0x5e74,    0x2e93,      0x3eb2,    0xed1,    0x1ef0,
+};
+
+When sending a CRC to the console, always send the most significant byte first. This is the
+opposite of how regular data values are sent where the least significant byte is sent first.
+
+Example, calculating the CRC in the DMPAFT example above:
+Old CRC Data byte Table index                 Table Value New CRC
+0x0000     0xC6         (0x00 ^ 0xC6) = 0xC6 0xB98A       (0x0000 ^ 0xB98A) = 0xB98A
+0xB98A     0xCE         (0xB9 ^ 0xCE) = 0x77 0x0E70       (0x8A00 ^ 0x0E70) = 0x8470
+0x8470     0xA2         (0x84 ^ 0xA2) = 0x26  0x44A4      (0x7000 ^ 0x44A4) = 0x34A4
+0x34A4     0x03         (0x34 ^ 0x03) = 0x37  0x46B4      (0xA400 ^ 0x46B4) = 0xE2B4
+
+If you continue processing the received CRC value of 0xE2B4 it will look like this:
+Old CRC Data byte Table index                    Table Value New CRC
+0xE2B4       0xE2        (0xE2^ 0xE2) = 0x00     0x0000        (0xB400 ^ 0x0000) = 0xB400
+0xB400       0xB4        (0xB4^ 0xB4) = 0x00     0x0000        (0x0000^ 0x0000) = 0x0000
+
+
+
+   Rev 2.6.1                              Page 38 of 60                       March 29, 2013
+The final CRC of zero indicates that the "packet" passed its CRC check.
+
+XIII. EEPROM configuration settings
+There are two different ways to access data from the EEPROM. The commands "EERD" and
+"EEWR" provide a text based interface that you can use with a terminal emulation program, such
+as HyperTerminal. All numerical data is sent and received as ASCII strings that represent
+hexadecimal numbers. You can read as many values as you want with one "EERD" command, but
+you can only write one byte of data for each "EEWR" command.
+
+The commands "EEBRD" and "EEBWR" use similar hex strings to specify what data you want to
+read or write, but the actual EEPROM data is send and received as binary bytes. You can read
+and write as many bytes as you would like to in a single command.
+
+Both read and written data includes a CRC code. A CRC is required for data written with the
+"EEBWR" command.
+
+There are several EEPROM data locations that should not be written with the "EEWR" or "EEBWR"
+commands. These are either factory calibration values that should not be changed, or else they
+are values that can be set from a different command. For example, use the "SETPER" command to
+set the ARCHIVE_PERIOD value, and the "BAR=" command to set the BAR_CAL and
+ELEVATION values. It is safe to read these EEPROM values.
+
+The table below gives the addresses and sizes of the most useful EEPROM data values. The
+address of each field is given both in decimal and in hex. Use the hex value in all "EE... "
+commands. There is a supplemental list of the locations where the Vantage graph data is stored
+in section XV.
+
+EEPROM address table
+  Name                       Hex   Dec    Size Description
+  BAR_GAIN                   1     1      2    These are the factory barometer calibration values.
+  BAR_OFFSET                 3     3      2    Do not modify them!
+  BAR_CAL                    5     5      2    Barometer Offset calibration.
+                                               Use the "BAR=" command to set this value!
+  HUM33                      7     7      2    These are the factory inside humidity calibration values.
+  HUM80                      9     9      2    Do not modify them!
+  LATITUDE                   0B    11     2    Station Latitude in tenths of a degree. Negative values =
+                                               southern hemisphere
+  LONGITUDE                  0D    13     2    Station Longitude in tenths of a degree. Negative values =
+                                               western hemisphere
+  ELEVATION                  0F    15     2    Station elevation in feet.
+                                               Use the "BAR=" command to set this value!
+  TIME_ZONE                  11    17     1    String number of the time zone selected on the setup
+                                               screen.
+  MANUAL_OR_AUTO             12    18     1    1 = manual daylight savings, 0 = automatic daylight
+                                               savings
+
+
+
+
+   Rev 2.6.1                             Page 39 of 60                            March 29, 2013
+Name               Hex   Dec    Size Description
+DAYLIGHT_SAVINGS   13    19     1    This is the configuration bit for the day light savings mode
+                                     when it is set in manual mode. 1 = daylight savings is now
+                                     on, 0 = daylight savings is now off. When automatic
+                                     daylight savings mode is selected, this bit is ignored and it
+                                     does not indicate whether the daylight savings is on or not.
+GMT_OFFSET         14    20     2    The time difference between GMT and local time (a 2-byte
+                                     signed number in hundredths of hours. For example, a
+                                     value of 850 would be +8.50 hours. Negative values in
+                                     2’s complements, represent western hemisphere.
+GMT_OR_ZONE        16    22     1    1 = use the GMT_OFFSET value, 0 = use the TIME_ZONE
+                                     value
+USETX              17    23     1    Bitmapped field that indicates which DavisTalk
+                                     transmitters to listen to. Bit 0 = ID 1.
+RE_TRANSMIT_TX     18    24     1    ID number to use for retransmit. 0 = don't retransmit, 1 =
+                                     use ID 1, 2 = use ID 2, etc.
+STATION_LIST       19    25     16 2 bytes per transmitter ID. First byte is station type, second
+                                     byte is <temp sensor # | hum sensor #>. See section XIV.4
+                                     for more details.
+UNIT_BITS          29    41     1    Barometer unit (bit 1:0):
+                                                       0: 0.01 INCHES
+                                                       1: 0.1 MM
+                                                       2: 0.1 HPA
+                                                       3: 0.1 MB
+                                     Temperature unit (Bit 3:2):
+                                                       0: ◦F (Whole degrees)
+                                                       1: ◦F (Tenths of a degree)
+                                                       2: ◦C (Whole degrees)
+                                                       3: ◦C (Tenths of a degree)
+                                     Elevation unit (Bit 4):
+                                                       0: FEET
+                                                       1: METERS
+                                     RAIN unit (Bit 5):
+                                                       0: INCHES
+                                                       1: MM
+                                     Wind unit (Bit 7:6):
+                                                       0: MPH
+                                                       1: M/S
+                                                       2: Km/H
+                                                       3: KNOTS
+UNIT_BITS_COMP     2A    42     1    This should be the 1's complement of UNIT_BITS for
+                                     validation.
+
+
+
+
+ Rev 2.6.1                     Page 40 of 60                             March 29, 2013
+Name                            Hex      Dec    Size Description
+SETUP_BITS                      2B       43      1     AM/PM Time Mode (Bit 0):
+                                                                         0: AM/PM Mode
+                                                                         1: 24-Hour Mode
+                                                       Is AM or PM (Bit 1):
+                                                                         0: PM
+                                                                         1: AM
+                                                       Month/Day Format (Bit 2):
+                                                                         0: Shown as Month/Day
+                                                                         1: Shown as Day/Month
+                                                       Wind Cup Size (Bit 3): (VP and VP2 only)
+                                                                         0: Small Size
+                                                                         1: Large Size
+                                                       Rain Collector Size (Bit 5:4):
+                                                                         0: 0.01 INCHES
+                                                                         1: 0.2 MM
+                                                                         2: 0.1 MM
+                                                       Latitude (Bit 6):
+                                                                         0: South
+                                                                         1: North
+                                                       Longitude (Bit 7):
+                                                                         0: West
+                                                                         1: East
+RAIN_SEASON_START                 2C      44     1     Month that the Yearly rain total is cleared. 1 = January, etc
+ARCHIVE_PERIOD                    2D      45     1     Number of minutes in the archive period.
+                                                       Use "SETPER" to set this value.
+Calibration values are 1 byte signed numbers that are offsets applied to the corresponding raw sensor value in the
+native sensor units (either 0.1 °F or 1 %)
+TEMP_IN_CAL                       32      50     1     The setting range is from (-12.8 °F to 12.7 °F) with the
+                                                       most significant byte as the sign bit.
+TEMP_IN_COMP                      33      51     1     1's compliment of TEMP_IN_CAL to validate calibration
+                                                       data
+TEMP_OUT_CAL                      34      52     1     The setting range is from (-12.8 °F to 12.7 °F) with the
+                                                       most significant byte as the sign bit.
+TEMP_CAL                          35      53     15 7 "extra" temperatures, 4 soil temperatures, and 4 leaf
+                                                      temperatures
+HUM_IN_CAL                        44      68     1     The inside humidity calibration value is ranged from 0 to
+                                                       100%.
+HUM_CAL                           45      69     8     The first entry is the currently selected outside humidity
+                                                       sensor.
+DIR_CAL                           4D      77     2     2 byte wind direction calibration allows full 360°
+                                                       calibration in both directions.
+
+DEFAULT_BAR_GRAPH               4F       79       1    These values control which time span to use on the
+DEFAULT_RAIN_GRAPH              50       80       1    console graph display when Rain, Barometer, or Wind
+DEFAULT_SPEED_GRAPH             51       81       1    Speed is shown.
+
+ALARM_START                     52       82       94   Starting location for the Alarm threshold data. See section
+                                                       XIV.5 for more details on setting alarm thresholds
+BAR_RISE_ALARM                  52       82       1    3 hour rising bar trend alarm. Units are in Hg * 1000
+BAR_FALL_ALARM                  53       83       1    3 hour falling bar trend alarm. Units are in Hg * 1000
+TIME_ALARM                      54       84       2    Time alarm. Hours * 100 + minutes
+TIME_COMP_ALARM                 56       86       2    1's compliment of TIME_ALARM to validate alarm entries
+LOW_TEMP_IN_ALARM               58       88       1    Threshold is (data value – 90) °F
+HIGH_TEMP_IN_ALARM              59       89       1    Threshold is (data value – 90) °F
+
+
+ Rev 2.6.1                                      Page 41 of 60                               March 29, 2013
+Name                          Hex   Dec     Size Description
+LOW_TEMP_OUT_ALARM            5A    90      1    Threshold is (data value – 90) °F
+HIGH_TEMP_OUT_ALARM           5B    91      1    Threshold is (data value – 90) °F
+LOW_TEMP_ALARM                5C    92      15 7 extra temps, 4 soil temps, 4 leaf temps
+HIGH_TEMP_ALARM               6B    107     15 7 extra temps, 4 soil temps, 4 leaf temps
+LOW_HUM_IN_ALARM              7A    122     1    Low relative humidity alarm in %.
+HIGH_HUM_IN_ALARM             7B    123     1    High relative humidity alarm in %.
+LOW_HUM_ALARM                 7C    124     8    First entry is the current Outside Humidity setting
+HIGH_HUM_ALARM                84    132     8    First entry is the current Outside Humidity setting
+LOW_DEW_ALARM                 8C    140     1    Threshold is (data value – 120) °F
+HIGH_DEW_ALARM                8D    141     1    Threshold is (data value – 120) °F
+CHILL_ALARM                   8E    142     1    Threshold is (data value – 120) °F
+HEAT_ALARM                    8F    143     1    Threshold is (data value – 90) °F
+THSW_ALARM                    90    144     1    Threshold is (data value – 90) °F
+SPEED_ALARM                   91    145     1    Current Wind Speed alarm. Units are MPH
+SPEED_10MIN_ALARM             92    146     1    10 minute average Wind Speed alarm. Units are MPH
+UV_ALARM                      93    147     1    Current UV index alarm. Units are (UV Index * 10)
+LOW_SOIL_ALARM                95    149     4    Low soil moisture alarm in centibar. It supports four soil
+                                                 moisture sensors.
+HIGH_SOIL_ALARM               99    153     4    High soil moisture alarm in centibar. It supports four soil
+                                                 moisture sensors.
+LOW_LEAF_ALARM                9D    157     4    Low leaf wetness alarm with index 0 to 15. 0 is very dry
+                                                 and 15 is very wet.
+HIGH_LEAF_ALARM               A1    161     4    High leaf wetness alarm with index 0 to 15. 0 is very dry
+                                                 and 15 is very wet.
+SOLAR_ALARM                   A5    165     2    Solar energy alarm is set with watts/meter2.
+RAIN_RATE_ALARM               A7    167     2    Rate rain alarm is set with rain clicks/hour
+RAIN_15MIN_ALARM              A9    169     2    15-minute alarm is set with rain clicks.
+RAIN_24HR_ALARM               AB    171     2    24-hour alarm is set with rain clicks.
+RAIN_STORM_ALARM              AD    173     2    Rain storm alarm is set with rain clicks.
+ET_DAY_ALARM                  AF    175     1    Evapotranspiration alarm is set with 1000th of an inch.
+
+Graph Pointers                      177     8    See section XV
+Graph data (VP only)                185          See section XV
+
+Wind Cup Size (VP2 & Vue            195          Only 2 least significant bits are used:
+only)                                            0 = undefined
+                                                 1 = small;
+                                                 2 = large;
+                                                 3 = other (no speed correction applied by console);
+Graph data (VP2 & Vue only)         325          See section XV
+
+Log Average Temperature       FFC   4092    1    Set this value to zero to enable logging of average
+                                                 temperature values. A non-zero value causes the
+                                                 temperature at the end of the archive period to be logged.
+Password CRC                  FFE   4094    2    WeatherLink uses these two bytes to hold the CRC of a
+                                                 password in order to provide some protection from
+                                                 unauthorized access. This is only enforced by software
+                                                 implementation. The value 0xFFFF indicates that no
+                                                 password is set.
+
+
+
+
+ Rev 2.6.1                                 Page 42 of 60                             March 29, 2013
+XIV. Common Tasks
+This section describes how to perform several common tasks, especially ones that need to be
+done in a particular way.
+
+1. Setting Temperature and Humidity Calibration Values
+The 28 EEPROM bytes starting at address 50 (0x32) contain the calibration offsets for
+temperature and humidity values. Unfortunately, if you modify these values in the EEPROM, the
+new calibration value will not take effect until the next time the Vantage receives a data packet
+containing that temperature or humidity value. In order to update the Vantage display with the
+new calibration values, you have to follow this procedure.
+
+Create a data structure to hold all of the calibration values, and one to hold the results of the
+"CALED" command.
+
+ 1. Use "EEBRD 32 2B" to read in the current calibration offset values.
+ 2. Use "CALED" to read in the current calibrated sensor values.
+ 3. Determine what the un-calibrated sensor values are by subtracting the calibration offset
+    from the data value. Make sure that you only do this if the sensor has valid data (i.e. not
+    0x7FFF, or 0xFF).
+ 4. Determine and write the new calibration values into the EEPROM using "EEBWR 32 2B".
+ 5. Use "CALFIX" to send the un-calibrated sensor values to the Vantage to have the display
+    update using the new calibration values.
+
+You can use the "EERD 32 2B" command if you want to, but it is harder to process.
+
+You do not have to set all of the calibration values, but you do have to send all of the sensor data
+values in the "CALFIX" command.
+
+2. Setting the Time, Time Zone, and Daylight savings
+The "GETTIME" and "SETTIME" commands will get and set the time and date on the Vantage
+console, but you will need to use additional commands to set the time zone and daylight savings
+settings.
+
+Daylight Savings
+
+To set up the automatic daylight savings mode (works for US, Europe, and Australia), use the
+command "EEWR 12 00" (or its "EEBWR" equivilant). To use manual daylight savings mode (or if
+daylight savings is not used at all) use the command "EEWR 12 01".
+
+If you have selected manual daylight savings mode, use the command "EEWR 13 00" to set
+standard time and "EEWR 13 01" to set daylight savings time.
+
+
+
+
+   Rev 2.6.1                                Page 43 of 60                         March 29, 2013
+Time Zone
+
+You can either choose a time zone from the list of timezones shown on the console time zone
+setup screen, or you can set the GMT offset directly.
+
+To use a preset time zone, write the zone index number from the table below into the
+TIME_ZONE EEPROM field (i.e. "EEWR 11 xx"), and also write a zero into the
+GMT_OR_ZONE field (i.e. "EEWR 16 00").
+
+To use a custom time zone, write the GMT offset – in (hours * 100 + minutes), to a 15 minute
+resolution, with negative values for time zones west of GMT – to the 2 byte GMT_OFFSET
+field. Also write a one to the GMT_OR_ZONE field (i.e. "EEWR 16 01").
+Table of preset time zones on the Vantage and WeatherLink software.
+  Index GMT Offset Name
+  0       -1200          (GMT-12:00) Eniwetok, Kwajalein
+  1       -1100          (GMT-11:00) Midway Island, Samoa
+  2       -1000          (GMT-10:00) Hawaii
+  3       -900           (GMT-09:00) Alaska
+  4       -800           (GMT-08:00) Pacific Time, Tijuana
+  5       -700           (GMT-07:00) Mountain Time
+  6       -600           (GMT-06:00) Central Time
+  7       -600           (GMT-06:00) Mexico City
+  8       -600           (GMT-06:00) Central America
+  9       -500           (GMT-05.00) Bogota, Lima, Quito
+  10      -500           (GMT-05:00) Eastern Time
+  11      -400           (GMT-04:00) Atlantic Time
+  12      -400           (GMT-04.00) Caracas, La Paz, Santiago
+  13      -330           (GMT-03.30) Newfoundland
+  14      -300           (GMT-03.00) Brasilia
+  15      -300           (GMT-03.00) Buenos Aires, Georgetown, Greenland
+  16      -200           (GMT-02.00) Mid-Atlantic
+  17      -100           (GMT-01:00) Azores, Cape Verde Is.
+  18      0              (GMT) Greenwich Mean Time, Dublin, Edinburgh, Lisbon, London
+  19      0              (GMT) Monrovia, Casablanca
+  20      100            (GMT+01.00) Berlin, Rome, Amsterdam, Bern, Stockholm, Vienna
+  21      100            (GMT+01.00) Paris, Madrid, Brussels, Copenhagen, W Central Africa
+  22      100            (GMT+01.00) Prague, Belgrade, Bratislava, Budapest, Ljubljana
+  23      200            (GMT+02.00) Athens, Helsinki, Istanbul, Minsk, Riga, Tallinn
+  24      200            (GMT+02:00) Cairo
+  25      200            (GMT+02.00) Eastern Europe, Bucharest
+  26      200            (GMT+02:00) Harare, Pretoria
+  27      200            (GMT+02.00) Israel, Jerusalem
+  28      300            (GMT+03:00) Baghdad, Kuwait, Nairobi, Riyadh
+  29      300            (GMT+03.00) Moscow, St. Petersburg, Volgograd
+  30      330            (GMT+03:30) Tehran
+  31      400            (GMT+04:00) Abu Dhabi, Muscat, Baku, Tblisi, Yerevan, Kazan
+  32      430            (GMT+04:30) Kabul
+  33      500            (GMT+05:00) Islamabad, Karachi, Ekaterinburg, Tashkent
+  34      530            (GMT+05:30) Bombay, Calcutta, Madras, New Delhi, Chennai
+  35      600            (GMT+06:00) Almaty, Dhaka, Colombo, Novosibirsk, Astana
+  36      700            (GMT+07:00) Bangkok, Jakarta, Hanoi, Krasnoyarsk
+
+
+   Rev 2.6.1                              Page 44 of 60                           March 29, 2013
+  Index GMT Offset        Name
+  37      800             (GMT+08:00) Beijing, Chongqing, Urumqi, Irkutsk, Ulaan Bataar
+  38      800             (GMT+08:00) Hong Kong, Perth, Singapore, Taipei, Kuala Lumpur
+  39      900             (GMT+09:00) Tokyo, Osaka, Sapporo, Seoul, Yakutsk
+  40      930             (GMT+09:30) Adelaide
+  41      930             (GMT+09:30) Darwin
+  42      1000            (GMT+10:00) Brisbane, Melbourne, Sydney, Canberra
+  43      1000            (GMT+10.00) Hobart, Guam, Port Moresby, Vladivostok
+  44      1100            (GMT+11:00) Magadan, Solomon Is, New Caledonia
+  45      1200            (GMT+12:00) Fiji, Kamchatka, Marshall Is.
+  46      1200            (GMT+12:00) Wellington, Auckland
+
+
+3. Setting the Rain Collector type
+The rain collector type is stored in the SETUP_BITS EEPROM data byte.
+
+To read what the current rain collector type is:
+ 1. Use "EEBRD 2B 01" to read the current setup bits into the variable setup_bits.
+ 2. Calculate: rain_type = setup_bits & 0x30
+ 3. rain_type will have one of the following values: 0x00 = 0.01 in, 0x10 = 0.2 mm, or 0x20
+     = 0.1 mm
+
+To set a new rain collector type:
+ 1. Use "EEBRD 2B 01" to read the current setup bits into the variable setup_bits.
+ 2. Mask the rain collector bits to zero with setup_bits = setup_bits & 0xCF
+ 3. Set rain_type to one of the rain collector values given above.
+ 4. Calculate the new setup_bits = setup_bits | rain_type
+ 5. Use "EEBWR 2B 01" to set the new rain collector type
+ 6. Use "NEWSETUP" to have the Vantage use the new setting.
+
+4. Setting up transmitter station ID's and retransmit function.
+The 16 bytes of EEPROM data at STATION_LIST, plus the USETX field, control what
+transmitters the Vantage will listen to. These can be set for both wireless and cabled consoles,
+but the cabled ISS will always transmit on ID 1.
+IMPORTANT!! You must use the "NEWSETUP" command after changing the transmitter ID or
+retransmit settings. This allows the console to use the new settings.
+
+
+
+
+   Rev 2.6.1                               Page 45 of 60                         March 29, 2013
+Use "EEBRD 19 10" to read in the 16 bytes of station data. The format will look like this:
+  Index Contents
+         Upper nibble                Lower nibble
+  0      Tx period (VP) /            ID 1 Transmiter type
+         Repeater ID (VP2 & Vue)
+  1      Humidity Sensor #           Temperature Sensor #
+  2      Tx period (VP) /            ID 2 Transmiter type
+         Repeater ID (VP2 & Vue)
+  3      Humidity #                  Temperature #
+  4      Tx period (VP) /            ID 3 Transmiter type
+         Repeater ID (VP2 & Vue)
+  5      Humidity #                  Temperature #
+  6      Tx period (VP) /            ID 4 Transmiter type
+         Repeater ID (VP2 & Vue)
+  7      Humidity #                  Temperature #
+  8      Tx period (VP) /            ID 5 Transmiter type
+         Repeater ID (VP2 & Vue)
+  9      Humidity #                  Temperature #
+  10     Tx period (VP) /            ID 6 Transmiter type
+         Repeater ID (VP2 & Vue)
+  11     Humidity #                  Temperature #
+  12     Tx period (VP) /            ID 7 Transmiter type
+         Repeater ID (VP2 & Vue)
+  13     Humidity #                  Temperature #
+  14     Tx period (VP) /            ID 8 Transmiter type
+         Repeater ID (VP2 & Vue)
+  15     Humidity #                  Temperature #
+
+The Transmitter type field is taken from either the Rev A or Rev B station type tables below,
+depending on the firmware version date (April 24, 2002 and later use Rev B format).
+
+On the Vantage Pro, the Tx period field will have one of these values: 0 = station turned off, 1 =
+ISS normal or Temp/Hum 4x, 4 = ISS 0.25x or Temp/Hum normal.
+
+On the VantagePro2 wireles or the Vue consoles, the Repeater ID field holds the ID of the
+repeater to listed to, if one is being used. 0 = No Repeater used, 8 = listen to repeater A, 9 =
+listen to repeater B, 10 = listen to repeater C, … , 15 = listen to repeater H.
+
+For example on a VP 2, an ISS without a repeater would have the value (0x00 + 0x00) = 0x00. A
+Temperature/Humidity station that is being listened to from repeater A would have the value
+(0x80 + 0x03) = 0x83,.
+
+The humidity sensor number and temperature sensor number fields are only used if the
+transmitter type is a Temperature-Humidity station or a Temperature only station. These fields
+determine how the extra temperature and humidity data values are logged. These fields are
+ignored for other station types.
+
+
+   Rev 2.6.1                               Page 46 of 60                         March 29, 2013
+Starting with ID 1, the first transmitter with an extra Humidity sensor should be assigned the
+value 1, the second should have the value 2, etc.
+In the same maner, the first extra temperature sensor should be assigned the value ZERO, the
+second should have the value 1, etc.
+
+The USETX field holds bitmapped information on the transmitters that the Vantage will actively
+listen to. Bit 0 corresponds with ID 1, Bit 1 with ID 2, etc. Set this value after you have made
+any modifications to the STATION_LIST field.
+IMPORTANT!! You must use the "NEWSETUP" command after changing the transmitter ID or
+retransmit settings. This allows the console to use the new settings.
+Set Transmitters example (Rev B and VantagePro 2):
+  Index      Contents            Description
+  0          1     0     0x10    ID 1 = ISS
+  1          F     F     0xFF
+  2          4     3     0x43    ID 2 = Temp/Hum
+  3          1     0     0x10
+  4          1     3     0x13    ID 3 = Temp/Hum 4x
+  5          2     1     0x21
+  6          1     8     0x18    ID 4 = Leaf/Soil
+  7          F     F     0xFF
+  8          1     4     0x14    ID 5 = Wireles anemometer
+  9          F     F     0xFF
+  10         0     A     0x0A ID 6 = Not used
+  11         F     F     0xFF
+  12         0     A     0x0A ID 6 = Not used
+  13         F     F     0xFF
+  14         0     A     0x0A ID 6 = Not used
+  15         F     F     0xFF
+  USETX                  0x1F
+
+List of Station Types (Rev A):
+  Station Name                     Station Type (hex)    "standard" period
+  ISS                              0                     1
+  Temperature Only Station         1                     4
+  Humidity Only Station            2                     4
+  Temperature/Humidity Station     3                     4
+  Wireless Anemometer Station      4                     1
+  Rain Station                     5                     1
+  Leaf Station                     6                     1
+  Soil Station                     7                     1
+  SensorLink Station               8                     1
+  No station – OFF                 9                     0
+
+
+
+   Rev 2.6.1                             Page 47 of 60                        March 29, 2013
+List of Station Types (Rev B and VantagePro 2):
+  Station Name                    Station Type (hex)      "standard" period
+  ISS                             0                       1
+  Temperature Only Station        1                       4
+  Humidity Only Station           2                       4
+  Temperature/Humidity Station 3                          4
+  Wireless Anemometer Station 4                           1
+  Rain Station                    5                       1
+  Leaf Station                    6                       1
+  Soil Station                    7                       1
+  Soil/Leaf Station               8                       1
+  SensorLink Station *            9                       1
+  No station – OFF                A                       0
+
+* Vantage Pro2 and Vantage Vue do not support the SensorLink station type.
+
+List of Station Types (Vantage Vue):
+  Station Name                     Station Type (hex)
+  ISS – Vantage Vue                0
+  Temperature Only Station *       1
+  Humidity Only Station *          2
+  Temperature/Humidity Station * 3
+  Wireless Anemometer Station      4
+  ISS – Vantage Pro 2              5
+  Leaf Station *                   6
+  Soil Station *                   7
+  Soil/Leaf Station *              8
+  SensorLink Station *             9
+  No station – OFF                 A
+
+* The only station types supported by the Vantage Vue are: "ISS – Vantage Vue", "ISS – VP2",
+"Wireless Anemometer", and "No Station – OFF".
+
+Retransmit feature
+To activate the retransmit feature of the console, write the ID number (1-8) that you would like
+the Vantage to transmit on into the RE_TRANSMIT_TX field. This ID can not also be used to
+receive data from a remote sensor. Use the value 0 to turn retransmit off.
+
+IMPORTANT!! You must use the "NEWSETUP" command after changing the transmitter ID or
+retransmit settings. This allows the console to use the new settings.
+
+5. Setting Alarm Thresholds
+The alarm values are stored in the EEPROM. Each alarm is described below along with its
+EEPROM address.
+
+
+   Rev 2.6.1                              Page 48 of 60                       March 29, 2013
+Field                Offset   Size Explanation
+ALARM_START          82=0x52 94      Starting location for the Alarm threshold data.
+BAR_RISE_ALARM       0       1       The BAR_RISE alarms is 1 byte unsigned number. A zero
+                                     value indicates the alarm is not set. A non-zero value of 1 to
+                                     255 represents .001 in to .255 in.
+BAR_FALL_ALARM       1        1      The BAR_FALL alarms is 1 byte unsigned number. A zero
+                                     value indicates the alarm is not set. A non-zero value of 1 to
+                                     255 represents .001 in to .255 in.
+TIME_ALARM           2        2      The TIME_A alarm is a 2 byte number in the format HOURS
+                                     * 100 + MINUTES.
+TIME_COMP_ALARM      4        2      A value of 0xffff indicates an alarm is not set.
+LOW_TEMP_IN_ALARM    6        1      The temperature alarm is in 1 unsigned byte in 1 °F resolution.
+                                     It has an offset of +90°F so every number is positive. For
+                                     example -32 °F would be stored as 58°F. If the alarm is not
+                                     set, a 255 is stored.
+HIGH_TEMP_IN_ALARM   7        1      The temperature alarm is in 1 unsigned byte in 1 °F resolution.
+                                     It has an offset of +90°F so every number is positive. For
+                                     example -32 °F would be stored as 58 °F. If the alarm is not
+                                     set, a 255 is stored.
+LOW_TEMP_OUT_ALARM   8        1      The temperature alarm is in 1 unsigned byte in 1 °F resolution.
+                                     It has an offset of +90°F so every number is positive. For
+                                     example -32°F would be stored as 58°F (-32 + 90). If the
+                                     alarm is not set, a 255 is stored.
+HIGH_TEMP_OUT_ALARM 9         1      The temperature alarm is in 1 unsigned byte in 1 °F resolution.
+                                     It has an offset of +90°F so every number is positive. For
+                                     example -32°F would be stored as 58°F (-32 + 90). If the
+                                     alarm is not set, a 255 is stored.
+LOW_TEMP_ALARM       10       15     The temperature alarm is in 1 unsigned byte in 1 °F resolution.
+                                     It has an offset of +90°F so every number is positive. For
+                                     example -32°F would be stored as 58°F (-32 + 90). If the
+                                     alarm is not set, a 255 is stored. There are 15 bytes for the
+                                     temperature alarm. Bytes 0 to 6 are for the extra temperature
+                                     stations, bytes 7 to 10 are for the soil station temperature, and
+                                     bytes 11 to 14 are for the leaf station temperature.
+HIGH_TEMP_ALARM      25       15     The temperature alarm is in 1 unsigned byte in 1 °F resolution.
+                                     It has an offset of +90°F so every number is positive. For
+                                     example -32°F would be stored as 58°F (-32 + 90). If the
+                                     alarm is not set, a 255 is stored. Bytes 0 to 6 are for the extra
+                                     temperature stations, bytes 7 to 10 are for the soil station
+                                     temperature, and bytes 11 to 14 are for the leaf station
+                                     temperature.
+LOW_HUM_IN_ALARM     40       1      The humidity alarm is stored in 1 unsigned byte in 1%
+                                     resolution. A value of 255 indicates the alarm is not set.
+HIGH_HUM_IN_ALARM    41       1      The humidity alarm is stored in 1 unsigned byte in 1%
+                                     resolution. A value of 255 indicates the alarm is not set.
+LOW_HUM_ALARM        42       8      The humidity alarm is stored in 1 unsigned byte in 1%
+                                     resolution. A value of 255 indicates the alarm is not set. Note
+                                     that the first byte is for the ISS outside humidity.
+HIGH_HUM_ALARM       50       8      The humidity alarm is stored in 1 unsigned byte in 1%
+                                     resolution. A value of 255 indicates the alarm is not set. .
+                                     Note that the first byte is for the ISS outside humidity.
+LOW_DEW_ALARM        58       1      The dew alarm is in 1 unsigned byte in 1 °F resolution. It has
+                                     an offset of +120°F so every number is positive. For example
+                                     -32 °F would be stored as 88 °F. If the alarm is not set, a 255
+                                     is stored.
+
+
+
+ Rev 2.6.1                         Page 49 of 60                             March 29, 2013
+Field               Offset   Size Explanation
+HIGH_DEW_ALARM      59       1     The dew alarm is in 1 unsigned byte in 1 °F resolution. It has
+                                   an offset of +120°F so every number is positive. For example
+                                   -32 °F would be stored as 88 °F. If the alarm is not set, a 255
+                                   is stored.
+CHILL_ALARM         60       1     The chill alarm is in 1 unsigned byte in 1 °F resolution. It has
+                                   an offset of +120°F so every number is positive. For example
+                                   -32 °F would be stored as 88 °F. If the alarm is not set, a 255
+                                   is stored.
+HEAT_ALARM          61       1     The heat alarm is in 1 unsigned byte in 1 °F resolution. It has
+                                   an offset of +90°F so every number is positive. For example
+THSW_ALARM          62       1     The temperature alarm is in 1 unsigned byte in 1°F resolution.
+                                   It has an offset of +90°F so every number is positive. For
+                                   example, -32°F would be stored as -32 plus 90, which is 58°F.
+SPEED_ALARM         63       1     Wind speed alarm is stored in 1 unsigned byte in 1 mph
+                                   resolution. A value of 255 indicates the alarm is not set.
+SPEED_10MIN_ALARM   64       1     10 minute average Wind Speed alarm is stored in 1 unsigned
+                                   byte in 1 mph resolution. A value of 255 indicates the alarm is
+                                   not set.
+UV_ALARM            65       1     The UV alarm is stored in 1 unsigned byte in the units of .1
+                                   index. A value of 255 indicats no alarm is set.
+UV_DOSE_ALARM       66       1     The UV exposure alarm threshold is stored in the
+                                   UV_DOSE_A_X location. However, this is an internal alarm
+                                   that must be set throught he console.
+LOW_SOIL_ALARM      67       4     The soil moisture alarm is stored in 1 byte unsigned values
+                                   with resolution of 1 cb. A value of 255 indicates the alarm is
+                                   not set. There are four bytes for the soil alarm, one for each of
+                                   the four sensors.
+HIGH_SOIL_ALARM     71       4     The soil moisture alarm is stored in 1 byte unsigned values
+                                   with resolution of 1 cb. A value of 255 indicates the alarm is
+                                   not set. There are four bytes for the soil alarm, one for each of
+                                   the four sensors.
+LOW_LEAF_ALARM      75       4     The leaf wetness alarm is stored in 1 byte unsigned value.
+                                   Leaf wetness ranges from 0 to 15. A value of 255 indicates
+                                   the alarm is not set. There are four bytes for the leaf alarm,
+                                   one for each of the four sensors.
+HIGH_LEAF_ALARM     79       4     The leaf wetness alarm is stored in 1 byte unsigned value.
+                                   Leaf wetness ranges from 0 to 15. A value of 255 indicates
+                                   the alarm is not set. There are four bytes for the leaf alarm, one
+                                   for each of the four sensors.
+SOLAR_ALARM         83       2     The solar radiation alarm is a 2 byte value stored in 1 W/m^2
+                                   resolution. Valid range is from 0 to 1800. A value of 0xffff
+                                   (65535) indicates the alarm is not set.
+RAIN_RATE_ALARM     85       2     The rain rate alarm is a 2 byte value stored with a resolution of
+                                   rain clicks per hour (0.01 in or 0.2 mm). A value of 0xffff
+                                   (65535) indicates the alarm is not set.
+RAIN_15MIN_ALARM    87       2     The rain total alarms are stored in 2 bytes with a resolution of
+RAIN_24HR_ALARM     89       2     rain clicks (0.01 in or 0.2 mm). A value of 0xffff (65535)
+RAIN_STORM_ALARM    91       2     means no alarm is set.
+ET_DAY_ALARM        93       1     The ET day alarm is stored in 1 unsigned byte in the resolution
+                                   of .001 inches. A value of 255 means no alarm is set.
+
+
+
+
+ Rev 2.6.1                       Page 50 of 60                              March 29, 2013
+6. Calculating ISS reception
+The "Number of Wind Samples" field in the archive record can tell you the quality of radio
+communication between the ISS (or wireless anemometer) and the console because wind speed
+data is send in almost all data packets. In order to use this, you need to know how many packets
+you could have gotten if you had 100 % reception. This is a function of both the archive interval
+and the transmitter ID that is sending wind speed. The formula for Vantage Pro2 console is
+different from the one for Vantage Pro console.
+
+The formulas for determining the expected maximum number of packets containing wind speed
+are:
+       archive_interval_min * 60 archive_interval_min * 60
+                                                                    (for Vantage Pro)
+                    ID  1            50.0  ( ID  1) *1.25
+              2.5 
+                     16.0
+       or
+
+        archive_interval_min * 60
+                                                            (for Vantage Pro2 and Vantage Vue)
+               41  ID  1
+                   16
+
+
+Here archive_interval_min is the archive interval in minutes and ID is the transmitter ID number
+between 1 and 8.
+
+It is possible for the number of wind samples to be larger than the "expected" maximum value.
+This is because the maximum value is a long term average, rounded to an integer. The
+WeatherLink program displays 100% in these cases (i.e. not the 105% that the math would
+suggest).
+
+
+
+
+   Rev 2.6.1                              Page 51 of 60                       March 29, 2013
+XV. EEPROM Graph data locations for Vantage Pro
+
+Please note that some of the pointer values stored in the EEPROM may not be updated
+immediately, such as NEXT_10MIN_PTR and NEXT_15MIN_PTR. This is done to save
+EEPROM write cycles, since the EEPROM is good for 100,000 times of write. Those data will
+only be saved into the EEPROM at the beginning of each new month or when the console goes
+into setup mode.
+GRAPH_START               176
+
+NEXT_10MIN_PTR            GRAPH_START+1
+NEXT_15MIN_PTR            GRAPH_START+2
+NEXT_HOUR_PTR             GRAPH_START+3
+NEXT_DAY_PTR              GRAPH_START+4
+NEXT_MONTH_PTR            GRAPH_START+5
+NEXT_YEAR_PTR             GRAPH_START+6
+NEXT_RAIN_STORM_PTR       GRAPH_START+7
+NEXT_RAIN_YEAR_PTR        GRAPH_START+8
+START                     GRAPH_START+9 = 185
+//                                                        NUMBER NUMBER
+//                                                          OF     OF
+//                                                        ENTRYS BYTES
+//                                                        --------------
+TEMP_IN_HOUR                    START +     0             // 24 || 1
+TEMP_IN_DAY_HIGHS               START +    24             // 24 || 1
+TEMP_IN_DAY_HIGH_TIMES          START +    48             // 24 || 2
+TEMP_IN_DAY_LOWS                START +    96             // 24 || 1
+TEMP_IN_DAY_LOW_TIMES           START +   120             // 24 || 2
+TEMP_IN_MONTH_HIGHS             START +   168             // 25 || 1
+TEMP_IN_MONTH_LOWS              START +   193             // 25 || 1
+TEMP_IN_YEAR_HIGHS              START +   218             // 1 || 1
+TEMP_IN_YEAR_LOWS               START +   219             // 1 || 1
+
+TEMP_OUT_HOUR                   START +   220             // 24 ||   1
+TEMP_OUT_DAY_HIGHS              START +   244             // 24 ||   1
+TEMP_OUT_DAY_HIGH_TIMES         START +   268             // 24 ||   2
+TEMP_OUT_DAY_LOWS               START +   316             // 24 ||   1
+TEMP_OUT_DAY_LOW_TIMES          START +   340             // 24 ||   2
+TEMP_OUT_MONTH_HIGHS            START +   388             // 25 ||   1
+TEMP_OUT_MONTH_LOWS             START +   413             // 25 ||   1
+TEMP_OUT_YEAR_HIGHS             START +   438             // 25 ||   1
+TEMP_OUT_YEAR_LOWS              START +   463             // 25 ||   1
+
+DEW_HOUR                        START +   488             // 24 ||   1
+DEW_DAY_HIGHS                   START +   512             // 24 ||   1
+DEW_DAY_HIGH_TIMES              START +   536             // 24 ||   2
+DEW_DAY_LOWS                    START +   584             // 24 ||   1
+DEW_DAY_LOW_TIMES               START +   608             // 24 ||   2
+DEW_MONTH_HIGHS                 START +   656             // 25 ||   1
+DEW_MONTH_LOWS                  START +   681             // 25 ||   1
+DEW_YEAR_HIGHS                  START +   706             // 1 ||    1
+DEW_YEAR_LOWS                   START +   707             // 1 ||    1
+
+CHILL_HOUR                      START +   708             // 24 ||   1
+CHILL_DAY_LOWS                  START +   732             // 24 ||   1
+CHILL_DAY_LOW_TIMES             START +   756             // 24 ||   2
+CHILL_MONTH_LOWS                START +   804             // 25 ||   1
+CHILL_YEAR_LOWS                 START +   829             // 1 ||    1
+
+THSW_HOUR                       START +   830             // 24 ||   1
+THSW_DAY_HIGHS                  START +   854             // 24 ||   1
+THSW_DAY_HIGH_TIMES             START +   878             // 24 ||   2
+THSW_MONTH_HIGHS                START +   926             // 25 ||   1
+THSW_YEAR_HIGHS                 START +   951             // 1 ||    1
+
+HEAT_HOUR                       START +   952             // 24 ||   1
+HEAT_DAY_HIGHS                  START +   976             // 24 ||   1
+
+
+
+   Rev 2.6.1                                    Page 52 of 60              March 29, 2013
+HEAT_DAY_HIGH_TIMES         START + 1000             // 24 ||   2
+HEAT_MONTH_HIGHS            START + 1048             // 25 ||   1
+HEAT_YEAR_HIGHS             START + 1073             // 1 ||    1
+
+HUM_IN_HOUR                 START + 1074             // 24 ||   1
+HUM_IN_DAY_HIGHS            START + 1098             // 24 ||   1
+HUM_IN_DAY_HIGH_TIMES       START + 1122             // 24 ||   2
+HUM_IN_DAY_LOWS             START + 1170             // 24 ||   1
+HUM_IN_DAY_LOW_TIMES        START + 1194             // 24 ||   2
+HUM_IN_MONTH_HIGHS          START + 1242             // 25 ||   1
+HUM_IN_MONTH_LOWS           START + 1267             // 25 ||   1
+HUM_IN_YEAR_HIGHS           START + 1292             // 1 ||    1
+HUM_IN_YEAR_LOWS            START + 1293             // 1 ||    1
+
+HUM_OUT_HOUR                START + 1294             // 24 ||   1
+HUM_OUT_DAY_HIGHS           START + 1318             // 24 ||   1
+HUM_OUT_DAY_HIGH_TIMES      START + 1342             // 24 ||   2
+HUM_OUT_DAY_LOWS            START + 1390             // 24 ||   1
+HUM_OUT_DAY_LOW_TIMES       START + 1414             // 24 ||   2
+HUM_OUT_MONTH_HIGHS         START + 1462             // 25 ||   1
+HUM_OUT_MONTH_LOWS          START + 1487             // 25 ||   1
+HUM_OUT_YEAR_HIGHS          START + 1512             // 1 ||    1
+HUM_OUT_YEAR_LOWS           START + 1513             // 1 ||    1
+
+BAR_15_MIN                  START + 1514             // 24 ||   2
+BAR_HOUR                    START + 1562             // 24 ||   2
+BAR_DAY_HIGHS               START + 1610             // 24 ||   2
+BAR_DAY_HIGH_TIMES          START + 1658             // 24 ||   2
+BAR_DAY_LOWS                START + 1706             // 24 ||   2
+BAR_DAY_LOW_TIMES           START + 1754             // 24 ||   2
+BAR_MONTH_HIGHS             START + 1802             // 25 ||   2
+BAR_MONTH_LOWS              START + 1852             // 25 ||   2
+BAR_YEAR_HIGHS              START + 1902             // 1 ||    2
+BAR_YEAR_LOWS               START + 1904             // 1 ||    2
+
+WIND_SPEED_10_MIN_AVG       START + 1906             // 24 ||   1
+WIND_SPEED_HOUR_AVG         START + 1930             // 24 ||   1
+WIND_SPEED_DAY_HIGHS        START + 1954             // 24 ||   1
+WIND_SPEED_DAY_HIGH_TIMES   START + 1978             // 24 ||   2
+WIND_SPEED_DAY_HIGH_DIR     START + 2026             // 24 ||   1
+WIND_SPEED_MONTH_HIGHS      START + 2050             // 25 ||   1
+WIND_SPEED_MONTH_HIGH_DIR   START + 2075             // 25 ||   1
+WIND_SPEED_YEAR_HIGHS       START + 2100             // 25 ||   1
+WIND_SPEED_YEAR_HIGH_DIR    START + 2125             // 25 ||   1
+
+WIND_DIR_HOUR               START + 2150             // 24 ||   1
+WIND_DIR_DAY                START + 2174             // 24 ||   1
+WIND_DIR_MONTH              START + 2198             // 24 ||   1
+WIND_DIR_DAY_BINS           START + 2222             // 8 ||    2
+WIND_DIR_MONTH_BINS         START + 2238             // 8 ||    2
+
+RAIN_RATE_1_MIN             START + 2254             // 24 ||   2
+RAIN_RATE_HOUR              START + 2302             // 24 ||   2
+RAIN_RATE_DAY_HIGHS         START + 2350             // 24 ||   2
+RAIN_RATE_DAY_HIGH_TIMES    START + 2398             // 24 ||   2
+RAIN_RATE_MONTH_HIGHS       START + 2446             // 25 ||   2
+RAIN_RATE_YEAR_HIGHS        START + 2496             // 25 ||   2
+
+RAIN_15_MIN                 START + 2546             // 24 ||   1
+RAIN_HOUR                   START + 2570             // 24 ||   2
+RAIN_STORM                  START + 2618             // 25 ||   2
+RAIN_STORM_START            START + 2668             // 25 ||   2
+RAIN_STORM_END              START + 2718             // 25 ||   2
+RAIN_DAY_TOTAL              START + 2768             // 25 ||   2
+RAIN_MONTH_TOTAL            START + 2818             // 25 ||   2
+RAIN_YEAR_TOTAL             START + 2868             // 25 ||   2
+
+ET_HOUR                     START + 2918             // 24 ||   1
+ET_DAY_TOTAL                START + 2942             // 25 ||   1
+ET_MONTH_TOTAL              START + 2967             // 25 ||   2
+ET_YEAR_TOTAL               START + 3017             // 25 ||   2
+
+
+
+
+   Rev 2.6.1                               Page 53 of 60            March 29, 2013
+SOLAR_HOUR_AVG          START + 3067              // 24 ||     2
+SOLAR_DAY_HIGHS         START + 3115              // 24 ||     2
+SOLAR_DAY_HIGH_TIMES    START + 3163              // 24 ||     2
+SOLAR_MONTH_HIGHS       START + 3211              // 25 ||     2
+SOLAR_YEAR_HIGHS        START + 3261              // 1 ||      2
+
+UV_HOUR_AVG             START + 3263              // 24 ||     1
+UV_MEDS_HOUR            START + 3287              // 24 ||     1
+UV_MEDS_DAY             START + 3311              // 24 ||     1
+UV_DAY_HIGHS            START + 3335              // 24 ||     1
+UV_DAY_HIGH_TIMES       START + 3359              // 24 ||     2
+UV_MONTH_HIGHS          START + 3407              // 25 ||     1
+UV_YEAR_HIGHS           START + 3432              // 1 ||      1
+
+LEAF_HOUR               START + 3433              // 24 ||     1
+LEAF_DAY_LOWS           START + 3457              // 24 ||     1
+LEAF_DAY_LOW_TIMES      START + 3481              // 24 ||     2
+LEAF_DAY_HIGHS          START + 3529              // 24 ||     1
+LEAF_DAY_HIGH_TIMES     START + 3553              // 24 ||     2
+WIND_SPEED_HOUR_HIGHS   START + 3601              // 24 ||     1
+LEAF_MONTH_LOWS         START + 3625              // 1 ||      1
+LEAF_MONTH_HIGHS        START + 3626              // 25 ||     1
+LEAF_YEAR_LOWS          START + 3651              // 1 ||      1
+LEAF_YEAR_HIGHS         START + 3652              // 1 ||      1
+
+SOIL_HOUR               START + 3653              // 24 ||     1
+SOIL_DAY_LOWS           START + 3677              // 24 ||     1
+SOIL_DAY_LOW_TIMES      START + 3701              // 24 ||     2
+SOIL_DAY_HIGHS          START + 3749              // 24 ||     1
+SOIL_DAY_HIGH_TIMES     START + 3773              // 24 ||     2
+SOIL_MONTH_LOWS         START + 3821              // 25 ||     1
+SOIL_MONTH_HIGHS        START + 3846              // 25 ||     1
+SOIL_YEAR_LOWS          START + 3871              // 1 ||      1
+SOIL_YEAR_HIGHS         START + 3872              // 1 ||      1
+SOIL_YEAR_HIGHS_COMP    START + 3873              // 1 ||      1
+
+RX_PERCENTAGE           START + 3874              //   24 ||       1
+
+SAVE_MIN                RX_PERCENTAGE+25 = 4084
+SAVE_HOUR               SAVE_MIN+1
+SAVE_DAY                SAVE_HOUR+1
+SAVE_MONTH              SAVE_HOUR+2
+SAVE_YEAR               SAVE_HOUR+3
+SAVE_YEAR_COMP          SAVE_HOUR+4
+BAUD_RATE               SAVE_HOUR+5
+DEFAULT_RATE_GRAPH      SAVE_HOUR+6
+
+
+
+
+   Rev 2.6.1                           Page 54 of 60                   March 29, 2013
+XVI. EEPROM Graph data locations for VP2
+
+Please note that some of the pointer values stored in the EEPROM may not be updated
+immediately, such as NEXT_10MIN_PTR and NEXT_15MIN_PTR. This is done to save
+EEPROM write cycles, since the EEPROM is good for 100,000 times of write. Those data will
+only be saved into the EEPROM at the beginning of each new month or when the console goes
+into setup mode.
+#define GRAPH_START            176
+
+NEXT_10MIN_PTR            GRAPH_START+1
+NEXT_15MIN_PTR            GRAPH_START+2
+NEXT_HOUR_PTR             GRAPH_START+3
+NEXT_DAY_PTR              GRAPH_START+4
+NEXT_MONTH_PTR            GRAPH_START+5
+NEXT_YEAR_PTR             GRAPH_START+6
+NEXT_RAIN_STORM_PTR       GRAPH_START+7
+NEXT_RAIN_YEAR_PTR        GRAPH_START+8
+
+
+#define START                   325
+
+//                                                     NUMBER NUMBER
+//                                                       OF     OF
+//                                                     ENTRYS BYTES
+//                                                     --------------
+TEMP_IN_HOUR                 START +     0             // 24 || 1
+TEMP_IN_DAY_HIGHS            START +    24             // 24 || 1
+TEMP_IN_DAY_HIGH_TIMES       START +    48             // 24 || 2
+TEMP_IN_DAY_LOWS             START +    96             // 24 || 1
+TEMP_IN_DAY_LOW_TIMES        START +   120             // 24 || 2
+TEMP_IN_MONTH_HIGHS          START +   168             // 25 || 1
+TEMP_IN_MONTH_LOWS           START +   193             // 25 || 1
+TEMP_IN_YEAR_HIGHS           START +   218             // 1 || 1
+TEMP_IN_YEAR_LOWS            START +   219             // 1 || 1
+
+TEMP_OUT_HOUR                START +   220             // 24 ||   1
+TEMP_OUT_DAY_HIGHS           START +   244             // 24 ||   1
+TEMP_OUT_DAY_HIGH_TIMES      START +   268             // 24 ||   2
+TEMP_OUT_DAY_LOWS            START +   316             // 24 ||   1
+TEMP_OUT_DAY_LOW_TIMES       START +   340             // 24 ||   2
+TEMP_OUT_MONTH_HIGHS         START +   388             // 25 ||   1
+TEMP_OUT_MONTH_LOWS          START +   413             // 25 ||   1
+TEMP_OUT_YEAR_HIGHS          START +   438             // 25 ||   1
+TEMP_OUT_YEAR_LOWS           START +   463             // 25 ||   1
+
+DEW_HOUR                     START +   488             // 24 ||   1
+DEW_DAY_HIGHS                START +   512             // 24 ||   1
+DEW_DAY_HIGH_TIMES           START +   536             // 24 ||   2
+DEW_DAY_LOWS                 START +   584             // 24 ||   1
+DEW_DAY_LOW_TIMES            START +   608             // 24 ||   2
+DEW_MONTH_HIGHS              START +   656             // 25 ||   1
+DEW_MONTH_LOWS               START +   681             // 25 ||   1
+DEW_YEAR_HIGHS               START +   706             // 1 ||    1
+DEW_YEAR_LOWS                START +   707             // 1 ||    1
+
+CHILL_HOUR                   START +   708             // 24 ||   1
+CHILL_DAY_LOWS               START +   732             // 24 ||   1
+CHILL_DAY_LOW_TIMES          START +   756             // 24 ||   2
+CHILL_MONTH_LOWS             START +   804             // 25 ||   1
+CHILL_YEAR_LOWS              START +   829             // 1 ||    1
+
+THSW_HOUR                    START +   830             // 24 ||   1
+THSW_DAY_HIGHS               START +   854             // 24 ||   1
+THSW_DAY_HIGH_TIMES          START +   878             // 24 ||   2
+THSW_MONTH_HIGHS             START +   926             // 25 ||   1
+THSW_YEAR_HIGHS              START +   951             // 1 ||    1
+
+
+
+   Rev 2.6.1                                 Page 55 of 60              March 29, 2013
+HEAT_HOUR                   START + 952              // 24 ||   1
+HEAT_DAY_HIGHS              START + 976              // 24 ||   1
+HEAT_DAY_HIGH_TIMES         START + 1000             // 24 ||   2
+HEAT_MONTH_HIGHS            START + 1048             // 25 ||   1
+HEAT_YEAR_HIGHS             START + 1073             // 1 ||    1
+
+HUM_IN_HOUR                 START + 1074             // 24 ||   1
+HUM_IN_DAY_HIGHS            START + 1098             // 24 ||   1
+HUM_IN_DAY_HIGH_TIMES       START + 1122             // 24 ||   2
+HUM_IN_DAY_LOWS             START + 1170             // 24 ||   1
+HUM_IN_DAY_LOW_TIMES        START + 1194             // 24 ||   2
+HUM_IN_MONTH_HIGHS          START + 1242             // 25 ||   1
+HUM_IN_MONTH_LOWS           START + 1267             // 25 ||   1
+HUM_IN_YEAR_HIGHS           START + 1292             // 1 ||    1
+HUM_IN_YEAR_LOWS            START + 1293             // 1 ||    1
+
+HUM_OUT_HOUR                START + 1294             // 24 ||   1
+HUM_OUT_DAY_HIGHS           START + 1318             // 24 ||   1
+HUM_OUT_DAY_HIGH_TIMES      START + 1342             // 24 ||   2
+HUM_OUT_DAY_LOWS            START + 1390             // 24 ||   1
+HUM_OUT_DAY_LOW_TIMES       START + 1414             // 24 ||   2
+HUM_OUT_MONTH_HIGHS         START + 1462             // 25 ||   1
+HUM_OUT_MONTH_LOWS          START + 1487             // 25 ||   1
+HUM_OUT_YEAR_HIGHS          START + 1512             // 1 ||    1
+HUM_OUT_YEAR_LOWS           START + 1513             // 1 ||    1
+
+BAR_15_MIN                  START + 1514             // 24 ||   2
+BAR_HOUR                    START + 1562             // 24 ||   2
+BAR_DAY_HIGHS               START + 1610             // 24 ||   2
+BAR_DAY_HIGH_TIMES          START + 1658             // 24 ||   2
+BAR_DAY_LOWS                START + 1706             // 24 ||   2
+BAR_DAY_LOW_TIMES           START + 1754             // 24 ||   2
+BAR_MONTH_HIGHS             START + 1802             // 25 ||   2
+BAR_MONTH_LOWS              START + 1852             // 25 ||   2
+BAR_YEAR_HIGHS              START + 1902             // 1 ||    2
+BAR_YEAR_LOWS               START + 1904             // 1 ||    2
+
+WIND_SPEED_10_MIN_AVG       START + 1906             // 24 ||   1
+WIND_SPEED_HOUR_AVG         START + 1930             // 24 ||   1
+WIND_SPEED_HOUR_HIGHS       START + 1954             // 24 ||   1
+WIND_SPEED_DAY_HIGHS        START + 1978             // 24 ||   1
+WIND_SPEED_DAY_HIGH_TIMES   START + 2002             // 24 ||   2
+WIND_SPEED_DAY_HIGH_DIR     START + 2050             // 24 ||   1
+WIND_SPEED_MONTH_HIGHS      START + 2074             // 25 ||   1
+WIND_SPEED_MONTH_HIGH_DIR   START + 2099             // 25 ||   1
+WIND_SPEED_YEAR_HIGHS       START + 2124             // 25 ||   1
+WIND_SPEED_YEAR_HIGH_DIR    START + 2149             // 25 ||   1
+
+WIND_DIR_HOUR               START + 2174             // 24 ||   1
+WIND_DIR_DAY                START + 2198             // 24 ||   1
+WIND_DIR_MONTH              START + 2222             // 24 ||   1
+WIND_DIR_DAY_BINS           START + 2246             // 8 ||    2
+WIND_DIR_MONTH_BINS         START + 2262             // 8 ||    2
+
+RAIN_RATE_1_MIN             START + 2278             // 24 ||   2
+RAIN_RATE_HOUR              START + 2326             // 24 ||   2
+RAIN_RATE_DAY_HIGHS         START + 2374             // 24 ||   2
+RAIN_RATE_DAY_HIGH_TIMES    START + 2422             // 24 ||   2
+RAIN_RATE_MONTH_HIGHS       START + 2470             // 25 ||   2
+RAIN_RATE_YEAR_HIGHS        START + 2520             // 25 ||   2
+
+RAIN_15_MIN                 START + 2570             // 24 ||   1
+RAIN_HOUR                   START + 2594             // 24 ||   2
+RAIN_STORM                  START + 2642             // 25 ||   2
+RAIN_STORM_START            START + 2692             // 25 ||   2
+RAIN_STORM_END              START + 2742             // 25 ||   2
+RAIN_DAY_TOTAL              START + 2792             // 25 ||   2
+RAIN_MONTH_TOTAL            START + 2842             // 25 ||   2
+RAIN_YEAR_TOTAL             START + 2892             // 25 ||   2
+
+ET_HOUR                     START + 2942             // 24 ||   1
+
+
+   Rev 2.6.1                               Page 56 of 60            March 29, 2013
+ET_DAY_TOTAL             START + 2966             // 25 ||      1
+ET_MONTH_TOTAL           START + 2991             // 25 ||      2
+ET_YEAR_TOTAL            START + 3041             // 25 ||      2
+
+SOLAR_HOUR_AVG           START + 3091             // 24 ||      2
+SOLAR_DAY_HIGHS          START + 3139             // 24 ||      2
+SOLAR_DAY_HIGH_TIMES     START + 3187             // 24 ||      2
+SOLAR_MONTH_HIGHS        START + 3235             // 1 ||       2
+SOLAR_YEAR_HIGHS         START + 3237             // 1 ||       2
+
+UV_HOUR_AVG              START + 3239             // 24 ||      1
+UV_MEDS_HOUR             START + 3263             // 24 ||      1
+UV_MEDS_DAY              START + 3287             // 24 ||      1
+UV_DAY_HIGHS             START + 3311             // 24 ||      1
+UV_DAY_HIGH_TIMES        START + 3335             // 24 ||      2
+UV_MONTH_HIGHS           START + 3383             // 1 ||       1
+UV_YEAR_HIGHS            START + 3384             // 1 ||       1
+
+LEAF_HOUR                START + 3385             // 24 ||      1
+LEAF_DAY_LOWS            START + 3409             // 24 ||      1
+LEAF_DAY_LOW_TIMES       START + 3433             // 24 ||      2
+LEAF_DAY_HIGHS           START + 3481             // 24 ||      1
+LEAF_DAY_HIGH_TIMES      START + 3505             // 24 ||      2
+LEAF_MONTH_LOWS          START + 3553             // 1 ||       1
+LEAF_MONTH_HIGHS         START + 3554             // 1 ||       1
+LEAF_YEAR_LOWS           START + 3555             // 1 ||       1
+LEAF_YEAR_HIGHS          START + 3556             // 1 ||       1
+
+SOIL_HOUR                START + 3557             // 24 ||      1
+SOIL_DAY_LOWS            START + 3581             // 24 ||      1
+SOIL_DAY_LOW_TIMES       START + 3605             // 24 ||      2
+SOIL_DAY_HIGHS           START + 3653             // 24 ||      1
+SOIL_DAY_HIGH_TIMES      START + 3677             // 24 ||      2
+SOIL_MONTH_LOWS          START + 3725             // 1 ||       1
+SOIL_MONTH_HIGHS         START + 3726             // 1 ||       1
+SOIL_YEAR_LOWS           START + 3727             // 1 ||       1
+SOIL_YEAR_HIGHS          START + 3728             // 1 ||       1
+SOIL_YEAR_HIGHS_COMP     START + 3729             // 1 ||       1
+
+
+RX_PERCENTAGE          START + 3730               //    24 ||       1
+
+SAVE_MIN               RX_PERCENTAGE+25           // 4080
+SAVE_HOUR              SAVE_MIN+1
+SAVE_DAY               SAVE_HOUR+1
+SAVE_MONTH             SAVE_HOUR+2
+SAVE_YEAR              SAVE_HOUR+3
+SAVE_YEAR_COMP         SAVE_HOUR+4
+BAUD_RATE              SAVE_HOUR+5
+DEFAULT_RATE_GRAPH     SAVE_HOUR+6
+LCD_MODEL              SAVE_HOUR+8
+LCD_MODEL_COMP         SAVE_HOUR+9
+LOG_AVERAGE_TEMPS      SAVE_HOUR+11         // MUST BE AT 4092
+
+
+
+
+   Rev 2.6.1                            Page 57 of 60                   March 29, 2013
+XVII. EEPROM Graph data locations for Vue
+
+#define GRAPH_START               176
+
+NEXT_10MIN_PTR           GRAPH_START+1
+NEXT_15MIN_PTR           GRAPH_START+2
+NEXT_HOUR_PTR            GRAPH_START+3
+NEXT_DAY_PTR             GRAPH_START+4
+NEXT_MONTH_PTR           GRAPH_START+5
+NEXT_YEAR_PTR            GRAPH_START+6
+NEXT_RAIN_STORM_PTR      GRAPH_START+7
+NEXT_RAIN_YEAR_PTR       GRAPH_START+8
+
+
+#define START                           325
+
+//                                                             NUMBER NUMBER
+//                                                               OF     OF
+//                                                             ENTRYS BYTES
+//                                                            --------------
+#define TEMP_OUT_HOUR                   START +     0         // 25 | 2
+#define TEMP_OUT_DAY_HIGHS              START +    50         // 25 | 2
+#define TEMP_OUT_DAY_LOWS               START +   100         // 25 | 2
+#define TEMP_OUT_MONTH_HIGHS            START +   150         // 26 | 2
+#define TEMP_OUT_MONTH_LOWS             START +   202         // 26 | 2
+#define TEMP_OUT_YEAR_HIGHS             START +   254         // 1 | 2
+#define TEMP_OUT_YEAR_LOWS              START +   256         // 1 | 2
+#define TEMP_OUT_DAY_HIGH_TIMES         START +   258         // 25 | 2
+#define TEMP_OUT_DAY_LOW_TIMES          START +   308         // 25 | 2
+
+#define TEMP_IN_HOUR                    START +   358         // 25   |   1
+#define TEMP_IN_DAY_HIGHS               START +   383         // 25   |   1
+#define TEMP_IN_DAY_HIGH_TIMES          START +   408         // 25   |   2
+#define TEMP_IN_DAY_LOWS                START +   458         // 25   |   1
+#define TEMP_IN_DAY_LOW_TIMES           START +   483         // 25   |   2
+#define TEMP_IN_MONTH_HIGHS             START +   533         // 26   |   1
+#define TEMP_IN_MONTH_LOWS              START +   559         // 26   |   1
+#define TEMP_IN_YEAR_HIGHS              START +   585         // 1    |   1
+#define TEMP_IN_YEAR_LOWS               START +   586         // 1    |   1
+
+#define DEW_HOUR                        START +   587         // 25   |   1
+#define DEW_DAY_HIGHS                   START +   612         // 25   |   1
+#define DEW_DAY_HIGH_TIMES              START +   637         // 25   |   2
+#define DEW_DAY_LOWS                    START +   687         // 25   |   1
+#define DEW_DAY_LOW_TIMES               START +   712         // 25   |   2
+#define DEW_MONTH_HIGHS                 START +   762         // 26   |   1
+#define DEW_MONTH_LOWS                  START +   788         // 26   |   1
+#define DEW_YEAR_HIGHS                  START +   814         // 1    |   1
+#define DEW_YEAR_LOWS                   START +   815         // 1    |   1
+
+#define CHILL_HOUR                      START +   816         // 25   |   1
+#define CHILL_DAY_LOWS                  START +   841         // 25   |   1
+#define CHILL_DAY_LOW_TIMES             START +   866         // 25   |   2
+#define CHILL_MONTH_LOWS                START +   916         // 26   |   1
+#define CHILL_YEAR_LOWS                 START +   942         // 1    |   1
+#define CHILL_YEAR_LOWS_COMP            START +   943         // 1    |   1
+
+#define HEAT_HOUR                       START + 944           // 25   |   1
+#define HEAT_DAY_HIGHS                  START + 969           // 25   |   1
+#define HEAT_DAY_HIGH_TIMES             START + 994           // 25   |   2
+#define HEAT_MONTH_HIGHS                START + 1044          // 26   |   1
+#define HEAT_YEAR_HIGHS                 START + 1070          // 1    |   1
+
+#define HUM_IN_HOUR                     START + 1071          // 25   |   1
+#define HUM_IN_DAY_HIGHS                START + 1096          // 25   |   1
+#define HUM_IN_DAY_HIGH_TIMES           START + 1121          // 25   |   2
+#define HUM_IN_DAY_LOWS                 START + 1171          // 25   |   1
+#define HUM_IN_DAY_LOW_TIMES            START + 1196          // 25   |   2
+#define HUM_IN_MONTH_HIGHS              START + 1246          // 26   |   1
+#define HUM_IN_MONTH_LOWS               START + 1272          // 26   |   1
+
+
+
+   Rev 2.6.1                                  Page 58 of 60                    March 29, 2013
+#define HUM_IN_YEAR_HIGHS           START + 1298           //   1   |   1
+#define HUM_IN_YEAR_LOWS            START + 1299           //   1   |   1
+
+#define HUM_OUT_HOUR                START + 1300           // 25    |   1
+#define HUM_OUT_DAY_HIGHS           START + 1325           // 25    |   1
+#define HUM_OUT_DAY_HIGH_TIMES      START + 1350           // 25    |   2
+#define HUM_OUT_DAY_LOWS            START + 1400           // 25    |   1
+#define HUM_OUT_DAY_LOW_TIMES       START + 1425           // 25    |   2
+#define HUM_OUT_MONTH_HIGHS         START + 1475           // 26    |   1
+#define HUM_OUT_MONTH_LOWS          START + 1501           // 26    |   1
+#define HUM_OUT_YEAR_HIGHS          START + 1527           // 1     |   1
+#define HUM_OUT_YEAR_LOWS           START + 1528           // 1     |   1
+
+#define BAR_15_MIN                  START + 1529           // 25    |   2
+#define BAR_HOUR                    START + 1579           // 25    |   2
+#define BAR_DAY_HIGHS               START + 1629           // 25    |   2
+#define BAR_DAY_HIGH_TIMES          START + 1679           // 25    |   2
+#define BAR_DAY_LOWS                START + 1729           // 25    |   2
+#define BAR_DAY_LOW_TIMES           START + 1779           // 25    |   2
+#define BAR_MONTH_HIGHS             START + 1829           // 26    |   2
+#define BAR_MONTH_LOWS              START + 1881           // 26    |   2
+#define BAR_YEAR_HIGHS              START + 1933           // 1     |   2
+#define BAR_YEAR_LOWS               START + 1935           // 1     |   2
+
+
+#define WIND_SPEED_10_MIN_AVG       START + 1937           // 25    |   1
+#define WIND_SPEED_HOUR_AVG         START + 1962           // 25    |   1
+#define WIND_SPEED_HOUR_HIGHS       START + 1987           // 25    |   1
+#define WIND_SPEED_DAY_HIGHS        START + 2012           // 25    |   1
+#define WIND_SPEED_DAY_HIGH_TIMES   START + 2037           // 25    |   2
+#define WIND_SPEED_DAY_HIGH_DIR     START + 2087           // 25    |   1
+#define WIND_SPEED_MONTH_HIGHS      START + 2112           // 26    |   1
+#define WIND_SPEED_MONTH_HIGH_DIR   START + 2138           // 26    |   1
+#define WIND_SPEED_YEAR_HIGHS       START + 2164           // 1     |   1
+#define WIND_SPEED_YEAR_HIGH_DIR    START + 2165           // 1     |   1
+
+#define WIND_DIR_HOUR               START + 2166           // 25    |   1
+#define WIND_DIR_DAY                START + 2191           // 25    |   1
+#define WIND_DIR_MONTH              START + 2216           // 25    |   1
+#define WIND_DIR_DAY_BINS           START + 2241           // 8     |   2
+#define WIND_DIR_MONTH_BINS         START + 2257           // 8     |   2
+
+#define RAIN_RATE_1_MIN             START + 2273           // 25    |   2
+#define RAIN_RATE_HOUR              START + 2323           // 25    |   2
+#define RAIN_RATE_DAY_HIGHS         START + 2373           // 25    |   2
+#define RAIN_RATE_DAY_HIGH_TIMES    START + 2423           // 25    |   2
+#define RAIN_RATE_MONTH_HIGHS       START + 2473           // 26    |   2
+#define RAIN_RATE_YEAR_HIGHS        START + 2525           // 26    |   2
+
+#define RAIN_15_MIN                 START + 2577           // 25    |   1
+#define RAIN_HOUR                   START + 2602           // 25    |   2
+#define RAIN_STORM                  START + 2652           // 26    |   2
+#define RAIN_STORM_START            START + 2704           // 26    |   2
+#define RAIN_STORM_END              START + 2756           // 26    |   2
+#define RAIN_DAY_TOTAL              START + 2808           // 26    |   2
+#define RAIN_MONTH_TOTAL            START + 2860           // 26    |   2
+#define RAIN_YEAR_TOTAL             START + 2912           // 26    |   2
+
+#define ET_HOUR                     START + 2964           // 25    |   1
+#define ET_DAY_TOTAL                START + 2989           // 26    |   1
+#define ET_MONTH_TOTAL              START + 3015           // 26    |   2
+#define ET_YEAR_TOTAL               START + 3067           // 26    |   2
+
+#define RX_PERCENTAGE               START + 3119           // 25    |   1
+
+
+#define END_OF_GRAPHS               RX_PERCENTAGE+25       // 3469
+
+#define   COOLING_DD_BASE           END_OF_GRAPHS
+#define   HEATING_DD_BASE           END_OF_GRAPHS+2
+#define   COOLING_DD                END_OF_GRAPHS+4
+#define   HEATING_DD                END_OF_GRAPHS+8     // 4 bytes long
+
+
+   Rev 2.6.1                            Page 59 of 60                       March 29, 2013
+#define   LCD_VOLUME_OFFSET          END_OF_GRAPHS+12
+#define   LCD_VOLUME_OFFSET_COMP     END_OF_GRAPHS+13
+#define   SAVE_TODAYS_HIGHS_LOWS     END_OF_GRAPHS+14
+#define   END_OF_TODAYS_HIGHS_LOWS   SAVE_TODAYS_HIGHS_LOWS+68 // Start 1 after this (3552)
+#define   WIND_CAL                   4000
+#define   KEY_TEST_PASSED            4002
+
+
+// stuff at end of EEPROM same position as VP2
+#define   SAVE_MIN                        4080
+#define   SAVE_HOUR                       4081
+#define   SAVE_DAY                        4082
+#define   SAVE_MONTH                      4083
+#define   SAVE_YEAR                       4084
+#define   SAVE_YEAR_COMP                  4085
+#define   BAUD_RATE                       4086
+#define   DEFAULT_RATE_GRAPH              4087
+#define   LCD_MODEL                       4089
+#define   LCD_MODEL_COMP                  4090
+#define   LOG_AVERAGE_TEMPS               4092   // MUST BE AT 4092
+
+
+
+
+   Rev 2.6.1                             Page 60 of 60                       March 29, 2013
+
