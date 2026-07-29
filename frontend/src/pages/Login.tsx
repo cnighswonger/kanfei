@@ -31,7 +31,7 @@ const cardStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   background: "var(--color-bg-secondary)",
   color: "var(--color-text)",
@@ -43,7 +43,7 @@ const inputStyle: React.CSSProperties = {
 const btnStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 16px",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontWeight: 600,
   fontFamily: "var(--font-body)",
   background: "var(--color-accent)",
@@ -128,7 +128,7 @@ export default function Login() {
       <div style={cardStyle}>
         <h2 style={{
           margin: "0 0 4px 0",
-          fontSize: "22px",
+          fontSize: "calc(22px * var(--font-scale))",
           fontFamily: "var(--font-heading)",
           color: "var(--color-text)",
           textAlign: "center",
@@ -137,7 +137,7 @@ export default function Login() {
         </h2>
         <p style={{
           margin: "0 0 24px 0",
-          fontSize: "13px",
+          fontSize: "calc(13px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-muted)",
           textAlign: "center",
@@ -152,7 +152,7 @@ export default function Login() {
             <div style={{ marginBottom: "16px" }}>
               <label style={{
                 display: "block",
-                fontSize: "12px",
+                fontSize: "calc(12px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-secondary)",
                 marginBottom: "4px",
@@ -172,7 +172,7 @@ export default function Login() {
             <div style={{ marginBottom: "16px" }}>
               <label style={{
                 display: "block",
-                fontSize: "12px",
+                fontSize: "calc(12px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-secondary)",
                 marginBottom: "4px",
@@ -191,7 +191,7 @@ export default function Login() {
             <div style={{ marginBottom: "24px" }}>
               <label style={{
                 display: "block",
-                fontSize: "12px",
+                fontSize: "calc(12px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-secondary)",
                 marginBottom: "4px",
@@ -210,7 +210,7 @@ export default function Login() {
             {error && (
               <p style={{
                 color: "var(--color-danger)",
-                fontSize: "13px",
+                fontSize: "calc(13px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 margin: "0 0 16px 0",
                 textAlign: "center",
@@ -232,7 +232,7 @@ export default function Login() {
             <div style={{ marginBottom: "16px" }}>
               <label style={{
                 display: "block",
-                fontSize: "12px",
+                fontSize: "calc(12px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-secondary)",
                 marginBottom: "4px",
@@ -252,7 +252,7 @@ export default function Login() {
             <div style={{ marginBottom: "24px" }}>
               <label style={{
                 display: "block",
-                fontSize: "12px",
+                fontSize: "calc(12px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-secondary)",
                 marginBottom: "4px",
@@ -271,7 +271,7 @@ export default function Login() {
             {error && (
               <p style={{
                 color: "var(--color-danger)",
-                fontSize: "13px",
+                fontSize: "calc(13px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 margin: "0 0 16px 0",
                 textAlign: "center",

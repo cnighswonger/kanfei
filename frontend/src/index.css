@@ -7,6 +7,14 @@
   padding: 0;
 }
 
+:root {
+  /* Static default so `calc(Npx * var(--font-scale))` declarations are valid
+     on first paint before ThemeContext.applyThemeToDOM() runs in useEffect.
+     Without this, every inline-style fontSize falls back to UA defaults
+     until React mounts, causing a visible text-size flash. */
+  --font-scale: 1;
+}
+
 html {
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -19,7 +27,7 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
   line-height: 1.5;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
@@ -162,7 +170,7 @@ a:hover {
 
   /* Dashboard heading: shrink so edit button stays inline */
   .dashboard-heading {
-    font-size: 16px !important;
+    font-size: calc(16px * var(--font-scale, 1)) !important;
   }
 
   /* Dashboard: two-column compact grid */

@@ -155,7 +155,7 @@ export default function WindRose({ height }: WindRoseProps) {
         align: "center",
         verticalAlign: "bottom",
         layout: "horizontal",
-        itemStyle: { color: textColor, fontSize: "10px", fontWeight: "normal" },
+        itemStyle: { color: textColor, fontSize: "calc(10px * var(--font-scale))", fontWeight: "normal" },
         symbolRadius: 2,
         padding: 0,
         margin: 4,
@@ -167,7 +167,7 @@ export default function WindRose({ height }: WindRoseProps) {
         lineColor: textColor,
         gridLineColor: textColor,
         labels: {
-          style: { color: textColor, fontSize: "10px" },
+          style: { color: textColor, fontSize: "calc(10px * var(--font-scale))" },
         },
       },
       yAxis: {
@@ -178,7 +178,7 @@ export default function WindRose({ height }: WindRoseProps) {
         gridLineInterpolation: "polygon",
         labels: {
           format: "{value}%",
-          style: { color: textColor, fontSize: "9px" },
+          style: { color: textColor, fontSize: "calc(9px * var(--font-scale))" },
         },
         title: { text: undefined },
       },
@@ -204,7 +204,7 @@ export default function WindRose({ height }: WindRoseProps) {
     return (
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100%", color: "var(--color-text-muted)", fontSize: "13px",
+        height: "100%", color: "var(--color-text-muted)", fontSize: "calc(13px * var(--font-scale))",
         fontFamily: "var(--font-body)",
       }}>
         Loading...
@@ -216,7 +216,7 @@ export default function WindRose({ height }: WindRoseProps) {
     return (
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100%", color: "var(--color-text-muted)", fontSize: "13px",
+        height: "100%", color: "var(--color-text-muted)", fontSize: "calc(13px * var(--font-scale))",
         fontFamily: "var(--font-body)",
       }}>
         Calm — no wind in last 3h
@@ -232,7 +232,7 @@ export default function WindRose({ height }: WindRoseProps) {
       {lastUpdate && (
         <div style={{
           textAlign: "center",
-          fontSize: "9px",
+          fontSize: "calc(9px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-muted)",
           padding: "2px 0 0",

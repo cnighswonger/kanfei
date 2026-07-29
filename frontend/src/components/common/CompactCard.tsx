@@ -32,7 +32,7 @@ export default function CompactCard({
     >
       <div
         style={{
-          fontSize: "10px",
+          fontSize: "calc(10px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-secondary)",
           textTransform: "uppercase",
@@ -54,7 +54,7 @@ export default function CompactCard({
       {secondary && (
         <div
           style={{
-            fontSize: "10px",
+            fontSize: "calc(10px * var(--font-scale))",
             fontFamily: "var(--font-gauge)",
             color: "var(--color-text-muted)",
             whiteSpace: "nowrap",

@@ -349,7 +349,7 @@ function ControlPanel({
     border: "none",
     borderRadius: "4px",
     padding: isMobile ? "4px 10px" : "4px 12px",
-    fontSize: "12px",
+    fontSize: "calc(12px * var(--font-scale))",
     fontWeight: 600,
     cursor: "pointer",
     transition: "background 0.15s, color 0.15s",
@@ -359,7 +359,7 @@ function ControlPanel({
     display: "flex",
     alignItems: "center",
     gap: "6px",
-    fontSize: "11px",
+    fontSize: "calc(11px * var(--font-scale))",
     color: "var(--color-text-muted)",
     padding: isMobile ? "0 4px" : "0 2px",
   };
@@ -440,7 +440,7 @@ function RadarTimeline({ radarFrame, setRadarFrame, radarPlaying, setRadarPlayin
           border: "none",
           background: "none",
           cursor: "pointer",
-          fontSize: 16,
+          fontSize: "calc(16px * var(--font-scale))",
           padding: "0 2px",
           color: "var(--color-text)",
           lineHeight: 1,
@@ -462,7 +462,7 @@ function RadarTimeline({ radarFrame, setRadarFrame, radarPlaying, setRadarPlayin
         style={{ width: isMobile ? 140 : 200, cursor: "pointer", margin: 0 }}
       />
       <span style={{
-        fontSize: 11,
+        fontSize: "calc(11px * var(--font-scale))",
         fontWeight: 600,
         color: "var(--color-text-muted)",
         minWidth: 48,
@@ -501,7 +501,7 @@ const spinnerStyle: React.CSSProperties = {
   alignItems: "center",
   flex: 1,
   color: "var(--color-text-muted)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
 };
 
 export default function MapView() {
@@ -733,7 +733,7 @@ export default function MapView() {
           }}
         >
           <Popup>
-            <div style={{ fontSize: 13 }}>
+            <div style={{ fontSize: "calc(13px * var(--font-scale))" }}>
               <strong>{home.name}</strong>
               {home.temp_f != null && <div>Temp: {Math.round(home.temp_f)}°F</div>}
               {home.wind_mph != null && <div>Wind: {Math.round(home.wind_mph)} mph</div>}
@@ -752,7 +752,7 @@ export default function MapView() {
           const icon = L.divIcon({
             className: "",
             html: `<div style="
-              font-size:11px;font-weight:700;font-family:var(--font-gauge);
+              font-size:calc(11px * var(--font-scale, 1));font-weight:700;font-family:var(--font-gauge);
               color:#fff;background:${color};
               padding:1px 3px;border-radius:3px;display:inline-block;
               white-space:nowrap;pointer-events:auto;
@@ -765,9 +765,9 @@ export default function MapView() {
           return (
             <Marker key={s.id} position={[s.lat, s.lon]} icon={icon}>
               <Popup>
-                <div style={{ fontSize: 12, maxWidth: 220 }}>
+                <div style={{ fontSize: "calc(12px * var(--font-scale))", maxWidth: 220 }}>
                   <strong>{s.name}</strong>
-                  <div style={{ color: "#888", fontSize: 11 }}>
+                  <div style={{ color: "#888", fontSize: "calc(11px * var(--font-scale))" }}>
                     {s.source}{s.distance_mi != null ? ` \u00B7 ${s.distance_mi.toFixed(1)} mi` : ""}
                   </div>
                   {s.temp_f != null && <div>Temp: {Math.round(s.temp_f)}°F</div>}
@@ -782,7 +782,7 @@ export default function MapView() {
                   )}
                   {s.precip_in != null && <div>Precip: {s.precip_in.toFixed(2)}"</div>}
                   {s.updated && (
-                    <div style={{ color: "#888", fontSize: 10, marginTop: 2 }}>
+                    <div style={{ color: "#888", fontSize: "calc(10px * var(--font-scale))", marginTop: 2 }}>
                       Updated: {new Date(s.updated).toLocaleTimeString()}
                     </div>
                   )}
@@ -834,7 +834,7 @@ export default function MapView() {
                   interactive={false}
                   icon={L.divIcon({
                     className: "",
-                    html: `<span style="font-size:10px;font-weight:600;color:${isDark ? "#c8dcff" : "#14287a"};background:${isDark ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.85)"};padding:1px 4px;border-radius:2px;white-space:nowrap;text-shadow:${isDark ? "0 0 3px rgba(0,0,0,0.8)" : "0 0 3px rgba(255,255,255,0.9)"}">${iso.label}</span>`,
+                    html: `<span style="font-size:calc(10px * var(--font-scale, 1));font-weight:600;color:${isDark ? "#c8dcff" : "#14287a"};background:${isDark ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.85)"};padding:1px 4px;border-radius:2px;white-space:nowrap;text-shadow:${isDark ? "0 0 3px rgba(0,0,0,0.8)" : "0 0 3px rgba(255,255,255,0.9)"}">${iso.label}</span>`,
                     iconSize: [0, 0],
                     iconAnchor: [0, 6],
                   })}
@@ -862,7 +862,7 @@ export default function MapView() {
                 <Popup>
                   <div style={{ maxWidth: 300 }}>
                     <strong>{alert.event}</strong>
-                    <p style={{ fontSize: 12, margin: "4px 0" }}>{alert.headline}</p>
+                    <p style={{ fontSize: "calc(12px * var(--font-scale))", margin: "4px 0" }}>{alert.headline}</p>
                   </div>
                 </Popup>
               </GeoJSON>
@@ -899,7 +899,7 @@ export default function MapView() {
         padding: "8px 6px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
       }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-muted)", whiteSpace: "nowrap" }}>
+        <span style={{ fontSize: "calc(10px * var(--font-scale))", fontWeight: 600, color: "var(--color-text-muted)", whiteSpace: "nowrap" }}>
           Radar
         </span>
         <input
@@ -918,7 +918,7 @@ export default function MapView() {
             cursor: "pointer",
           }}
         />
-        <span style={{ fontSize: 9, color: "var(--color-text-muted)" }}>
+        <span style={{ fontSize: "calc(9px * var(--font-scale))", color: "var(--color-text-muted)" }}>
           {Math.round(radarOpacity * 100)}%
         </span>
       </div>}

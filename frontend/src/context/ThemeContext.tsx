@@ -47,6 +47,10 @@ export function applyThemeToDOM(theme: Theme) {
   root.style.setProperty('--gauge-bg-opacity', String(theme.gauge.bgOpacity));
   root.style.setProperty('--gauge-shadow', theme.gauge.shadow);
   root.style.setProperty('--gauge-border-radius', theme.gauge.borderRadius);
+
+  // Apply global font-size multiplier. Consumers read this via
+  // `calc(Npx * var(--font-scale))` in inline styles.
+  root.style.setProperty('--font-scale', String(theme.fontScale ?? 1));
 }
 
 function deserializeCustomTheme(raw: string): Theme | null {
@@ -55,7 +59,9 @@ function deserializeCustomTheme(raw: string): Theme | null {
     const parsed = JSON.parse(raw);
     // Basic validation: must have colors, fonts, gauge objects
     if (parsed?.colors && parsed?.fonts && parsed?.gauge) {
-      return { ...parsed, name: 'custom', label: 'Custom' };
+      // Backfill fontScale for custom themes saved before this field existed.
+      const fontScale = typeof parsed.fontScale === 'number' ? parsed.fontScale : 1;
+      return { ...parsed, name: 'custom', label: 'Custom', fontScale };
     }
   } catch { /* corrupt JSON */ }
   return null;

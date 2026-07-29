@@ -106,7 +106,7 @@ const sectionHeaderStyle: React.CSSProperties = {
   gap: "8px",
   cursor: "pointer",
   userSelect: "none",
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   fontWeight: 600,
   fontFamily: "var(--font-body)",
   color: "var(--color-text-secondary)",
@@ -118,7 +118,7 @@ const colorRowStyle: React.CSSProperties = {
   alignItems: "center",
   gap: "8px",
   marginBottom: "6px",
-  fontSize: "12px",
+  fontSize: "calc(12px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text)",
 };
@@ -135,7 +135,7 @@ const swatchStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   flex: 1,
   padding: "4px 8px",
-  fontSize: "12px",
+  fontSize: "calc(12px * var(--font-scale))",
   fontFamily: "var(--font-mono)",
   background: "var(--color-bg-secondary)",
   color: "var(--color-text)",
@@ -146,7 +146,7 @@ const inputStyle: React.CSSProperties = {
 
 const btnStyle: React.CSSProperties = {
   padding: "8px 16px",
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   fontWeight: 600,
   fontFamily: "var(--font-body)",
   border: "none",
@@ -220,7 +220,7 @@ function ColorField({
       {hint && (
         <div style={{
           flex: 1,
-          fontSize: "11px",
+          fontSize: "calc(11px * var(--font-scale))",
           color: "var(--color-text-secondary)",
           fontStyle: "italic",
           marginLeft: "8px",
@@ -286,6 +286,10 @@ export default function ThemeEditor({ onClose }: ThemeEditorProps) {
     }));
   }, []);
 
+  const updateFontScale = useCallback((value: number) => {
+    setDraft((d) => ({ ...d, fontScale: value }));
+  }, []);
+
   const resetToBase = useCallback(() => {
     const base = themes[baseName] ?? themes.dark;
     setDraft({ ...structuredClone(base), name: "custom", label: "Custom" });
@@ -333,7 +337,7 @@ export default function ThemeEditor({ onClose }: ThemeEditorProps) {
       {/* Base theme selector */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
         <label style={{
-          fontSize: "12px",
+          fontSize: "calc(12px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-secondary)",
         }}>
@@ -360,7 +364,7 @@ export default function ThemeEditor({ onClose }: ThemeEditorProps) {
             color: "var(--color-text)",
             border: "1px solid var(--color-border)",
             padding: "4px 12px",
-            fontSize: "12px",
+            fontSize: "calc(12px * var(--font-scale))",
           }}
         >
           Reset to Base
@@ -417,6 +421,22 @@ export default function ThemeEditor({ onClose }: ThemeEditorProps) {
                 />
               </div>
             ))}
+            <div style={colorRowStyle}>
+              <div style={{ width: "110px", flexShrink: 0 }}>Font Scale</div>
+              <input
+                type="range"
+                min={85}
+                max={175}
+                step={1}
+                value={Math.round(draft.fontScale * 100)}
+                onChange={(e) => updateFontScale(parseInt(e.target.value, 10) / 100)}
+                style={{ flex: 1 }}
+                aria-label="Font scale"
+              />
+              <span style={{ width: "44px", textAlign: "right" }}>
+                {draft.fontScale.toFixed(2)}×
+              </span>
+            </div>
           </div>
         )}
       </div>

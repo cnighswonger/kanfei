@@ -39,10 +39,10 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
         label="Rain"
         secondary={<span>Day {dailyStr} / Yest {yesterdayStr} / Yr {yearlyStr}</span>}
       >
-        <span style={{ fontSize: "28px", fontFamily: "var(--font-gauge)", fontWeight: "bold", color }}>
+        <span style={{ fontSize: "calc(28px * var(--font-scale))", fontFamily: "var(--font-gauge)", fontWeight: "bold", color }}>
           {rateStr}
         </span>
-        <span style={{ fontSize: "12px", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "2px" }}>
+        <span style={{ fontSize: "calc(12px * var(--font-scale))", fontFamily: "var(--font-gauge)", color: "var(--color-text-muted)", marginLeft: "2px" }}>
           {unit}/hr
         </span>
       </CompactCard>
@@ -68,7 +68,7 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
       boxSizing: 'border-box',
     }}>
       <div style={{
-        fontSize: '12px',
+        fontSize: 'calc(12px * var(--font-scale))',
         fontFamily: 'var(--font-body)',
         color: 'var(--color-text-secondary)',
         textTransform: 'uppercase',
@@ -91,7 +91,7 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
           />
         </svg>
         <span style={{
-          fontSize: '36px',
+          fontSize: 'calc(36px * var(--font-scale))',
           fontFamily: 'var(--font-gauge)',
           fontWeight: 'bold',
           color: color,
@@ -101,7 +101,7 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
           {rateStr}
         </span>
         <span style={{
-          fontSize: '12px',
+          fontSize: 'calc(12px * var(--font-scale))',
           fontFamily: 'var(--font-body)',
           color: 'var(--color-text-muted)',
         }}>
@@ -111,7 +111,7 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
 
       {/* Rain status text */}
       <div style={{
-        fontSize: '11px',
+        fontSize: 'calc(11px * var(--font-scale))',
         fontFamily: 'var(--font-body)',
         color: 'var(--color-text-muted)',
         marginBottom: '12px',
@@ -125,7 +125,7 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
 
       {peakRate != null && peakRate > 0 && (
         <div style={{
-          fontSize: '11px',
+          fontSize: 'calc(11px * var(--font-scale))',
           fontFamily: 'var(--font-body)',
           color: 'var(--color-text-secondary)',
           marginBottom: '4px',
@@ -134,7 +134,7 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
         }}>
           <div>Peak: {peakRate.toFixed(decimals)} {unit}/hr</div>
           {peakRateAt && (
-            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+            <div style={{ fontSize: 'calc(10px * var(--font-scale))', color: 'var(--color-text-muted)' }}>
               at {formatTimestamp(peakRateAt)}
             </div>
           )}
@@ -158,14 +158,14 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
-            fontSize: '10px',
+            fontSize: 'calc(10px * var(--font-scale))',
             fontFamily: 'var(--font-body)',
             color: 'var(--color-text-muted)',
             textTransform: 'uppercase',
             marginBottom: '2px',
           }}>Today</div>
           <div style={{
-            fontSize: '18px',
+            fontSize: 'calc(18px * var(--font-scale))',
             fontFamily: 'var(--font-gauge)',
             fontWeight: 'bold',
             color: 'var(--color-text)',
@@ -173,20 +173,20 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
             {dailyStr}
           </div>
           <div style={{
-            fontSize: '10px',
+            fontSize: 'calc(10px * var(--font-scale))',
             color: 'var(--color-text-muted)',
           }}>{unit}</div>
         </div>
         <div style={{ textAlign: 'center' }}>
           <div style={{
-            fontSize: '10px',
+            fontSize: 'calc(10px * var(--font-scale))',
             fontFamily: 'var(--font-body)',
             color: 'var(--color-text-muted)',
             textTransform: 'uppercase',
             marginBottom: '2px',
           }}>Yesterday</div>
           <div style={{
-            fontSize: '18px',
+            fontSize: 'calc(18px * var(--font-scale))',
             fontFamily: 'var(--font-gauge)',
             fontWeight: 'bold',
             color: 'var(--color-text)',
@@ -194,20 +194,20 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
             {yesterdayStr}
           </div>
           <div style={{
-            fontSize: '10px',
+            fontSize: 'calc(10px * var(--font-scale))',
             color: 'var(--color-text-muted)',
           }}>{unit}</div>
         </div>
         <div style={{ textAlign: 'center' }}>
           <div style={{
-            fontSize: '10px',
+            fontSize: 'calc(10px * var(--font-scale))',
             fontFamily: 'var(--font-body)',
             color: 'var(--color-text-muted)',
             textTransform: 'uppercase',
             marginBottom: '2px',
           }}>Year</div>
           <div style={{
-            fontSize: '18px',
+            fontSize: 'calc(18px * var(--font-scale))',
             fontFamily: 'var(--font-gauge)',
             fontWeight: 'bold',
             color: 'var(--color-text)',
@@ -215,7 +215,7 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
             {yearlyStr}
           </div>
           <div style={{
-            fontSize: '10px',
+            fontSize: 'calc(10px * var(--font-scale))',
             color: 'var(--color-text-muted)',
           }}>{unit}</div>
         </div>

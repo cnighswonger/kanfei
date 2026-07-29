@@ -46,7 +46,7 @@ const editToggleStyle: React.CSSProperties = {
   borderRadius: 6,
   padding: "4px 10px",
   cursor: "pointer",
-  fontSize: 16,
+  fontSize: "calc(16px * var(--font-scale))",
   color: "var(--color-text)",
   fontFamily: "var(--font-body)",
   marginLeft: 12,
@@ -62,7 +62,7 @@ const toolbarStyle: React.CSSProperties = {
   background: "var(--color-bg-card)",
   border: "1px solid var(--color-accent)",
   borderRadius: 8,
-  fontSize: 14,
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   flexWrap: "wrap",
 };
@@ -72,7 +72,7 @@ const toolbarBtnStyle: React.CSSProperties = {
   borderRadius: 6,
   border: "none",
   cursor: "pointer",
-  fontSize: 13,
+  fontSize: "calc(13px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   fontWeight: 600,
 };
@@ -85,7 +85,7 @@ const addTilePlaceholderStyle: React.CSSProperties = {
   border: "2px dashed var(--color-border)",
   borderRadius: "var(--gauge-border-radius, 16px)",
   color: "var(--color-text-muted)",
-  fontSize: 16,
+  fontSize: "calc(16px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   cursor: "pointer",
   transition: "border-color 0.2s, color 0.2s",
@@ -116,7 +116,7 @@ function LayoutPresets({ onPreset }: { onPreset: (span: number) => void }) {
             background: "none",
             color: "var(--color-text-secondary)",
             cursor: "pointer",
-            fontSize: 11,
+            fontSize: "calc(11px * var(--font-scale))",
             fontWeight: 600,
             fontFamily: "var(--font-body)",
             padding: 0,
@@ -224,7 +224,7 @@ export default function DashboardGrid() {
             className="dashboard-heading"
             style={{
               margin: "0 0 16px 0",
-              fontSize: "24px",
+              fontSize: "calc(24px * var(--font-scale))",
               fontFamily: "var(--font-heading)",
               color: "var(--color-text)",
               whiteSpace: "nowrap",
@@ -306,7 +306,7 @@ export default function DashboardGrid() {
         <h2
           style={{
             margin: "0 0 16px 0",
-            fontSize: "24px",
+            fontSize: "calc(24px * var(--font-scale))",
             fontFamily: "var(--font-heading)",
             color: "var(--color-text)",
           }}
@@ -325,7 +325,7 @@ export default function DashboardGrid() {
         </span>
         {!isMobile && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>Presets</span>
+            <span style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-secondary)" }}>Presets</span>
             <LayoutPresets onPreset={setAllTilesSpan} />
           </span>
         )}

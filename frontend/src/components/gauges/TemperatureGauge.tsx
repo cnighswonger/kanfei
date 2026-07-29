@@ -126,7 +126,7 @@ export default function TemperatureGauge({
           ) : undefined
         }
       >
-        <span style={{ fontSize: "28px", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: fillColor }}>
+        <span style={{ fontSize: "calc(28px * var(--font-scale))", fontFamily: "var(--font-gauge)", fontWeight: "bold", color: fillColor }}>
           {displayVal !== null ? `${displayVal.toFixed(1)}°${unit}` : "--.-°"}
         </span>
       </CompactCard>
@@ -156,7 +156,7 @@ export default function TemperatureGauge({
     }}>
       {label && (
         <div style={{
-          fontSize: '12px',
+          fontSize: 'calc(12px * var(--font-scale))',
           fontFamily: 'var(--font-body)',
           color: 'var(--color-text-secondary)',
           marginBottom: '4px',
@@ -226,7 +226,7 @@ export default function TemperatureGauge({
               <text
                 x={tubeX + tubeW / 2 + 16}
                 y={y + 3}
-                fontSize="10"
+                style={{ fontSize: "calc(10px * var(--font-scale))" }}
                 fill="var(--color-text-secondary)"
                 fontFamily="var(--font-gauge)"
               >
@@ -250,7 +250,7 @@ export default function TemperatureGauge({
             <text
               x={tubeX - tubeW / 2 - 17}
               y={yForTemp(high) + 3}
-              fontSize="9"
+              style={{ fontSize: "calc(9px * var(--font-scale))" }}
               fill="var(--color-temp-hot)"
               fontFamily="var(--font-gauge)"
               textAnchor="end"
@@ -274,7 +274,7 @@ export default function TemperatureGauge({
             <text
               x={tubeX - tubeW / 2 - 17}
               y={yForTemp(low) + 3}
-              fontSize="9"
+              style={{ fontSize: "calc(9px * var(--font-scale))" }}
               fill="var(--color-temp-cold)"
               fontFamily="var(--font-gauge)"
               textAnchor="end"
@@ -287,7 +287,7 @@ export default function TemperatureGauge({
 
       {/* Digital readout */}
       <div style={{
-        fontSize: '28px',
+        fontSize: 'calc(28px * var(--font-scale))',
         fontFamily: 'var(--font-gauge)',
         fontWeight: 'bold',
         color: displayVal !== null ? fillColor : 'var(--color-text-muted)',
@@ -299,7 +299,7 @@ export default function TemperatureGauge({
 
       {(highAt || lowAt) && (
         <div style={{
-          fontSize: '10px',
+          fontSize: 'calc(10px * var(--font-scale))',
           fontFamily: 'var(--font-gauge)',
           color: 'var(--color-text-muted)',
           marginTop: '2px',

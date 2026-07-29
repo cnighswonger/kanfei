@@ -15,7 +15,7 @@ const fieldGroup: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text-secondary)",
   marginBottom: "4px",
@@ -24,7 +24,7 @@ const labelStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   background: "var(--color-bg-secondary)",
   color: "var(--color-text)",
@@ -34,7 +34,7 @@ const inputStyle: React.CSSProperties = {
 };
 
 const hintStyle: React.CSSProperties = {
-  fontSize: "12px",
+  fontSize: "calc(12px * var(--font-scale))",
   color: "var(--color-text-muted)",
   marginTop: "4px",
 };
@@ -44,10 +44,10 @@ export default function StepAccount({ adminUsername, adminPassword, adminPasswor
 
   return (
     <div>
-      <h2 style={{ fontSize: "18px", fontFamily: "var(--font-heading)", color: "var(--color-text)", margin: "0 0 8px 0" }}>
+      <h2 style={{ fontSize: "calc(18px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", margin: "0 0 8px 0" }}>
         Admin Account
       </h2>
-      <p style={{ fontSize: "13px", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", margin: "0 0 24px 0" }}>
+      <p style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", margin: "0 0 24px 0" }}>
         Create an admin account to protect your station settings.
       </p>
 

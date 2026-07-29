@@ -108,7 +108,7 @@ export default function WindHistory({ hours = 4, height }: WindHistoryProps) {
         lineColor: borderColor,
         tickColor: borderColor,
         labels: {
-          style: { color: textMuted, fontSize: "9px" },
+          style: { color: textMuted, fontSize: "calc(9px * var(--font-scale))" },
         },
         crosshair: true,
       },
@@ -128,7 +128,7 @@ export default function WindHistory({ hours = 4, height }: WindHistoryProps) {
               const cardinals: Record<number, string> = { 0: "N", 90: "E", 180: "S", 270: "W", 360: "N" };
               return cardinals[this.value as number] ?? "";
             },
-            style: { color: textMuted, fontSize: "9px" },
+            style: { color: textMuted, fontSize: "calc(9px * var(--font-scale))" },
           },
           title: { text: undefined },
           gridLineColor: borderColor,
@@ -146,7 +146,7 @@ export default function WindHistory({ hours = 4, height }: WindHistoryProps) {
           min: 0,
           softMax: 15,
           labels: {
-            style: { color: textMuted, fontSize: "9px" },
+            style: { color: textMuted, fontSize: "calc(9px * var(--font-scale))" },
           },
           title: { text: undefined },
           gridLineColor: borderColor,
@@ -161,7 +161,7 @@ export default function WindHistory({ hours = 4, height }: WindHistoryProps) {
         shared: true,
         backgroundColor: "rgba(0,0,0,0.85)",
         borderColor: borderColor,
-        style: { color: "#e5e7eb", fontSize: "11px", fontFamily },
+        style: { color: "#e5e7eb", fontSize: "calc(11px * var(--font-scale))", fontFamily },
         xDateFormat: "%l:%M %p",
         pointFormatter: function (this: Highcharts.Point): string {
           const name = this.series.name;
@@ -224,7 +224,7 @@ export default function WindHistory({ hours = 4, height }: WindHistoryProps) {
     return (
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100%", color: "var(--color-text-muted)", fontSize: "13px",
+        height: "100%", color: "var(--color-text-muted)", fontSize: "calc(13px * var(--font-scale))",
         fontFamily: "var(--font-body)",
       }}>
         Loading...
@@ -236,7 +236,7 @@ export default function WindHistory({ hours = 4, height }: WindHistoryProps) {
     return (
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100%", color: "var(--color-text-muted)", fontSize: "13px",
+        height: "100%", color: "var(--color-text-muted)", fontSize: "calc(13px * var(--font-scale))",
         fontFamily: "var(--font-body)",
       }}>
         No wind data available
@@ -252,7 +252,7 @@ export default function WindHistory({ hours = 4, height }: WindHistoryProps) {
       {lastUpdate && (
         <div style={{
           textAlign: "center",
-          fontSize: "9px",
+          fontSize: "calc(9px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-muted)",
           padding: "2px 0 0",

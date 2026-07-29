@@ -62,7 +62,7 @@ export default function HistoricalChart({
       title: {
         text: title,
         style: {
-          fontSize: "16px",
+          fontSize: "calc(16px * var(--font-scale))",
           fontWeight: "bold",
           color: textColor,
         },
@@ -70,7 +70,7 @@ export default function HistoricalChart({
       subtitle: {
         text: "Click and drag to zoom",
         style: {
-          fontSize: "11px",
+          fontSize: "calc(11px * var(--font-scale))",
           color: mutedColor,
         },
       },
@@ -81,17 +81,17 @@ export default function HistoricalChart({
         lineColor: borderColor,
         tickColor: borderColor,
         labels: {
-          style: { color: secondaryColor, fontSize: "11px" },
+          style: { color: secondaryColor, fontSize: "calc(11px * var(--font-scale))" },
         },
         gridLineWidth: 0,
       },
       yAxis: {
         title: {
           text: unit,
-          style: { color: secondaryColor, fontSize: "12px" },
+          style: { color: secondaryColor, fontSize: "calc(12px * var(--font-scale))" },
         },
         labels: {
-          style: { color: secondaryColor, fontSize: "11px" },
+          style: { color: secondaryColor, fontSize: "calc(11px * var(--font-scale))" },
         },
         gridLineColor: borderColor,
         gridLineWidth: 1,
@@ -105,7 +105,7 @@ export default function HistoricalChart({
         pointFormat: `<b>{point.y:.1f}</b> ${unit}`,
         backgroundColor: cardBg,
         borderColor: borderColor,
-        style: { color: textColor, fontSize: "12px" },
+        style: { color: textColor, fontSize: "calc(12px * var(--font-scale))" },
       },
       plotOptions: {
         areaspline: {

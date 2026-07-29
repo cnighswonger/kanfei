@@ -84,7 +84,7 @@ export default function TrendModal({
                 <h4
                   style={{
                     margin: "0 0 8px 0",
-                    fontSize: "14px",
+                    fontSize: "calc(14px * var(--font-scale))",
                     fontFamily: "var(--font-heading)",
                     color: "var(--color-text)",
                   }}
@@ -100,7 +100,7 @@ export default function TrendModal({
                       justifyContent: "center",
                       height: 160,
                       color: "var(--color-text-muted)",
-                      fontSize: "13px",
+                      fontSize: "calc(13px * var(--font-scale))",
                       fontFamily: "var(--font-body)",
                     }}
                   >
@@ -116,7 +116,7 @@ export default function TrendModal({
                       justifyContent: "center",
                       height: 160,
                       color: "var(--color-text-muted)",
-                      fontSize: "13px",
+                      fontSize: "calc(13px * var(--font-scale))",
                       fontFamily: "var(--font-body)",
                     }}
                   >

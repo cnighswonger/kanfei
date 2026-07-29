@@ -30,7 +30,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text-secondary)",
   marginBottom: "6px",
@@ -39,7 +39,7 @@ const labelStyle: React.CSSProperties = {
 
 const selectStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   padding: "8px 12px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -53,7 +53,7 @@ const selectStyle: React.CSSProperties = {
 
 const btnStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   padding: "8px 16px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -154,7 +154,7 @@ export default function StepSerial({
     <div>
       <p
         style={{
-          fontSize: "14px",
+          fontSize: "calc(14px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-secondary)",
           marginBottom: "20px",
@@ -170,7 +170,7 @@ export default function StepSerial({
         <button
           style={{
             ...btnAccent,
-            fontSize: "15px",
+            fontSize: "calc(15px * var(--font-scale))",
             padding: "12px 32px",
             opacity: busy ? 0.6 : 1,
             cursor: busy ? "wait" : "pointer",
@@ -183,7 +183,7 @@ export default function StepSerial({
         </button>
         <p
           style={{
-            fontSize: "12px",
+            fontSize: "calc(12px * var(--font-scale))",
             color: "var(--color-text-muted)",
             marginTop: "8px",
             marginBottom: 0,
@@ -204,7 +204,7 @@ export default function StepSerial({
               <button
                 style={{
                   ...btnStyle,
-                  fontSize: "11px",
+                  fontSize: "calc(11px * var(--font-scale))",
                   padding: "2px 8px",
                   marginLeft: "8px",
                 }}
@@ -285,7 +285,7 @@ export default function StepSerial({
         >
           <div
             style={{
-              fontSize: "16px",
+              fontSize: "calc(16px * var(--font-scale))",
               fontWeight: "bold",
               fontFamily: "var(--font-heading)",
             }}
@@ -294,7 +294,7 @@ export default function StepSerial({
           </div>
           <div
             style={{
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               marginTop: "4px",
               opacity: 0.85,
             }}
@@ -310,7 +310,7 @@ export default function StepSerial({
             ...cardStyle,
             borderColor: "var(--color-danger)",
             color: "var(--color-danger)",
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
           }}
         >
           {error}

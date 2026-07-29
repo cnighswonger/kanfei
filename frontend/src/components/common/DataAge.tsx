@@ -42,7 +42,7 @@ export default function DataAge({ timestamp }: DataAgeProps) {
 
   return (
     <span style={{
-      fontSize: '11px',
+      fontSize: 'calc(11px * var(--font-scale))',
       fontFamily: 'var(--font-mono)',
       color: isStale ? 'var(--color-warning)' : 'var(--color-text-muted)',
       transition: 'color 0.3s ease',
