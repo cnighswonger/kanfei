@@ -140,3 +140,16 @@ def cmd_calfix() -> bytes:
 def cmd_clrcal() -> bytes:
     """CLRCAL — clear all temperature and humidity calibration offsets."""
     return b"CLRCAL\n"
+
+
+def cmd_setper(minutes: int) -> bytes:
+    """SETPER — set the archive interval in minutes.
+
+    Manual section IX.7 claims this "automatically clears the archive
+    memory ... so that all archived records in the archive memory use the
+    same archive interval".  **It does not**, at least on a Vantage Vue
+    running fw 2.12: the interval changed and every existing record stayed
+    put, leaving precisely the mixed-interval archive the manual says this
+    prevents.  Send CLRLOG explicitly if a clean archive is wanted.
+    """
+    return f"SETPER {minutes}\n".encode()

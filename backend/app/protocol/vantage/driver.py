@@ -33,6 +33,7 @@ from ..base import (
 from ..serial_port import SerialPort
 from ..crc import crc_validate, crc_calculate
 from ..commands import build_wrd_command
+from ..constants import DAVIS_LEGAL_ARCHIVE_PERIODS
 from .constants import (
     VantageModel,
     VANTAGE_NAMES,
@@ -75,6 +76,8 @@ from .commands import (
     cmd_caled,
     cmd_calfix,
     cmd_clrcal,
+    cmd_clrlog,
+    cmd_setper,
     build_dmpaft_timestamp,
     build_settime_payload,
 )
@@ -646,6 +649,98 @@ class VantageDriver(StationDriver):
     async def async_clear_calibration(self) -> bool:
         return await self._run_in_executor(self.clear_calibration)
 
+    # ---- Archive period ----
+
+    def set_archive_period(self, minutes: int) -> bool:
+        """Set the archive interval via SETPER.
+
+        **This does NOT erase archive memory**, despite manual section
+        IX.7 stating that it "automatically clears the archive memory ...
+        so that all archived records in the archive memory use the same
+        archive interval".  Verified on a Vantage Vue (fw 2.12): the
+        interval changed and all 46 existing records survived, giving
+        exactly the mixed-interval archive the manual says this prevents.
+
+        So after changing the interval the archive holds records at BOTH
+        the old and new spacing, and the record spanning the change covers
+        a partial period (observed: 30, 30, 12 min).  Anything consuming
+        archive data must either tolerate that or call clear_log() —
+        which is irreversible, so sync first.
+
+        Davis firmware honours only {1, 5, 10, 15, 30, 60, 120}; anything
+        else is rejected here rather than sent, matching LinkDriver's
+        behaviour (see #174, where a 1..120 range check let through values
+        like 68 and 102).
+
+        Shorter intervals trade buffer depth for resolution: archive memory
+        holds 2560 records, so 1 min ≈ 42 h of history where 30 min ≈ 53
+        days.  That bounds how long a logger outage can be before archive
+        backfill starts losing data.
+        """
+        if minutes not in DAVIS_LEGAL_ARCHIVE_PERIODS:
+            raise ValueError(
+                f"Archive period must be one of "
+                f"{sorted(DAVIS_LEGAL_ARCHIVE_PERIODS)} (got {minutes})"
+            )
+
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_setper(minutes))
+            # The manual (IX.7) documents an <ACK> reply; fw 2.12 on a Vue
+            # answers "\n\rOK\n\r".  Accept either.
+            #
+            # Do NOT use _read_ok_response() here: it expects OK *plus a
+            # payload* (as VER/NVER return) and loops waiting for one, so a
+            # bare OK makes it time out and raise "No response received" on
+            # a command that actually succeeded.
+            ok = self._read_status_reply()
+            if ok:
+                self.hw_config.archive_interval = minutes
+                logger.info(
+                    "Archive period set to %d min (console cleared archive memory)",
+                    minutes,
+                )
+            else:
+                logger.warning(
+                    "SETPER %d: unexpected response %r", minutes, response,
+                )
+            return ok
+
+    async def async_set_archive_period(self, minutes: int) -> bool:
+        return await self._run_in_executor(self.set_archive_period, minutes)
+
+    def clear_log(self) -> bool:
+        """CLRLOG — erase archive memory.  **IRREVERSIBLE.**
+
+        Every archive record is destroyed.  Sync before calling; there is no
+        undo and the console holds the only copy.
+
+        The manual states SETPER "automatically clears the archive memory",
+        so this ought to be redundant after an interval change.  It is not:
+        on a Vue running fw 2.12, SETPER changed the interval but left the
+        existing records in place, producing exactly the mixed-interval
+        archive the manual says it prevents.  Call this explicitly after
+        SETPER if a clean archive matters.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_clrlog())
+            # Manual IX.6 documents '"OK"<LF><CR>' followed by '"DONE"'
+            # after a delay.  fw 2.12 on a Vue actually replies with a bare
+            # ACK (0x06) and nothing else — verified on hardware, where the
+            # erase demonstrably worked (48 records -> 0) while a text-based
+            # check reported failure.  Accept either.
+            ok = self._read_status_reply()
+            logger.info(
+                "CLRLOG: %s", "archive erased" if ok else "unexpected response",
+            )
+            return ok
+
+    async def async_clear_log(self) -> bool:
+        return await self._run_in_executor(self.clear_log)
+
     # ---- Clock ----
 
     def read_station_time(self) -> Optional[dict]:
@@ -865,6 +960,35 @@ class VantageDriver(StationDriver):
             return None
 
     # ---- Text response reader ----
+
+    def _read_status_reply(self, timeout_reads: int = 24) -> bool:
+        """Read a bare success reply from a command that returns no payload.
+
+        Vantage acknowledgement styles are not consistent, and the manual
+        does not always match the firmware.  Observed on a Vue (fw 2.12):
+
+            SETPER  -> b"\n\rOK\n\r"   (manual documents <ACK>)
+            CLRLOG  -> b"\x06"          (manual documents "OK" then "DONE")
+
+        So accept ACK, "OK", or "DONE" in any combination.  Unlike
+        _read_ok_response(), this does NOT wait for a payload — that helper
+        loops until one arrives and raises "No response received" when a
+        command legitimately has nothing more to say.
+        """
+        buf = b""
+        for _ in range(timeout_reads):
+            chunk = self.serial.receive(1)
+            if not chunk:
+                if buf:
+                    break          # reply complete, line has gone quiet
+                continue           # nothing yet, keep waiting
+            buf += chunk
+            if ACK in buf or b"OK" in buf or b"DONE" in buf:
+                # Consume any trailing LF/CR so the next command starts clean.
+                self.serial.receive(4)
+                return True
+        logger.debug("status reply: got %r", buf)
+        return False
 
     def _read_ok_response(self, max_bytes: int = 256) -> str:
         """Read an OK-prefixed text response terminated by LF CR.
