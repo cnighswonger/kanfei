@@ -25,6 +25,7 @@ from ..base import (
     SensorSnapshot,
     HardwareInfo,
     CAP_ARCHIVE_SYNC,
+    CAP_CALIBRATION_RW,
     CAP_CLOCK_SYNC,
     CAP_RAIN_RESET,
     CAP_HILOWS,
@@ -46,6 +47,15 @@ from .constants import (
     ARCHIVE_PAGE_SIZE,
     DMPAFT_HEADER_SIZE,
     STATION_TYPE_WRD_ADDR,
+    CALFIX_BLOCK_SIZE,
+    CALFIX_OFF_INSIDE_TEMP,
+    CALFIX_OFF_OUTSIDE_TEMP,
+    CALFIX_OFF_INSIDE_HUM,
+    CALFIX_OFF_OUTSIDE_HUM,
+    CALFIX_INVALID_TEMP,
+    CALFIX_INVALID_HUM,
+    CAL_BLOCK_START,
+    CAL_BLOCK_END,
     MAX_RETRIES,
     ACK,
     NAK,
@@ -62,11 +72,19 @@ from .commands import (
     cmd_settime,
     cmd_eebrd,
     cmd_eebwr,
+    cmd_caled,
+    cmd_calfix,
+    cmd_clrcal,
     build_dmpaft_timestamp,
     build_settime_payload,
 )
 from .eeprom import (
+    EEAddr,
     SETUP_BITS,
+    CAL_INSIDE_TEMP,
+    CAL_OUTSIDE_TEMP,
+    CAL_INSIDE_HUM,
+    CAL_OUTSIDE_HUM,
     ARCHIVE_INTERVAL,
     LATITUDE,
     LONGITUDE,
@@ -131,14 +149,17 @@ class VantageDriver(StationDriver):
 
     @property
     def capabilities(self) -> set[str]:
-        caps = {CAP_ARCHIVE_SYNC, CAP_CLOCK_SYNC, CAP_RAIN_RESET}
+        # CAP_CALIBRATION_RW is advertised again as of #209: the addresses
+        # now come from the Vantage Serial Reference rather than guesswork,
+        # and write_calibration() performs the CALED/CALFIX sequence that
+        # actually makes an offset take effect.  It was withdrawn in #211
+        # because a bare EEBWR silently did nothing.
+        caps = {
+            CAP_ARCHIVE_SYNC, CAP_CLOCK_SYNC, CAP_RAIN_RESET,
+            CAP_CALIBRATION_RW,
+        }
         if self.hw_config.has_loop2:
             caps.add(CAP_HILOWS)
-        # CAP_CALIBRATION_RW is deliberately NOT advertised: the driver has
-        # no read/write path wired to the calibration offsets, and the
-        # humidity offset address is not yet known (see eeprom.py and #209).
-        # Advertising it makes the UI offer controls that silently do
-        # nothing — the write ACKs and reads back, but never takes effect.
         return caps
 
     def request_stop(self) -> None:
@@ -400,23 +421,55 @@ class VantageDriver(StationDriver):
     # ---- EEPROM ----
 
     def _eeprom_read(self, address: int, n_bytes: int) -> Optional[bytes]:
-        """Read n_bytes from EEPROM. Returns data bytes or None."""
+        """Read n_bytes from EEPROM, retrying transient failures.
+
+        Retries matter here: a single dropped response is common on this
+        link, and callers that treat None as "field absent" can silently do
+        the wrong thing.  write_calibration() is the sharp case — a None
+        there would skip un-calibrating a field and make CALFIX send an
+        already-calibrated value as if it were raw.
+        """
+        for attempt in range(MAX_RETRIES):
+            result = self._eeprom_read_once(address, n_bytes)
+            if result is not None:
+                return result
+            if attempt + 1 < MAX_RETRIES:
+                logger.debug(
+                    "EEBRD 0x%04X: retry %d/%d",
+                    address, attempt + 1, MAX_RETRIES,
+                )
+                self.serial.flush()
+        logger.warning(
+            "EEBRD 0x%04X: failed after %d attempts", address, MAX_RETRIES,
+        )
+        return None
+
+    def _eeprom_read_once(self, address: int, n_bytes: int) -> Optional[bytes]:
+        """Single EEBRD attempt. Returns data bytes or None."""
         self._wakeup()
         self.serial.flush()
         self.serial.send(cmd_eebrd(address, n_bytes))
 
         ack = self.serial.receive_byte()
         if ack != ACK:
-            logger.warning("EEBRD 0x%04X: no ACK", address)
+            logger.debug("EEBRD 0x%04X: no ACK", address)
             return None
 
         response = self.serial.receive(n_bytes + 2)
         if len(response) < n_bytes + 2:
-            logger.warning("EEBRD 0x%04X: short read (%d bytes)", address, len(response))
-            return response[:n_bytes] if len(response) >= n_bytes else None
+            # Previously this returned response[:n_bytes] on a short read —
+            # i.e. CRC-UNVALIDATED bytes, indistinguishable from a good
+            # read.  With the retry loop above that would have been worse
+            # still: a truncated read would be accepted as success instead
+            # of retried.  Fail, and let the caller retry.
+            logger.debug(
+                "EEBRD 0x%04X: short read (%d of %d bytes)",
+                address, len(response), n_bytes + 2,
+            )
+            return None
 
         if not crc_validate(response):
-            logger.warning("EEBRD 0x%04X: CRC failed", address)
+            logger.debug("EEBRD 0x%04X: CRC failed", address)
             return None
 
         return response[:n_bytes]
@@ -436,6 +489,162 @@ class VantageDriver(StationDriver):
 
         ack = self.serial.receive_byte()
         return ack == ACK
+
+    # ---- Calibration ----
+
+    def _caled(self) -> Optional[bytes]:
+        """CALED — read the 43-byte block of current CALIBRATED values."""
+        self._wakeup()
+        self.serial.flush()
+        self.serial.send(cmd_caled())
+
+        if self.serial.receive_byte() != ACK:
+            logger.warning("CALED: no ACK")
+            return None
+
+        payload = self.serial.receive(CALFIX_BLOCK_SIZE + 2)
+        if len(payload) < CALFIX_BLOCK_SIZE + 2:
+            logger.warning(
+                "CALED: short read (%d of %d bytes)",
+                len(payload), CALFIX_BLOCK_SIZE + 2,
+            )
+            return None
+        if not crc_validate(payload):
+            logger.warning("CALED: CRC failed")
+            return None
+        return payload[:CALFIX_BLOCK_SIZE]
+
+    def _calfix(self, block: bytes) -> bool:
+        """CALFIX — send UN-CALIBRATED values so the display updates."""
+        if len(block) != CALFIX_BLOCK_SIZE:
+            raise ValueError(
+                f"CALFIX block must be {CALFIX_BLOCK_SIZE} bytes, "
+                f"got {len(block)}"
+            )
+        self._wakeup()
+        self.serial.flush()
+        self.serial.send(cmd_calfix())
+
+        if self.serial.receive_byte() != ACK:
+            logger.warning("CALFIX: no ACK")
+            return False
+
+        crc = crc_calculate(block)
+        self.serial.send(block + struct.pack(">H", crc))
+        return self.serial.receive_byte() == ACK
+
+    def write_calibration(self, field: EEAddr, offset: int) -> bool:
+        """Set a temperature/humidity calibration offset, and apply it.
+
+        Writing the EEPROM byte alone is not enough.  Per the Vantage
+        Serial Reference section XIV.1, a new calibration value "will not
+        take effect until the next time the Vantage receives a data packet
+        containing that temperature or humidity value" — so this performs
+        the documented sequence:
+
+            EEBRD (current offsets) -> CALED (calibrated values)
+              -> subtract to get un-calibrated -> EEBWR (new offset)
+              -> CALFIX (push un-calibrated values back)
+
+        `field` must be one of the single-byte CAL_* entries in eeprom.py.
+        `offset` is in that sensor's native units: tenths °F for
+        temperature, whole percent for humidity.
+
+        Deliberately writes ONE field rather than the manual's block form:
+        its "EEBWR 32 2B" example writes 43 bytes from 0x32, which runs
+        past the calibration block and over the graph defaults and alarm
+        thresholds.  See CAL_BLOCK_* in constants.py.
+        """
+        if field.n_bytes != 1:
+            raise ValueError(
+                f"write_calibration expects a 1-byte field, "
+                f"got {field.n_bytes} at 0x{field.address:02X}"
+            )
+        if not CAL_BLOCK_START <= field.address <= CAL_BLOCK_END:
+            raise ValueError(
+                f"0x{field.address:02X} is outside the calibration block "
+                f"(0x{CAL_BLOCK_START:02X}..0x{CAL_BLOCK_END:02X})"
+            )
+        if not -128 <= offset <= 127:
+            raise ValueError(f"calibration offset {offset} out of range")
+
+        with self._io_lock:
+            # 1. current calibrated sensor values
+            calibrated = self._caled()
+            if calibrated is None:
+                logger.error("write_calibration: CALED failed")
+                return False
+
+            # 2. current offsets, so we can back out un-calibrated values
+            block = bytearray(calibrated)
+            for name, blk_off, size in (
+                ("inside temp", CALFIX_OFF_INSIDE_TEMP, 2),
+                ("outside temp", CALFIX_OFF_OUTSIDE_TEMP, 2),
+                ("inside hum", CALFIX_OFF_INSIDE_HUM, 1),
+                ("outside hum", CALFIX_OFF_OUTSIDE_HUM, 1),
+            ):
+                ee = {
+                    "inside temp": CAL_INSIDE_TEMP,
+                    "outside temp": CAL_OUTSIDE_TEMP,
+                    "inside hum": CAL_INSIDE_HUM,
+                    "outside hum": CAL_OUTSIDE_HUM,
+                }[name]
+                cur = self._eeprom_read(ee.address, 1)
+                if cur is None:
+                    continue
+                cur_off = struct.unpack("b", cur)[0]
+                # The offset we are about to change is applied AFTER this
+                # un-calibration step, so back out the value currently in
+                # effect for every field.
+                if size == 2:
+                    val = struct.unpack_from("<h", block, blk_off)[0]
+                    if val == CALFIX_INVALID_TEMP:
+                        continue          # dashed — leave untouched
+                    struct.pack_into("<h", block, blk_off, val - cur_off)
+                else:
+                    val = block[blk_off]
+                    if val == CALFIX_INVALID_HUM:
+                        continue
+                    block[blk_off] = (val - cur_off) & 0xFF
+
+            # 3. write the new offset
+            if not self._eeprom_write(field.address, struct.pack("b", offset)):
+                logger.error(
+                    "write_calibration: EEBWR 0x%02X failed", field.address,
+                )
+                return False
+
+            # 4. push un-calibrated values so the console re-applies cal
+            if not self._calfix(bytes(block)):
+                logger.error("write_calibration: CALFIX failed")
+                return False
+
+            logger.info(
+                "Calibration 0x%02X set to %+d (CALFIX applied)",
+                field.address, offset,
+            )
+            return True
+
+    def clear_calibration(self) -> bool:
+        """CLRCAL — zero every temperature and humidity calibration offset.
+
+        Affects ALL temp/humidity offsets at once, not one field.  Does not
+        touch barometer calibration, which is set with BAR=.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_clrcal())
+            response = self._read_ok_response()
+            ok = "OK" in response or response.strip() == ""
+            logger.info("CLRCAL: %s", "cleared" if ok else f"unexpected {response!r}")
+            return ok
+
+    async def async_write_calibration(self, field: EEAddr, offset: int) -> bool:
+        return await self._run_in_executor(self.write_calibration, field, offset)
+
+    async def async_clear_calibration(self) -> bool:
+        return await self._run_in_executor(self.clear_calibration)
 
     # ---- Clock ----
 

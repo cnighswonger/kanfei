@@ -36,31 +36,52 @@ ELEVATION = EEAddr(0x0F, 2)           # i16, feet
 
 # --------------- Calibration offsets ---------------
 #
-# Only CAL_OUTSIDE_TEMP is verified against hardware (Vantage Vue fw 2.12).
-# The others are unverified and MUST be confirmed on a real station before
-# anything is wired up to them — see the note below and issue #209.
+# Source: Davis Vantage Serial Communication Reference Rev 2.6.1, section
+# XIII (`reference/vantage_serial_ref_v261.txt`).  Quoting the map header:
+#
+#   "Calibration values are 1 byte signed numbers that are offsets applied
+#    to the corresponding raw sensor value in the native sensor units
+#    (either 0.1 °F or 1 %)"
+#
+# So every entry here is 1 byte per field, signed.  Multi-byte entries
+# below are arrays of 1-byte fields, not wide integers.
+#
+# IMPORTANT: writing these with EEBWR alone does NOT change what the
+# console reports.  Section XIV.1: the new value "will not take effect
+# until the next time the Vantage receives a data packet containing that
+# temperature or humidity value".  Use VantageDriver.write_calibration(),
+# which performs the documented CALED/CALFIX sequence.
 
-# VERIFIED: 1 signed byte, tenths °F.  Writing 10/25/50/-10 moved the
-# reported outside temperature by +1.0/+2.5/+5.0/-1.0 °F respectively.
-# Note this is ONE byte, not the i16 previously declared here; 0x35 was
-# probed and is inert, so it is not a high byte.
+CAL_INSIDE_TEMP = EEAddr(0x32, 1)     # signed i8, tenths °F
+# TEMP_IN_COMP must be written as the 1's complement of CAL_INSIDE_TEMP;
+# the console uses it to validate the inside-temp calibration and will
+# reject or ignore the setting if it does not match.
+CAL_INSIDE_TEMP_COMP = EEAddr(0x33, 1)
+
+# VERIFIED on hardware (Vantage Vue fw 2.12): writing 10/25/50/-10 moved
+# the reported outside temperature by +1.0/+2.5/+5.0/-1.0 °F.
 CAL_OUTSIDE_TEMP = EEAddr(0x34, 1)    # signed i8, tenths °F
 
-# UNVERIFIED — addresses below are believed-wrong or untested.
+# 15 one-byte offsets: 7 "extra" temps, then 4 soil, then 4 leaf.
+CAL_TEMP_EXTRA = EEAddr(0x35, 15)
+
+CAL_INSIDE_HUM = EEAddr(0x44, 1)      # signed i8, percent
+
+# HUM_CAL is 8 one-byte offsets.  Per the manual, "the first entry is the
+# currently selected outside humidity sensor" — so outside humidity is
+# 0x45 and the extra humidities are 0x46..0x4C.
 #
-# The outside-humidity offset is NOT at 0x46 (the value this file used to
-# carry) and NOT at 0x45.  Both accept a write and read the value back, yet
-# leave the reported humidity unchanged.  Every byte in 0x40–0x50 was swept
-# with a +20 offset against a console reading a rock-steady 55% RH; none
-# moved it by more than ambient drift (±1%).  The correct address is not
-# yet known, so no constant is defined for it — a wrong one is worse than
-# a missing one, because it fails silently.
-#
-# CAL_INSIDE_TEMP and CAL_INSIDE_HUM are simply untested. They may be
-# correct; nobody has checked. They plausibly came from the same source as
-# the two known-bad entries, so treat them as suspect until proven.
-CAL_INSIDE_TEMP = EEAddr(0x32, 1)     # UNVERIFIED: signed i8, tenths °F?
-CAL_INSIDE_HUM = EEAddr(0x44, 1)      # UNVERIFIED: signed i8, percent?
+# 0x46 is where this file previously (wrongly) put outside humidity; it is
+# extra-humidity 1, which is inert on a station with no extra sensors.
+# That is why writes to it appeared to succeed and do nothing (#209).
+CAL_OUTSIDE_HUM = EEAddr(0x45, 1)     # signed i8, percent
+CAL_HUM_ALL = EEAddr(0x45, 8)         # outside + 7 extra
+
+CAL_WIND_DIR = EEAddr(0x4D, 2)        # i16, degrees
+
+# The calibration block ends at 0x4E.  0x4F onward is graph defaults and
+# then ALARM_START at 0x52 — see CAL_BLOCK_* in constants.py for why the
+# manual's own "EEBWR 32 2B" example must not be followed literally.
 
 
 # --------------- Helpers ---------------

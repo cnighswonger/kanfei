@@ -125,3 +125,18 @@ def build_settime_payload(
     data = bytes([second, minute, hour, day, month, year - 1900])
     crc = crc_calculate(data)
     return data + struct.pack(">H", crc)
+
+
+def cmd_caled() -> bytes:
+    """CALED — request the current CALIBRATED temp/humidity block."""
+    return b"CALED\n"
+
+
+def cmd_calfix() -> bytes:
+    """CALFIX — send UN-CALIBRATED values so the display adopts new cal."""
+    return b"CALFIX\n"
+
+
+def cmd_clrcal() -> bytes:
+    """CLRCAL — clear all temperature and humidity calibration offsets."""
+    return b"CLRCAL\n"
