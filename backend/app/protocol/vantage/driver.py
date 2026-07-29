@@ -654,10 +654,18 @@ class VantageDriver(StationDriver):
     def set_archive_period(self, minutes: int) -> bool:
         """Set the archive interval via SETPER.
 
-        **This ERASES archive memory.**  Not a side effect of this driver —
-        the console does it, so that every stored record shares a single
-        interval (manual section IX.7).  Any records not already downloaded
-        are lost, so sync before calling.
+        **This does NOT erase archive memory**, despite manual section
+        IX.7 stating that it "automatically clears the archive memory ...
+        so that all archived records in the archive memory use the same
+        archive interval".  Verified on a Vantage Vue (fw 2.12): the
+        interval changed and all 46 existing records survived, giving
+        exactly the mixed-interval archive the manual says this prevents.
+
+        So after changing the interval the archive holds records at BOTH
+        the old and new spacing, and the record spanning the change covers
+        a partial period (observed: 30, 30, 12 min).  Anything consuming
+        archive data must either tolerate that or call clear_log() —
+        which is irreversible, so sync first.
 
         Davis firmware honours only {1, 5, 10, 15, 30, 60, 120}; anything
         else is rejected here rather than sent, matching LinkDriver's
