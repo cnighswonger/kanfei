@@ -27,7 +27,12 @@ from app.config import settings
 from app.logging_setup import configure_logging
 from app.models.database import init_database, SessionLocal, engine
 from app.models.station_config import StationConfigModel
-from app.protocol.base import StationDriver
+from app.protocol.base import (
+    StationDriver,
+    CAP_ARCHIVE_PERIOD_RW,
+    CAP_SAMPLE_PERIOD_RW,
+    CAP_CALIBRATION_RW,
+)
 from app.protocol.link_driver import LinkDriver, CalibrationOffsets, _rain_register_to_mm
 from app.protocol.serial_port import list_serial_ports
 from app.protocol.constants import STATION_NAMES, DAVIS_LEGAL_ARCHIVE_PERIODS
@@ -1026,44 +1031,157 @@ class LoggerDaemon:
         }
 
     async def _h_read_station_time(self, _msg: dict) -> Any:
-        link = self._link
-        if not link or not link.connected:
-            raise RuntimeError("Not connected (or driver does not support clock read)")
-        result = await link.async_read_station_time()
+        # Same fix as the config handlers (#219): this used to require a
+        # LinkDriver, so the dashboard's station-clock tile was empty on
+        # Vantage stations even though VantageDriver implements the clock
+        # methods.  Ask the driver, not its type.
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if not hasattr(drv, "async_read_station_time"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support reading the station clock"
+            )
+        result = await drv.async_read_station_time()
         if result is None:
             logger.warning("read_station_time returned None")
         return result
 
     async def _h_sync_station_time(self, _msg: dict) -> dict[str, Any]:
-        link = self._link
-        if not link or not link.connected:
-            raise RuntimeError("Not connected (or driver does not support clock sync)")
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if not hasattr(drv, "async_write_station_time"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support setting the station clock"
+            )
         now = datetime.now()
-        ok = await link.async_write_station_time(now)
+        ok = await drv.async_write_station_time(now)
         return {"success": ok, "synced_to": now.strftime("%H:%M:%S %m/%d/%Y")}
 
+    # Config operations, and the driver methods that implement them.  Used
+    # to infer support when a driver has not declared the capability flag.
+    _CONFIG_OPS: dict[str, tuple[str, tuple[str, ...]]] = {
+        CAP_ARCHIVE_PERIOD_RW: (
+            "archive_period",
+            ("async_set_archive_period", "async_read_archive_period"),
+        ),
+        CAP_SAMPLE_PERIOD_RW: (
+            "sample_period",
+            ("async_set_sample_period", "async_read_sample_period"),
+        ),
+        CAP_CALIBRATION_RW: (
+            "calibration",
+            ("async_write_calibration", "async_read_calibration"),
+        ),
+    }
+
+    def _driver_caps(self) -> set[str]:
+        """Config capabilities of the connected driver.
+
+        Prefers the driver's declared `capabilities`, but falls back to
+        checking for the implementing methods.  A driver that predates the
+        CAP_*_RW constants (or a test double) still works rather than
+        having every setting rejected as unsupported.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            return set()
+
+        try:
+            declared = set(drv.capabilities)
+        except Exception:          # pragma: no cover — defensive
+            declared = set()
+
+        caps: set[str] = set()
+        for cap, (_field, methods) in self._CONFIG_OPS.items():
+            if cap in declared or all(hasattr(drv, m) for m in methods):
+                caps.add(cap)
+        # Preserve any other declared flags (archive_sync, hilows, ...).
+        return caps | {c for c in declared if isinstance(c, str)}
+
     async def _h_read_config(self, _msg: dict) -> dict[str, Any]:
+        """Report the settings this station supports.
+
+        Previously gated on isinstance(driver, LinkDriver), which made the
+        whole settings panel dead on Vantage stations (#219).  Now driven by
+        declared capabilities, and the response says which fields the
+        station actually supports so the UI can hide the rest instead of
+        offering controls that do nothing.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+
+        caps = self._driver_caps()
         link = self._link
-        if not link or not link.connected:
-            raise RuntimeError("Not connected (or driver does not support config read)")
-        cal = link.calibration
-        return {
-            "archive_period": self._archive_period,
-            "sample_period": self._sample_period,
-            "calibration": {
+
+        archive_period = None
+        if CAP_ARCHIVE_PERIOD_RW in caps:
+            archive_period = self._archive_period
+            if archive_period is None and hasattr(drv, "async_read_archive_period"):
+                archive_period = await drv.async_read_archive_period()
+
+        sample_period = self._sample_period if CAP_SAMPLE_PERIOD_RW in caps else None
+
+        calibration = None
+        if CAP_CALIBRATION_RW in caps and link is not None:
+            # The calibration block is still LinkDriver-shaped (five legacy
+            # fields).  Vantage calibration uses different addresses and a
+            # different write procedure (#214), so it is reported as
+            # unsupported here rather than mapped onto a shape that does not
+            # fit — see "supported" below.
+            cal = link.calibration
+            calibration = {
                 "inside_temp": cal.inside_temp,
                 "outside_temp": cal.outside_temp,
                 "barometer": cal.barometer,
                 "outside_humidity": cal.outside_hum,
                 "rain_cal": cal.rain_cal,
+            }
+
+        return {
+            "archive_period": archive_period,
+            "sample_period": sample_period,
+            "calibration": calibration,
+            "supported": {
+                "archive_period": CAP_ARCHIVE_PERIOD_RW in caps,
+                "sample_period": CAP_SAMPLE_PERIOD_RW in caps,
+                "calibration": calibration is not None,
             },
         }
 
     async def _h_write_config(self, msg: dict) -> dict[str, Any]:
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+
+        caps = self._driver_caps()
         link = self._link
-        if not link or not link.connected:
-            raise RuntimeError("Not connected (or driver does not support config write)")
         results: dict[str, str] = {}
+
+        # Reject up front anything this station cannot do, with a distinct
+        # result value.  "unsupported" is not "failed": one means the
+        # station has no such setting, the other means the write was tried
+        # and did not take.  Collapsing them is how #219 looked like a
+        # generic malfunction rather than a missing feature.
+        for field, cap in (
+            ("archive_period", CAP_ARCHIVE_PERIOD_RW),
+            ("sample_period", CAP_SAMPLE_PERIOD_RW),
+            ("calibration", CAP_CALIBRATION_RW),
+        ):
+            if msg.get(field) is not None and cap not in caps:
+                results[field] = "unsupported"
+                logger.info(
+                    "write_config: %s not supported by %s",
+                    field, drv.station_name,
+                )
+
+        # Calibration additionally needs the legacy register layout; the
+        # Vantage path has different addresses and a CALED/CALFIX write
+        # sequence (#214) that this handler does not yet speak.
+        if msg.get("calibration") is not None and link is None:
+            results["calibration"] = "unsupported"
         # Pull current canonical state up front; we'll merge successful writes
         # back in below and persist a single updated row at the end so the
         # daemon's source-of-truth stays in sync with the link (issue #147).
@@ -1079,11 +1197,22 @@ class LoggerDaemon:
         # the link's true state silently.  A mismatch is "failed" — the
         # canonical row stays at the previous value, and the daemon's
         # cached state is set to whatever the link is actually reporting.
-        if msg.get("archive_period") is not None:
+        if msg.get("archive_period") is not None and "archive_period" not in results:
             want = msg["archive_period"]
-            ack = await link.async_set_archive_period(want)
+            # Route to whichever driver is connected — LinkDriver (SAP) and
+            # VantageDriver (SETPER) both expose this pair.  Verifying by
+            # read-back rather than trusting the ACK is what caught SETPER
+            # silently not applying on some consoles.
+            try:
+                ack = await drv.async_set_archive_period(want)
+            except ValueError as exc:
+                # Driver rejected an illegal period before touching the
+                # hardware (Davis honours only {1,5,10,15,30,60,120}).
+                logger.warning("archive_period rejected: %s", exc)
+                results["archive_period"] = "invalid"
+                ack = False
             if ack:
-                actual = await link.async_read_archive_period()
+                actual = await drv.async_read_archive_period()
                 if actual == want:
                     self._archive_period = actual
                     canonical["archive_period"] = actual
@@ -1091,16 +1220,16 @@ class LoggerDaemon:
                     results["archive_period"] = "ok"
                 else:
                     logger.warning(
-                        "SAP ACKed but link still reports %s (wanted %s)",
+                        "archive period ACKed but station still reports %s (wanted %s)",
                         actual, want,
                     )
                     if actual is not None:
                         self._archive_period = actual
                     results["archive_period"] = "failed"
-            else:
+            elif results.get("archive_period") != "invalid":
                 results["archive_period"] = "failed"
 
-        if msg.get("sample_period") is not None:
+        if msg.get("sample_period") is not None and "sample_period" not in results:
             want = msg["sample_period"]
             ack = await link.async_set_sample_period(want)
             if ack:
@@ -1121,7 +1250,7 @@ class LoggerDaemon:
             else:
                 results["sample_period"] = "failed"
 
-        if msg.get("calibration") is not None:
+        if msg.get("calibration") is not None and "calibration" not in results:
             cal = msg["calibration"]
             offsets = CalibrationOffsets(
                 inside_temp=cal["inside_temp"],

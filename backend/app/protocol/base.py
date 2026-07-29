@@ -78,6 +78,19 @@ CAP_CLOCK_SYNC = "clock_sync"            # Can set station clock
 CAP_RAIN_RESET = "rain_reset"            # Can clear rain accumulators
 CAP_HILOWS = "hilows"                    # Can retrieve hi/low records
 
+# Settings-panel operations.  Declared separately from the coarse flags
+# above because a driver can support one without the other: every Davis
+# serial station has an archive period, but "sample period" is a
+# WeatherLink-logger concept with no equivalent in the Vantage protocol.
+#
+# The settings handlers consult these rather than checking the driver's
+# concrete type.  An isinstance(driver, LinkDriver) check is what made the
+# whole settings panel dead on Vantage stations (#219) — and the same
+# pattern caused #215 — so new config operations belong here, not in a
+# type test.
+CAP_ARCHIVE_PERIOD_RW = "archive_period_rw"   # Can read/write archive interval
+CAP_SAMPLE_PERIOD_RW = "sample_period_rw"     # Can read/write sample period
+
 
 # --------------- Abstract base class ---------------
 
