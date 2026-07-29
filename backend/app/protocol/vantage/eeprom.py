@@ -17,7 +17,11 @@ class EEAddr:
 # --------------- System configuration ---------------
 
 ARCHIVE_INTERVAL = EEAddr(0x2D, 1)    # minutes (1–120)
-STATION_TYPE = EEAddr(0x12, 1)        # 16 = VP1/VP2, 17 = Vue
+# NOTE: station type is NOT in EEPROM.  It lives in processor memory at
+# 0x4D and is read with the WRD command — see STATION_TYPE_WRD_ADDR in
+# constants.py.  A `STATION_TYPE = EEAddr(0x12, 1)` entry used to sit here;
+# 0x12 was the WRD command byte mistaken for an address, and EEBRD 0x12
+# reads an unrelated location that holds 0x00 on a Vue.
 SETUP_BITS = EEAddr(0x2B, 1)          # bits 4-5: rain collector type
 UNIT_BITS = EEAddr(0x29, 1)           # unit configuration byte
 RAIN_YEAR_START = EEAddr(0x2C, 1)     # month (1–12)

@@ -49,16 +49,22 @@ DMPAFT_HEADER_SIZE = 6
 MAX_RETRIES = 3
 
 # --------------- Station model codes ---------------
-# EEPROM offset 0x12
+# Read from station PROCESSOR MEMORY at address 0x4D via the WRD command
+# -- NOT from EEPROM.  These are different address spaces; EEBRD 0x12
+# returns 0x00 on a Vue, which is what previously made every Vue report
+# itself as a Pro2.
+STATION_TYPE_WRD_ADDR = 0x4D
 
 
 class VantageModel(IntEnum):
-    """Station type codes from EEPROM offset 0x12."""
+    """Station type codes from processor memory 0x4D (WRD)."""
+    UNKNOWN = -1       # detection failed or unrecognised code
     VANTAGE_PRO = 16   # VP1 and VP2 both report 16
     VANTAGE_VUE = 17
 
 
 VANTAGE_NAMES = {
+    VantageModel.UNKNOWN: "Vantage (unknown model)",
     VantageModel.VANTAGE_PRO: "Vantage Pro2",
     VantageModel.VANTAGE_VUE: "Vantage Vue",
 }
