@@ -19,7 +19,7 @@
     "highcharts-react-official": "^3.2.3",
     "leaflet": "^1.9.4",
     "react": "^19.2.7",
-    "react-colorful": "^5.7.0",
+    "react-colorful": "^5.8.0",
     "react-dom": "^19.2.7",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.16.0",
