@@ -125,3 +125,31 @@ def build_settime_payload(
     data = bytes([second, minute, hour, day, month, year - 1900])
     crc = crc_calculate(data)
     return data + struct.pack(">H", crc)
+
+
+def cmd_caled() -> bytes:
+    """CALED — request the current CALIBRATED temp/humidity block."""
+    return b"CALED\n"
+
+
+def cmd_calfix() -> bytes:
+    """CALFIX — send UN-CALIBRATED values so the display adopts new cal."""
+    return b"CALFIX\n"
+
+
+def cmd_clrcal() -> bytes:
+    """CLRCAL — clear all temperature and humidity calibration offsets."""
+    return b"CLRCAL\n"
+
+
+def cmd_setper(minutes: int) -> bytes:
+    """SETPER — set the archive interval in minutes.
+
+    Manual section IX.7 claims this "automatically clears the archive
+    memory ... so that all archived records in the archive memory use the
+    same archive interval".  **It does not**, at least on a Vantage Vue
+    running fw 2.12: the interval changed and every existing record stayed
+    put, leaving precisely the mixed-interval archive the manual says this
+    prevents.  Send CLRLOG explicitly if a clean archive is wanted.
+    """
+    return f"SETPER {minutes}\n".encode()

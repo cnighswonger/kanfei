@@ -32,6 +32,8 @@ from ..base import (
 )
 from ..serial_port import SerialPort
 from ..crc import crc_validate, crc_calculate
+from ..commands import build_wrd_command
+from ..constants import DAVIS_LEGAL_ARCHIVE_PERIODS
 from .constants import (
     VantageModel,
     VANTAGE_NAMES,
@@ -44,6 +46,17 @@ from .constants import (
     LOOP2_PACKET_SIZE,
     RAIN_CLICK_INCHES,
     ARCHIVE_PAGE_SIZE,
+    DMPAFT_HEADER_SIZE,
+    STATION_TYPE_WRD_ADDR,
+    CALFIX_BLOCK_SIZE,
+    CALFIX_OFF_INSIDE_TEMP,
+    CALFIX_OFF_OUTSIDE_TEMP,
+    CALFIX_OFF_INSIDE_HUM,
+    CALFIX_OFF_OUTSIDE_HUM,
+    CALFIX_INVALID_TEMP,
+    CALFIX_INVALID_HUM,
+    CAL_BLOCK_START,
+    CAL_BLOCK_END,
     MAX_RETRIES,
     ACK,
     NAK,
@@ -60,12 +73,21 @@ from .commands import (
     cmd_settime,
     cmd_eebrd,
     cmd_eebwr,
+    cmd_caled,
+    cmd_calfix,
+    cmd_clrcal,
+    cmd_clrlog,
+    cmd_setper,
     build_dmpaft_timestamp,
     build_settime_payload,
 )
 from .eeprom import (
-    STATION_TYPE,
+    EEAddr,
     SETUP_BITS,
+    CAL_INSIDE_TEMP,
+    CAL_OUTSIDE_TEMP,
+    CAL_INSIDE_HUM,
+    CAL_OUTSIDE_HUM,
     ARCHIVE_INTERVAL,
     LATITUDE,
     LONGITUDE,
@@ -130,9 +152,16 @@ class VantageDriver(StationDriver):
 
     @property
     def capabilities(self) -> set[str]:
-        caps = {CAP_ARCHIVE_SYNC, CAP_CLOCK_SYNC, CAP_RAIN_RESET}
+        # CAP_CALIBRATION_RW is advertised again as of #209: the addresses
+        # now come from the Vantage Serial Reference rather than guesswork,
+        # and write_calibration() performs the CALED/CALFIX sequence that
+        # actually makes an offset take effect.  It was withdrawn in #211
+        # because a bare EEBWR silently did nothing.
+        caps = {
+            CAP_ARCHIVE_SYNC, CAP_CLOCK_SYNC, CAP_RAIN_RESET,
+            CAP_CALIBRATION_RW,
+        }
         if self.hw_config.has_loop2:
-            caps.add(CAP_CALIBRATION_RW)
             caps.add(CAP_HILOWS)
         return caps
 
@@ -230,18 +259,52 @@ class VantageDriver(StationDriver):
                 # Drain any leftover bytes
                 self.serial.flush()
 
-            # 3. Station type from EEPROM
-            type_data = self._eeprom_read(STATION_TYPE.address, STATION_TYPE.n_bytes)
-            if type_data and len(type_data) >= 1:
+            # 3. Station type from processor memory via WRD.
+            #
+            # This does NOT live in EEPROM.  The previous code read EEBRD
+            # 0x12, but 0x12 is the WRD *command byte* (n_nibbles<<4 | bank),
+            # not an address -- it was transcribed out of the command
+            # `WRD 0x12 0x4D` as though it were an offset.  EEPROM 0x12
+            # holds 0x00 on a Vue, so the lookup raised ValueError and the
+            # field silently kept its VANTAGE_PRO default: every Vue
+            # reported itself as a Pro2.
+            self.hw_config.station_type = VantageModel.UNKNOWN
+            code = self._read_station_type_code()
+            if code is None:
+                logger.warning(
+                    "Station type: WRD read failed — reporting unknown model"
+                )
+            else:
                 try:
-                    self.hw_config.station_type = VantageModel(type_data[0])
+                    self.hw_config.station_type = VantageModel(code)
                     logger.info(
                         "Station type: %s (code %d)",
                         VANTAGE_NAMES.get(self.hw_config.station_type, "Unknown"),
-                        type_data[0],
+                        code,
                     )
                 except ValueError:
-                    logger.warning("Unknown station type byte: 0x%02X", type_data[0])
+                    logger.warning(
+                        "Unrecognised station type code %d (0x%02X) — "
+                        "reporting unknown model", code, code,
+                    )
+
+    def _read_station_type_code(self) -> Optional[int]:
+        """Read the station model code from processor memory via WRD.
+
+        Returns the raw code byte, or None if the station did not respond.
+        """
+        for attempt in range(MAX_RETRIES):
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(build_wrd_command(1, 0, STATION_TYPE_WRD_ADDR))
+            response = self.serial.receive(2)
+            if len(response) >= 2 and response[0] == ACK:
+                return response[1]
+            logger.debug(
+                "WRD station type attempt %d/%d: got %r",
+                attempt + 1, MAX_RETRIES, response.hex() if response else "empty",
+            )
+        return None
 
     # ---- Initial config from EEPROM ----
 
@@ -361,23 +424,55 @@ class VantageDriver(StationDriver):
     # ---- EEPROM ----
 
     def _eeprom_read(self, address: int, n_bytes: int) -> Optional[bytes]:
-        """Read n_bytes from EEPROM. Returns data bytes or None."""
+        """Read n_bytes from EEPROM, retrying transient failures.
+
+        Retries matter here: a single dropped response is common on this
+        link, and callers that treat None as "field absent" can silently do
+        the wrong thing.  write_calibration() is the sharp case — a None
+        there would skip un-calibrating a field and make CALFIX send an
+        already-calibrated value as if it were raw.
+        """
+        for attempt in range(MAX_RETRIES):
+            result = self._eeprom_read_once(address, n_bytes)
+            if result is not None:
+                return result
+            if attempt + 1 < MAX_RETRIES:
+                logger.debug(
+                    "EEBRD 0x%04X: retry %d/%d",
+                    address, attempt + 1, MAX_RETRIES,
+                )
+                self.serial.flush()
+        logger.warning(
+            "EEBRD 0x%04X: failed after %d attempts", address, MAX_RETRIES,
+        )
+        return None
+
+    def _eeprom_read_once(self, address: int, n_bytes: int) -> Optional[bytes]:
+        """Single EEBRD attempt. Returns data bytes or None."""
         self._wakeup()
         self.serial.flush()
         self.serial.send(cmd_eebrd(address, n_bytes))
 
         ack = self.serial.receive_byte()
         if ack != ACK:
-            logger.warning("EEBRD 0x%04X: no ACK", address)
+            logger.debug("EEBRD 0x%04X: no ACK", address)
             return None
 
         response = self.serial.receive(n_bytes + 2)
         if len(response) < n_bytes + 2:
-            logger.warning("EEBRD 0x%04X: short read (%d bytes)", address, len(response))
-            return response[:n_bytes] if len(response) >= n_bytes else None
+            # Previously this returned response[:n_bytes] on a short read —
+            # i.e. CRC-UNVALIDATED bytes, indistinguishable from a good
+            # read.  With the retry loop above that would have been worse
+            # still: a truncated read would be accepted as success instead
+            # of retried.  Fail, and let the caller retry.
+            logger.debug(
+                "EEBRD 0x%04X: short read (%d of %d bytes)",
+                address, len(response), n_bytes + 2,
+            )
+            return None
 
         if not crc_validate(response):
-            logger.warning("EEBRD 0x%04X: CRC failed", address)
+            logger.debug("EEBRD 0x%04X: CRC failed", address)
             return None
 
         return response[:n_bytes]
@@ -397,6 +492,254 @@ class VantageDriver(StationDriver):
 
         ack = self.serial.receive_byte()
         return ack == ACK
+
+    # ---- Calibration ----
+
+    def _caled(self) -> Optional[bytes]:
+        """CALED — read the 43-byte block of current CALIBRATED values."""
+        self._wakeup()
+        self.serial.flush()
+        self.serial.send(cmd_caled())
+
+        if self.serial.receive_byte() != ACK:
+            logger.warning("CALED: no ACK")
+            return None
+
+        payload = self.serial.receive(CALFIX_BLOCK_SIZE + 2)
+        if len(payload) < CALFIX_BLOCK_SIZE + 2:
+            logger.warning(
+                "CALED: short read (%d of %d bytes)",
+                len(payload), CALFIX_BLOCK_SIZE + 2,
+            )
+            return None
+        if not crc_validate(payload):
+            logger.warning("CALED: CRC failed")
+            return None
+        return payload[:CALFIX_BLOCK_SIZE]
+
+    def _calfix(self, block: bytes) -> bool:
+        """CALFIX — send UN-CALIBRATED values so the display updates."""
+        if len(block) != CALFIX_BLOCK_SIZE:
+            raise ValueError(
+                f"CALFIX block must be {CALFIX_BLOCK_SIZE} bytes, "
+                f"got {len(block)}"
+            )
+        self._wakeup()
+        self.serial.flush()
+        self.serial.send(cmd_calfix())
+
+        if self.serial.receive_byte() != ACK:
+            logger.warning("CALFIX: no ACK")
+            return False
+
+        crc = crc_calculate(block)
+        self.serial.send(block + struct.pack(">H", crc))
+        return self.serial.receive_byte() == ACK
+
+    def write_calibration(self, field: EEAddr, offset: int) -> bool:
+        """Set a temperature/humidity calibration offset, and apply it.
+
+        Writing the EEPROM byte alone is not enough.  Per the Vantage
+        Serial Reference section XIV.1, a new calibration value "will not
+        take effect until the next time the Vantage receives a data packet
+        containing that temperature or humidity value" — so this performs
+        the documented sequence:
+
+            EEBRD (current offsets) -> CALED (calibrated values)
+              -> subtract to get un-calibrated -> EEBWR (new offset)
+              -> CALFIX (push un-calibrated values back)
+
+        `field` must be one of the single-byte CAL_* entries in eeprom.py.
+        `offset` is in that sensor's native units: tenths °F for
+        temperature, whole percent for humidity.
+
+        Deliberately writes ONE field rather than the manual's block form:
+        its "EEBWR 32 2B" example writes 43 bytes from 0x32, which runs
+        past the calibration block and over the graph defaults and alarm
+        thresholds.  See CAL_BLOCK_* in constants.py.
+        """
+        if field.n_bytes != 1:
+            raise ValueError(
+                f"write_calibration expects a 1-byte field, "
+                f"got {field.n_bytes} at 0x{field.address:02X}"
+            )
+        if not CAL_BLOCK_START <= field.address <= CAL_BLOCK_END:
+            raise ValueError(
+                f"0x{field.address:02X} is outside the calibration block "
+                f"(0x{CAL_BLOCK_START:02X}..0x{CAL_BLOCK_END:02X})"
+            )
+        if not -128 <= offset <= 127:
+            raise ValueError(f"calibration offset {offset} out of range")
+
+        with self._io_lock:
+            # 1. current calibrated sensor values
+            calibrated = self._caled()
+            if calibrated is None:
+                logger.error("write_calibration: CALED failed")
+                return False
+
+            # 2. current offsets, so we can back out un-calibrated values
+            block = bytearray(calibrated)
+            for name, blk_off, size in (
+                ("inside temp", CALFIX_OFF_INSIDE_TEMP, 2),
+                ("outside temp", CALFIX_OFF_OUTSIDE_TEMP, 2),
+                ("inside hum", CALFIX_OFF_INSIDE_HUM, 1),
+                ("outside hum", CALFIX_OFF_OUTSIDE_HUM, 1),
+            ):
+                ee = {
+                    "inside temp": CAL_INSIDE_TEMP,
+                    "outside temp": CAL_OUTSIDE_TEMP,
+                    "inside hum": CAL_INSIDE_HUM,
+                    "outside hum": CAL_OUTSIDE_HUM,
+                }[name]
+                cur = self._eeprom_read(ee.address, 1)
+                if cur is None:
+                    continue
+                cur_off = struct.unpack("b", cur)[0]
+                # The offset we are about to change is applied AFTER this
+                # un-calibration step, so back out the value currently in
+                # effect for every field.
+                if size == 2:
+                    val = struct.unpack_from("<h", block, blk_off)[0]
+                    if val == CALFIX_INVALID_TEMP:
+                        continue          # dashed — leave untouched
+                    struct.pack_into("<h", block, blk_off, val - cur_off)
+                else:
+                    val = block[blk_off]
+                    if val == CALFIX_INVALID_HUM:
+                        continue
+                    block[blk_off] = (val - cur_off) & 0xFF
+
+            # 3. write the new offset
+            if not self._eeprom_write(field.address, struct.pack("b", offset)):
+                logger.error(
+                    "write_calibration: EEBWR 0x%02X failed", field.address,
+                )
+                return False
+
+            # 4. push un-calibrated values so the console re-applies cal
+            if not self._calfix(bytes(block)):
+                logger.error("write_calibration: CALFIX failed")
+                return False
+
+            logger.info(
+                "Calibration 0x%02X set to %+d (CALFIX applied)",
+                field.address, offset,
+            )
+            return True
+
+    def clear_calibration(self) -> bool:
+        """CLRCAL — zero every temperature and humidity calibration offset.
+
+        Affects ALL temp/humidity offsets at once, not one field.  Does not
+        touch barometer calibration, which is set with BAR=.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_clrcal())
+            response = self._read_ok_response()
+            ok = "OK" in response or response.strip() == ""
+            logger.info("CLRCAL: %s", "cleared" if ok else f"unexpected {response!r}")
+            return ok
+
+    async def async_write_calibration(self, field: EEAddr, offset: int) -> bool:
+        return await self._run_in_executor(self.write_calibration, field, offset)
+
+    async def async_clear_calibration(self) -> bool:
+        return await self._run_in_executor(self.clear_calibration)
+
+    # ---- Archive period ----
+
+    def set_archive_period(self, minutes: int) -> bool:
+        """Set the archive interval via SETPER.
+
+        **This does NOT erase archive memory**, despite manual section
+        IX.7 stating that it "automatically clears the archive memory ...
+        so that all archived records in the archive memory use the same
+        archive interval".  Verified on a Vantage Vue (fw 2.12): the
+        interval changed and all 46 existing records survived, giving
+        exactly the mixed-interval archive the manual says this prevents.
+
+        So after changing the interval the archive holds records at BOTH
+        the old and new spacing, and the record spanning the change covers
+        a partial period (observed: 30, 30, 12 min).  Anything consuming
+        archive data must either tolerate that or call clear_log() —
+        which is irreversible, so sync first.
+
+        Davis firmware honours only {1, 5, 10, 15, 30, 60, 120}; anything
+        else is rejected here rather than sent, matching LinkDriver's
+        behaviour (see #174, where a 1..120 range check let through values
+        like 68 and 102).
+
+        Shorter intervals trade buffer depth for resolution: archive memory
+        holds 2560 records, so 1 min ≈ 42 h of history where 30 min ≈ 53
+        days.  That bounds how long a logger outage can be before archive
+        backfill starts losing data.
+        """
+        if minutes not in DAVIS_LEGAL_ARCHIVE_PERIODS:
+            raise ValueError(
+                f"Archive period must be one of "
+                f"{sorted(DAVIS_LEGAL_ARCHIVE_PERIODS)} (got {minutes})"
+            )
+
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_setper(minutes))
+            # The manual (IX.7) documents an <ACK> reply; fw 2.12 on a Vue
+            # answers "\n\rOK\n\r".  Accept either.
+            #
+            # Do NOT use _read_ok_response() here: it expects OK *plus a
+            # payload* (as VER/NVER return) and loops waiting for one, so a
+            # bare OK makes it time out and raise "No response received" on
+            # a command that actually succeeded.
+            ok = self._read_status_reply()
+            if ok:
+                self.hw_config.archive_interval = minutes
+                logger.info(
+                    "Archive period set to %d min (console cleared archive memory)",
+                    minutes,
+                )
+            else:
+                logger.warning(
+                    "SETPER %d: unexpected response %r", minutes, response,
+                )
+            return ok
+
+    async def async_set_archive_period(self, minutes: int) -> bool:
+        return await self._run_in_executor(self.set_archive_period, minutes)
+
+    def clear_log(self) -> bool:
+        """CLRLOG — erase archive memory.  **IRREVERSIBLE.**
+
+        Every archive record is destroyed.  Sync before calling; there is no
+        undo and the console holds the only copy.
+
+        The manual states SETPER "automatically clears the archive memory",
+        so this ought to be redundant after an interval change.  It is not:
+        on a Vue running fw 2.12, SETPER changed the interval but left the
+        existing records in place, producing exactly the mixed-interval
+        archive the manual says it prevents.  Call this explicitly after
+        SETPER if a clean archive matters.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_clrlog())
+            # Manual IX.6 documents '"OK"<LF><CR>' followed by '"DONE"'
+            # after a delay.  fw 2.12 on a Vue actually replies with a bare
+            # ACK (0x06) and nothing else — verified on hardware, where the
+            # erase demonstrably worked (48 records -> 0) while a text-based
+            # check reported failure.  Accept either.
+            ok = self._read_status_reply()
+            logger.info(
+                "CLRLOG: %s", "archive erased" if ok else "unexpected response",
+            )
+            return ok
+
+    async def async_clear_log(self) -> bool:
+        return await self._run_in_executor(self.clear_log)
 
     # ---- Clock ----
 
@@ -486,9 +829,19 @@ class VantageDriver(StationDriver):
                 raise ConnectionError("DMPAFT: timestamp not ACKed")
 
             # Read header: page_count (u16 LE) + first_record_offset (u16 LE)
-            header = self.serial.receive(4)
-            if len(header) < 4:
-                raise ConnectionError("DMPAFT: header short read")
+            # + CRC (u16 BE) = 6 bytes total.  Reading only the 4 payload
+            # bytes strands the CRC in the buffer, where it is then misread
+            # as the start of page 0.
+            header = self.serial.receive(DMPAFT_HEADER_SIZE)
+            if len(header) < DMPAFT_HEADER_SIZE:
+                raise ConnectionError(
+                    f"DMPAFT: header short read ({len(header)} of "
+                    f"{DMPAFT_HEADER_SIZE} bytes)"
+                )
+
+            if not crc_validate(header):
+                self.serial.send(bytes([ESC]))
+                raise ConnectionError("DMPAFT: header CRC failed")
 
             page_count = struct.unpack_from("<H", header, 0)[0]
             first_offset = struct.unpack_from("<H", header, 2)[0]
@@ -497,26 +850,63 @@ class VantageDriver(StationDriver):
             if page_count == 0:
                 return []
 
+            # The station sends nothing until the header is ACKed.  Without
+            # this the first page read blocks until timeout and every
+            # subsequent one returns zero bytes.
+            self.serial.send(bytes([ACK]))
+
             records: list[VantageArchiveRecord] = []
+            pages_read = 0
             for page_num in range(page_count):
-                if self._stop_requested:
-                    self.serial.send(bytes([ESC]))
-                    logger.info("DMPAFT: aborted by stop request at page %d", page_num)
+                page_data = None
+
+                # Retry a corrupt or short page in place.  NAK asks the
+                # station to resend the SAME page, so advancing the loop
+                # counter on failure (as this previously did) desynchronises
+                # the stream from the station.
+                for attempt in range(MAX_RETRIES):
+                    if self._stop_requested:
+                        self.serial.send(bytes([ESC]))
+                        logger.info("DMPAFT: aborted by stop request at page %d", page_num)
+                        page_data = None
+                        break
+
+                    chunk = self.serial.receive(ARCHIVE_PAGE_SIZE)
+                    if len(chunk) < ARCHIVE_PAGE_SIZE:
+                        logger.warning(
+                            "DMPAFT page %d: short read (%d of %d bytes), attempt %d/%d",
+                            page_num, len(chunk), ARCHIVE_PAGE_SIZE,
+                            attempt + 1, MAX_RETRIES,
+                        )
+                        self.serial.send(bytes([NAK]))
+                        continue
+
+                    if not crc_validate(chunk):
+                        logger.warning(
+                            "DMPAFT page %d: CRC failed, attempt %d/%d",
+                            page_num, attempt + 1, MAX_RETRIES,
+                        )
+                        self.serial.send(bytes([NAK]))
+                        continue
+
+                    page_data = chunk
                     break
 
-                page_data = self.serial.receive(ARCHIVE_PAGE_SIZE)
-                if len(page_data) < ARCHIVE_PAGE_SIZE:
-                    logger.warning("DMPAFT page %d: short read (%d bytes)", page_num, len(page_data))
-                    self.serial.send(bytes([NAK]))
-                    continue
+                if self._stop_requested:
+                    break
 
-                if not crc_validate(page_data[:ARCHIVE_PAGE_SIZE]):
-                    logger.warning("DMPAFT page %d: CRC failed, sending NAK", page_num)
-                    self.serial.send(bytes([NAK]))
-                    continue
+                if page_data is None:
+                    # Out of retries — abort rather than press on against a
+                    # stream we can no longer trust.
+                    self.serial.send(bytes([ESC]))
+                    raise ConnectionError(
+                        f"DMPAFT: page {page_num} unreadable after "
+                        f"{MAX_RETRIES} attempts"
+                    )
 
-                # ACK this page
+                # ACK advances the station to the next page.
                 self.serial.send(bytes([ACK]))
+                pages_read += 1
 
                 # Parse records
                 page_records = parse_archive_page(page_data)
@@ -527,10 +917,24 @@ class VantageDriver(StationDriver):
                     record = parse_archive_record(
                         record_bytes, self.hw_config.rain_click_inches,
                     )
-                    if record is not None:
-                        records.append(record)
+                    if record is None:
+                        continue
 
-            logger.info("DMPAFT: retrieved %d records", len(records))
+                    # The station sends whole pages, so the final page is
+                    # padded with unwritten slots and any page may carry
+                    # records older than the request.  first_offset only
+                    # covers page 0, so filter on the timestamp too --
+                    # otherwise a request for a future time still returns
+                    # the tail of the archive.
+                    if record.timestamp is None or record.timestamp <= after:
+                        continue
+
+                    records.append(record)
+
+            logger.info(
+                "DMPAFT: retrieved %d records from %d/%d pages",
+                len(records), pages_read, page_count,
+            )
             return records
 
     # ---- RXCHECK diagnostics ----
@@ -556,6 +960,35 @@ class VantageDriver(StationDriver):
             return None
 
     # ---- Text response reader ----
+
+    def _read_status_reply(self, timeout_reads: int = 24) -> bool:
+        """Read a bare success reply from a command that returns no payload.
+
+        Vantage acknowledgement styles are not consistent, and the manual
+        does not always match the firmware.  Observed on a Vue (fw 2.12):
+
+            SETPER  -> b"\n\rOK\n\r"   (manual documents <ACK>)
+            CLRLOG  -> b"\x06"          (manual documents "OK" then "DONE")
+
+        So accept ACK, "OK", or "DONE" in any combination.  Unlike
+        _read_ok_response(), this does NOT wait for a payload — that helper
+        loops until one arrives and raises "No response received" when a
+        command legitimately has nothing more to say.
+        """
+        buf = b""
+        for _ in range(timeout_reads):
+            chunk = self.serial.receive(1)
+            if not chunk:
+                if buf:
+                    break          # reply complete, line has gone quiet
+                continue           # nothing yet, keep waiting
+            buf += chunk
+            if ACK in buf or b"OK" in buf or b"DONE" in buf:
+                # Consume any trailing LF/CR so the next command starts clean.
+                self.serial.receive(4)
+                return True
+        logger.debug("status reply: got %r", buf)
+        return False
 
     def _read_ok_response(self, max_bytes: int = 256) -> str:
         """Read an OK-prefixed text response terminated by LF CR.

@@ -83,7 +83,7 @@ export default function TileCatalogModal({
         <h3
           style={{
             margin: "0 0 16px 0",
-            fontSize: 18,
+            fontSize: "calc(18px * var(--font-scale))",
             fontFamily: "var(--font-heading)",
             color: "var(--color-text)",
           }}
@@ -95,7 +95,7 @@ export default function TileCatalogModal({
           <div key={cat} style={{ marginBottom: 16 }}>
             <div
               style={{
-                fontSize: 12,
+                fontSize: "calc(12px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-muted)",
                 textTransform: "uppercase",
@@ -130,7 +130,7 @@ export default function TileCatalogModal({
                       color: disabled
                         ? "var(--color-text-muted)"
                         : "var(--color-text)",
-                      fontSize: 13,
+                      fontSize: "calc(13px * var(--font-scale))",
                       fontFamily: "var(--font-body)",
                       cursor: disabled ? "default" : "pointer",
                       opacity: disabled ? 0.5 : 1,
@@ -164,7 +164,7 @@ export default function TileCatalogModal({
               border: "none",
               background: "var(--color-accent)",
               color: "#fff",
-              fontSize: 14,
+              fontSize: "calc(14px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               fontWeight: 600,
               cursor: "pointer",

@@ -34,25 +34,69 @@ LOOP_HEADER = b"LOO"
 
 # --------------- Archive ---------------
 
-ARCHIVE_PAGE_SIZE = 267          # 5 × 52 records + 4 unused + 2 CRC
+ARCHIVE_PAGE_SIZE = 267          # 1 seq + 5 × 52 records + 4 unused + 2 CRC
+ARCHIVE_PAGE_HEADER_SIZE = 1     # leading sequence byte, before record 0
 ARCHIVE_RECORD_SIZE = 52
 ARCHIVE_RECORDS_PER_PAGE = 5
+
+# DMPAFT response header: page_count (u16 LE) + first_record_offset (u16 LE)
+# + CRC (u16 BE).  The station waits for an ACK after this before sending
+# page 0.
+DMPAFT_HEADER_SIZE = 6
+
+# --------------- Calibration ---------------
+
+# CALED / CALFIX exchange a 43-byte block (section X.6):
+#   inside temp      0   2      leaf temps      26  8  (4 x 2)
+#   outside temp     2   2      inside hum      34  1
+#   extra temps      4  14      outside hum     35  1
+#   soil temps      18   8      extra hums      36  7
+CALFIX_BLOCK_SIZE = 43
+CALFIX_OFF_INSIDE_TEMP = 0
+CALFIX_OFF_OUTSIDE_TEMP = 2
+CALFIX_OFF_INSIDE_HUM = 34
+CALFIX_OFF_OUTSIDE_HUM = 35
+
+# Sentinels meaning "no sensor / dashed" in a CALED block.  Per XIV.1 these
+# must be left alone rather than back-calculated, or garbage is written
+# into the console's display values.
+CALFIX_INVALID_TEMP = 0x7FFF
+CALFIX_INVALID_HUM = 0xFF
+
+# The EEPROM calibration block really spans 0x32..0x4E (29 bytes).
+#
+# Do NOT use the manual's own "EEBRD 32 2B" / "EEBWR 32 2B" example from
+# section XIV.1: 0x2B is 43, the size of the CALFIX *data block*, not of
+# the EEPROM region.  A 43-byte write at 0x32 runs to 0x5C, past the end
+# of the calibration block and over DEFAULT_BAR_GRAPH (0x4F),
+# DEFAULT_RAIN_GRAPH (0x50), DEFAULT_SPEED_GRAPH (0x51) and 11 bytes of
+# ALARM_START (0x52).  The manual's own prose two lines earlier says
+# "28 EEPROM bytes", and its address map implies 29 — the three do not
+# agree, so this driver writes individual fields instead.
+CAL_BLOCK_START = 0x32
+CAL_BLOCK_END = 0x4E
 
 # --------------- Retry ---------------
 
 MAX_RETRIES = 3
 
 # --------------- Station model codes ---------------
-# EEPROM offset 0x12
+# Read from station PROCESSOR MEMORY at address 0x4D via the WRD command
+# -- NOT from EEPROM.  These are different address spaces; EEBRD 0x12
+# returns 0x00 on a Vue, which is what previously made every Vue report
+# itself as a Pro2.
+STATION_TYPE_WRD_ADDR = 0x4D
 
 
 class VantageModel(IntEnum):
-    """Station type codes from EEPROM offset 0x12."""
+    """Station type codes from processor memory 0x4D (WRD)."""
+    UNKNOWN = -1       # detection failed or unrecognised code
     VANTAGE_PRO = 16   # VP1 and VP2 both report 16
     VANTAGE_VUE = 17
 
 
 VANTAGE_NAMES = {
+    VantageModel.UNKNOWN: "Vantage (unknown model)",
     VantageModel.VANTAGE_PRO: "Vantage Pro2",
     VantageModel.VANTAGE_VUE: "Vantage Vue",
 }

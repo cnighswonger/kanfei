@@ -23,7 +23,7 @@ export default function TrendArrow({ trend, size = 16 }: TrendArrowProps) {
   return (
     <span
       style={{
-        fontSize: `${size}px`,
+        fontSize: `calc(${size}px * var(--font-scale))`,
         color,
         fontWeight: 'bold',
         lineHeight: 1,

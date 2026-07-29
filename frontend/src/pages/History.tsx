@@ -83,7 +83,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text-secondary)",
   marginBottom: "6px",
@@ -92,7 +92,7 @@ const labelStyle: React.CSSProperties = {
 
 const selectStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   padding: "8px 12px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -105,7 +105,7 @@ const selectStyle: React.CSSProperties = {
 
 const presetBtnBase: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   padding: "6px 14px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -115,7 +115,7 @@ const presetBtnBase: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   padding: "8px 12px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -215,7 +215,7 @@ export default function History() {
         type: "datetime",
         lineColor: borderColor,
         tickColor: borderColor,
-        labels: { style: { color: textMuted, fontSize: isMobile ? "9px" : "11px" } },
+        labels: { style: { color: textMuted, fontSize: isMobile ? "calc(9px * var(--font-scale))" : "calc(11px * var(--font-scale))" } },
         crosshair: true,
       },
       yAxis: {
@@ -223,10 +223,10 @@ export default function History() {
           ? { text: undefined }
           : {
               text: `${SENSOR_DISPLAY_NAMES[sensor] ?? sensor} (${unitLabel.trim()})`,
-              style: { color: textMuted, fontSize: "12px" },
+              style: { color: textMuted, fontSize: "calc(12px * var(--font-scale))" },
             },
         gridLineColor: borderColor,
-        labels: { style: { color: textMuted, fontSize: isMobile ? "9px" : "11px" } },
+        labels: { style: { color: textMuted, fontSize: isMobile ? "calc(9px * var(--font-scale))" : "calc(11px * var(--font-scale))" } },
         softMin: yScale.softMin,
         softMax: yScale.softMax,
         ...(yScale.tickInterval != null && { tickInterval: yScale.tickInterval }),
@@ -237,7 +237,7 @@ export default function History() {
         valueSuffix: unitLabel,
         backgroundColor: bgCard,
         borderColor: borderColor,
-        style: { color: textColor, fontSize: "12px" },
+        style: { color: textColor, fontSize: "calc(12px * var(--font-scale))" },
         xDateFormat: "%b %e, %Y %l:%M %p",
       },
       plotOptions: {
@@ -283,7 +283,7 @@ export default function History() {
           className="dashboard-heading"
           style={{
             margin: "0 0 16px 0",
-            fontSize: "24px",
+            fontSize: "calc(24px * var(--font-scale))",
             fontFamily: "var(--font-heading)",
             color: "var(--color-text)",
           }}
@@ -334,7 +334,7 @@ export default function History() {
                   style={{
                     ...presetBtnBase,
                     padding: isMobile ? "8px 6px" : "6px 14px",
-                    fontSize: isMobile ? "12px" : "13px",
+                    fontSize: isMobile ? "calc(12px * var(--font-scale))" : "calc(13px * var(--font-scale))",
                     background:
                       preset === p.key
                         ? "var(--color-accent)"
@@ -446,31 +446,31 @@ export default function History() {
         >
           {summary.max != null && (
             <div>
-              <span style={{ fontSize: "11px", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>High </span>
-              <span style={{ fontSize: "16px", fontFamily: "var(--font-heading)", color: "var(--color-text)", fontWeight: "bold" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>High </span>
+              <span style={{ fontSize: "calc(16px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", fontWeight: "bold" }}>
                 {summary.max}{(UNIT_LABELS[SENSOR_UNITS[sensor] ?? ""] ?? "").trim()}
               </span>
             </div>
           )}
           {summary.min != null && (
             <div>
-              <span style={{ fontSize: "11px", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Low </span>
-              <span style={{ fontSize: "16px", fontFamily: "var(--font-heading)", color: "var(--color-text)", fontWeight: "bold" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Low </span>
+              <span style={{ fontSize: "calc(16px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", fontWeight: "bold" }}>
                 {summary.min}{(UNIT_LABELS[SENSOR_UNITS[sensor] ?? ""] ?? "").trim()}
               </span>
             </div>
           )}
           {summary.avg != null && (
             <div>
-              <span style={{ fontSize: "11px", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Avg </span>
-              <span style={{ fontSize: "16px", fontFamily: "var(--font-heading)", color: "var(--color-text)", fontWeight: "bold" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Avg </span>
+              <span style={{ fontSize: "calc(16px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", fontWeight: "bold" }}>
                 {summary.avg}{(UNIT_LABELS[SENSOR_UNITS[sensor] ?? ""] ?? "").trim()}
               </span>
             </div>
           )}
           {summary.count > 0 && (
             <div style={{ marginLeft: "auto" }}>
-              <span style={{ fontSize: "11px", fontFamily: "var(--font-body)", color: "var(--color-text-muted)" }}>
+              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)" }}>
                 {summary.count.toLocaleString()} points
               </span>
             </div>
@@ -526,14 +526,14 @@ export default function History() {
                 }}
               >
                 <span
-                  style={{ color: "var(--color-danger)", fontSize: "16px" }}
+                  style={{ color: "var(--color-danger)", fontSize: "calc(16px * var(--font-scale))" }}
                 >
                   Failed to load data
                 </span>
                 <span
                   style={{
                     color: "var(--color-text-muted)",
-                    fontSize: "13px",
+                    fontSize: "calc(13px * var(--font-scale))",
                     maxWidth: "400px",
                     textAlign: "center",
                   }}
@@ -551,7 +551,7 @@ export default function History() {
                   alignItems: "center",
                   height: isMobile ? "280px" : "400px",
                   color: "var(--color-text-muted)",
-                  fontSize: "14px",
+                  fontSize: "calc(14px * var(--font-scale))",
                 }}
               >
                 No data available for the selected range.

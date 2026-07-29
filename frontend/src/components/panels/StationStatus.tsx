@@ -133,7 +133,7 @@ export default function StationStatus() {
         <div>
           <span
             style={{
-              fontSize: "11px",
+              fontSize: "calc(11px * var(--font-scale))",
               fontFamily: "var(--font-body)",
               color: "var(--color-text-muted)",
               marginRight: "8px",
@@ -143,7 +143,7 @@ export default function StationStatus() {
           </span>
           <span
             style={{
-              fontSize: "12px",
+              fontSize: "calc(12px * var(--font-scale))",
               fontFamily: "var(--font-gauge)",
               fontWeight: "bold",
               color: "var(--color-text)",
@@ -156,7 +156,7 @@ export default function StationStatus() {
           onClick={handleSync}
           disabled={syncing || !stationStatus?.connected}
           style={{
-            fontSize: "10px",
+            fontSize: "calc(10px * var(--font-scale))",
             fontFamily: "var(--font-body)",
             padding: "2px 8px",
             background: "var(--color-bg-card)",
@@ -191,7 +191,7 @@ export default function StationStatus() {
           >
             <span
               style={{
-                fontSize: "11px",
+                fontSize: "calc(11px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-muted)",
               }}
@@ -200,7 +200,7 @@ export default function StationStatus() {
             </span>
             <span
               style={{
-                fontSize: "12px",
+                fontSize: "calc(12px * var(--font-scale))",
                 fontFamily: "var(--font-gauge)",
                 fontWeight: "bold",
                 color: highlightColor(row.highlight),
@@ -245,7 +245,7 @@ export default function StationStatus() {
             />
             <span
               style={{
-                fontSize: "16px",
+                fontSize: "calc(16px * var(--font-scale))",
                 fontFamily: "var(--font-gauge)",
                 fontWeight: "bold",
                 color: highlightColor(isConnected ? "success" : "danger"),
@@ -285,7 +285,7 @@ export default function StationStatus() {
             >
               <div
                 style={{
-                  fontSize: "12px",
+                  fontSize: "calc(12px * var(--font-scale))",
                   fontFamily: "var(--font-body)",
                   color: "var(--color-text-secondary)",
                   textTransform: "uppercase",
@@ -319,7 +319,7 @@ export default function StationStatus() {
     >
       <div
         style={{
-          fontSize: "12px",
+          fontSize: "calc(12px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-secondary)",
           textTransform: "uppercase",

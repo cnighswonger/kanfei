@@ -140,7 +140,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
             background: 'none',
             border: 'none',
             color: 'var(--color-text)',
-            fontSize: '20px',
+            fontSize: 'calc(20px * var(--font-scale))',
             cursor: 'pointer',
             padding: '4px 8px',
             borderRadius: '4px',
@@ -155,7 +155,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
           className="header-title"
           style={{
             margin: 0,
-            fontSize: '18px',
+            fontSize: 'calc(18px * var(--font-scale))',
             fontWeight: 600,
             color: 'var(--color-text)',
             fontFamily: 'var(--font-heading)',
@@ -173,7 +173,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                fontSize: '13px',
+                fontSize: 'calc(13px * var(--font-scale))',
                 color: 'var(--color-text-secondary)',
                 whiteSpace: 'nowrap',
                 background: 'var(--color-bg-secondary)',
@@ -186,10 +186,10 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
                 {icon}
               </span>
               <span className="header-forecast-text">{local.text}</span>
-              <span style={{ color: trendArrow(local.trend).color, fontSize: '10px' }}>
+              <span style={{ color: trendArrow(local.trend).color, fontSize: 'calc(10px * var(--font-scale))' }}>
                 {trendArrow(local.trend).symbol}
               </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'calc(12px * var(--font-scale))', color: 'var(--color-text-muted)' }}>
                 {local.confidence}%
               </span>
             </div>
@@ -201,7 +201,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
         <div
           className="header-hilo"
           style={{
-            fontSize: '13px',
+            fontSize: 'calc(13px * var(--font-scale))',
             fontFamily: 'var(--font-gauge)',
             color: 'var(--color-text-secondary)',
             whiteSpace: 'nowrap',
@@ -221,7 +221,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            fontSize: '13px',
+            fontSize: 'calc(13px * var(--font-scale))',
             color: 'var(--color-text-secondary)',
           }}
         >
@@ -250,7 +250,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
             border: '1px solid var(--color-border)',
             borderRadius: '6px',
             padding: '6px 10px',
-            fontSize: '13px',
+            fontSize: 'calc(13px * var(--font-scale))',
             fontFamily: 'var(--font-body)',
             cursor: 'pointer',
             outline: 'none',
@@ -270,7 +270,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
             border: '1px solid var(--color-border)',
             borderRadius: '6px',
             padding: '6px 10px',
-            fontSize: '12px',
+            fontSize: 'calc(12px * var(--font-scale))',
             fontFamily: 'var(--font-body)',
             color: 'var(--color-text-secondary)',
             cursor: 'pointer',

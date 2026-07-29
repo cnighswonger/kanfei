@@ -1112,7 +1112,7 @@ function StationMarkers({ data, selected, onSelect }: {
   const [hovered, setHovered] = useState<number | null>(null);
 
   const labelStyle: React.CSSProperties = {
-    fontSize: 10,
+    fontSize: "calc(10px * var(--font-scale))",
     fontWeight: 600,
     color: "#fff",
     background: "rgba(0,0,0,0.7)",
@@ -1215,7 +1215,7 @@ function GroundLabels({ data }: { data: PressureGridData }) {
   }
 
   const style: React.CSSProperties = {
-    fontSize: 9,
+    fontSize: "calc(9px * var(--font-scale))",
     fontWeight: 500,
     color: "rgba(255,255,255,0.6)",
     whiteSpace: "nowrap",
@@ -1253,7 +1253,7 @@ function CardinalLabels({ data }: { data: PressureGridData }) {
   ];
 
   const style: React.CSSProperties = {
-    fontSize: 14,
+    fontSize: "calc(14px * var(--font-scale))",
     fontWeight: 700,
     color: "rgba(255,255,255,0.75)",
     textShadow: "0 1px 4px rgba(0,0,0,0.6)",
@@ -1296,7 +1296,7 @@ function PressureScale({ data, pressureUnit }: { data: PressureGridData; pressur
   }
 
   const style: React.CSSProperties = {
-    fontSize: 9,
+    fontSize: "calc(9px * var(--font-scale))",
     fontWeight: 500,
     color: "rgba(255,255,255,0.6)",
     whiteSpace: "nowrap",
@@ -1432,7 +1432,7 @@ function CompassRose({ bearing, isDark }: { bearing: number; isDark: boolean }) 
             return (
               <text key={c.label} x={lx} y={ly}
                 textAnchor="middle" dominantBaseline="central"
-                fontSize={c.primary ? 13 : 11}
+                style={{ fontSize: `calc(${c.primary ? 13 : 11}px * var(--font-scale))` }}
                 fontWeight={c.primary ? 700 : 600}
                 fill={c.primary ? "#e74c3c" : (isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.5)")}
               >
@@ -1515,7 +1515,7 @@ function InfoPanel({ data, isDark }: { data: PressureGridData; isDark: boolean }
     borderRadius: 8,
     padding: "10px 14px",
     color: isDark ? "#ccc" : "#333",
-    fontSize: 12,
+    fontSize: "calc(12px * var(--font-scale))",
     lineHeight: 1.6,
     backdropFilter: "blur(8px)",
     maxWidth: 220,
@@ -1534,9 +1534,9 @@ function InfoPanel({ data, isDark }: { data: PressureGridData; isDark: boolean }
       <div>Stations: {data.station_count}</div>
       <div>Range: {pMin} – {pMax}</div>
       <div>Grid: {data.rows} × {data.cols}</div>
-      <div style={{ marginTop: 6, fontSize: 10, color: isDark ? "#888" : "#999" }}>Low → High</div>
+      <div style={{ marginTop: 6, fontSize: "calc(10px * var(--font-scale))", color: isDark ? "#888" : "#999" }}>Low → High</div>
       <div style={legendBar} />
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: isDark ? "#888" : "#999" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "calc(10px * var(--font-scale))", color: isDark ? "#888" : "#999" }}>
         <span>{pMin}</span>
         <span>{pMax}</span>
       </div>
@@ -1569,7 +1569,7 @@ function TempScale({ tMin, tMax, isDark, tempUnit }: {
     borderRadius: 8,
     padding: "8px 12px",
     color: isDark ? "#ccc" : "#333",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--font-scale))",
     lineHeight: 1.5,
     backdropFilter: "blur(8px)",
     maxWidth: 180,
@@ -1577,15 +1577,15 @@ function TempScale({ tMin, tMax, isDark, tempUnit }: {
 
   return (
     <div style={panelStyle}>
-      <div style={{ fontWeight: 600, marginBottom: 3, fontSize: 11 }}>Temperature</div>
-      <div style={{ fontSize: 10, color: isDark ? "#888" : "#999" }}>Cool → Warm</div>
+      <div style={{ fontWeight: 600, marginBottom: 3, fontSize: "calc(11px * var(--font-scale))" }}>Temperature</div>
+      <div style={{ fontSize: "calc(10px * var(--font-scale))", color: isDark ? "#888" : "#999" }}>Cool → Warm</div>
       <div style={{
         height: 8,
         borderRadius: 3,
         background: `linear-gradient(to right, ${stops.join(", ")})`,
         margin: "3px 0",
       }} />
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: isDark ? "#888" : "#999" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "calc(10px * var(--font-scale))", color: isDark ? "#888" : "#999" }}>
         <span>{fmtTemp(tMin, tempUnit)}</span>
         <span>{fmtTemp(tMax, tempUnit)}</span>
       </div>
@@ -1616,7 +1616,7 @@ function VorticityScale({ isDark, offsetTop }: { isDark: boolean; offsetTop: num
     borderRadius: 8,
     padding: "8px 12px",
     color: isDark ? "#ccc" : "#333",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--font-scale))",
     lineHeight: 1.5,
     backdropFilter: "blur(8px)",
     maxWidth: 180,
@@ -1624,15 +1624,15 @@ function VorticityScale({ isDark, offsetTop }: { isDark: boolean; offsetTop: num
 
   return (
     <div style={panelStyle}>
-      <div style={{ fontWeight: 600, marginBottom: 3, fontSize: 11 }}>Vorticity</div>
-      <div style={{ fontSize: 10, color: isDark ? "#888" : "#999" }}>Anticyclonic → Cyclonic</div>
+      <div style={{ fontWeight: 600, marginBottom: 3, fontSize: "calc(11px * var(--font-scale))" }}>Vorticity</div>
+      <div style={{ fontSize: "calc(10px * var(--font-scale))", color: isDark ? "#888" : "#999" }}>Anticyclonic → Cyclonic</div>
       <div style={{
         height: 8,
         borderRadius: 3,
         background: `linear-gradient(to right, ${stops.join(", ")})`,
         margin: "3px 0",
       }} />
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: isDark ? "#888" : "#999" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "calc(10px * var(--font-scale))", color: isDark ? "#888" : "#999" }}>
         <span>-</span>
         <span>+</span>
       </div>
@@ -1662,7 +1662,7 @@ function DivergenceScale({ isDark, offsetTop }: { isDark: boolean; offsetTop: nu
     borderRadius: 8,
     padding: "8px 12px",
     color: isDark ? "#ccc" : "#333",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--font-scale))",
     lineHeight: 1.5,
     backdropFilter: "blur(8px)",
     maxWidth: 180,
@@ -1670,15 +1670,15 @@ function DivergenceScale({ isDark, offsetTop }: { isDark: boolean; offsetTop: nu
 
   return (
     <div style={panelStyle}>
-      <div style={{ fontWeight: 600, marginBottom: 3, fontSize: 11 }}>Convergence / Divergence</div>
-      <div style={{ fontSize: 10, color: isDark ? "#888" : "#999" }}>Updraft → Subsidence</div>
+      <div style={{ fontWeight: 600, marginBottom: 3, fontSize: "calc(11px * var(--font-scale))" }}>Convergence / Divergence</div>
+      <div style={{ fontSize: "calc(10px * var(--font-scale))", color: isDark ? "#888" : "#999" }}>Updraft → Subsidence</div>
       <div style={{
         height: 8,
         borderRadius: 3,
         background: `linear-gradient(to right, ${stops.join(", ")})`,
         margin: "3px 0",
       }} />
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: isDark ? "#888" : "#999" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "calc(10px * var(--font-scale))", color: isDark ? "#888" : "#999" }}>
         <span>Conv</span>
         <span>Div</span>
       </div>
@@ -1715,7 +1715,7 @@ function LayersPanel({ isDark, ...props }: {
     borderRadius: 8,
     padding: "10px 14px",
     color: isDark ? "#ccc" : "#333",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--font-scale))",
     lineHeight: 1.8,
     backdropFilter: "blur(10px)",
     minWidth: 170,
@@ -1741,7 +1741,7 @@ function LayersPanel({ isDark, ...props }: {
 
   return (
     <div style={panelStyle}>
-      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 12 }}>Layers</div>
+      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: "calc(12px * var(--font-scale))" }}>Layers</div>
 
       {/* Radar */}
       <label style={rowStyle}>
@@ -1852,7 +1852,7 @@ function StationDetailPanel({ station, isDark, onClose, units }: {
     borderRadius: 8,
     padding: "12px 16px",
     color: isDark ? "#ddd" : "#222",
-    fontSize: 12,
+    fontSize: "calc(12px * var(--font-scale))",
     lineHeight: 1.7,
     backdropFilter: "blur(8px)",
     minWidth: 200,
@@ -1872,21 +1872,21 @@ function StationDetailPanel({ station, isDark, onClose, units }: {
     border: "none",
     color: isDark ? "#888" : "#999",
     cursor: "pointer",
-    fontSize: 16,
+    fontSize: "calc(16px * var(--font-scale))",
     padding: 0,
     lineHeight: 1,
   };
 
   const mutedStyle: React.CSSProperties = {
     color: isDark ? "#888" : "#999",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--font-scale))",
   };
 
   return (
     <div style={panelStyle}>
       <div style={headStyle}>
         <div>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>{station.name || station.id || "Station"}</div>
+          <div style={{ fontWeight: 600, fontSize: "calc(13px * var(--font-scale))" }}>{station.name || station.id || "Station"}</div>
           {station.source && <div style={mutedStyle}>{station.source}{station.id ? ` · ${station.id}` : ""}</div>}
         </div>
         <button style={closeBtn} onClick={onClose} title="Close">{"\u2715"}</button>
@@ -1996,7 +1996,7 @@ export default function PressureField() {
     alignItems: "center",
     flex: 1,
     color: "var(--color-text-muted)",
-    fontSize: 14,
+    fontSize: "calc(14px * var(--font-scale))",
   };
 
   if (loading) return <div style={spinnerStyle}>Loading pressure field...</div>;
@@ -2032,7 +2032,7 @@ export default function PressureField() {
         borderRadius: 8,
         padding: "8px 16px",
         backdropFilter: "blur(8px)",
-        fontSize: 12,
+        fontSize: "calc(12px * var(--font-scale))",
         color: isDark ? "#ccc" : "#333",
       }}>
         <button
@@ -2043,14 +2043,14 @@ export default function PressureField() {
             border: "none",
             color: isDark ? "#ccc" : "#333",
             cursor: "pointer",
-            fontSize: 16,
+            fontSize: "calc(16px * var(--font-scale))",
             padding: "2px 4px",
             lineHeight: 1,
           }}
         >
           {rotating ? "\u23F8" : "\u25B6"}
         </button>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "calc(11px * var(--font-scale))" }}>
           Zoom
           <input
             type="range"
@@ -2081,7 +2081,7 @@ export default function PressureField() {
           backdropFilter: "blur(8px)",
           color: isDark ? "#ccc" : "#333",
           cursor: "pointer",
-          fontSize: 18,
+          fontSize: "calc(18px * var(--font-scale))",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

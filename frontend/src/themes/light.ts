@@ -44,6 +44,7 @@ const light: Theme = {
     shadow: '0 2px 12px rgba(0,0,0,0.08)',
     borderRadius: '16px',
   },
+  fontScale: 1.0,
 };
 
 export default light;

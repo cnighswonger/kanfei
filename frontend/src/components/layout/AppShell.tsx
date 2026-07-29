@@ -139,7 +139,7 @@ export default function AppShell({
                   color: 'var(--color-warning-text, #fff3cd)',
                   border: '1px solid var(--color-warning-border, #997404)',
                   borderRadius: 8,
-                  fontSize: 13,
+                  fontSize: "calc(13px * var(--font-scale))",
                   fontFamily: 'var(--font-body)',
                   cursor: 'pointer',
                   display: 'flex',
@@ -149,7 +149,7 @@ export default function AppShell({
               >
                 <span style={{ flexShrink: 0 }}>{'\u26A0'}</span>
                 <span style={{ flex: 1 }}>{nowcastWarning}</span>
-                <span style={{ flexShrink: 0, opacity: 0.7, fontSize: 11 }}>click to dismiss</span>
+                <span style={{ flexShrink: 0, opacity: 0.7, fontSize: "calc(11px * var(--font-scale))" }}>click to dismiss</span>
               </div>
             )}
             {channelMuted.length > 0 && (
@@ -162,7 +162,7 @@ export default function AppShell({
                   color: 'var(--color-warning-text, #fff3cd)',
                   border: '1px solid var(--color-warning-border, #997404)',
                   borderRadius: 8,
-                  fontSize: 13,
+                  fontSize: "calc(13px * var(--font-scale))",
                   fontFamily: 'var(--font-body)',
                   display: 'flex',
                   alignItems: 'center',

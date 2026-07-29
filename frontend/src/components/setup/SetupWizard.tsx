@@ -62,14 +62,14 @@ const headerStyle: React.CSSProperties = {
 };
 
 const titleStyle: React.CSSProperties = {
-  fontSize: "28px",
+  fontSize: "calc(28px * var(--font-scale))",
   fontFamily: "var(--font-heading)",
   color: "var(--color-text)",
   margin: "0 0 8px 0",
 };
 
 const subtitleStyle: React.CSSProperties = {
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text-secondary)",
   margin: 0,
@@ -84,7 +84,7 @@ const progressBar: React.CSSProperties = {
 
 const btnStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   padding: "10px 24px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -278,7 +278,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
         {error && (
           <div
             style={{
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               color: "var(--color-danger)",
               marginBottom: "16px",
               padding: "12px",

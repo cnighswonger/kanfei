@@ -45,7 +45,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   color: "var(--color-text-secondary)",
   marginBottom: "6px",
@@ -54,7 +54,7 @@ const labelStyle: React.CSSProperties = {
 
 const selectStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   padding: "8px 12px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -73,7 +73,7 @@ const inputStyle: React.CSSProperties = {
 
 const btnStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   padding: "8px 16px",
   borderRadius: "6px",
   border: "1px solid var(--color-border)",
@@ -193,7 +193,7 @@ export default function StepStation({
       {/* Driver selection */}
       <p
         style={{
-          fontSize: "14px",
+          fontSize: "calc(14px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-secondary)",
           marginBottom: "20px",
@@ -223,7 +223,7 @@ export default function StepStation({
           {selectedDriver && (
             <p
               style={{
-                fontSize: "12px",
+                fontSize: "calc(12px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-muted)",
                 marginTop: "8px",
@@ -243,7 +243,7 @@ export default function StepStation({
           <h4
             style={{
               margin: "0 0 12px 0",
-              fontSize: "14px",
+              fontSize: "calc(14px * var(--font-scale))",
               fontFamily: "var(--font-heading)",
               color: "var(--color-text)",
             }}
@@ -258,7 +258,7 @@ export default function StepStation({
                 <button
                   style={{
                     ...btnAccent,
-                    fontSize: "14px",
+                    fontSize: "calc(14px * var(--font-scale))",
                     padding: "10px 28px",
                     opacity: busy ? 0.6 : 1,
                     cursor: busy ? "wait" : "pointer",
@@ -270,7 +270,7 @@ export default function StepStation({
                 </button>
                 <p
                   style={{
-                    fontSize: "11px",
+                    fontSize: "calc(11px * var(--font-scale))",
                     color: "var(--color-text-muted)",
                     marginTop: "6px",
                     marginBottom: 0,
@@ -293,7 +293,7 @@ export default function StepStation({
                     <button
                       style={{
                         ...btnStyle,
-                        fontSize: "11px",
+                        fontSize: "calc(11px * var(--font-scale))",
                         padding: "2px 8px",
                         marginLeft: "8px",
                       }}
@@ -408,7 +408,7 @@ export default function StepStation({
               />
               <p
                 style={{
-                  fontSize: "12px",
+                  fontSize: "calc(12px * var(--font-scale))",
                   color: "var(--color-text-muted)",
                   marginTop: "6px",
                 }}
@@ -433,7 +433,7 @@ export default function StepStation({
               />
               <p
                 style={{
-                  fontSize: "12px",
+                  fontSize: "calc(12px * var(--font-scale))",
                   color: "var(--color-text-muted)",
                   marginTop: "6px",
                 }}
@@ -460,7 +460,7 @@ export default function StepStation({
         >
           <div
             style={{
-              fontSize: "16px",
+              fontSize: "calc(16px * var(--font-scale))",
               fontWeight: "bold",
               fontFamily: "var(--font-heading)",
             }}
@@ -468,7 +468,7 @@ export default function StepStation({
             Station Found: {stationType}
           </div>
           {isSerial && (
-            <div style={{ fontSize: "13px", marginTop: "4px", opacity: 0.85 }}>
+            <div style={{ fontSize: "calc(13px * var(--font-scale))", marginTop: "4px", opacity: 0.85 }}>
               {serialPort} at {baudRate} baud
             </div>
           )}
@@ -481,7 +481,7 @@ export default function StepStation({
             ...cardStyle,
             borderColor: "var(--color-danger)",
             color: "var(--color-danger)",
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
           }}
         >
           {error}

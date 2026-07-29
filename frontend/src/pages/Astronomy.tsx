@@ -15,7 +15,7 @@ const cardStyle: React.CSSProperties = {
 
 const sectionTitle: React.CSSProperties = {
   margin: "0 0 16px 0",
-  fontSize: "18px",
+  fontSize: "calc(18px * var(--font-scale))",
   fontFamily: "var(--font-heading)",
   color: "var(--color-text)",
 };
@@ -26,7 +26,7 @@ const dataRow: React.CSSProperties = {
   alignItems: "center",
   padding: "8px 0",
   borderBottom: "1px solid var(--color-border-light)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
 };
 
@@ -43,7 +43,7 @@ const emptyState: React.CSSProperties = {
   padding: "32px 0",
   textAlign: "center" as const,
   color: "var(--color-text-muted)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
 };
 
@@ -146,7 +146,7 @@ function SunArc({ sunrise, sunset }: { sunrise: string; sunset: string }) {
         y={cy + 14}
         textAnchor="middle"
         fill="var(--color-text-muted)"
-        fontSize="10"
+        style={{ fontSize: "calc(10px * var(--font-scale))" }}
         fontFamily="var(--font-body)"
       >
         Rise
@@ -158,7 +158,7 @@ function SunArc({ sunrise, sunset }: { sunrise: string; sunset: string }) {
         y={cy + 14}
         textAnchor="middle"
         fill="var(--color-text-muted)"
-        fontSize="10"
+        style={{ fontSize: "calc(10px * var(--font-scale))" }}
         fontFamily="var(--font-body)"
       >
         Set
@@ -346,7 +346,7 @@ function SunSection({ sun }: { sun: SunData }) {
       <h4
         style={{
           margin: "20px 0 10px 0",
-          fontSize: "15px",
+          fontSize: "calc(15px * var(--font-scale))",
           fontFamily: "var(--font-heading)",
           color: "var(--color-text-secondary)",
         }}
@@ -358,7 +358,7 @@ function SunSection({ sun }: { sun: SunData }) {
           display: "grid",
           gridTemplateColumns: "1fr auto auto",
           gap: "0",
-          fontSize: "13px",
+          fontSize: "calc(13px * var(--font-scale))",
           fontFamily: "var(--font-body)",
         }}
       >
@@ -459,7 +459,7 @@ function MoonSection({ moon }: { moon: MoonData }) {
         style={{
           textAlign: "center",
           margin: "12px 0 4px 0",
-          fontSize: "16px",
+          fontSize: "calc(16px * var(--font-scale))",
           fontFamily: "var(--font-heading)",
           color: "var(--color-text)",
         }}
@@ -479,7 +479,7 @@ function MoonSection({ moon }: { moon: MoonData }) {
           <span
             style={{
               color: "var(--color-text-secondary)",
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontFamily: "var(--font-body)",
             }}
           >
@@ -487,7 +487,7 @@ function MoonSection({ moon }: { moon: MoonData }) {
           </span>
           <span
             style={{
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontFamily: "var(--font-mono)",
               color: "var(--color-text-secondary)",
             }}
@@ -541,7 +541,7 @@ export default function Astronomy() {
           <h2
             style={{
               margin: "0 0 16px 0",
-              fontSize: "24px",
+              fontSize: "calc(24px * var(--font-scale))",
               fontFamily: "var(--font-heading)",
               color: "var(--color-text)",
             }}
@@ -567,7 +567,7 @@ export default function Astronomy() {
         <h2
           style={{
             margin: "0 0 16px 0",
-            fontSize: "24px",
+            fontSize: "calc(24px * var(--font-scale))",
             fontFamily: "var(--font-heading)",
             color: "var(--color-text)",
           }}

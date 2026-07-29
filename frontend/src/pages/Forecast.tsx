@@ -15,14 +15,14 @@ const cardStyle: React.CSSProperties = {
 
 const sectionTitle: React.CSSProperties = {
   margin: "0 0 16px 0",
-  fontSize: "18px",
+  fontSize: "calc(18px * var(--font-scale))",
   fontFamily: "var(--font-heading)",
   color: "var(--color-text)",
 };
 
 const mutedText: React.CSSProperties = {
   color: "var(--color-text-muted)",
-  fontSize: "13px",
+  fontSize: "calc(13px * var(--font-scale))",
   fontFamily: "var(--font-body)",
 };
 
@@ -30,7 +30,7 @@ const emptyState: React.CSSProperties = {
   padding: "32px 0",
   textAlign: "center" as const,
   color: "var(--color-text-muted)",
-  fontSize: "14px",
+  fontSize: "calc(14px * var(--font-scale))",
   fontFamily: "var(--font-body)",
 };
 
@@ -54,13 +54,13 @@ function ZambrettiSection({
 
   return (
     <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
-      <h3 style={{ ...sectionTitle, fontSize: isMobile ? "16px" : "18px" }}>Local Forecast (Zambretti)</h3>
+      <h3 style={{ ...sectionTitle, fontSize: isMobile ? "calc(16px * var(--font-scale))" : "calc(18px * var(--font-scale))" }}>Local Forecast (Zambretti)</h3>
 
       {/* Forecast text */}
       <p
         style={{
           margin: "0 0 16px 0",
-          fontSize: "16px",
+          fontSize: "calc(16px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text)",
           lineHeight: "1.5",
@@ -81,7 +81,7 @@ function ZambrettiSection({
           <span style={mutedText}>Confidence</span>
           <span
             style={{
-              fontSize: "13px",
+              fontSize: "calc(13px * var(--font-scale))",
               fontFamily: "var(--font-mono)",
               color: "var(--color-text-secondary)",
             }}
@@ -147,7 +147,7 @@ function NWSPeriodCard({ period, isMobile }: { period: NWSPeriod; isMobile?: boo
           <h4
             style={{
               margin: 0,
-              fontSize: isMobile ? "14px" : "15px",
+              fontSize: isMobile ? "calc(14px * var(--font-scale))" : "calc(15px * var(--font-scale))",
               fontFamily: "var(--font-heading)",
               color: "var(--color-text)",
             }}
@@ -157,7 +157,7 @@ function NWSPeriodCard({ period, isMobile }: { period: NWSPeriod; isMobile?: boo
           {period.short_forecast && (
             <span
               style={{
-                fontSize: isMobile ? "11px" : "12px",
+                fontSize: isMobile ? "calc(11px * var(--font-scale))" : "calc(12px * var(--font-scale))",
                 fontFamily: "var(--font-body)",
                 color: "var(--color-text-muted)",
                 display: "block",
@@ -177,7 +177,7 @@ function NWSPeriodCard({ period, isMobile }: { period: NWSPeriod; isMobile?: boo
           display: "flex",
           gap: isMobile ? "10px" : "16px",
           flexWrap: "wrap",
-          fontSize: isMobile ? "12px" : "13px",
+          fontSize: isMobile ? "calc(12px * var(--font-scale))" : "calc(13px * var(--font-scale))",
           fontFamily: "var(--font-body)",
         }}
       >
@@ -197,7 +197,7 @@ function NWSPeriodCard({ period, isMobile }: { period: NWSPeriod; isMobile?: boo
       <p
         style={{
           margin: 0,
-          fontSize: isMobile ? "12px" : "13px",
+          fontSize: isMobile ? "calc(12px * var(--font-scale))" : "calc(13px * var(--font-scale))",
           lineHeight: "1.45",
           color: "var(--color-text-secondary)",
           fontFamily: "var(--font-body)",
@@ -233,7 +233,7 @@ export default function Forecast() {
         <h2
           style={{
             margin: 0,
-            fontSize: "24px",
+            fontSize: "calc(24px * var(--font-scale))",
             fontFamily: "var(--font-heading)",
             color: "var(--color-text)",
           }}
@@ -248,7 +248,7 @@ export default function Forecast() {
             borderRadius: "var(--gauge-border-radius)",
             color: "var(--color-text-secondary)",
             padding: "6px 14px",
-            fontSize: "13px",
+            fontSize: "calc(13px * var(--font-scale))",
             fontFamily: "var(--font-body)",
             cursor: "pointer",
           }}
@@ -269,7 +269,7 @@ export default function Forecast() {
         />
       ) : (
         <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
-          <h3 style={{ ...sectionTitle, fontSize: isMobile ? "16px" : "18px" }}>Local Forecast (Zambretti)</h3>
+          <h3 style={{ ...sectionTitle, fontSize: isMobile ? "calc(16px * var(--font-scale))" : "calc(18px * var(--font-scale))" }}>Local Forecast (Zambretti)</h3>
           <div style={emptyState}>
             No local forecast available. The Zambretti algorithm requires
             barometric pressure history to generate predictions.
@@ -288,7 +288,7 @@ export default function Forecast() {
               marginBottom: isMobile ? "10px" : "16px",
             }}
           >
-            <h3 style={{ ...sectionTitle, margin: 0, fontSize: isMobile ? "16px" : "18px" }}>
+            <h3 style={{ ...sectionTitle, margin: 0, fontSize: isMobile ? "calc(16px * var(--font-scale))" : "calc(18px * var(--font-scale))" }}>
               NWS Forecast
             </h3>
             <span style={mutedText}>
