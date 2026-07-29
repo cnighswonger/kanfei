@@ -235,11 +235,13 @@ def build_public_data(db: Session) -> PublicWeatherData:
         daily.rain_total_in = convert("rain_total", row[3])
         daily.rain_total_mm = si_rain_to_display_mm(row[3]) if row[3] is not None else None
 
-    from ..protocol.constants import STATION_NAMES, StationModel
-    try:
-        station_type = STATION_NAMES.get(StationModel(reading.station_type), None)
-    except (ValueError, KeyError):
-        station_type = None
+    from ..services.station_naming import resolve_station_name, UNKNOWN
+    # Resolve against the driver family, not StationModel alone — a Vantage
+    # code would otherwise land on a legacy member and report the wrong
+    # station publicly (#215).  This endpoint's contract is None (not the
+    # string "Unknown") when the model cannot be determined.
+    _name = resolve_station_name(reading.station_type, db)
+    station_type = None if _name == UNKNOWN else _name
 
     meta = PublicMeta(
         timestamp=reading.timestamp.isoformat() if reading.timestamp else datetime.now(timezone.utc).isoformat(),
