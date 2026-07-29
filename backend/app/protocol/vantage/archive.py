@@ -16,6 +16,7 @@ from typing import Optional
 from ..crc import crc_validate
 from .constants import (
     ARCHIVE_PAGE_SIZE,
+    ARCHIVE_PAGE_HEADER_SIZE,
     ARCHIVE_RECORD_SIZE,
     ARCHIVE_RECORDS_PER_PAGE,
     INVALID_TEMP,
@@ -244,7 +245,11 @@ def parse_archive_record(
 def parse_archive_page(page: bytes) -> list[tuple[int, bytes]]:
     """Parse a 267-byte archive page into (index, record_bytes) tuples.
 
-    Page layout: 5 × 52-byte records + 4 unused bytes + 2-byte CRC.
+    Page layout: 1 sequence byte + 5 × 52-byte records + 4 unused bytes
+    + 2-byte CRC = 267.  The leading sequence byte is what makes the page
+    267 rather than 266; omitting it shifts every record one byte early
+    and decodes pure garbage (timestamps in 2126, temperatures of -487°F).
+
     Returns up to 5 records with their 0-based index within the page.
     """
     if len(page) < ARCHIVE_PAGE_SIZE:
@@ -257,7 +262,7 @@ def parse_archive_page(page: bytes) -> list[tuple[int, bytes]]:
 
     records = []
     for i in range(ARCHIVE_RECORDS_PER_PAGE):
-        start = i * ARCHIVE_RECORD_SIZE
+        start = ARCHIVE_PAGE_HEADER_SIZE + i * ARCHIVE_RECORD_SIZE
         end = start + ARCHIVE_RECORD_SIZE
         record_bytes = page[start:end]
         records.append((i, record_bytes))
