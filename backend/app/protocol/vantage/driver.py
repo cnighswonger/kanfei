@@ -31,6 +31,7 @@ from ..base import (
 )
 from ..serial_port import SerialPort
 from ..crc import crc_validate, crc_calculate
+from ..commands import build_wrd_command
 from .constants import (
     VantageModel,
     VANTAGE_NAMES,
@@ -44,6 +45,7 @@ from .constants import (
     RAIN_CLICK_INCHES,
     ARCHIVE_PAGE_SIZE,
     DMPAFT_HEADER_SIZE,
+    STATION_TYPE_WRD_ADDR,
     MAX_RETRIES,
     ACK,
     NAK,
@@ -64,7 +66,6 @@ from .commands import (
     build_settime_payload,
 )
 from .eeprom import (
-    STATION_TYPE,
     SETUP_BITS,
     ARCHIVE_INTERVAL,
     LATITUDE,
@@ -234,18 +235,52 @@ class VantageDriver(StationDriver):
                 # Drain any leftover bytes
                 self.serial.flush()
 
-            # 3. Station type from EEPROM
-            type_data = self._eeprom_read(STATION_TYPE.address, STATION_TYPE.n_bytes)
-            if type_data and len(type_data) >= 1:
+            # 3. Station type from processor memory via WRD.
+            #
+            # This does NOT live in EEPROM.  The previous code read EEBRD
+            # 0x12, but 0x12 is the WRD *command byte* (n_nibbles<<4 | bank),
+            # not an address -- it was transcribed out of the command
+            # `WRD 0x12 0x4D` as though it were an offset.  EEPROM 0x12
+            # holds 0x00 on a Vue, so the lookup raised ValueError and the
+            # field silently kept its VANTAGE_PRO default: every Vue
+            # reported itself as a Pro2.
+            self.hw_config.station_type = VantageModel.UNKNOWN
+            code = self._read_station_type_code()
+            if code is None:
+                logger.warning(
+                    "Station type: WRD read failed — reporting unknown model"
+                )
+            else:
                 try:
-                    self.hw_config.station_type = VantageModel(type_data[0])
+                    self.hw_config.station_type = VantageModel(code)
                     logger.info(
                         "Station type: %s (code %d)",
                         VANTAGE_NAMES.get(self.hw_config.station_type, "Unknown"),
-                        type_data[0],
+                        code,
                     )
                 except ValueError:
-                    logger.warning("Unknown station type byte: 0x%02X", type_data[0])
+                    logger.warning(
+                        "Unrecognised station type code %d (0x%02X) — "
+                        "reporting unknown model", code, code,
+                    )
+
+    def _read_station_type_code(self) -> Optional[int]:
+        """Read the station model code from processor memory via WRD.
+
+        Returns the raw code byte, or None if the station did not respond.
+        """
+        for attempt in range(MAX_RETRIES):
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(build_wrd_command(1, 0, STATION_TYPE_WRD_ADDR))
+            response = self.serial.receive(2)
+            if len(response) >= 2 and response[0] == ACK:
+                return response[1]
+            logger.debug(
+                "WRD station type attempt %d/%d: got %r",
+                attempt + 1, MAX_RETRIES, response.hex() if response else "empty",
+            )
+        return None
 
     # ---- Initial config from EEPROM ----
 
