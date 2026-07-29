@@ -140,3 +140,12 @@ def cmd_calfix() -> bytes:
 def cmd_clrcal() -> bytes:
     """CLRCAL — clear all temperature and humidity calibration offsets."""
     return b"CLRCAL\n"
+
+
+def cmd_setper(minutes: int) -> bytes:
+    """SETPER — set the archive interval in minutes.
+
+    NOTE: the console clears archive memory as a side effect, so that every
+    stored record shares one interval.  Manual section IX.7.
+    """
+    return f"SETPER {minutes}\n".encode()
