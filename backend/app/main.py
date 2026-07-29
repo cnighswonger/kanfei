@@ -31,18 +31,14 @@ try:
 except ImportError:
     _NOWCAST_AVAILABLE = False
 
-# Unified log format with timestamps for all loggers (app + uvicorn).
-_LOG_FMT = "%(asctime)s %(levelname)-8s %(name)s - %(message)s"
-_LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
-logging.basicConfig(
-    level=logging.INFO,
-    format=_LOG_FMT,
-    datefmt=_LOG_DATEFMT,
-)
-# Suppress noisy websockets library tracebacks on client disconnect (Windows semaphore timeout)
-logging.getLogger("websockets").setLevel(logging.WARNING)
-# httpx logs full request URLs at INFO — Telegram bot token is embedded in the URL path.
-logging.getLogger("httpx").setLevel(logging.WARNING)
+# Logging is configured in one shared place so that every entrypoint gets
+# the same credential suppression — see app/logging_setup.py and #206, where
+# the logger daemon lacked this and leaked WU credentials to the journal.
+from .logging_setup import configure_logging, LOG_FMT, LOG_DATEFMT
+
+_LOG_FMT = LOG_FMT
+_LOG_DATEFMT = LOG_DATEFMT
+configure_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -339,5 +335,7 @@ app = create_app()
 if __name__ == "__main__":
     import uvicorn
 
-    logging.basicConfig(level=logging.INFO)
+    # No basicConfig() here: configure_logging() at import time already did
+    # it, and a second call is a no-op that only invites someone to "fix" it
+    # by adding options that bypass the credential suppression (#206).
     uvicorn.run(app, host=settings.host, port=settings.port)
