@@ -1,3 +1,70 @@
+kanfei (0.1.0~beta22) unstable; urgency=medium
+
+  * Security: upload credentials no longer reach the systemd journal.  The
+    logger daemon wrote your Weather Underground password to the journal in
+    plaintext on every upload — roughly every 21 seconds, for as long as
+    journal retention held.  The HTTP client logs full request URLs, and the
+    PWS upload protocol carries credentials as query-string parameters; the
+    web service suppressed that logging but the logger daemon, a separate
+    entrypoint, never did.  Logging setup now lives in one shared place that
+    every entrypoint uses, and a redaction filter strips credential values
+    from any log line that reaches a handler, so a future component cannot
+    reopen the hole.  CWOP/APRS and the nowcast client were audited and are
+    unaffected.  ACTION REQUIRED: treat any Weather Underground password
+    used with an earlier release as disclosed and rotate it AFTER upgrading
+    — rotating first simply leaks the new value the same way — and consider
+    purging existing journal entries.  Closes #206.
+
+  * Fix: Davis Vantage archive download now works.  Downloading historical
+    records from a Vantage Pro, Pro2 or Vue silently returned nothing on
+    every attempt, so archive backfill has never functioned for those
+    stations; because the failure looked like "no new records" rather than
+    an error, nothing ever reported it.  Three separate defects were
+    involved: the response header was read as 4 bytes instead of 6, the
+    console was never sent the acknowledgement it waits for before
+    transmitting each page, and the page parser ignored the leading
+    sequence byte — which shifted every field by one and decoded
+    timestamps in the year 2126 and temperatures of -487°F.  A corrupt
+    page now retries in place rather than desynchronising the stream, and
+    a total protocol failure raises instead of being indistinguishable
+    from an empty archive.  Verified against real hardware: 0 records
+    before, 41 after.  Closes #207.
+
+  * Fix: Vantage temperature and humidity calibration offsets now take
+    effect.  Writing an offset appeared to succeed — the value stored and
+    read back correctly — but the reading never changed, because the
+    console only applies a new calibration after being sent the documented
+    CALED/CALFIX sequence.  The outside-humidity offset was also written to
+    the wrong address, one byte off, where it adjusted a nonexistent extra
+    sensor instead.  Closes #209.
+
+  * Fix: a Vantage Vue no longer reports itself as a Vantage Pro2, and no
+    longer appears as "Weather Wizard III" on the dashboard and public API.
+    The model code was read from the wrong memory area, and separately,
+    readings from any non-legacy station were stored with a station-type
+    value that happened to be a valid code for a different, much older
+    Davis model.  Closes #208, #215.
+
+  * New: the UI font size is adjustable from the custom theme editor.  A
+    slider between 0.85x and 1.75x scales text throughout the interface,
+    including gauge labels, and is saved with your custom theme.  Existing
+    themes are unaffected and continue to render exactly as before.
+
+  * New: Vantage stations can set the archive interval and clear archive
+    memory from the driver, matching capability the legacy Davis driver has
+    always had.  Note that, contrary to Davis's own documentation, setting
+    the interval does NOT clear existing records — the archive will hold a
+    mix of old and new intervals until explicitly cleared.
+
+  * Adds the Davis Vantage Serial Communication Reference to the repository.
+    Its absence was the direct cause of the address-map errors behind
+    several of the fixes above.
+
+  * Dependency and CI updates: React 19.2.8, react-router 7.18, Vite 8.1,
+    three.js 0.185.1, typescript-eslint 8.62, and current GitHub Actions.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 29 Jul 2026 19:00:30 +0000
+
 kanfei (0.1.0~beta21) unstable; urgency=medium
 
   * Fix: the backup-restore endpoint now writes the restored database
