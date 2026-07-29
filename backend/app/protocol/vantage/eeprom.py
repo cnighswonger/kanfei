@@ -31,11 +31,32 @@ LONGITUDE = EEAddr(0x0D, 2)           # i16, tenths of a degree
 ELEVATION = EEAddr(0x0F, 2)           # i16, feet
 
 # --------------- Calibration offsets ---------------
+#
+# Only CAL_OUTSIDE_TEMP is verified against hardware (Vantage Vue fw 2.12).
+# The others are unverified and MUST be confirmed on a real station before
+# anything is wired up to them — see the note below and issue #209.
 
-CAL_INSIDE_TEMP = EEAddr(0x32, 2)     # signed i16, tenths °F
-CAL_OUTSIDE_TEMP = EEAddr(0x34, 2)    # signed i16, tenths °F
-CAL_INSIDE_HUM = EEAddr(0x44, 1)      # signed i8, percent
-CAL_OUTSIDE_HUM = EEAddr(0x46, 1)     # signed i8, percent
+# VERIFIED: 1 signed byte, tenths °F.  Writing 10/25/50/-10 moved the
+# reported outside temperature by +1.0/+2.5/+5.0/-1.0 °F respectively.
+# Note this is ONE byte, not the i16 previously declared here; 0x35 was
+# probed and is inert, so it is not a high byte.
+CAL_OUTSIDE_TEMP = EEAddr(0x34, 1)    # signed i8, tenths °F
+
+# UNVERIFIED — addresses below are believed-wrong or untested.
+#
+# The outside-humidity offset is NOT at 0x46 (the value this file used to
+# carry) and NOT at 0x45.  Both accept a write and read the value back, yet
+# leave the reported humidity unchanged.  Every byte in 0x40–0x50 was swept
+# with a +20 offset against a console reading a rock-steady 55% RH; none
+# moved it by more than ambient drift (±1%).  The correct address is not
+# yet known, so no constant is defined for it — a wrong one is worse than
+# a missing one, because it fails silently.
+#
+# CAL_INSIDE_TEMP and CAL_INSIDE_HUM are simply untested. They may be
+# correct; nobody has checked. They plausibly came from the same source as
+# the two known-bad entries, so treat them as suspect until proven.
+CAL_INSIDE_TEMP = EEAddr(0x32, 1)     # UNVERIFIED: signed i8, tenths °F?
+CAL_INSIDE_HUM = EEAddr(0x44, 1)      # UNVERIFIED: signed i8, percent?
 
 
 # --------------- Helpers ---------------

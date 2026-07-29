@@ -25,7 +25,6 @@ from ..base import (
     SensorSnapshot,
     HardwareInfo,
     CAP_ARCHIVE_SYNC,
-    CAP_CALIBRATION_RW,
     CAP_CLOCK_SYNC,
     CAP_RAIN_RESET,
     CAP_HILOWS,
@@ -133,8 +132,12 @@ class VantageDriver(StationDriver):
     def capabilities(self) -> set[str]:
         caps = {CAP_ARCHIVE_SYNC, CAP_CLOCK_SYNC, CAP_RAIN_RESET}
         if self.hw_config.has_loop2:
-            caps.add(CAP_CALIBRATION_RW)
             caps.add(CAP_HILOWS)
+        # CAP_CALIBRATION_RW is deliberately NOT advertised: the driver has
+        # no read/write path wired to the calibration offsets, and the
+        # humidity offset address is not yet known (see eeprom.py and #209).
+        # Advertising it makes the UI offer controls that silently do
+        # nothing — the write ACKs and reads back, but never takes effect.
         return caps
 
     def request_stop(self) -> None:
