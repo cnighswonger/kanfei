@@ -26,6 +26,7 @@ from ..base import (
     HardwareInfo,
     CAP_ARCHIVE_SYNC,
     CAP_CALIBRATION_RW,
+    CAP_ARCHIVE_PERIOD_RW,
     CAP_CLOCK_SYNC,
     CAP_RAIN_RESET,
     CAP_HILOWS,
@@ -160,6 +161,11 @@ class VantageDriver(StationDriver):
         caps = {
             CAP_ARCHIVE_SYNC, CAP_CLOCK_SYNC, CAP_RAIN_RESET,
             CAP_CALIBRATION_RW,
+            # SETPER — added in #217.  CAP_SAMPLE_PERIOD_RW is deliberately
+            # absent: "sample period" is a WeatherLink-logger concept with
+            # no equivalent anywhere in the Vantage serial protocol, so it
+            # is genuinely unsupported rather than merely unimplemented.
+            CAP_ARCHIVE_PERIOD_RW,
         }
         if self.hw_config.has_loop2:
             caps.add(CAP_HILOWS)
@@ -650,6 +656,34 @@ class VantageDriver(StationDriver):
         return await self._run_in_executor(self.clear_calibration)
 
     # ---- Archive period ----
+
+    def read_archive_period(self) -> Optional[int]:
+        """Read the archive interval from EEPROM, in minutes.
+
+        Reads the register rather than returning the cached
+        hw_config.archive_interval, so a value changed by the console's own
+        UI (or by another process on the port) is reported accurately.
+        """
+        with self._io_lock:
+            data = self._eeprom_read(ARCHIVE_INTERVAL.address, ARCHIVE_INTERVAL.n_bytes)
+            if not data:
+                logger.warning("read_archive_period: EEPROM read failed")
+                return None
+            value = data[0]
+            if value not in DAVIS_LEGAL_ARCHIVE_PERIODS:
+                # Same guard as LinkDriver.read_archive_period (see #174):
+                # a garbage register value must not be presented as truth.
+                logger.warning(
+                    "read_archive_period: rejecting non-Davis-legal value %d "
+                    "(expected one of %s)",
+                    value, sorted(DAVIS_LEGAL_ARCHIVE_PERIODS),
+                )
+                return None
+            self.hw_config.archive_interval = value
+            return value
+
+    async def async_read_archive_period(self) -> Optional[int]:
+        return await self._run_in_executor(self.read_archive_period)
 
     def set_archive_period(self, minutes: int) -> bool:
         """Set the archive interval via SETPER.
