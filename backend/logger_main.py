@@ -24,6 +24,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app.config import settings
+from app.logging_setup import configure_logging
 from app.models.database import init_database, SessionLocal, engine
 from app.models.station_config import StationConfigModel
 from app.protocol.base import StationDriver
@@ -1205,11 +1206,11 @@ class LoggerDaemon:
 # --------------- Entry point ---------------
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)-8s %(name)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    # Shared setup — quietens httpx/httpcore (which log full request URLs,
+    # credentials included) and installs the redaction filter.  This daemon
+    # previously called basicConfig() directly and leaked Weather Underground
+    # credentials into the systemd journal on every upload (#206).
+    configure_logging(level=logging.INFO)
     daemon = LoggerDaemon()
     try:
         asyncio.run(daemon.run())
