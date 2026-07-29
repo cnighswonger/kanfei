@@ -34,9 +34,15 @@ LOOP_HEADER = b"LOO"
 
 # --------------- Archive ---------------
 
-ARCHIVE_PAGE_SIZE = 267          # 5 × 52 records + 4 unused + 2 CRC
+ARCHIVE_PAGE_SIZE = 267          # 1 seq + 5 × 52 records + 4 unused + 2 CRC
+ARCHIVE_PAGE_HEADER_SIZE = 1     # leading sequence byte, before record 0
 ARCHIVE_RECORD_SIZE = 52
 ARCHIVE_RECORDS_PER_PAGE = 5
+
+# DMPAFT response header: page_count (u16 LE) + first_record_offset (u16 LE)
+# + CRC (u16 BE).  The station waits for an ACK after this before sending
+# page 0.
+DMPAFT_HEADER_SIZE = 6
 
 # --------------- Retry ---------------
 

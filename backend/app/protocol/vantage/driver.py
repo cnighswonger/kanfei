@@ -44,6 +44,7 @@ from .constants import (
     LOOP2_PACKET_SIZE,
     RAIN_CLICK_INCHES,
     ARCHIVE_PAGE_SIZE,
+    DMPAFT_HEADER_SIZE,
     MAX_RETRIES,
     ACK,
     NAK,
@@ -486,9 +487,19 @@ class VantageDriver(StationDriver):
                 raise ConnectionError("DMPAFT: timestamp not ACKed")
 
             # Read header: page_count (u16 LE) + first_record_offset (u16 LE)
-            header = self.serial.receive(4)
-            if len(header) < 4:
-                raise ConnectionError("DMPAFT: header short read")
+            # + CRC (u16 BE) = 6 bytes total.  Reading only the 4 payload
+            # bytes strands the CRC in the buffer, where it is then misread
+            # as the start of page 0.
+            header = self.serial.receive(DMPAFT_HEADER_SIZE)
+            if len(header) < DMPAFT_HEADER_SIZE:
+                raise ConnectionError(
+                    f"DMPAFT: header short read ({len(header)} of "
+                    f"{DMPAFT_HEADER_SIZE} bytes)"
+                )
+
+            if not crc_validate(header):
+                self.serial.send(bytes([ESC]))
+                raise ConnectionError("DMPAFT: header CRC failed")
 
             page_count = struct.unpack_from("<H", header, 0)[0]
             first_offset = struct.unpack_from("<H", header, 2)[0]
@@ -497,26 +508,63 @@ class VantageDriver(StationDriver):
             if page_count == 0:
                 return []
 
+            # The station sends nothing until the header is ACKed.  Without
+            # this the first page read blocks until timeout and every
+            # subsequent one returns zero bytes.
+            self.serial.send(bytes([ACK]))
+
             records: list[VantageArchiveRecord] = []
+            pages_read = 0
             for page_num in range(page_count):
-                if self._stop_requested:
-                    self.serial.send(bytes([ESC]))
-                    logger.info("DMPAFT: aborted by stop request at page %d", page_num)
+                page_data = None
+
+                # Retry a corrupt or short page in place.  NAK asks the
+                # station to resend the SAME page, so advancing the loop
+                # counter on failure (as this previously did) desynchronises
+                # the stream from the station.
+                for attempt in range(MAX_RETRIES):
+                    if self._stop_requested:
+                        self.serial.send(bytes([ESC]))
+                        logger.info("DMPAFT: aborted by stop request at page %d", page_num)
+                        page_data = None
+                        break
+
+                    chunk = self.serial.receive(ARCHIVE_PAGE_SIZE)
+                    if len(chunk) < ARCHIVE_PAGE_SIZE:
+                        logger.warning(
+                            "DMPAFT page %d: short read (%d of %d bytes), attempt %d/%d",
+                            page_num, len(chunk), ARCHIVE_PAGE_SIZE,
+                            attempt + 1, MAX_RETRIES,
+                        )
+                        self.serial.send(bytes([NAK]))
+                        continue
+
+                    if not crc_validate(chunk):
+                        logger.warning(
+                            "DMPAFT page %d: CRC failed, attempt %d/%d",
+                            page_num, attempt + 1, MAX_RETRIES,
+                        )
+                        self.serial.send(bytes([NAK]))
+                        continue
+
+                    page_data = chunk
                     break
 
-                page_data = self.serial.receive(ARCHIVE_PAGE_SIZE)
-                if len(page_data) < ARCHIVE_PAGE_SIZE:
-                    logger.warning("DMPAFT page %d: short read (%d bytes)", page_num, len(page_data))
-                    self.serial.send(bytes([NAK]))
-                    continue
+                if self._stop_requested:
+                    break
 
-                if not crc_validate(page_data[:ARCHIVE_PAGE_SIZE]):
-                    logger.warning("DMPAFT page %d: CRC failed, sending NAK", page_num)
-                    self.serial.send(bytes([NAK]))
-                    continue
+                if page_data is None:
+                    # Out of retries — abort rather than press on against a
+                    # stream we can no longer trust.
+                    self.serial.send(bytes([ESC]))
+                    raise ConnectionError(
+                        f"DMPAFT: page {page_num} unreadable after "
+                        f"{MAX_RETRIES} attempts"
+                    )
 
-                # ACK this page
+                # ACK advances the station to the next page.
                 self.serial.send(bytes([ACK]))
+                pages_read += 1
 
                 # Parse records
                 page_records = parse_archive_page(page_data)
@@ -527,10 +575,24 @@ class VantageDriver(StationDriver):
                     record = parse_archive_record(
                         record_bytes, self.hw_config.rain_click_inches,
                     )
-                    if record is not None:
-                        records.append(record)
+                    if record is None:
+                        continue
 
-            logger.info("DMPAFT: retrieved %d records", len(records))
+                    # The station sends whole pages, so the final page is
+                    # padded with unwritten slots and any page may carry
+                    # records older than the request.  first_offset only
+                    # covers page 0, so filter on the timestamp too --
+                    # otherwise a request for a future time still returns
+                    # the tail of the archive.
+                    if record.timestamp is None or record.timestamp <= after:
+                        continue
+
+                    records.append(record)
+
+            logger.info(
+                "DMPAFT: retrieved %d records from %d/%d pages",
+                len(records), pages_read, page_count,
+            )
             return records
 
     # ---- RXCHECK diagnostics ----
