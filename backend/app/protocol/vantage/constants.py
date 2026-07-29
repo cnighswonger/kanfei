@@ -44,6 +44,38 @@ ARCHIVE_RECORDS_PER_PAGE = 5
 # page 0.
 DMPAFT_HEADER_SIZE = 6
 
+# --------------- Calibration ---------------
+
+# CALED / CALFIX exchange a 43-byte block (section X.6):
+#   inside temp      0   2      leaf temps      26  8  (4 x 2)
+#   outside temp     2   2      inside hum      34  1
+#   extra temps      4  14      outside hum     35  1
+#   soil temps      18   8      extra hums      36  7
+CALFIX_BLOCK_SIZE = 43
+CALFIX_OFF_INSIDE_TEMP = 0
+CALFIX_OFF_OUTSIDE_TEMP = 2
+CALFIX_OFF_INSIDE_HUM = 34
+CALFIX_OFF_OUTSIDE_HUM = 35
+
+# Sentinels meaning "no sensor / dashed" in a CALED block.  Per XIV.1 these
+# must be left alone rather than back-calculated, or garbage is written
+# into the console's display values.
+CALFIX_INVALID_TEMP = 0x7FFF
+CALFIX_INVALID_HUM = 0xFF
+
+# The EEPROM calibration block really spans 0x32..0x4E (29 bytes).
+#
+# Do NOT use the manual's own "EEBRD 32 2B" / "EEBWR 32 2B" example from
+# section XIV.1: 0x2B is 43, the size of the CALFIX *data block*, not of
+# the EEPROM region.  A 43-byte write at 0x32 runs to 0x5C, past the end
+# of the calibration block and over DEFAULT_BAR_GRAPH (0x4F),
+# DEFAULT_RAIN_GRAPH (0x50), DEFAULT_SPEED_GRAPH (0x51) and 11 bytes of
+# ALARM_START (0x52).  The manual's own prose two lines earlier says
+# "28 EEPROM bytes", and its address map implies 29 — the three do not
+# agree, so this driver writes individual fields instead.
+CAL_BLOCK_START = 0x32
+CAL_BLOCK_END = 0x4E
+
 # --------------- Retry ---------------
 
 MAX_RETRIES = 3
