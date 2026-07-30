@@ -1286,23 +1286,34 @@ class LoggerDaemon:
 
         return {"results": results}
 
-    async def _h_clear_rain_daily(self, _msg: dict) -> dict[str, Any]:
-        link = self._link
-        if not link or not link.connected:
-            raise RuntimeError("Not connected (or driver does not support rain clear)")
-        ok = await link.async_clear_rain_daily()
+    async def _clear_rain(self, which: str) -> dict[str, Any]:
+        """Clear a rain accumulator on whichever driver is connected.
+
+        Was LinkDriver-gated, so the rain-clear buttons did nothing on
+        Vantage stations even though the protocol supports it — CLRVAR 13
+        (daily) and CLRVAR 17 (yearly), manual section IX.6.  I originally
+        recorded this as "unsupported by the protocol" in #219 on the
+        strength of a hasattr() check, which only ever answered "did we
+        implement it".  See #221.
+        """
+        method = f"async_clear_rain_{which}"
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if not hasattr(drv, method):
+            raise RuntimeError(
+                f"{drv.station_name} does not support clearing {which} rain"
+            )
+        ok = await getattr(drv, method)()
         if ok:
             await self._refresh_after_rain_clear()
         return {"success": ok}
 
+    async def _h_clear_rain_daily(self, _msg: dict) -> dict[str, Any]:
+        return await self._clear_rain("daily")
+
     async def _h_clear_rain_yearly(self, _msg: dict) -> dict[str, Any]:
-        link = self._link
-        if not link or not link.connected:
-            raise RuntimeError("Not connected (or driver does not support rain clear)")
-        ok = await link.async_clear_rain_yearly()
-        if ok:
-            await self._refresh_after_rain_clear()
-        return {"success": ok}
+        return await self._clear_rain("yearly")
 
     async def _refresh_after_rain_clear(self) -> None:
         """Reset poller rain cache and force an immediate poll so the

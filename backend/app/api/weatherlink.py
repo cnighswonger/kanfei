@@ -131,12 +131,24 @@ async def clear_rain_daily(_admin=Depends(require_admin)):
     """Clear the daily rain accumulator."""
     try:
         client = get_ipc_client()
-        result = await client.send_command({"cmd": "clear_rain_daily"})
+        result = await client.send_command({"cmd": "clear_rain_daily"}, timeout=20.0)
         if result.get("ok"):
             return result["data"]
-        return {"error": result.get("error", "Failed")}
+        detail = result.get("error", "Failed")
+        # "does not support" is a station limitation (501), anything else
+        # is a transient/connection problem (503).  Neither is a 200 — a
+        # command that did not run must not look like one that did (#219).
+        raise HTTPException(
+            status_code=501 if "does not support" in detail else 503,
+            detail=detail,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
     except (ConnectionRefusedError, OSError):
-        return {"error": "Logger daemon not running"}
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
 
 
 @router.post("/weatherlink/clear-rain-yearly")
@@ -144,12 +156,24 @@ async def clear_rain_yearly(_admin=Depends(require_admin)):
     """Clear the yearly rain accumulator."""
     try:
         client = get_ipc_client()
-        result = await client.send_command({"cmd": "clear_rain_yearly"})
+        result = await client.send_command({"cmd": "clear_rain_yearly"}, timeout=20.0)
         if result.get("ok"):
             return result["data"]
-        return {"error": result.get("error", "Failed")}
+        detail = result.get("error", "Failed")
+        # "does not support" is a station limitation (501), anything else
+        # is a transient/connection problem (503).  Neither is a 200 — a
+        # command that did not run must not look like one that did (#219).
+        raise HTTPException(
+            status_code=501 if "does not support" in detail else 503,
+            detail=detail,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
     except (ConnectionRefusedError, OSError):
-        return {"error": "Logger daemon not running"}
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
 
 
 @router.post("/weatherlink/force-archive")
@@ -157,9 +181,21 @@ async def force_archive(_admin=Depends(require_admin)):
     """Force the WeatherLink to write an archive record now."""
     try:
         client = get_ipc_client()
-        result = await client.send_command({"cmd": "force_archive"})
+        result = await client.send_command({"cmd": "force_archive"}, timeout=20.0)
         if result.get("ok"):
             return result["data"]
-        return {"error": result.get("error", "Failed")}
+        detail = result.get("error", "Failed")
+        # "does not support" is a station limitation (501), anything else
+        # is a transient/connection problem (503).  Neither is a 200 — a
+        # command that did not run must not look like one that did (#219).
+        raise HTTPException(
+            status_code=501 if "does not support" in detail else 503,
+            detail=detail,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
     except (ConnectionRefusedError, OSError):
-        return {"error": "Logger daemon not running"}
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
