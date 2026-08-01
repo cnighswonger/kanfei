@@ -39,6 +39,13 @@ ARCHIVE_PAGE_HEADER_SIZE = 1     # leading sequence byte, before record 0
 ARCHIVE_RECORD_SIZE = 52
 ARCHIVE_RECORDS_PER_PAGE = 5
 
+# DMP streams the whole archive with no page-count header (unlike DMPAFT,
+# which negotiates one), so the reader needs the fixed size: the console
+# holds 2560 records = 512 pages of 5.  §I quotes "up to 2560 archive
+# records" for a console with a WeatherLink logger fitted.
+ARCHIVE_TOTAL_RECORDS = 2560
+ARCHIVE_TOTAL_PAGES = ARCHIVE_TOTAL_RECORDS // ARCHIVE_RECORDS_PER_PAGE
+
 # DMPAFT response header: page_count (u16 LE) + first_record_offset (u16 LE)
 # + CRC (u16 BE).  The station waits for an ACK after this before sending
 # page 0.

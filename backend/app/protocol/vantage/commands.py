@@ -67,6 +67,42 @@ def cmd_getee() -> bytes:
     return b"GETEE\n"
 
 
+def cmd_putrain(clicks: int) -> bytes:
+    """PUTRAIN — set the yearly rain total, in RAIN CLICKS (§IX.2).
+
+    The unit is clicks, not inches and not millimetres, and a click is not
+    a fixed size: 0.01", 0.2 mm or 0.1 mm depending on the collector
+    fitted (EEPROM setup bits, 0x2B).  Passing a value in any other unit
+    silently sets the wrong yearly total, so callers should go through
+    VantageDriver.set_yearly_rain(), which converts from mm using the
+    collector this station actually reports.
+
+    The manual's example sets 24.83 inches on a 0.01" collector as
+    "PUTRAIN 2483".
+    """
+    return f"PUTRAIN {clicks}\n".encode()
+
+
+def cmd_putet(hundredths_inch: int) -> bytes:
+    """PUTET — set the yearly ET total, in HUNDREDTHS OF AN INCH (§IX.2).
+
+    Note this differs from PUTRAIN: ET is a fixed hundredths-of-an-inch
+    unit with no collector dependency.  The two commands sit next to each
+    other in the manual and read alike, which makes it easy to assume they
+    share a unit.  They do not.
+    """
+    return f"PUTET {hundredths_inch}\n".encode()
+
+
+def cmd_dmp() -> bytes:
+    """DMP — download the entire archive memory (§IX.3).
+
+    Uses the same paged transfer as DMPAFT (§X.6): 267-byte pages, each
+    ACKed or NAKed, ESC to abort.
+    """
+    return b"DMP\n"
+
+
 def cmd_dmpaft() -> bytes:
     """DMPAFT — begin archive dump after timestamp."""
     return b"DMPAFT\n"
