@@ -44,6 +44,15 @@ ARCHIVE_RECORDS_PER_PAGE = 5
 # page 0.
 DMPAFT_HEADER_SIZE = 6
 
+# --------------- GETEE ---------------
+
+# Full EEPROM dump: 4096 bytes of data plus a trailing 2-byte CRC.
+# Measured on a Vue at 19200 8N1: 4098 bytes arrive in ~2.14 s, which is
+# the theoretical wire time, so a single receive() call is sufficient and
+# no chunking is needed.
+EEPROM_SIZE = 4096
+GETEE_TOTAL_SIZE = 4098
+
 # --------------- Calibration ---------------
 
 # CALED / CALFIX exchange a 43-byte block (section X.6):

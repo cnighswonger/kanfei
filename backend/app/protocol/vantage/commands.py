@@ -52,6 +52,21 @@ def cmd_bardata() -> bytes:
     return b"BARDATA\n"
 
 
+def cmd_receivers() -> bytes:
+    """RECEIVERS — bitmask of transmitter IDs the console is hearing.
+
+    Manual section IX.1.  Replies "OK" then a single RAW byte, not text:
+    bit 0 = Tx ID 1.  Note this reports what is being *received*, not what
+    the console is configured to listen for (EEPROM USETX at 0x18).
+    """
+    return b"RECEIVERS\n"
+
+
+def cmd_getee() -> bytes:
+    """GETEE — dump the entire 4096-byte EEPROM plus a 2-byte CRC (§IX.4)."""
+    return b"GETEE\n"
+
+
 def cmd_dmpaft() -> bytes:
     """DMPAFT — begin archive dump after timestamp."""
     return b"DMPAFT\n"
