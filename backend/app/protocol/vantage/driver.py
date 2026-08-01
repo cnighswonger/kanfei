@@ -79,12 +79,17 @@ from .commands import (
     cmd_clrcal,
     cmd_clrlog,
     cmd_clrvar,
+    cmd_clrhighs,
+    cmd_clrlows,
     cmd_hilows,
     cmd_setper,
     CLRVAR_VARIABLES,
     CLRVAR_NAMES,
     CLRVAR_RAIN_DAILY,
     CLRVAR_RAIN_YEAR,
+    CLR_PERIODS,
+    CLR_PERIOD_NAMES,
+    CLR_PERIOD_DAILY,
     build_dmpaft_timestamp,
     build_settime_payload,
 )
@@ -793,8 +798,66 @@ class VantageDriver(StationDriver):
         """Clear the yearly rain accumulator (CLRVAR 17)."""
         return self.clear_variable(CLRVAR_RAIN_YEAR)
 
+    def clear_highs(self, period: int = CLR_PERIOD_DAILY) -> bool:
+        """CLRHIGHS — clear ALL high records for a period.  **IRREVERSIBLE.**
+
+        `period` is 0 daily / 1 monthly / 2 yearly (manual section IX.13).
+
+        This is deliberately not scoped to a single sensor, because the
+        protocol cannot do that: section II.4 states "You can not reset
+        individual high or low values."  Clearing the daily highs to drop
+        one bad reading also drops that day's barometer, wind, humidity and
+        inside-temperature highs.  Callers wanting to remove a single
+        outlier should know they are trading the whole period for it.
+        """
+        if period not in CLR_PERIODS:
+            raise ValueError(
+                f"CLRHIGHS period must be one of {sorted(CLR_PERIODS)} "
+                f"(got {period})"
+            )
+        name = CLR_PERIOD_NAMES.get(period, str(period))
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_clrhighs(period))
+            ok = self._read_status_reply()
+            logger.info(
+                "CLRHIGHS %d (%s highs): %s",
+                period, name, "cleared" if ok else "unexpected response",
+            )
+            return ok
+
+    def clear_lows(self, period: int = CLR_PERIOD_DAILY) -> bool:
+        """CLRLOWS — clear ALL low records for a period.  **IRREVERSIBLE.**
+
+        Same period argument and same all-or-nothing caveat as
+        clear_highs(); see that docstring.
+        """
+        if period not in CLR_PERIODS:
+            raise ValueError(
+                f"CLRLOWS period must be one of {sorted(CLR_PERIODS)} "
+                f"(got {period})"
+            )
+        name = CLR_PERIOD_NAMES.get(period, str(period))
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_clrlows(period))
+            ok = self._read_status_reply()
+            logger.info(
+                "CLRLOWS %d (%s lows): %s",
+                period, name, "cleared" if ok else "unexpected response",
+            )
+            return ok
+
     async def async_clear_variable(self, variable: int) -> bool:
         return await self._run_in_executor(self.clear_variable, variable)
+
+    async def async_clear_highs(self, period: int = CLR_PERIOD_DAILY) -> bool:
+        return await self._run_in_executor(self.clear_highs, period)
+
+    async def async_clear_lows(self, period: int = CLR_PERIOD_DAILY) -> bool:
+        return await self._run_in_executor(self.clear_lows, period)
 
     async def async_clear_rain_daily(self) -> bool:
         return await self._run_in_executor(self.clear_rain_daily)
