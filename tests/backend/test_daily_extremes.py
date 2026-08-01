@@ -50,9 +50,9 @@ class TestAtTimestamp:
             # Single sample at 03:00 covering every aggregated column.
             ts = midnight + timedelta(hours=3)
             _add(db, ts,
-                 outside_temp=720, inside_temp=680,
+                 outside_temp=320, inside_temp=225,
                  outside_humidity=50, inside_humidity=40,
-                 wind_speed=100, barometer=29920, rain_rate=30)
+                 wind_speed=100, barometer=10132, rain_rate=30)
             db.commit()
             extremes = get_daily_extremes(db)
         finally:
@@ -81,8 +81,8 @@ class TestAtTimestamp:
             early = midnight + timedelta(hours=2)
             late = midnight + timedelta(hours=8)
             # Both rows hit the same peak — earliest wins.
-            _add(db, early, outside_temp=850)
-            _add(db, late, outside_temp=850)
+            _add(db, early, outside_temp=385)
+            _add(db, late, outside_temp=385)
             db.commit()
             extremes = get_daily_extremes(db)
         finally:
@@ -105,9 +105,9 @@ class TestAtTimestamp:
         db = SessionLocal()
         try:
             # 23:59 yesterday-UTC — outside today's window.
-            _add(db, midnight - timedelta(minutes=1), outside_temp=999)
+            _add(db, midnight - timedelta(minutes=1), outside_temp=455)
             # 00:01 today — inside the window.
-            _add(db, midnight + timedelta(minutes=1), outside_temp=700)
+            _add(db, midnight + timedelta(minutes=1), outside_temp=300)
             db.commit()
             extremes = get_daily_extremes(db)
         finally:
@@ -117,7 +117,7 @@ class TestAtTimestamp:
         # Yesterday's 999 must not have leaked in.
         assert extremes["outside_temp_hi"]["value"] is not None
         assert extremes["outside_temp_hi"]["at"] is not None
-        assert "999" not in str(extremes["outside_temp_hi"]["value"])
+        assert "455" not in str(extremes["outside_temp_hi"]["value"])
 
     def test_null_column_yields_null_extreme(self, fresh_readings):
         # Only outside_temp populated — rain_rate / barometer extremes
@@ -125,7 +125,7 @@ class TestAtTimestamp:
         midnight = _midnight_utc()
         db = SessionLocal()
         try:
-            _add(db, midnight + timedelta(hours=1), outside_temp=700)
+            _add(db, midnight + timedelta(hours=1), outside_temp=300)
             db.commit()
             extremes = get_daily_extremes(db)
         finally:

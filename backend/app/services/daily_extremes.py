@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..models.sensor_reading import SensorReadingModel
-from ..models.sensor_meta import convert, SENSOR_UNITS
+from ..models.sensor_meta import convert, SENSOR_UNITS, SENSOR_BOUNDS
 
 
 def _iso_z(ts: Optional[datetime]) -> Optional[str]:
@@ -39,6 +39,39 @@ def _clamp_hum(val: Optional[dict]) -> Optional[dict]:
         return val
     val["value"] = max(0, min(100, val["value"]))
     return val
+
+
+def _in_bounds(column: str, raw) -> bool:
+    """Whether a RAW (pre-conversion) reading is inside its declared range.
+
+    SENSOR_BOUNDS already existed and is applied by history.py and
+    export.py, so charts and CSV exports have always discarded
+    out-of-range values.  Daily extremes did not consult it — which meant
+    the *published* path was the least guarded one, since cwop.py and
+    wunderground.py both source their gust from wind_speed_hi.
+
+    That gap is how a 27-minute transmitter dropout on the bench Vue put a
+    255 mph gust on APRS/findu for hours after the link recovered.  The
+    instantaneous wind was correct throughout; only the daily maximum was
+    poisoned, and an extreme outlives the outage that produced it.
+
+    Checking the raw value matters: these bounds are in storage units, and
+    the guard has to run before convert(), or the threshold would depend
+    on whether the user displays mph, km/h or m/s.
+    """
+    if raw is None:
+        return True
+    bounds = SENSOR_BOUNDS.get(column)
+    if bounds is None:
+        return True
+    return bounds[0] <= raw <= bounds[1]
+
+
+def _bounded(column: str, raw, at_fn) -> Optional[dict]:
+    """_val(), but discarding readings outside the sensor's declared range."""
+    if not _in_bounds(column, raw):
+        return None
+    return _val(column, raw, at_fn())
 
 
 def _at(db: Session, midnight: datetime, column, raw) -> Optional[datetime]:
@@ -85,17 +118,24 @@ def get_daily_extremes(db: Session) -> Optional[dict]:
     if row is None or row[0] is None:
         return None
 
+    # Every extreme goes through _bounded().  SENSOR_BOUNDS was already
+    # applied by history.py and export.py; daily extremes were the gap,
+    # and they are the ones that get PUBLISHED — cwop.py and
+    # wunderground.py both source their gust from wind_speed_hi.
+    def B(column, raw, model_col):
+        return _bounded(column, raw, lambda: _at(db, midnight, model_col, raw))
+
     return {
-        "outside_temp_hi": _val("outside_temp", row[0], _at(db, midnight, S.outside_temp, row[0])),
-        "outside_temp_lo": _val("outside_temp", row[1], _at(db, midnight, S.outside_temp, row[1])),
-        "inside_temp_hi": _val("inside_temp", row[2], _at(db, midnight, S.inside_temp, row[2])),
-        "inside_temp_lo": _val("inside_temp", row[3], _at(db, midnight, S.inside_temp, row[3])),
-        "wind_speed_hi": _val("wind_speed", row[4], _at(db, midnight, S.wind_speed, row[4])),
-        "barometer_hi": _val("barometer", row[5], _at(db, midnight, S.barometer, row[5])),
-        "barometer_lo": _val("barometer", row[6], _at(db, midnight, S.barometer, row[6])),
-        "humidity_hi": _clamp_hum(_val("outside_humidity", row[7], _at(db, midnight, S.outside_humidity, row[7]))),
-        "humidity_lo": _clamp_hum(_val("outside_humidity", row[8], _at(db, midnight, S.outside_humidity, row[8]))),
-        "rain_rate_hi": _val("rain_rate", row[9], _at(db, midnight, S.rain_rate, row[9])),
-        "inside_humidity_hi": _clamp_hum(_val("inside_humidity", row[10], _at(db, midnight, S.inside_humidity, row[10]))),
-        "inside_humidity_lo": _clamp_hum(_val("inside_humidity", row[11], _at(db, midnight, S.inside_humidity, row[11]))),
+        "outside_temp_hi": B("outside_temp", row[0], S.outside_temp),
+        "outside_temp_lo": B("outside_temp", row[1], S.outside_temp),
+        "inside_temp_hi": B("inside_temp", row[2], S.inside_temp),
+        "inside_temp_lo": B("inside_temp", row[3], S.inside_temp),
+        "wind_speed_hi": B("wind_speed", row[4], S.wind_speed),
+        "barometer_hi": B("barometer", row[5], S.barometer),
+        "barometer_lo": B("barometer", row[6], S.barometer),
+        "humidity_hi": _clamp_hum(B("outside_humidity", row[7], S.outside_humidity)),
+        "humidity_lo": _clamp_hum(B("outside_humidity", row[8], S.outside_humidity)),
+        "rain_rate_hi": B("rain_rate", row[9], S.rain_rate),
+        "inside_humidity_hi": _clamp_hum(B("inside_humidity", row[10], S.inside_humidity)),
+        "inside_humidity_lo": _clamp_hum(B("inside_humidity", row[11], S.inside_humidity)),
     }
