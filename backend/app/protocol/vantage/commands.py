@@ -86,8 +86,31 @@ def cmd_clrlog() -> bytes:
     return b"CLRLOG\n"
 
 
-def cmd_clrhighs(period: int = 0) -> bytes:
-    """CLRHIGHS — clear high records (0=daily, 1=monthly, -1=yearly)."""
+# --------------- CLRHIGHS / CLRLOWS periods ---------------
+# Manual sections IX.6 / IX.13: the argument is 0, 1, or 2.  An earlier
+# docstring here claimed -1 meant yearly; that is wrong and would have put
+# an undefined value on the wire.  Nothing called it, so nothing broke.
+#
+# These clear *every* extremum for the period.  Per section II.4, "You can
+# not reset individual high or low values" — there is no way to clear just
+# one sensor's high, so callers must accept the collateral.
+CLR_PERIOD_DAILY = 0
+CLR_PERIOD_MONTHLY = 1
+CLR_PERIOD_YEARLY = 2
+
+CLR_PERIODS: frozenset[int] = frozenset({
+    CLR_PERIOD_DAILY, CLR_PERIOD_MONTHLY, CLR_PERIOD_YEARLY,
+})
+
+CLR_PERIOD_NAMES: dict[int, str] = {
+    CLR_PERIOD_DAILY: "daily",
+    CLR_PERIOD_MONTHLY: "monthly",
+    CLR_PERIOD_YEARLY: "yearly",
+}
+
+
+def cmd_clrhighs(period: int = CLR_PERIOD_DAILY) -> bytes:
+    """CLRHIGHS — clear ALL high records for a period (0/1/2)."""
     return f"CLRHIGHS {period}\n".encode()
 
 
@@ -102,8 +125,8 @@ def cmd_hilows() -> bytes:
     return b"HILOWS\n"
 
 
-def cmd_clrlows(period: int = 0) -> bytes:
-    """CLRLOWS — clear low records (0=daily, 1=monthly, -1=yearly)."""
+def cmd_clrlows(period: int = CLR_PERIOD_DAILY) -> bytes:
+    """CLRLOWS — clear ALL low records for a period (0/1/2)."""
     return f"CLRLOWS {period}\n".encode()
 
 
