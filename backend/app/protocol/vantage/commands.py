@@ -91,6 +91,17 @@ def cmd_clrhighs(period: int = 0) -> bytes:
     return f"CLRHIGHS {period}\n".encode()
 
 
+def cmd_hilows() -> bytes:
+    """HILOWS — read the current 436-byte hi/low block + 2-byte CRC.
+
+    Manual section IX.2: the station responds with <ACK> then a 436-byte
+    payload holding daily, monthly, and yearly highs/lows for every
+    supported sensor, plus a trailing big-endian CRC-16.  Layout is
+    documented in section X.3.
+    """
+    return b"HILOWS\n"
+
+
 def cmd_clrlows(period: int = 0) -> bytes:
     """CLRLOWS — clear low records (0=daily, 1=monthly, -1=yearly)."""
     return f"CLRLOWS {period}\n".encode()

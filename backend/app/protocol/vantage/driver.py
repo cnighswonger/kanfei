@@ -79,6 +79,7 @@ from .commands import (
     cmd_clrcal,
     cmd_clrlog,
     cmd_clrvar,
+    cmd_hilows,
     cmd_setper,
     CLRVAR_VARIABLES,
     CLRVAR_NAMES,
@@ -105,6 +106,11 @@ from .archive import (
     parse_archive_record,
     parse_archive_page,
     VantageArchiveRecord,
+)
+from .hilows import (
+    parse_hilows,
+    VantageHighsLows,
+    HILOWS_TOTAL_SIZE,
 )
 
 logger = logging.getLogger(__name__)
@@ -1045,6 +1051,42 @@ class VantageDriver(StationDriver):
             logger.warning("RXCHECK: unexpected response: %r", response)
             return None
 
+    # ---- HILOWS: current high/low block ----
+
+    def hilows(self) -> Optional[VantageHighsLows]:
+        """Read the console's current high/low block via HILOWS (§IX.2).
+
+        Response: <ACK> then 436 bytes of payload plus a 2-byte CRC.  The
+        parser filters dashed sentinels field-by-field so an unpopulated
+        extra-temp slot comes back as None rather than -90 °F.
+
+        Advertised via CAP_HILOWS on the driver; before this landed the
+        capability was true in name only — the exact "advertise-what-you-
+        cannot-do" bug that motivated #221.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_hilows())
+
+            ack = self.serial.receive_byte()
+            if ack != ACK:
+                raise ConnectionError("HILOWS: no ACK")
+
+            block = self.serial.receive(HILOWS_TOTAL_SIZE)
+            if len(block) < HILOWS_TOTAL_SIZE:
+                raise ConnectionError(
+                    f"HILOWS: short read ({len(block)} of "
+                    f"{HILOWS_TOTAL_SIZE} bytes)"
+                )
+
+            if not crc_validate(block[:HILOWS_TOTAL_SIZE]):
+                raise ConnectionError("HILOWS: CRC failed")
+
+            return parse_hilows(
+                block, rain_click_inches=self.hw_config.rain_click_inches,
+            )
+
     # ---- Text response reader ----
 
     def _read_status_reply(self, timeout_reads: int = 24) -> bool:
@@ -1132,3 +1174,6 @@ class VantageDriver(StationDriver):
 
     async def async_rxcheck(self) -> Optional[dict]:
         return await self._run_in_executor(self.rxcheck)
+
+    async def async_hilows(self) -> Optional[VantageHighsLows]:
+        return await self._run_in_executor(self.hilows)
