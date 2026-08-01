@@ -47,6 +47,11 @@ def cmd_rxcheck() -> bytes:
     return b"RXCHECK\n"
 
 
+def cmd_bardata() -> bytes:
+    """BARDATA — read barometer calibration parameters as text (§IX.5)."""
+    return b"BARDATA\n"
+
+
 def cmd_dmpaft() -> bytes:
     """DMPAFT — begin archive dump after timestamp."""
     return b"DMPAFT\n"
