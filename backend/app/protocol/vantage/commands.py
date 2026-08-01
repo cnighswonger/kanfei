@@ -67,6 +67,32 @@ def cmd_getee() -> bytes:
     return b"GETEE\n"
 
 
+def cmd_rxtest() -> bytes:
+    """RXTEST — leave the "Receiving From…" screen (§IX.1).
+
+    Moves the console from the "Receiving From…" setup screen to the main
+    current-conditions screen.  The manual presents this as the way to
+    "programmatically recover from a powerloss when the console boots into
+    the receiving from screen" — and NEWSETUP appears to leave it in that
+    same state, which stops normal sensor reception even though the
+    console still answers serial commands.
+
+    Also clears the CRC error count reported by RXCHECK.
+    """
+    return b"RXTEST\n"
+
+
+def cmd_newsetup() -> bytes:
+    """NEWSETUP — re-initialise the console after a config change (§IX.7).
+
+    The manual is emphatic that this must follow a latitude or longitude
+    write, and any change to the setup bits at 0x2B.  It says only
+    "re-initializes" and does not enumerate what that resets, so callers
+    should verify anything they care about afterwards rather than assume.
+    """
+    return b"NEWSETUP\n"
+
+
 def cmd_putrain(clicks: int) -> bytes:
     """PUTRAIN — set the yearly rain total, in RAIN CLICKS (§IX.2).
 

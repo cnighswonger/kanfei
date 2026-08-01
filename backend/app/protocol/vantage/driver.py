@@ -75,6 +75,8 @@ from .commands import (
     cmd_bardata,
     cmd_receivers,
     cmd_getee,
+    cmd_newsetup,
+    cmd_rxtest,
     cmd_putrain,
     cmd_putet,
     cmd_dmp,
@@ -1335,6 +1337,79 @@ class VantageDriver(StationDriver):
 
     # ---- Station location ----
 
+    def set_location(
+        self,
+        latitude: float,
+        longitude: float,
+        newsetup: bool = True,
+    ) -> bool:
+        """Write station latitude/longitude to EEPROM (§XIV, 0x0B / 0x0D).
+
+        Both are stored as signed 16-bit TENTHS of a degree, so precision
+        is limited to 0.1 deg (~7 km) by the format, not by this code.
+        Negative latitude is southern hemisphere, negative longitude is
+        western.
+
+        The console must be re-initialised afterwards or the change may
+        not take effect — §IX.7 says so explicitly for latitude and
+        longitude.  `newsetup=False` skips that, which is only useful for
+        batching several EEPROM changes before a single re-init.
+
+        The console uses these values for its own sunrise/sunset
+        calculation and pressure correction, so a wrong location produces
+        quietly wrong derived data rather than an obvious failure.
+        """
+        if not -90.0 <= latitude <= 90.0:
+            raise ValueError(f"latitude out of range: {latitude}")
+        if not -180.0 <= longitude <= 180.0:
+            raise ValueError(f"longitude out of range: {longitude}")
+
+        lat_tenths = int(round(latitude * 10))
+        lon_tenths = int(round(longitude * 10))
+
+        with self._io_lock:
+            ok_lat = self._eeprom_write(
+                LATITUDE.address, struct.pack("<h", lat_tenths))
+            ok_lon = self._eeprom_write(
+                LONGITUDE.address, struct.pack("<h", lon_tenths))
+
+            if not (ok_lat and ok_lon):
+                logger.warning(
+                    "set_location: EEPROM write failed (lat=%s lon=%s)",
+                    ok_lat, ok_lon,
+                )
+                return False
+
+            if newsetup:
+                self.serial.flush()
+                self.serial.send(cmd_newsetup())
+                if not self._read_status_reply():
+                    logger.warning(
+                        "set_location: NEWSETUP did not acknowledge; the "
+                        "values are written but may not be in effect"
+                    )
+                    return False
+
+        logger.info(
+            "set_location: %.1f, %.1f written (%d, %d tenths)%s",
+            lat_tenths / 10.0, lon_tenths / 10.0,
+            lat_tenths, lon_tenths,
+            "" if newsetup else " — NEWSETUP skipped",
+        )
+        return True
+
+    def read_location(self) -> Optional[tuple[float, float]]:
+        """Read station latitude/longitude back from EEPROM as degrees."""
+        with self._io_lock:
+            lat_raw = self._eeprom_read(LATITUDE.address, 2)
+            lon_raw = self._eeprom_read(LONGITUDE.address, 2)
+        if not lat_raw or not lon_raw:
+            return None
+        return (
+            struct.unpack("<h", lat_raw)[0] / 10.0,
+            struct.unpack("<h", lon_raw)[0] / 10.0,
+        )
+
     def set_yearly_rain(self, millimetres: float) -> bool:
         """PUTRAIN — overwrite the console's yearly rain total.  **IRREVERSIBLE.**
 
@@ -1410,6 +1485,48 @@ class VantageDriver(StationDriver):
     async def async_set_yearly_et(self, millimetres: float) -> bool:
         return await self._run_in_executor(self.set_yearly_et, millimetres)
 
+
+    def rxtest(self) -> bool:
+        """RXTEST — leave the "Receiving From…" screen (§IX.1).
+
+        Needed after NEWSETUP.  Re-initialising the console appears to
+        land it on the "Receiving From…" setup screen — the same state it
+        boots into after a power loss.  There it still answers serial
+        commands, so nothing looks broken, but it is not running normal
+        reception: RXCHECK reads 0/0/0/0 and every remote sensor dashes.
+
+        Measured on a Vue (fw 2.12): before a NEWSETUP, RXCHECK showed
+        23,516 packets received; immediately after, 0 packets and outside
+        temp/humidity/wind all at their dashed sentinels, while the
+        console's own barometer kept reading normally.
+
+        Also clears the RXCHECK CRC error count, so a caller using that
+        counter as a health signal should re-baseline afterwards.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_rxtest())
+            ok = self._read_status_reply()
+            logger.info("RXTEST: %s", "ok" if ok else "unexpected response")
+            return ok
+
+    def newsetup(self) -> bool:
+        """NEWSETUP — re-initialise the console (§IX.7).
+
+        Required after a latitude/longitude write or a change to the setup
+        bits at 0x2B.  The manual does not say what re-initialisation
+        resets, so verify anything that matters afterwards.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_newsetup())
+            ok = self._read_status_reply()
+            logger.info("NEWSETUP: %s", "ok" if ok else "unexpected response")
+            return ok
+
+    # ---- Text response reader ----
 
     def _read_status_reply(self, timeout_reads: int = 24) -> bool:
         """Read a bare success reply from a command that returns no payload.
@@ -1517,6 +1634,21 @@ class VantageDriver(StationDriver):
 
     async def async_write_station_time(self, dt: datetime) -> bool:
         return await self._run_in_executor(self.write_station_time, dt)
+
+    async def async_set_location(
+        self, latitude: float, longitude: float, newsetup: bool = True,
+    ) -> bool:
+        return await self._run_in_executor(
+            self.set_location, latitude, longitude, newsetup)
+
+    async def async_read_location(self) -> Optional[tuple[float, float]]:
+        return await self._run_in_executor(self.read_location)
+
+    async def async_newsetup(self) -> bool:
+        return await self._run_in_executor(self.newsetup)
+
+    async def async_rxtest(self) -> bool:
+        return await self._run_in_executor(self.rxtest)
 
     async def async_dmpaft(self, after: datetime) -> list[VantageArchiveRecord]:
         return await self._run_in_executor(self.dmpaft, after)
