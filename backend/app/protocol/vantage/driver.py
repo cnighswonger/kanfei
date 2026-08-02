@@ -69,6 +69,7 @@ from .commands import (
     cmd_ver,
     cmd_nver,
     cmd_rxcheck,
+    cmd_bardata,
     cmd_dmpaft,
     cmd_gettime,
     cmd_settime,
@@ -117,6 +118,7 @@ from .hilows import (
     VantageHighsLows,
     HILOWS_TOTAL_SIZE,
 )
+from .bardata import parse_bardata, BarometerCalibration
 
 logger = logging.getLogger(__name__)
 
@@ -1114,6 +1116,42 @@ class VantageDriver(StationDriver):
             logger.warning("RXCHECK: unexpected response: %r", response)
             return None
 
+    # ---- BARDATA: barometer calibration parameters ----
+
+    def bardata(self) -> Optional[BarometerCalibration]:
+        """Read barometer calibration parameters via BARDATA (§IX.5).
+
+        Read-only: reports the console's current elevation, offset and the
+        intermediate terms of its pressure-correction formula.
+
+        Unlike RXCHECK this is a multi-line text response — nine KEY VALUE
+        lines after the OK — so it needs _read_text_block() rather than
+        _read_ok_response(), which returns at the first payload line.
+
+        Observed on a Vue (fw 2.12):
+            BAR 29916 / ELEVATION 265 / DEW POINT 80 / VIRTUAL TEMP 74
+            C 69 / R 1007 / BARCAL 50 / GAIN 0 / OFFSET -44
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_bardata())
+            response = self._read_text_block()
+
+        if not response:
+            logger.warning("BARDATA: no response")
+            return None
+
+        cal = parse_bardata(response)
+        if cal is None:
+            logger.warning("BARDATA: unparseable response: %r", response)
+        else:
+            logger.info(
+                "BARDATA: bar=%s inHg, elevation=%s ft, barcal=%s inHg",
+                cal.barometer_inhg, cal.elevation_ft, cal.barcal_inhg,
+            )
+        return cal
+
     # ---- HILOWS: current high/low block ----
 
     def hilows(self) -> Optional[VantageHighsLows]:
@@ -1181,6 +1219,33 @@ class VantageDriver(StationDriver):
         logger.debug("status reply: got %r", buf)
         return False
 
+    def _read_text_block(self, max_bytes: int = 512,
+                         quiet_reads: int = 3) -> str:
+        """Read a multi-line text response, stopping when the line goes quiet.
+
+        _read_ok_response() returns as soon as it has one payload line,
+        which is right for RXCHECK but truncates BARDATA's nine.  There is
+        no length prefix and no terminator distinguishable from the LF CR
+        that ends every line, so the only way to know the console has
+        finished is that it stops sending.
+
+        Reads until `quiet_reads` consecutive empty reads once something
+        has arrived.
+        """
+        buf = b""
+        quiet = 0
+        for _ in range(max_bytes):
+            chunk = self.serial.receive(1)
+            if not chunk:
+                if buf:
+                    quiet += 1
+                    if quiet >= quiet_reads:
+                        break
+                continue
+            quiet = 0
+            buf += chunk
+        return buf.decode("ascii", errors="replace")
+
     def _read_ok_response(self, max_bytes: int = 256) -> str:
         """Read an OK-prefixed text response terminated by LF CR.
 
@@ -1240,3 +1305,6 @@ class VantageDriver(StationDriver):
 
     async def async_hilows(self) -> Optional[VantageHighsLows]:
         return await self._run_in_executor(self.hilows)
+
+    async def async_bardata(self) -> Optional[BarometerCalibration]:
+        return await self._run_in_executor(self.bardata)
