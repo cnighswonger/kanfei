@@ -148,6 +148,29 @@ def _valid_wind_dir(val: int) -> Optional[int]:
     return val
 
 
+def _valid_wind_speed(val: int) -> Optional[int]:
+    """Return wind speed in mph if valid, else None.
+
+    255 is the dashed sentinel for the single-byte wind fields.  It was
+    previously passed straight through, so a transmitter dropout logged
+    255 mph (114 m/s) as a real reading — and did so on every poll for the
+    duration of the outage, because a stuck sentinel does not look like
+    noise, it looks like a sustained gale.
+
+    Everything around it was already guarded: wind DIRECTION has
+    _valid_wind_dir(), temperature and humidity have their own filters,
+    and the LOOP2 wind fields check 0x7FFF.  Only the two LOOP wind speed
+    bytes were unfiltered, which is why a dropout produced a snapshot with
+    every other outdoor field None and a plausible-looking number here.
+
+    The manual notes wind speed "is forced to be 0" when the console loses
+    sync, so 255 specifically means no data rather than a real extreme.
+    """
+    if val == 0xFF:
+        return None
+    return val
+
+
 def _valid_clock(val: int) -> Optional[int]:
     """Return an hour*100+min time if it decodes to a real clock value.
 
@@ -283,8 +306,8 @@ def parse_loop(raw: bytes) -> Optional[LoopData]:
     data.outside_humidity = _valid_humidity(raw[33])
 
     # Wind
-    data.wind_speed = raw[14]
-    data.wind_speed_10min = raw[15]
+    data.wind_speed = _valid_wind_speed(raw[14])
+    data.wind_speed_10min = _valid_wind_speed(raw[15])
     data.wind_direction = _valid_wind_dir(struct.unpack_from("<H", raw, 16)[0])
 
     # Rain
