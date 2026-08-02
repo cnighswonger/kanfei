@@ -2,6 +2,10 @@
 
 Self-hosted weather station dashboard and data logger for personal weather stations. FastAPI backend with React/TypeScript frontend.
 
+This file is the single source of standards for every agent working in this
+repo — Claude Code, Codex, Gemini, or any other. `CLAUDE.md` is a symlink to
+it for Claude Code's auto-discovery; edit this file, never the symlink.
+
 ## Build
 
 - Frontend: `cd frontend && npm run build`
@@ -22,15 +26,15 @@ Self-hosted weather station dashboard and data logger for personal weather stati
 
 ## Work Discipline (all agents)
 
-- **Step 0 cleanup**: Before any structural refactor on a file >300 LOC, first remove dead code, unused imports, and debug logs. Commit cleanup separately before the real work.
-- **Phased execution**: For multi-file refactors, break work into explicit phases. Complete a phase, run verification, and get approval before the next. Scope phases by complexity, not arbitrary file count.
-- **Flag architectural issues, don't silently refactor.** If architecture is flawed or patterns are inconsistent — flag it and propose a fix. Do not unilaterally refactor beyond the current task scope. The user decides whether to expand scope.
-- **Forced verification**: Do not report a task as complete until the relevant checks pass:
-  - Frontend: `npx tsc --noEmit`
-  - Backend: `py_compile` + `python -m pytest tests/backend/ -q`
-  - If verification is not possible, state that explicitly.
-- **No semantic search**: grep is not an AST. When renaming or changing any function/type/variable, search separately for: direct calls, type-level references, string literals, dynamic imports, re-exports, barrel file entries, and test files/mocks. Do not assume a single search caught everything.
-- **Edit with caution after long conversations**: Context may have been compacted. Re-read files before editing if the conversation is long or has been resumed.
+- **Step 0 cleanup**: Before any structural refactor on a file >300 LOC, first remove dead props, unused exports, unused imports, and debug logs. Commit this cleanup separately before the real work. Dead code wastes context tokens and accelerates compaction.
+- **Phased execution**: For multi-file refactors, break work into explicit phases. Complete a phase, run verification, and get approval before the next. Phases should be scoped by complexity, not an arbitrary file count — mechanical changes across many files (e.g., adding an import to 14 routers) are fine in one pass; complex logic changes should be phased.
+- **Flag architectural issues, don't silently refactor.** If architecture is flawed, state is duplicated, or patterns are inconsistent — flag it and propose a fix. Do not unilaterally refactor beyond the current task scope. The user decides whether to expand scope.
+- **Forced verification**: Do not report a task as complete until you have:
+  - Run `npx tsc --noEmit` (frontend)
+  - Run `py_compile` on modified Python files (backend)
+  - Run `python -m pytest tests/backend/ -q` (backend changes)
+  - Fixed ALL resulting errors
+  - If no type-checker or test runner applies — a docs-only change, say — state that explicitly instead of claiming success.
 
 ## Coding Discipline
 
@@ -43,3 +47,28 @@ Self-hosted weather station dashboard and data logger for personal weather stati
 - localStorage migration keys (`davis-wx-*` in `uiPrefs.ts`) are intentional for backwards compatibility — do not remove
 - Mark beta releases as full releases (not prerelease) so they show on the landing page
 - Multi-phase issues: use `Ref #N` (not `Closes #N`) until the final phase PR
+
+## Edit Safety
+
+- **Edit integrity**: Before every file edit, re-read the file. After editing, verify the change applied correctly if the edit was complex. An edit tool that matches on exact text fails silently when the match string is stale. Do not batch more than 3 edits to the same file without a verification read.
+- **No semantic search**: You have grep, not an AST. When renaming or changing any function/type/variable, search separately for:
+  - Direct calls and references
+  - Type-level references (interfaces, generics)
+  - String literals containing the name
+  - Dynamic imports and require() calls
+  - Re-exports and barrel file entries
+  - Test files and mocks
+
+  Do not assume a single grep caught everything.
+
+## Context Management
+
+These are written against Claude Code's harness, where the limits are known
+exactly. The underlying hazards — stale context after compaction, silently
+truncated tool output — apply to any agent with a bounded context window;
+translate the specifics to whatever harness you are running under.
+
+- **Sub-agent usage**: For tasks touching many independent files, consider launching parallel sub-agents. Each agent gets its own context window. Use this for genuinely independent work (research, mechanical edits across many files), not for interconnected changes that need shared context.
+- **Context decay awareness**: After 10+ messages, any auto-compaction, or a resumed session, re-read any file before editing it. Do not trust memory of file contents — compaction may have silently dropped that context. Editing against stale state causes silent failures.
+- **File read budget**: File reads are capped at 2,000 lines. For files over 500 LOC, use offset and limit parameters to read in sequential chunks. Never assume a complete file was seen from a single read.
+- **Tool result blindness**: Large tool results are silently truncated to a preview. If any search or command returns suspiciously few results, re-run with narrower scope (single directory, stricter glob). State when truncation is suspected.
