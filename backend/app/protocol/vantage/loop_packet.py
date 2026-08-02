@@ -544,6 +544,7 @@ def loop_to_snapshot(
     wind_speed = _mph_to_ms(loop.wind_speed) if loop.wind_speed is not None else None
     wind_direction = loop.wind_direction
     wind_gust = None
+    thsw_index = None
 
     if loop2 is not None:
         if loop2.wind_gust_10min is not None:
@@ -617,8 +618,20 @@ def loop_to_snapshot(
         extra["month_rain_mm"] = _clicks_to_mm(loop.month_rain, rain_click_inches)
 
     if loop2 is not None:
+        # THSW is the one derived value we cannot compute: it needs solar
+        # radiation.  A station without a solar sensor sends the dashed
+        # sentinel, which _valid_derived_temp() has already turned into
+        # None, so this is gated on the value arriving rather than on the
+        # station model — fit a solar sensor and it starts working with no
+        # code change.
+        #
+        # Converted to °C here.  It used to go into extra as raw °F while
+        # every other snapshot field was SI, which would have put a 90 °F
+        # THSW on a °C dashboard.
         if loop2.thsw_index is not None:
-            extra["thsw_index"] = float(loop2.thsw_index)
+            thsw_c = (loop2.thsw_index - 32) * 5.0 / 9.0
+            thsw_index = round(thsw_c, 1)
+            extra["thsw_index_c"] = thsw_index
         if loop2.wind_speed_2min is not None:
             extra["wind_2min_avg_ms"] = _mph_to_ms(round(loop2.wind_speed_2min / 10.0))
         if loop2.wind_speed_10min is not None:
@@ -650,5 +663,6 @@ def loop_to_snapshot(
         soil_moisture=soil_moisture,
         leaf_wetness=leaf_wetness,
         et_daily=et_daily,
+        thsw_index=thsw_index,
         extra=extra,
     )

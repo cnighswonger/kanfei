@@ -33,9 +33,13 @@ class TestHeatIndex:
         result_f = c_tenths_to_f_tenths(result)
         assert result_f > 1000  # > 100°F
 
-    def test_below_20c_returns_none(self):
-        # Below 68°F (20°C) → out of table range
-        assert heat_index(f_tenths_to_c_tenths(600), 50) is None
+    def test_below_20c_returns_air_temperature(self):
+        # Below 68°F (20°C) the table does not apply, but heat index is not
+        # missing data — with no humidity-driven warming to add, apparent
+        # temperature IS air temperature.  Returning None blanked the
+        # dashboard tile for most of the year, which reads as a fault.
+        temp_c = f_tenths_to_c_tenths(600)
+        assert heat_index(temp_c, 50) == temp_c
 
     def test_above_50c_returns_none(self):
         # Above 122°F (50°C) → out of table range

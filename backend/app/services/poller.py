@@ -276,6 +276,12 @@ class Poller:
                 wind_chill=wc,
                 feels_like=fl,
                 theta_e=theta,
+                # Station-computed, not calculated here — stored in tenths
+                # °C like the other temperature columns.
+                thsw_index=(
+                    round(snapshot.thsw_index * 10)
+                    if snapshot.thsw_index is not None else None
+                ),
                 pressure_trend=trend,
                 extra_json=(
                     json.dumps(snapshot.extra)
@@ -458,6 +464,11 @@ class Poller:
                 "wind_chill": {"value": _derived_f(wc), "unit": "F"},
                 "feels_like": {"value": _derived_f(fl), "unit": "F"},
                 "theta_e": {"value": theta / 10.0 if theta is not None else None, "unit": "K"},
+                "thsw_index": {
+                    "value": _derived_f(round(snapshot.thsw_index * 10))
+                    if snapshot.thsw_index is not None else None,
+                    "unit": "F",
+                },
             },
             "solar_radiation": (
                 {"value": snapshot.solar_radiation, "unit": "W/m²"}
