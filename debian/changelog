@@ -1,3 +1,20 @@
+kanfei (0.1.0~beta24) unstable; urgency=medium
+
+  * Fix: corrects three station-computed values read from Davis Vantage
+    stations.  Heat index, wind chill and the THSW index were each read one
+    byte early from the console's data packet, so the values were assembled
+    from adjacent fields and were not readings at all.  The "no sensor
+    fitted" marker for these fields was also being tested against the wrong
+    value, so it was never recognised — a Vantage Vue, which has no solar
+    sensor and therefore cannot compute a THSW index, reported an
+    implausible -256 rather than no value.  This was only reachable from
+    beta23 onward, since the packet carrying these fields had never
+    previously arrived, and the affected values are not yet shown anywhere
+    in the interface; the dew point, heat index and wind chill on the
+    dashboard are calculated independently and were never affected.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sun, 02 Aug 2026 01:20:00 +0000
+
 kanfei (0.1.0~beta23) unstable; urgency=medium
 
   * Fix: wind gust is now the station's real gust.  On Davis Vantage
