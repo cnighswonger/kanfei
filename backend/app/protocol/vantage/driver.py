@@ -48,6 +48,8 @@ from .constants import (
     RAIN_CLICK_INCHES,
     ARCHIVE_PAGE_SIZE,
     DMPAFT_HEADER_SIZE,
+    EEPROM_SIZE,
+    GETEE_TOTAL_SIZE,
     STATION_TYPE_WRD_ADDR,
     CALFIX_BLOCK_SIZE,
     CALFIX_OFF_INSIDE_TEMP,
@@ -70,6 +72,8 @@ from .commands import (
     cmd_nver,
     cmd_rxcheck,
     cmd_bardata,
+    cmd_receivers,
+    cmd_getee,
     cmd_dmpaft,
     cmd_gettime,
     cmd_settime,
@@ -1188,6 +1192,88 @@ class VantageDriver(StationDriver):
                 block, rain_click_inches=self.hw_config.rain_click_inches,
             )
 
+    # ---- RECEIVERS: transmitter IDs being heard ----
+
+    def receivers(self) -> Optional[list[int]]:
+        """Which transmitter IDs the console is currently hearing (§IX.1).
+
+        Returns a sorted list of Tx IDs (1-8), or None if the console did
+        not answer.  An EMPTY LIST IS A VALID ANSWER, not a failure.
+
+        On a Vantage Vue this legitimately returns [] — and that is worth
+        stating plainly, because it looks alarming next to a station that
+        is clearly working.  The Vue's sensor suite is integrated rather
+        than paired as an addressable transmitter, so the whole Tx-ID
+        mechanism (a Vantage Pro2 concept for external transmitters) has
+        nothing to report.  Measured on a Vue (fw 2.12): RECEIVERS returns
+        0x00 and EEPROM USETX is 0x00, while RXCHECK simultaneously shows
+        23,516 packets received and LOOP returns live sensor data.
+
+        Note this is what the console *hears*, which is not the same as
+        what it is configured to listen for (EEPROM USETX, 0x18).
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_receivers())
+            # "OK" then one RAW byte — not text, so the usual text reader
+            # would mangle a 0x01 into something unprintable.
+            raw = self.serial.receive(16)
+
+        idx = raw.find(b"OK")
+        if idx < 0:
+            logger.warning("RECEIVERS: no OK in response: %r", raw)
+            return None
+        payload = raw[idx + 2:].lstrip(b"\n\r")
+        if not payload:
+            logger.warning("RECEIVERS: no bitmask byte after OK: %r", raw)
+            return None
+
+        bitmask = payload[0]
+        heard = [n + 1 for n in range(8) if bitmask & (1 << n)]
+        logger.info(
+            "RECEIVERS: bitmask 0x%02X — hearing %s",
+            bitmask, heard if heard else "no addressable transmitters",
+        )
+        return heard
+
+    # ---- GETEE: full EEPROM dump ----
+
+    def get_eeprom(self) -> Optional[bytes]:
+        """Dump the whole 4096-byte EEPROM via GETEE (§IX.4).
+
+        Returns the 4096 data bytes with the trailing CRC stripped, or
+        None on a short read or CRC failure.
+
+        This is the largest single transfer in the protocol.  At 19200
+        8N1, 4098 bytes is ~2.1 s of wire time and a Vue delivers it in
+        one receive() — measured at 2.14 s — so no chunking is required.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_getee())
+
+            ack = self.serial.receive_byte()
+            if ack != ACK:
+                raise ConnectionError("GETEE: no ACK")
+
+            block = self.serial.receive(GETEE_TOTAL_SIZE)
+
+        if len(block) < GETEE_TOTAL_SIZE:
+            logger.warning(
+                "GETEE: short read (%d of %d bytes)",
+                len(block), GETEE_TOTAL_SIZE,
+            )
+            return None
+
+        if not crc_validate(block[:GETEE_TOTAL_SIZE]):
+            logger.warning("GETEE: CRC failed")
+            return None
+
+        logger.info("GETEE: read %d bytes of EEPROM", EEPROM_SIZE)
+        return block[:EEPROM_SIZE]
+
     # ---- Text response reader ----
 
     def _read_status_reply(self, timeout_reads: int = 24) -> bool:
@@ -1308,3 +1394,9 @@ class VantageDriver(StationDriver):
 
     async def async_bardata(self) -> Optional[BarometerCalibration]:
         return await self._run_in_executor(self.bardata)
+
+    async def async_receivers(self) -> Optional[list[int]]:
+        return await self._run_in_executor(self.receivers)
+
+    async def async_get_eeprom(self) -> Optional[bytes]:
+        return await self._run_in_executor(self.get_eeprom)
