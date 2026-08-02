@@ -41,6 +41,9 @@ class SensorReadingModel(Base):
     wind_chill: Mapped[int | None] = mapped_column(Integer, nullable=True)
     feels_like: Mapped[int | None] = mapped_column(Integer, nullable=True)
     theta_e: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Station-computed, not derived by us: THSW needs solar radiation, so
+    # only a station with a solar sensor reports it.  NULL everywhere else.
+    thsw_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pressure_trend: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (

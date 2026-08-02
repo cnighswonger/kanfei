@@ -56,6 +56,13 @@ class SensorSnapshot:
     # Evapotranspiration (mm)
     et_daily: Optional[float] = None
 
+    # Station-computed THSW index (°C).  Every other derived value is
+    # calculated from raw sensor readings in calculations.py; THSW needs
+    # solar radiation, so only a station with a solar sensor can produce
+    # one.  None on stations that lack the sensor, and on drivers that do
+    # not report it at all.
+    thsw_index: Optional[float] = None
+
     # Vendor-specific fields that don't map to the standard schema
     extra: dict = field(default_factory=dict)
 

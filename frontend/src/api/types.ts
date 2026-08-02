@@ -58,6 +58,8 @@ export interface DerivedData {
   wind_chill: ValueWithUnit | null;
   feels_like: ValueWithUnit | null;
   theta_e: ValueWithUnit | null;
+  /** Station-computed; null unless the station has a solar sensor. */
+  thsw_index: ValueWithUnit | null;
 }
 
 export interface DailyExtremes {

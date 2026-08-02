@@ -40,6 +40,7 @@ SENSOR_COLUMNS = {
     "wind_chill": SensorReadingModel.wind_chill,
     "feels_like": SensorReadingModel.feels_like,
     "theta_e": SensorReadingModel.theta_e,
+    "thsw_index": SensorReadingModel.thsw_index,
     "solar_radiation": SensorReadingModel.solar_radiation,
     "uv_index": SensorReadingModel.uv_index,
 }
@@ -65,6 +66,7 @@ SENSOR_UNITS: dict[str, str] = {
     "wind_chill": "F",
     "feels_like": "F",
     "theta_e": "K",
+    "thsw_index": "F",
     "solar_radiation": "W/m²",
     "uv_index": "",
 }
@@ -77,7 +79,8 @@ SENSOR_UNITS: dict[str, str] = {
 # Sensors without a converter return raw / divisor (or raw unchanged).
 # ---------------------------------------------------------------------------
 
-_TEMP_FIELDS = {"inside_temp", "outside_temp", "heat_index", "dew_point", "wind_chill", "feels_like"}
+_TEMP_FIELDS = {"inside_temp", "outside_temp", "heat_index", "dew_point", "wind_chill", "feels_like",
+                "thsw_index"}
 _RAIN_FIELDS = {"rain_total", "rain_yearly"}
 
 SENSOR_CONVERTERS: dict[str, object] = {
@@ -110,6 +113,7 @@ SENSOR_BOUNDS: dict[str, tuple[int, int]] = {
     "wind_chill": (-733, 656),         # -73.3 to 65.6 °C (tenths °C)
     "feels_like": (-733, 850),
     "theta_e": (2000, 4500),           # 200 to 450 K    (tenths K)
+    "thsw_index": (-400, 850),         # same range as heat_index (tenths °C)
     "inside_humidity": (1, 104),       # sensor tolerance: ±4% above 90% RH
     "outside_humidity": (1, 104),
     "wind_speed": (0, 894),            # 0 to 89.4 m/s ≈ 200 mph (tenths m/s)
@@ -139,6 +143,7 @@ SENSOR_SPIKE_THRESHOLDS: dict[str, int] = {
     "wind_chill": 28,
     "feels_like": 28,
     "theta_e": 50,           # 5 K    (tenths K)
+    "thsw_index": 28,        # same as heat_index
     "inside_humidity": 15,
     "outside_humidity": 15,
     "barometer": 34,         # 3.4 hPa ≈ 0.1 inHg (tenths hPa)

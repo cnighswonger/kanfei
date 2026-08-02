@@ -121,6 +121,8 @@ def get_current(db: Session = Depends(get_db)):
             "wind_chill": _val("wind_chill", reading.wind_chill),
             "feels_like": _val("feels_like", reading.feels_like),
             "theta_e": _val("theta_e", reading.theta_e),
+            # Station-computed; None unless the station has a solar sensor.
+            "thsw_index": _bounded("thsw_index", reading.thsw_index),
         },
         "solar_radiation": _val("solar_radiation", reading.solar_radiation),
         "uv_index": _val("uv_index", reading.uv_index),
