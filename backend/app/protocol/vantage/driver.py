@@ -47,6 +47,7 @@ from .constants import (
     LOOP2_PACKET_SIZE,
     RAIN_CLICK_INCHES,
     ARCHIVE_PAGE_SIZE,
+    ARCHIVE_TOTAL_PAGES,
     DMPAFT_HEADER_SIZE,
     EEPROM_SIZE,
     GETEE_TOTAL_SIZE,
@@ -74,6 +75,9 @@ from .commands import (
     cmd_bardata,
     cmd_receivers,
     cmd_getee,
+    cmd_putrain,
+    cmd_putet,
+    cmd_dmp,
     cmd_dmpaft,
     cmd_gettime,
     cmd_settime,
@@ -967,6 +971,136 @@ class VantageDriver(StationDriver):
 
     # ---- Archive (DMPAFT) ----
 
+    def _read_archive_pages(
+        self,
+        page_count: int,
+        first_offset: int,
+        label: str,
+        after: Optional[datetime] = None,
+    ) -> list[VantageArchiveRecord]:
+        """Read `page_count` archive pages off the wire and parse them.
+
+        Shared by DMP and DMPAFT — the paged transfer in §X.6 is identical
+        for both, and this logic carries two hard-won details worth having
+        in exactly one place: a NAK asks the station to resend the SAME
+        page (so the loop counter must not advance on failure), and an ESC
+        is required to abort cleanly rather than leaving the station mid
+        stream.
+
+        `after` filters records by timestamp; DMP passes None to keep
+        everything.  Caller must already hold _io_lock and have consumed
+        the response header.
+        """
+        records: list[VantageArchiveRecord] = []
+        pages_read = 0
+
+        for page_num in range(page_count):
+            page_data = None
+
+            for attempt in range(MAX_RETRIES):
+                if self._stop_requested:
+                    self.serial.send(bytes([ESC]))
+                    logger.info(
+                        "%s: aborted by stop request at page %d",
+                        label, page_num,
+                    )
+                    page_data = None
+                    break
+
+                chunk = self.serial.receive(ARCHIVE_PAGE_SIZE)
+                if len(chunk) < ARCHIVE_PAGE_SIZE:
+                    logger.warning(
+                        "%s page %d: short read (%d of %d bytes), attempt %d/%d",
+                        label, page_num, len(chunk), ARCHIVE_PAGE_SIZE,
+                        attempt + 1, MAX_RETRIES,
+                    )
+                    self.serial.send(bytes([NAK]))
+                    continue
+
+                if not crc_validate(chunk):
+                    logger.warning(
+                        "%s page %d: CRC failed, attempt %d/%d",
+                        label, page_num, attempt + 1, MAX_RETRIES,
+                    )
+                    self.serial.send(bytes([NAK]))
+                    continue
+
+                page_data = chunk
+                break
+
+            if self._stop_requested:
+                break
+
+            if page_data is None:
+                self.serial.send(bytes([ESC]))
+                raise ConnectionError(
+                    f"{label}: page {page_num} unreadable after "
+                    f"{MAX_RETRIES} attempts"
+                )
+
+            self.serial.send(bytes([ACK]))
+            pages_read += 1
+
+            for offset, record_bytes in parse_archive_page(page_data):
+                if page_num == 0 and offset < first_offset:
+                    continue
+
+                record = parse_archive_record(
+                    record_bytes, self.hw_config.rain_click_inches,
+                )
+                if record is None:
+                    continue
+
+                # Whole pages are sent, so the last one is padded with
+                # unwritten slots.  Drop anything without a timestamp, and
+                # when filtering, anything at or before the cutoff.
+                if record.timestamp is None:
+                    continue
+                if after is not None and record.timestamp <= after:
+                    continue
+
+                records.append(record)
+
+        logger.info(
+            "%s: retrieved %d records from %d/%d pages",
+            label, len(records), pages_read, page_count,
+        )
+        return records
+
+    def dmp(self) -> list[VantageArchiveRecord]:
+        """DMP — download the ENTIRE archive memory (§IX.3).
+
+        Where DMPAFT asks for records after a timestamp, this pulls
+        everything the console holds: up to 2560 records across 512 pages.
+        At 19200 baud that is several minutes of transfer, and it is
+        interruptible via request_stop().
+
+        Read-only — it does not alter or clear the archive.  Prefer
+        dmpaft() for routine syncing; this is for a full re-read, e.g.
+        rebuilding a database from the console.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_dmp())
+
+            ack = self.serial.receive_byte()
+            if ack != ACK:
+                raise ConnectionError("DMP: no ACK")
+
+            # DMP streams pages immediately with no page-count header —
+            # unlike DMPAFT, which negotiates one.  The archive is a fixed
+            # 512 pages of 5 records.
+            return self._read_archive_pages(
+                page_count=ARCHIVE_TOTAL_PAGES,
+                first_offset=0,
+                label="DMP",
+                after=None,
+            )
+
+    async def async_dmp(self) -> list[VantageArchiveRecord]:
+        return await self._run_in_executor(self.dmp)
+
     def dmpaft(self, after: datetime) -> list[VantageArchiveRecord]:
         """Download archive records after the given timestamp."""
         with self._io_lock:
@@ -1016,87 +1150,12 @@ class VantageDriver(StationDriver):
             # subsequent one returns zero bytes.
             self.serial.send(bytes([ACK]))
 
-            records: list[VantageArchiveRecord] = []
-            pages_read = 0
-            for page_num in range(page_count):
-                page_data = None
-
-                # Retry a corrupt or short page in place.  NAK asks the
-                # station to resend the SAME page, so advancing the loop
-                # counter on failure (as this previously did) desynchronises
-                # the stream from the station.
-                for attempt in range(MAX_RETRIES):
-                    if self._stop_requested:
-                        self.serial.send(bytes([ESC]))
-                        logger.info("DMPAFT: aborted by stop request at page %d", page_num)
-                        page_data = None
-                        break
-
-                    chunk = self.serial.receive(ARCHIVE_PAGE_SIZE)
-                    if len(chunk) < ARCHIVE_PAGE_SIZE:
-                        logger.warning(
-                            "DMPAFT page %d: short read (%d of %d bytes), attempt %d/%d",
-                            page_num, len(chunk), ARCHIVE_PAGE_SIZE,
-                            attempt + 1, MAX_RETRIES,
-                        )
-                        self.serial.send(bytes([NAK]))
-                        continue
-
-                    if not crc_validate(chunk):
-                        logger.warning(
-                            "DMPAFT page %d: CRC failed, attempt %d/%d",
-                            page_num, attempt + 1, MAX_RETRIES,
-                        )
-                        self.serial.send(bytes([NAK]))
-                        continue
-
-                    page_data = chunk
-                    break
-
-                if self._stop_requested:
-                    break
-
-                if page_data is None:
-                    # Out of retries — abort rather than press on against a
-                    # stream we can no longer trust.
-                    self.serial.send(bytes([ESC]))
-                    raise ConnectionError(
-                        f"DMPAFT: page {page_num} unreadable after "
-                        f"{MAX_RETRIES} attempts"
-                    )
-
-                # ACK advances the station to the next page.
-                self.serial.send(bytes([ACK]))
-                pages_read += 1
-
-                # Parse records
-                page_records = parse_archive_page(page_data)
-                for offset, record_bytes in page_records:
-                    if page_num == 0 and offset < first_offset:
-                        continue  # skip records before the requested time
-
-                    record = parse_archive_record(
-                        record_bytes, self.hw_config.rain_click_inches,
-                    )
-                    if record is None:
-                        continue
-
-                    # The station sends whole pages, so the final page is
-                    # padded with unwritten slots and any page may carry
-                    # records older than the request.  first_offset only
-                    # covers page 0, so filter on the timestamp too --
-                    # otherwise a request for a future time still returns
-                    # the tail of the archive.
-                    if record.timestamp is None or record.timestamp <= after:
-                        continue
-
-                    records.append(record)
-
-            logger.info(
-                "DMPAFT: retrieved %d records from %d/%d pages",
-                len(records), pages_read, page_count,
+            return self._read_archive_pages(
+                page_count=page_count,
+                first_offset=first_offset,
+                label="DMPAFT",
+                after=after,
             )
-            return records
 
     # ---- RXCHECK diagnostics ----
 
@@ -1274,7 +1333,83 @@ class VantageDriver(StationDriver):
         logger.info("GETEE: read %d bytes of EEPROM", EEPROM_SIZE)
         return block[:EEPROM_SIZE]
 
-    # ---- Text response reader ----
+    # ---- Station location ----
+
+    def set_yearly_rain(self, millimetres: float) -> bool:
+        """PUTRAIN — overwrite the console's yearly rain total.  **IRREVERSIBLE.**
+
+        Takes millimetres, matching how this codebase reports rain
+        everywhere else, and converts to clicks using the collector this
+        station actually reported at connect time.
+
+        That conversion is the whole point of this wrapper.  PUTRAIN's
+        native unit is rain clicks, and a click is 0.01", 0.2 mm or 0.1 mm
+        depending on the collector fitted — so the same integer means
+        three different rainfall totals on three different stations.
+        Sending a raw click count without knowing the collector is how you
+        silently set a yearly total that is off by a factor of two.
+
+        There is no read-back-and-restore here: the previous total is gone
+        once this succeeds.  Read the current value from a LOOP packet
+        first if it might be wanted.
+        """
+        if millimetres < 0:
+            raise ValueError(f"rain total cannot be negative: {millimetres}")
+
+        click_inches = self.hw_config.rain_click_inches
+        if not click_inches:
+            logger.warning(
+                "set_yearly_rain: rain collector size unknown; refusing to "
+                "guess (would risk a 2x error in the stored total)"
+            )
+            return False
+
+        clicks = int(round(millimetres / (click_inches * 25.4)))
+
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_putrain(clicks))
+            ok = self._read_status_reply()
+
+        logger.info(
+            "PUTRAIN %d clicks (%.2f mm at %.4f\"/click): %s",
+            clicks, millimetres, click_inches,
+            "set" if ok else "unexpected response",
+        )
+        return ok
+
+    def set_yearly_et(self, millimetres: float) -> bool:
+        """PUTET — overwrite the console's yearly ET total.  **IRREVERSIBLE.**
+
+        Takes millimetres for consistency with set_yearly_rain(), but note
+        the wire unit differs: ET is hundredths of an inch, fixed, with no
+        collector dependency.  PUTRAIN and PUTET sit adjacent in the manual
+        and read alike, which makes assuming a shared unit an easy mistake.
+        """
+        if millimetres < 0:
+            raise ValueError(f"ET total cannot be negative: {millimetres}")
+
+        hundredths = int(round(millimetres / 25.4 * 100))
+
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_putet(hundredths))
+            ok = self._read_status_reply()
+
+        logger.info(
+            "PUTET %d hundredths-inch (%.2f mm): %s",
+            hundredths, millimetres, "set" if ok else "unexpected response",
+        )
+        return ok
+
+    async def async_set_yearly_rain(self, millimetres: float) -> bool:
+        return await self._run_in_executor(self.set_yearly_rain, millimetres)
+
+    async def async_set_yearly_et(self, millimetres: float) -> bool:
+        return await self._run_in_executor(self.set_yearly_et, millimetres)
+
 
     def _read_status_reply(self, timeout_reads: int = 24) -> bool:
         """Read a bare success reply from a command that returns no payload.
@@ -1400,3 +1535,4 @@ class VantageDriver(StationDriver):
 
     async def async_get_eeprom(self) -> Optional[bytes]:
         return await self._run_in_executor(self.get_eeprom)
+
