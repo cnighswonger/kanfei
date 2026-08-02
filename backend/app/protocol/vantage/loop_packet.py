@@ -171,6 +171,24 @@ def _valid_wind_speed(val: int) -> Optional[int]:
     return val
 
 
+def _valid_derived_temp(val: int) -> Optional[int]:
+    """Return a LOOP2 station-computed temperature, or None when dashed.
+
+    Dew point, heat index, wind chill and THSW are two-byte signed values
+    in whole °F.  The dashed sentinel is 0x7FFF — the manual's table says
+    "255 = dashed data" for all four, but 255 cannot be the sentinel for a
+    two-byte field, and the wire agrees: a Vue with no solar sensor puts
+    32767 in THSW, not 255.
+
+    The range check is deliberately wide.  These are whole-degree °F
+    values, and -150..200 °F comfortably covers any real reading while
+    still catching a sentinel or a misaligned read.
+    """
+    if val == 0x7FFF or val == -1 or not (-150 <= val <= 200):
+        return None
+    return val
+
+
 def _valid_clock(val: int) -> Optional[int]:
     """Return an hour*100+min time if it decodes to a real clock value.
 
@@ -437,15 +455,34 @@ def parse_loop2(raw: bytes) -> Optional[Loop2Data]:
     val = struct.unpack_from("<H", raw, 24)[0]
     data.wind_gust_dir = val if val != 0x7FFF else None
 
-    # Derived values computed by the station
+    # Derived values computed by the station.
+    #
+    # Heat index, wind chill and THSW were each read one byte early,
+    # straddling the previous field's high byte and this field's low byte.
+    # Dew point at 30 was correct; the drift starts at 34 because the
+    # single unused byte at 32 and the humidity byte at 33 were counted as
+    # one field, not two.  Manual §X.2 gives 30 / 35 / 37 / 39.
+    #
+    # The dashed sentinel is 0x7FFF, not 0xFF: these are two-byte fields,
+    # so the byte-width sentinel could never match one.  That is how a
+    # bogus -256 THSW reached extra_json rather than being filtered.  The
+    # manual's own table says "255 = dashed data" for all four, which is
+    # wrong for the same reason -- the Vue puts 0x7FFF in THSW when it has
+    # no solar sensor to compute one from, and that is what the wire
+    # shows.
+    #
+    # Measured on a Vue (fw 2.12), bytes 28..46, to settle it:
+    #   heat_index  @34 = 22783 (garbage)  @35 =    88 °F
+    #   wind_chill  @36 = 21504 (garbage)  @37 =    84 °F
+    #   thsw_index  @38 =  -256 (garbage)  @39 = 32767 (dashed)
     val = struct.unpack_from("<h", raw, 30)[0]
-    data.dew_point = val if val != 0xFF else None
-    val = struct.unpack_from("<h", raw, 34)[0]
-    data.heat_index = val if val != 0xFF else None
-    val = struct.unpack_from("<h", raw, 36)[0]
-    data.wind_chill = val if val != 0xFF else None
-    val = struct.unpack_from("<h", raw, 38)[0]
-    data.thsw_index = val if val != 0xFF else None
+    data.dew_point = _valid_derived_temp(val)
+    val = struct.unpack_from("<h", raw, 35)[0]
+    data.heat_index = _valid_derived_temp(val)
+    val = struct.unpack_from("<h", raw, 37)[0]
+    data.wind_chill = _valid_derived_temp(val)
+    val = struct.unpack_from("<h", raw, 39)[0]
+    data.thsw_index = _valid_derived_temp(val)
 
     # Rain
     data.rain_rate = _valid_rain_rate(struct.unpack_from("<H", raw, 41)[0])
