@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from ..models.database import get_db
 from ..models.sensor_reading import SensorReadingModel
 from ..models.station_config import StationConfigModel
-from ..models.sensor_meta import convert, SENSOR_DIVISORS, SENSOR_UNITS
+from ..models.sensor_meta import convert, SENSOR_BOUNDS, SENSOR_DIVISORS, SENSOR_UNITS
 from ..services.daily_extremes import get_daily_extremes
 from ..services.station_naming import resolve_station_name
 
@@ -40,6 +40,20 @@ def _val(column: str, raw: int | None) -> dict | None:
     if raw is None:
         return None
     return {"value": convert(column, raw), "unit": SENSOR_UNITS.get(column, "")}
+
+
+def _bounded(column: str, raw: int | None) -> dict | None:
+    """_val(), but discarding a RAW reading outside its declared range.
+
+    Needed because publishing a live column is a new path to CWOP/WU, and
+    the sentinel that reached findu in #230 got there through exactly this
+    kind of unguarded hop.  Bounds are checked pre-conversion, in storage
+    units, so the threshold does not shift with the display unit.
+    """
+    bounds = SENSOR_BOUNDS.get(column)
+    if raw is not None and bounds is not None and not (bounds[0] <= raw <= bounds[1]):
+        return None
+    return _val(column, raw)
 
 
 def _clamp_humidity(val: dict | None) -> dict | None:
@@ -84,6 +98,11 @@ def get_current(db: Session = Depends(get_db)):
             "speed": _val("wind_speed", reading.wind_speed),
             "direction": _val("wind_direction", reading.wind_direction),
             "cardinal": _cardinal(reading.wind_direction),
+            # The station's own gust, where the hardware reports one.  Left
+            # out of the payload until now, which is why cwop.py and
+            # wunderground.py both fall back to daily_extremes.wind_speed_hi
+            # — there was nothing else to reach for.
+            "gust": _bounded("wind_gust", reading.wind_gust),
         },
         "barometer": {
             "value": convert("barometer", reading.barometer),

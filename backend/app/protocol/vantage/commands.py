@@ -47,6 +47,88 @@ def cmd_rxcheck() -> bytes:
     return b"RXCHECK\n"
 
 
+def cmd_bardata() -> bytes:
+    """BARDATA — read barometer calibration parameters as text (§IX.5)."""
+    return b"BARDATA\n"
+
+
+def cmd_receivers() -> bytes:
+    """RECEIVERS — bitmask of transmitter IDs the console is hearing.
+
+    Manual section IX.1.  Replies "OK" then a single RAW byte, not text:
+    bit 0 = Tx ID 1.  Note this reports what is being *received*, not what
+    the console is configured to listen for (EEPROM USETX at 0x18).
+    """
+    return b"RECEIVERS\n"
+
+
+def cmd_getee() -> bytes:
+    """GETEE — dump the entire 4096-byte EEPROM plus a 2-byte CRC (§IX.4)."""
+    return b"GETEE\n"
+
+
+def cmd_rxtest() -> bytes:
+    """RXTEST — leave the "Receiving From…" screen (§IX.1).
+
+    Moves the console from the "Receiving From…" setup screen to the main
+    current-conditions screen.  The manual presents this as the way to
+    "programmatically recover from a powerloss when the console boots into
+    the receiving from screen" — and NEWSETUP appears to leave it in that
+    same state, which stops normal sensor reception even though the
+    console still answers serial commands.
+
+    Also clears the CRC error count reported by RXCHECK.
+    """
+    return b"RXTEST\n"
+
+
+def cmd_newsetup() -> bytes:
+    """NEWSETUP — re-initialise the console after a config change (§IX.7).
+
+    The manual is emphatic that this must follow a latitude or longitude
+    write, and any change to the setup bits at 0x2B.  It says only
+    "re-initializes" and does not enumerate what that resets, so callers
+    should verify anything they care about afterwards rather than assume.
+    """
+    return b"NEWSETUP\n"
+
+
+def cmd_putrain(clicks: int) -> bytes:
+    """PUTRAIN — set the yearly rain total, in RAIN CLICKS (§IX.2).
+
+    The unit is clicks, not inches and not millimetres, and a click is not
+    a fixed size: 0.01", 0.2 mm or 0.1 mm depending on the collector
+    fitted (EEPROM setup bits, 0x2B).  Passing a value in any other unit
+    silently sets the wrong yearly total, so callers should go through
+    VantageDriver.set_yearly_rain(), which converts from mm using the
+    collector this station actually reports.
+
+    The manual's example sets 24.83 inches on a 0.01" collector as
+    "PUTRAIN 2483".
+    """
+    return f"PUTRAIN {clicks}\n".encode()
+
+
+def cmd_putet(hundredths_inch: int) -> bytes:
+    """PUTET — set the yearly ET total, in HUNDREDTHS OF AN INCH (§IX.2).
+
+    Note this differs from PUTRAIN: ET is a fixed hundredths-of-an-inch
+    unit with no collector dependency.  The two commands sit next to each
+    other in the manual and read alike, which makes it easy to assume they
+    share a unit.  They do not.
+    """
+    return f"PUTET {hundredths_inch}\n".encode()
+
+
+def cmd_dmp() -> bytes:
+    """DMP — download the entire archive memory (§IX.3).
+
+    Uses the same paged transfer as DMPAFT (§X.6): 267-byte pages, each
+    ACKed or NAKed, ESC to abort.
+    """
+    return b"DMP\n"
+
+
 def cmd_dmpaft() -> bytes:
     """DMPAFT — begin archive dump after timestamp."""
     return b"DMPAFT\n"
@@ -86,13 +168,47 @@ def cmd_clrlog() -> bytes:
     return b"CLRLOG\n"
 
 
-def cmd_clrhighs(period: int = 0) -> bytes:
-    """CLRHIGHS — clear high records (0=daily, 1=monthly, -1=yearly)."""
+# --------------- CLRHIGHS / CLRLOWS periods ---------------
+# Manual sections IX.6 / IX.13: the argument is 0, 1, or 2.  An earlier
+# docstring here claimed -1 meant yearly; that is wrong and would have put
+# an undefined value on the wire.  Nothing called it, so nothing broke.
+#
+# These clear *every* extremum for the period.  Per section II.4, "You can
+# not reset individual high or low values" — there is no way to clear just
+# one sensor's high, so callers must accept the collateral.
+CLR_PERIOD_DAILY = 0
+CLR_PERIOD_MONTHLY = 1
+CLR_PERIOD_YEARLY = 2
+
+CLR_PERIODS: frozenset[int] = frozenset({
+    CLR_PERIOD_DAILY, CLR_PERIOD_MONTHLY, CLR_PERIOD_YEARLY,
+})
+
+CLR_PERIOD_NAMES: dict[int, str] = {
+    CLR_PERIOD_DAILY: "daily",
+    CLR_PERIOD_MONTHLY: "monthly",
+    CLR_PERIOD_YEARLY: "yearly",
+}
+
+
+def cmd_clrhighs(period: int = CLR_PERIOD_DAILY) -> bytes:
+    """CLRHIGHS — clear ALL high records for a period (0/1/2)."""
     return f"CLRHIGHS {period}\n".encode()
 
 
-def cmd_clrlows(period: int = 0) -> bytes:
-    """CLRLOWS — clear low records (0=daily, 1=monthly, -1=yearly)."""
+def cmd_hilows() -> bytes:
+    """HILOWS — read the current 436-byte hi/low block + 2-byte CRC.
+
+    Manual section IX.2: the station responds with <ACK> then a 436-byte
+    payload holding daily, monthly, and yearly highs/lows for every
+    supported sensor, plus a trailing big-endian CRC-16.  Layout is
+    documented in section X.3.
+    """
+    return b"HILOWS\n"
+
+
+def cmd_clrlows(period: int = CLR_PERIOD_DAILY) -> bytes:
+    """CLRLOWS — clear ALL low records for a period (0/1/2)."""
     return f"CLRLOWS {period}\n".encode()
 
 
@@ -153,3 +269,41 @@ def cmd_setper(minutes: int) -> bytes:
     prevents.  Send CLRLOG explicitly if a clean archive is wanted.
     """
     return f"SETPER {minutes}\n".encode()
+
+
+# --------------- CLRVAR data-variable numbers ---------------
+# Manual section IX.6.  "Results are undefined if you use a number not on
+# this list", so callers must be restricted to exactly these values.
+# Note 15 is deliberately absent — the documented set is not contiguous.
+CLRVAR_RAIN_DAILY = 13
+CLRVAR_RAIN_STORM = 14
+CLRVAR_RAIN_MONTH = 16
+CLRVAR_RAIN_YEAR = 17
+CLRVAR_ET_MONTH = 25
+CLRVAR_ET_DAY = 26
+CLRVAR_ET_YEAR = 27
+
+CLRVAR_VARIABLES: frozenset[int] = frozenset({
+    CLRVAR_RAIN_DAILY, CLRVAR_RAIN_STORM, CLRVAR_RAIN_MONTH, CLRVAR_RAIN_YEAR,
+    CLRVAR_ET_MONTH, CLRVAR_ET_DAY, CLRVAR_ET_YEAR,
+})
+
+CLRVAR_NAMES: dict[int, str] = {
+    CLRVAR_RAIN_DAILY: "daily rain",
+    CLRVAR_RAIN_STORM: "storm rain",
+    CLRVAR_RAIN_MONTH: "month rain",
+    CLRVAR_RAIN_YEAR: "year rain",
+    CLRVAR_ET_MONTH: "month ET",
+    CLRVAR_ET_DAY: "day ET",
+    CLRVAR_ET_YEAR: "year ET",
+}
+
+
+def cmd_clrvar(variable: int) -> bytes:
+    """CLRVAR — clear a single rain or ET accumulator.
+
+    `variable` must be one of CLRVAR_VARIABLES; the manual warns that any
+    other number produces undefined behaviour, so this is not a value to
+    pass through from user input unchecked.
+    """
+    return f"CLRVAR {variable}\n".encode()

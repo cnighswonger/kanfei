@@ -27,6 +27,7 @@ from ..services.calculations import (
 from ..services.pressure_trend import analyze_pressure_trend
 from ..services.alerts import AlertChecker
 from ..models.database import SessionLocal
+from ..models.sensor_meta import SENSOR_BOUNDS
 from ..models.sensor_reading import SensorReadingModel
 from ..models.station_config import StationConfigModel
 
@@ -390,6 +391,23 @@ class Poller:
             """m/s float → mph display int."""
             return round(ms * 2.23694) if ms is not None else None
 
+        def _gust(ms: Optional[float]) -> Optional[int]:
+            """m/s float → mph display int, dropping out-of-range values.
+
+            The gust now goes straight out to CWOP/WU, so it gets the same
+            SENSOR_BOUNDS check the stored columns get.  Bounds are in
+            tenths m/s (storage units), matching how the value is written
+            to the DB — a driver-level sentinel must not survive the hop
+            to a published packet, which is how 255 mph reached findu
+            (#230).
+            """
+            if ms is None:
+                return None
+            bounds = SENSOR_BOUNDS.get("wind_gust")
+            if bounds is not None and not (bounds[0] <= round(ms * 10) <= bounds[1]):
+                return None
+            return _wind(ms)
+
         def _rain(mm: Optional[float]) -> Optional[float]:
             """mm float → inches display float."""
             return round(mm / 25.4, 2) if mm is not None else None
@@ -409,6 +427,10 @@ class Poller:
                 "speed": {"value": _wind(snapshot.wind_speed), "unit": "mph"},
                 "direction": {"value": snapshot.wind_direction, "unit": "°"},
                 "cardinal": self._cardinal(snapshot.wind_direction),
+                # Must mirror the /api/current shape — cwop.py and
+                # wunderground.py read whichever payload reaches them and
+                # cannot tell the two apart.
+                "gust": {"value": _gust(snapshot.wind_gust), "unit": "mph"},
             },
             "barometer": {
                 "value": _baro(snapshot.barometer),

@@ -39,10 +39,26 @@ ARCHIVE_PAGE_HEADER_SIZE = 1     # leading sequence byte, before record 0
 ARCHIVE_RECORD_SIZE = 52
 ARCHIVE_RECORDS_PER_PAGE = 5
 
+# DMP streams the whole archive with no page-count header (unlike DMPAFT,
+# which negotiates one), so the reader needs the fixed size: the console
+# holds 2560 records = 512 pages of 5.  §I quotes "up to 2560 archive
+# records" for a console with a WeatherLink logger fitted.
+ARCHIVE_TOTAL_RECORDS = 2560
+ARCHIVE_TOTAL_PAGES = ARCHIVE_TOTAL_RECORDS // ARCHIVE_RECORDS_PER_PAGE
+
 # DMPAFT response header: page_count (u16 LE) + first_record_offset (u16 LE)
 # + CRC (u16 BE).  The station waits for an ACK after this before sending
 # page 0.
 DMPAFT_HEADER_SIZE = 6
+
+# --------------- GETEE ---------------
+
+# Full EEPROM dump: 4096 bytes of data plus a trailing 2-byte CRC.
+# Measured on a Vue at 19200 8N1: 4098 bytes arrive in ~2.14 s, which is
+# the theoretical wire time, so a single receive() call is sufficient and
+# no chunking is needed.
+EEPROM_SIZE = 4096
+GETEE_TOTAL_SIZE = 4098
 
 # --------------- Calibration ---------------
 

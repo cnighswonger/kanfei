@@ -46,6 +46,8 @@ from .base import (
     HardwareInfo,
     CAP_ARCHIVE_SYNC,
     CAP_CALIBRATION_RW,
+    CAP_ARCHIVE_PERIOD_RW,
+    CAP_SAMPLE_PERIOD_RW,
     CAP_CLOCK_SYNC,
     CAP_RAIN_RESET,
     CAP_HILOWS,
@@ -1157,4 +1159,6 @@ class LinkDriver(StationDriver):
             CAP_CLOCK_SYNC,
             CAP_RAIN_RESET,
             CAP_HILOWS,
+            CAP_ARCHIVE_PERIOD_RW,
+            CAP_SAMPLE_PERIOD_RW,
         }

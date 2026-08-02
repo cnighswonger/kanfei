@@ -26,6 +26,7 @@ from ..base import (
     HardwareInfo,
     CAP_ARCHIVE_SYNC,
     CAP_CALIBRATION_RW,
+    CAP_ARCHIVE_PERIOD_RW,
     CAP_CLOCK_SYNC,
     CAP_RAIN_RESET,
     CAP_HILOWS,
@@ -46,7 +47,10 @@ from .constants import (
     LOOP2_PACKET_SIZE,
     RAIN_CLICK_INCHES,
     ARCHIVE_PAGE_SIZE,
+    ARCHIVE_TOTAL_PAGES,
     DMPAFT_HEADER_SIZE,
+    EEPROM_SIZE,
+    GETEE_TOTAL_SIZE,
     STATION_TYPE_WRD_ADDR,
     CALFIX_BLOCK_SIZE,
     CALFIX_OFF_INSIDE_TEMP,
@@ -68,6 +72,14 @@ from .commands import (
     cmd_ver,
     cmd_nver,
     cmd_rxcheck,
+    cmd_bardata,
+    cmd_receivers,
+    cmd_getee,
+    cmd_newsetup,
+    cmd_rxtest,
+    cmd_putrain,
+    cmd_putet,
+    cmd_dmp,
     cmd_dmpaft,
     cmd_gettime,
     cmd_settime,
@@ -77,7 +89,18 @@ from .commands import (
     cmd_calfix,
     cmd_clrcal,
     cmd_clrlog,
+    cmd_clrvar,
+    cmd_clrhighs,
+    cmd_clrlows,
+    cmd_hilows,
     cmd_setper,
+    CLRVAR_VARIABLES,
+    CLRVAR_NAMES,
+    CLRVAR_RAIN_DAILY,
+    CLRVAR_RAIN_YEAR,
+    CLR_PERIODS,
+    CLR_PERIOD_NAMES,
+    CLR_PERIOD_DAILY,
     build_dmpaft_timestamp,
     build_settime_payload,
 )
@@ -100,6 +123,12 @@ from .archive import (
     parse_archive_page,
     VantageArchiveRecord,
 )
+from .hilows import (
+    parse_hilows,
+    VantageHighsLows,
+    HILOWS_TOTAL_SIZE,
+)
+from .bardata import parse_bardata, BarometerCalibration
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +189,11 @@ class VantageDriver(StationDriver):
         caps = {
             CAP_ARCHIVE_SYNC, CAP_CLOCK_SYNC, CAP_RAIN_RESET,
             CAP_CALIBRATION_RW,
+            # SETPER — added in #217.  CAP_SAMPLE_PERIOD_RW is deliberately
+            # absent: "sample period" is a WeatherLink-logger concept with
+            # no equivalent anywhere in the Vantage serial protocol, so it
+            # is genuinely unsupported rather than merely unimplemented.
+            CAP_ARCHIVE_PERIOD_RW,
         }
         if self.hw_config.has_loop2:
             caps.add(CAP_HILOWS)
@@ -373,9 +407,22 @@ class VantageDriver(StationDriver):
             return None
 
     def _poll_lps(self) -> Optional[SensorSnapshot]:
-        """LPS 3 1 → one LOOP + one LOOP2 packet (VP2/Vue)."""
+        """LPS 3 2 → one LOOP + one LOOP2 packet (VP2/Vue).
+
+        The second argument is the TOTAL number of packets across all
+        selected types, not the number of rounds.  This asked for
+        ``LPS 3 1`` — bitmask 3 (LOOP + LOOP2), one packet total — so the
+        console sent the LOOP and stopped.  The LOOP2 read that followed
+        always timed out, and because a short read was discarded without
+        logging, every LOOP2 field silently stayed None for the life of
+        the install: 714,779 rows on the production box, not one carrying
+        a LOOP2-derived key.
+
+        The manual's own example is unambiguous (§IX, "LPS"): ``LPS 3 4``
+        is documented as "request 2 LOOP and 2 LOOP2 packets".
+        """
         self.serial.flush()
-        self.serial.send(cmd_lps(3, 1))
+        self.serial.send(cmd_lps(3, 2))
 
         ack = self.serial.receive_byte()
         if ack != ACK:
@@ -390,10 +437,19 @@ class VantageDriver(StationDriver):
         if loop_data is None:
             raise ConnectionError("LOOP parse failed")
 
-        # Read LOOP2 packet
+        # Read LOOP2 packet.  A missing or malformed LOOP2 is not fatal —
+        # every field it carries is supplementary — but it must be LOUD,
+        # or a regression here is invisible again.  The console sleeps
+        # 2.5 s between packets; the 5 s port timeout covers that.
         loop2_raw = self.serial.receive(LOOP2_PACKET_SIZE)
         loop2_data = None
-        if len(loop2_raw) >= LOOP2_PACKET_SIZE:
+        if len(loop2_raw) < LOOP2_PACKET_SIZE:
+            logger.warning(
+                "LOOP2 short read: %d/%d bytes (using LOOP only — "
+                "gust and 2/10-min wind will be unavailable)",
+                len(loop2_raw), LOOP2_PACKET_SIZE,
+            )
+        else:
             loop2_data = parse_loop2(loop2_raw)
             if loop2_data is None:
                 logger.warning("LOOP2 parse failed (using LOOP only)")
@@ -651,6 +707,34 @@ class VantageDriver(StationDriver):
 
     # ---- Archive period ----
 
+    def read_archive_period(self) -> Optional[int]:
+        """Read the archive interval from EEPROM, in minutes.
+
+        Reads the register rather than returning the cached
+        hw_config.archive_interval, so a value changed by the console's own
+        UI (or by another process on the port) is reported accurately.
+        """
+        with self._io_lock:
+            data = self._eeprom_read(ARCHIVE_INTERVAL.address, ARCHIVE_INTERVAL.n_bytes)
+            if not data:
+                logger.warning("read_archive_period: EEPROM read failed")
+                return None
+            value = data[0]
+            if value not in DAVIS_LEGAL_ARCHIVE_PERIODS:
+                # Same guard as LinkDriver.read_archive_period (see #174):
+                # a garbage register value must not be presented as truth.
+                logger.warning(
+                    "read_archive_period: rejecting non-Davis-legal value %d "
+                    "(expected one of %s)",
+                    value, sorted(DAVIS_LEGAL_ARCHIVE_PERIODS),
+                )
+                return None
+            self.hw_config.archive_interval = value
+            return value
+
+    async def async_read_archive_period(self) -> Optional[int]:
+        return await self._run_in_executor(self.read_archive_period)
+
     def set_archive_period(self, minutes: int) -> bool:
         """Set the archive interval via SETPER.
 
@@ -709,6 +793,111 @@ class VantageDriver(StationDriver):
 
     async def async_set_archive_period(self, minutes: int) -> bool:
         return await self._run_in_executor(self.set_archive_period, minutes)
+
+    def clear_variable(self, variable: int) -> bool:
+        """CLRVAR — clear one rain or ET accumulator.  **IRREVERSIBLE.**
+
+        `variable` must be one of CLRVAR_VARIABLES (manual section IX.6):
+        13 daily rain, 14 storm rain, 16 month rain, 17 year rain,
+        25 month ET, 26 day ET, 27 year ET.  The manual states results are
+        undefined for any other number, so anything else is rejected here
+        rather than sent.
+
+        Verified on a Vantage Vue (fw 2.12): replies with a bare ACK, as
+        documented, and clears only the named accumulator — daily rain went
+        to 0 while year rain stayed at 2848 clicks.
+        """
+        if variable not in CLRVAR_VARIABLES:
+            raise ValueError(
+                f"CLRVAR variable must be one of {sorted(CLRVAR_VARIABLES)} "
+                f"(got {variable})"
+            )
+        name = CLRVAR_NAMES.get(variable, str(variable))
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_clrvar(variable))
+            ok = self._read_status_reply()
+            logger.info(
+                "CLRVAR %d (%s): %s",
+                variable, name, "cleared" if ok else "unexpected response",
+            )
+            return ok
+
+    def clear_rain_daily(self) -> bool:
+        """Clear the daily rain accumulator (CLRVAR 13)."""
+        return self.clear_variable(CLRVAR_RAIN_DAILY)
+
+    def clear_rain_yearly(self) -> bool:
+        """Clear the yearly rain accumulator (CLRVAR 17)."""
+        return self.clear_variable(CLRVAR_RAIN_YEAR)
+
+    def clear_highs(self, period: int = CLR_PERIOD_DAILY) -> bool:
+        """CLRHIGHS — clear ALL high records for a period.  **IRREVERSIBLE.**
+
+        `period` is 0 daily / 1 monthly / 2 yearly (manual section IX.13).
+
+        This is deliberately not scoped to a single sensor, because the
+        protocol cannot do that: section II.4 states "You can not reset
+        individual high or low values."  Clearing the daily highs to drop
+        one bad reading also drops that day's barometer, wind, humidity and
+        inside-temperature highs.  Callers wanting to remove a single
+        outlier should know they are trading the whole period for it.
+        """
+        if period not in CLR_PERIODS:
+            raise ValueError(
+                f"CLRHIGHS period must be one of {sorted(CLR_PERIODS)} "
+                f"(got {period})"
+            )
+        name = CLR_PERIOD_NAMES.get(period, str(period))
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_clrhighs(period))
+            ok = self._read_status_reply()
+            logger.info(
+                "CLRHIGHS %d (%s highs): %s",
+                period, name, "cleared" if ok else "unexpected response",
+            )
+            return ok
+
+    def clear_lows(self, period: int = CLR_PERIOD_DAILY) -> bool:
+        """CLRLOWS — clear ALL low records for a period.  **IRREVERSIBLE.**
+
+        Same period argument and same all-or-nothing caveat as
+        clear_highs(); see that docstring.
+        """
+        if period not in CLR_PERIODS:
+            raise ValueError(
+                f"CLRLOWS period must be one of {sorted(CLR_PERIODS)} "
+                f"(got {period})"
+            )
+        name = CLR_PERIOD_NAMES.get(period, str(period))
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_clrlows(period))
+            ok = self._read_status_reply()
+            logger.info(
+                "CLRLOWS %d (%s lows): %s",
+                period, name, "cleared" if ok else "unexpected response",
+            )
+            return ok
+
+    async def async_clear_variable(self, variable: int) -> bool:
+        return await self._run_in_executor(self.clear_variable, variable)
+
+    async def async_clear_highs(self, period: int = CLR_PERIOD_DAILY) -> bool:
+        return await self._run_in_executor(self.clear_highs, period)
+
+    async def async_clear_lows(self, period: int = CLR_PERIOD_DAILY) -> bool:
+        return await self._run_in_executor(self.clear_lows, period)
+
+    async def async_clear_rain_daily(self) -> bool:
+        return await self._run_in_executor(self.clear_rain_daily)
+
+    async def async_clear_rain_yearly(self) -> bool:
+        return await self._run_in_executor(self.clear_rain_yearly)
 
     def clear_log(self) -> bool:
         """CLRLOG — erase archive memory.  **IRREVERSIBLE.**
@@ -806,6 +995,136 @@ class VantageDriver(StationDriver):
 
     # ---- Archive (DMPAFT) ----
 
+    def _read_archive_pages(
+        self,
+        page_count: int,
+        first_offset: int,
+        label: str,
+        after: Optional[datetime] = None,
+    ) -> list[VantageArchiveRecord]:
+        """Read `page_count` archive pages off the wire and parse them.
+
+        Shared by DMP and DMPAFT — the paged transfer in §X.6 is identical
+        for both, and this logic carries two hard-won details worth having
+        in exactly one place: a NAK asks the station to resend the SAME
+        page (so the loop counter must not advance on failure), and an ESC
+        is required to abort cleanly rather than leaving the station mid
+        stream.
+
+        `after` filters records by timestamp; DMP passes None to keep
+        everything.  Caller must already hold _io_lock and have consumed
+        the response header.
+        """
+        records: list[VantageArchiveRecord] = []
+        pages_read = 0
+
+        for page_num in range(page_count):
+            page_data = None
+
+            for attempt in range(MAX_RETRIES):
+                if self._stop_requested:
+                    self.serial.send(bytes([ESC]))
+                    logger.info(
+                        "%s: aborted by stop request at page %d",
+                        label, page_num,
+                    )
+                    page_data = None
+                    break
+
+                chunk = self.serial.receive(ARCHIVE_PAGE_SIZE)
+                if len(chunk) < ARCHIVE_PAGE_SIZE:
+                    logger.warning(
+                        "%s page %d: short read (%d of %d bytes), attempt %d/%d",
+                        label, page_num, len(chunk), ARCHIVE_PAGE_SIZE,
+                        attempt + 1, MAX_RETRIES,
+                    )
+                    self.serial.send(bytes([NAK]))
+                    continue
+
+                if not crc_validate(chunk):
+                    logger.warning(
+                        "%s page %d: CRC failed, attempt %d/%d",
+                        label, page_num, attempt + 1, MAX_RETRIES,
+                    )
+                    self.serial.send(bytes([NAK]))
+                    continue
+
+                page_data = chunk
+                break
+
+            if self._stop_requested:
+                break
+
+            if page_data is None:
+                self.serial.send(bytes([ESC]))
+                raise ConnectionError(
+                    f"{label}: page {page_num} unreadable after "
+                    f"{MAX_RETRIES} attempts"
+                )
+
+            self.serial.send(bytes([ACK]))
+            pages_read += 1
+
+            for offset, record_bytes in parse_archive_page(page_data):
+                if page_num == 0 and offset < first_offset:
+                    continue
+
+                record = parse_archive_record(
+                    record_bytes, self.hw_config.rain_click_inches,
+                )
+                if record is None:
+                    continue
+
+                # Whole pages are sent, so the last one is padded with
+                # unwritten slots.  Drop anything without a timestamp, and
+                # when filtering, anything at or before the cutoff.
+                if record.timestamp is None:
+                    continue
+                if after is not None and record.timestamp <= after:
+                    continue
+
+                records.append(record)
+
+        logger.info(
+            "%s: retrieved %d records from %d/%d pages",
+            label, len(records), pages_read, page_count,
+        )
+        return records
+
+    def dmp(self) -> list[VantageArchiveRecord]:
+        """DMP — download the ENTIRE archive memory (§IX.3).
+
+        Where DMPAFT asks for records after a timestamp, this pulls
+        everything the console holds: up to 2560 records across 512 pages.
+        At 19200 baud that is several minutes of transfer, and it is
+        interruptible via request_stop().
+
+        Read-only — it does not alter or clear the archive.  Prefer
+        dmpaft() for routine syncing; this is for a full re-read, e.g.
+        rebuilding a database from the console.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_dmp())
+
+            ack = self.serial.receive_byte()
+            if ack != ACK:
+                raise ConnectionError("DMP: no ACK")
+
+            # DMP streams pages immediately with no page-count header —
+            # unlike DMPAFT, which negotiates one.  The archive is a fixed
+            # 512 pages of 5 records.
+            return self._read_archive_pages(
+                page_count=ARCHIVE_TOTAL_PAGES,
+                first_offset=0,
+                label="DMP",
+                after=None,
+            )
+
+    async def async_dmp(self) -> list[VantageArchiveRecord]:
+        return await self._run_in_executor(self.dmp)
+
     def dmpaft(self, after: datetime) -> list[VantageArchiveRecord]:
         """Download archive records after the given timestamp."""
         with self._io_lock:
@@ -855,87 +1174,12 @@ class VantageDriver(StationDriver):
             # subsequent one returns zero bytes.
             self.serial.send(bytes([ACK]))
 
-            records: list[VantageArchiveRecord] = []
-            pages_read = 0
-            for page_num in range(page_count):
-                page_data = None
-
-                # Retry a corrupt or short page in place.  NAK asks the
-                # station to resend the SAME page, so advancing the loop
-                # counter on failure (as this previously did) desynchronises
-                # the stream from the station.
-                for attempt in range(MAX_RETRIES):
-                    if self._stop_requested:
-                        self.serial.send(bytes([ESC]))
-                        logger.info("DMPAFT: aborted by stop request at page %d", page_num)
-                        page_data = None
-                        break
-
-                    chunk = self.serial.receive(ARCHIVE_PAGE_SIZE)
-                    if len(chunk) < ARCHIVE_PAGE_SIZE:
-                        logger.warning(
-                            "DMPAFT page %d: short read (%d of %d bytes), attempt %d/%d",
-                            page_num, len(chunk), ARCHIVE_PAGE_SIZE,
-                            attempt + 1, MAX_RETRIES,
-                        )
-                        self.serial.send(bytes([NAK]))
-                        continue
-
-                    if not crc_validate(chunk):
-                        logger.warning(
-                            "DMPAFT page %d: CRC failed, attempt %d/%d",
-                            page_num, attempt + 1, MAX_RETRIES,
-                        )
-                        self.serial.send(bytes([NAK]))
-                        continue
-
-                    page_data = chunk
-                    break
-
-                if self._stop_requested:
-                    break
-
-                if page_data is None:
-                    # Out of retries — abort rather than press on against a
-                    # stream we can no longer trust.
-                    self.serial.send(bytes([ESC]))
-                    raise ConnectionError(
-                        f"DMPAFT: page {page_num} unreadable after "
-                        f"{MAX_RETRIES} attempts"
-                    )
-
-                # ACK advances the station to the next page.
-                self.serial.send(bytes([ACK]))
-                pages_read += 1
-
-                # Parse records
-                page_records = parse_archive_page(page_data)
-                for offset, record_bytes in page_records:
-                    if page_num == 0 and offset < first_offset:
-                        continue  # skip records before the requested time
-
-                    record = parse_archive_record(
-                        record_bytes, self.hw_config.rain_click_inches,
-                    )
-                    if record is None:
-                        continue
-
-                    # The station sends whole pages, so the final page is
-                    # padded with unwritten slots and any page may carry
-                    # records older than the request.  first_offset only
-                    # covers page 0, so filter on the timestamp too --
-                    # otherwise a request for a future time still returns
-                    # the tail of the archive.
-                    if record.timestamp is None or record.timestamp <= after:
-                        continue
-
-                    records.append(record)
-
-            logger.info(
-                "DMPAFT: retrieved %d records from %d/%d pages",
-                len(records), pages_read, page_count,
+            return self._read_archive_pages(
+                page_count=page_count,
+                first_offset=first_offset,
+                label="DMPAFT",
+                after=after,
             )
-            return records
 
     # ---- RXCHECK diagnostics ----
 
@@ -958,6 +1202,351 @@ class VantageDriver(StationDriver):
                 }
             logger.warning("RXCHECK: unexpected response: %r", response)
             return None
+
+    # ---- BARDATA: barometer calibration parameters ----
+
+    def bardata(self) -> Optional[BarometerCalibration]:
+        """Read barometer calibration parameters via BARDATA (§IX.5).
+
+        Read-only: reports the console's current elevation, offset and the
+        intermediate terms of its pressure-correction formula.
+
+        Unlike RXCHECK this is a multi-line text response — nine KEY VALUE
+        lines after the OK — so it needs _read_text_block() rather than
+        _read_ok_response(), which returns at the first payload line.
+
+        Observed on a Vue (fw 2.12):
+            BAR 29916 / ELEVATION 265 / DEW POINT 80 / VIRTUAL TEMP 74
+            C 69 / R 1007 / BARCAL 50 / GAIN 0 / OFFSET -44
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_bardata())
+            response = self._read_text_block()
+
+        if not response:
+            logger.warning("BARDATA: no response")
+            return None
+
+        cal = parse_bardata(response)
+        if cal is None:
+            logger.warning("BARDATA: unparseable response: %r", response)
+        else:
+            logger.info(
+                "BARDATA: bar=%s inHg, elevation=%s ft, barcal=%s inHg",
+                cal.barometer_inhg, cal.elevation_ft, cal.barcal_inhg,
+            )
+        return cal
+
+    # ---- HILOWS: current high/low block ----
+
+    def hilows(self) -> Optional[VantageHighsLows]:
+        """Read the console's current high/low block via HILOWS (§IX.2).
+
+        Response: <ACK> then 436 bytes of payload plus a 2-byte CRC.  The
+        parser filters dashed sentinels field-by-field so an unpopulated
+        extra-temp slot comes back as None rather than -90 °F.
+
+        Advertised via CAP_HILOWS on the driver; before this landed the
+        capability was true in name only — the exact "advertise-what-you-
+        cannot-do" bug that motivated #221.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_hilows())
+
+            ack = self.serial.receive_byte()
+            if ack != ACK:
+                raise ConnectionError("HILOWS: no ACK")
+
+            block = self.serial.receive(HILOWS_TOTAL_SIZE)
+            if len(block) < HILOWS_TOTAL_SIZE:
+                raise ConnectionError(
+                    f"HILOWS: short read ({len(block)} of "
+                    f"{HILOWS_TOTAL_SIZE} bytes)"
+                )
+
+            if not crc_validate(block[:HILOWS_TOTAL_SIZE]):
+                raise ConnectionError("HILOWS: CRC failed")
+
+            return parse_hilows(
+                block, rain_click_inches=self.hw_config.rain_click_inches,
+            )
+
+    # ---- RECEIVERS: transmitter IDs being heard ----
+
+    def receivers(self) -> Optional[list[int]]:
+        """Which transmitter IDs the console is currently hearing (§IX.1).
+
+        Returns a sorted list of Tx IDs (1-8), or None if the console did
+        not answer.  An EMPTY LIST IS A VALID ANSWER, not a failure.
+
+        On a Vantage Vue this legitimately returns [] — and that is worth
+        stating plainly, because it looks alarming next to a station that
+        is clearly working.  The Vue's sensor suite is integrated rather
+        than paired as an addressable transmitter, so the whole Tx-ID
+        mechanism (a Vantage Pro2 concept for external transmitters) has
+        nothing to report.  Measured on a Vue (fw 2.12): RECEIVERS returns
+        0x00 and EEPROM USETX is 0x00, while RXCHECK simultaneously shows
+        23,516 packets received and LOOP returns live sensor data.
+
+        Note this is what the console *hears*, which is not the same as
+        what it is configured to listen for (EEPROM USETX, 0x18).
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_receivers())
+            # "OK" then one RAW byte — not text, so the usual text reader
+            # would mangle a 0x01 into something unprintable.
+            raw = self.serial.receive(16)
+
+        idx = raw.find(b"OK")
+        if idx < 0:
+            logger.warning("RECEIVERS: no OK in response: %r", raw)
+            return None
+        payload = raw[idx + 2:].lstrip(b"\n\r")
+        if not payload:
+            logger.warning("RECEIVERS: no bitmask byte after OK: %r", raw)
+            return None
+
+        bitmask = payload[0]
+        heard = [n + 1 for n in range(8) if bitmask & (1 << n)]
+        logger.info(
+            "RECEIVERS: bitmask 0x%02X — hearing %s",
+            bitmask, heard if heard else "no addressable transmitters",
+        )
+        return heard
+
+    # ---- GETEE: full EEPROM dump ----
+
+    def get_eeprom(self) -> Optional[bytes]:
+        """Dump the whole 4096-byte EEPROM via GETEE (§IX.4).
+
+        Returns the 4096 data bytes with the trailing CRC stripped, or
+        None on a short read or CRC failure.
+
+        This is the largest single transfer in the protocol.  At 19200
+        8N1, 4098 bytes is ~2.1 s of wire time and a Vue delivers it in
+        one receive() — measured at 2.14 s — so no chunking is required.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_getee())
+
+            ack = self.serial.receive_byte()
+            if ack != ACK:
+                raise ConnectionError("GETEE: no ACK")
+
+            block = self.serial.receive(GETEE_TOTAL_SIZE)
+
+        if len(block) < GETEE_TOTAL_SIZE:
+            logger.warning(
+                "GETEE: short read (%d of %d bytes)",
+                len(block), GETEE_TOTAL_SIZE,
+            )
+            return None
+
+        if not crc_validate(block[:GETEE_TOTAL_SIZE]):
+            logger.warning("GETEE: CRC failed")
+            return None
+
+        logger.info("GETEE: read %d bytes of EEPROM", EEPROM_SIZE)
+        return block[:EEPROM_SIZE]
+
+    # ---- Station location ----
+
+    def set_location(
+        self,
+        latitude: float,
+        longitude: float,
+        newsetup: bool = True,
+    ) -> bool:
+        """Write station latitude/longitude to EEPROM (§XIV, 0x0B / 0x0D).
+
+        Both are stored as signed 16-bit TENTHS of a degree, so precision
+        is limited to 0.1 deg (~7 km) by the format, not by this code.
+        Negative latitude is southern hemisphere, negative longitude is
+        western.
+
+        The console must be re-initialised afterwards or the change may
+        not take effect — §IX.7 says so explicitly for latitude and
+        longitude.  `newsetup=False` skips that, which is only useful for
+        batching several EEPROM changes before a single re-init.
+
+        The console uses these values for its own sunrise/sunset
+        calculation and pressure correction, so a wrong location produces
+        quietly wrong derived data rather than an obvious failure.
+        """
+        if not -90.0 <= latitude <= 90.0:
+            raise ValueError(f"latitude out of range: {latitude}")
+        if not -180.0 <= longitude <= 180.0:
+            raise ValueError(f"longitude out of range: {longitude}")
+
+        lat_tenths = int(round(latitude * 10))
+        lon_tenths = int(round(longitude * 10))
+
+        with self._io_lock:
+            ok_lat = self._eeprom_write(
+                LATITUDE.address, struct.pack("<h", lat_tenths))
+            ok_lon = self._eeprom_write(
+                LONGITUDE.address, struct.pack("<h", lon_tenths))
+
+            if not (ok_lat and ok_lon):
+                logger.warning(
+                    "set_location: EEPROM write failed (lat=%s lon=%s)",
+                    ok_lat, ok_lon,
+                )
+                return False
+
+            if newsetup:
+                self.serial.flush()
+                self.serial.send(cmd_newsetup())
+                if not self._read_status_reply():
+                    logger.warning(
+                        "set_location: NEWSETUP did not acknowledge; the "
+                        "values are written but may not be in effect"
+                    )
+                    return False
+
+        logger.info(
+            "set_location: %.1f, %.1f written (%d, %d tenths)%s",
+            lat_tenths / 10.0, lon_tenths / 10.0,
+            lat_tenths, lon_tenths,
+            "" if newsetup else " — NEWSETUP skipped",
+        )
+        return True
+
+    def read_location(self) -> Optional[tuple[float, float]]:
+        """Read station latitude/longitude back from EEPROM as degrees."""
+        with self._io_lock:
+            lat_raw = self._eeprom_read(LATITUDE.address, 2)
+            lon_raw = self._eeprom_read(LONGITUDE.address, 2)
+        if not lat_raw or not lon_raw:
+            return None
+        return (
+            struct.unpack("<h", lat_raw)[0] / 10.0,
+            struct.unpack("<h", lon_raw)[0] / 10.0,
+        )
+
+    def set_yearly_rain(self, millimetres: float) -> bool:
+        """PUTRAIN — overwrite the console's yearly rain total.  **IRREVERSIBLE.**
+
+        Takes millimetres, matching how this codebase reports rain
+        everywhere else, and converts to clicks using the collector this
+        station actually reported at connect time.
+
+        That conversion is the whole point of this wrapper.  PUTRAIN's
+        native unit is rain clicks, and a click is 0.01", 0.2 mm or 0.1 mm
+        depending on the collector fitted — so the same integer means
+        three different rainfall totals on three different stations.
+        Sending a raw click count without knowing the collector is how you
+        silently set a yearly total that is off by a factor of two.
+
+        There is no read-back-and-restore here: the previous total is gone
+        once this succeeds.  Read the current value from a LOOP packet
+        first if it might be wanted.
+        """
+        if millimetres < 0:
+            raise ValueError(f"rain total cannot be negative: {millimetres}")
+
+        click_inches = self.hw_config.rain_click_inches
+        if not click_inches:
+            logger.warning(
+                "set_yearly_rain: rain collector size unknown; refusing to "
+                "guess (would risk a 2x error in the stored total)"
+            )
+            return False
+
+        clicks = int(round(millimetres / (click_inches * 25.4)))
+
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_putrain(clicks))
+            ok = self._read_status_reply()
+
+        logger.info(
+            "PUTRAIN %d clicks (%.2f mm at %.4f\"/click): %s",
+            clicks, millimetres, click_inches,
+            "set" if ok else "unexpected response",
+        )
+        return ok
+
+    def set_yearly_et(self, millimetres: float) -> bool:
+        """PUTET — overwrite the console's yearly ET total.  **IRREVERSIBLE.**
+
+        Takes millimetres for consistency with set_yearly_rain(), but note
+        the wire unit differs: ET is hundredths of an inch, fixed, with no
+        collector dependency.  PUTRAIN and PUTET sit adjacent in the manual
+        and read alike, which makes assuming a shared unit an easy mistake.
+        """
+        if millimetres < 0:
+            raise ValueError(f"ET total cannot be negative: {millimetres}")
+
+        hundredths = int(round(millimetres / 25.4 * 100))
+
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_putet(hundredths))
+            ok = self._read_status_reply()
+
+        logger.info(
+            "PUTET %d hundredths-inch (%.2f mm): %s",
+            hundredths, millimetres, "set" if ok else "unexpected response",
+        )
+        return ok
+
+    async def async_set_yearly_rain(self, millimetres: float) -> bool:
+        return await self._run_in_executor(self.set_yearly_rain, millimetres)
+
+    async def async_set_yearly_et(self, millimetres: float) -> bool:
+        return await self._run_in_executor(self.set_yearly_et, millimetres)
+
+
+    def rxtest(self) -> bool:
+        """RXTEST — leave the "Receiving From…" screen (§IX.1).
+
+        Needed after NEWSETUP.  Re-initialising the console appears to
+        land it on the "Receiving From…" setup screen — the same state it
+        boots into after a power loss.  There it still answers serial
+        commands, so nothing looks broken, but it is not running normal
+        reception: RXCHECK reads 0/0/0/0 and every remote sensor dashes.
+
+        Measured on a Vue (fw 2.12): before a NEWSETUP, RXCHECK showed
+        23,516 packets received; immediately after, 0 packets and outside
+        temp/humidity/wind all at their dashed sentinels, while the
+        console's own barometer kept reading normally.
+
+        Also clears the RXCHECK CRC error count, so a caller using that
+        counter as a health signal should re-baseline afterwards.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_rxtest())
+            ok = self._read_status_reply()
+            logger.info("RXTEST: %s", "ok" if ok else "unexpected response")
+            return ok
+
+    def newsetup(self) -> bool:
+        """NEWSETUP — re-initialise the console (§IX.7).
+
+        Required after a latitude/longitude write or a change to the setup
+        bits at 0x2B.  The manual does not say what re-initialisation
+        resets, so verify anything that matters afterwards.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_newsetup())
+            ok = self._read_status_reply()
+            logger.info("NEWSETUP: %s", "ok" if ok else "unexpected response")
+            return ok
 
     # ---- Text response reader ----
 
@@ -989,6 +1578,33 @@ class VantageDriver(StationDriver):
                 return True
         logger.debug("status reply: got %r", buf)
         return False
+
+    def _read_text_block(self, max_bytes: int = 512,
+                         quiet_reads: int = 3) -> str:
+        """Read a multi-line text response, stopping when the line goes quiet.
+
+        _read_ok_response() returns as soon as it has one payload line,
+        which is right for RXCHECK but truncates BARDATA's nine.  There is
+        no length prefix and no terminator distinguishable from the LF CR
+        that ends every line, so the only way to know the console has
+        finished is that it stops sending.
+
+        Reads until `quiet_reads` consecutive empty reads once something
+        has arrived.
+        """
+        buf = b""
+        quiet = 0
+        for _ in range(max_bytes):
+            chunk = self.serial.receive(1)
+            if not chunk:
+                if buf:
+                    quiet += 1
+                    if quiet >= quiet_reads:
+                        break
+                continue
+            quiet = 0
+            buf += chunk
+        return buf.decode("ascii", errors="replace")
 
     def _read_ok_response(self, max_bytes: int = 256) -> str:
         """Read an OK-prefixed text response terminated by LF CR.
@@ -1041,8 +1657,36 @@ class VantageDriver(StationDriver):
     async def async_write_station_time(self, dt: datetime) -> bool:
         return await self._run_in_executor(self.write_station_time, dt)
 
+    async def async_set_location(
+        self, latitude: float, longitude: float, newsetup: bool = True,
+    ) -> bool:
+        return await self._run_in_executor(
+            self.set_location, latitude, longitude, newsetup)
+
+    async def async_read_location(self) -> Optional[tuple[float, float]]:
+        return await self._run_in_executor(self.read_location)
+
+    async def async_newsetup(self) -> bool:
+        return await self._run_in_executor(self.newsetup)
+
+    async def async_rxtest(self) -> bool:
+        return await self._run_in_executor(self.rxtest)
+
     async def async_dmpaft(self, after: datetime) -> list[VantageArchiveRecord]:
         return await self._run_in_executor(self.dmpaft, after)
 
     async def async_rxcheck(self) -> Optional[dict]:
         return await self._run_in_executor(self.rxcheck)
+
+    async def async_hilows(self) -> Optional[VantageHighsLows]:
+        return await self._run_in_executor(self.hilows)
+
+    async def async_bardata(self) -> Optional[BarometerCalibration]:
+        return await self._run_in_executor(self.bardata)
+
+    async def async_receivers(self) -> Optional[list[int]]:
+        return await self._run_in_executor(self.receivers)
+
+    async def async_get_eeprom(self) -> Optional[bytes]:
+        return await self._run_in_executor(self.get_eeprom)
+

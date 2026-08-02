@@ -57,6 +57,13 @@ class LoopData:
     sunset: Optional[int] = None             # hour*100 + min
     forecast_icons: Optional[int] = None
     forecast_rule: Optional[int] = None
+    # Battery status — LOOP bytes 86 and 87.  Present in every packet all
+    # along; we simply never read them.  transmitter_battery_status is a
+    # bitmask, one bit per transmitter ID (bit 0 = transmitter 1, the ISS
+    # on a Vue).  The manual names byte 86 but documents no bit layout, so
+    # that reading is inferred rather than specified.
+    transmitter_battery_status: Optional[int] = None   # bitmask
+    console_battery_voltage: Optional[float] = None    # volts
     extra_temps: list[Optional[int]] = field(default_factory=list)
     soil_temps: list[Optional[int]] = field(default_factory=list)
     leaf_temps: list[Optional[int]] = field(default_factory=list)
@@ -141,6 +148,51 @@ def _valid_wind_dir(val: int) -> Optional[int]:
     return val
 
 
+def _valid_wind_speed(val: int) -> Optional[int]:
+    """Return wind speed in mph if valid, else None.
+
+    255 is the dashed sentinel for the single-byte wind fields.  It was
+    previously passed straight through, so a transmitter dropout logged
+    255 mph (114 m/s) as a real reading — and did so on every poll for the
+    duration of the outage, because a stuck sentinel does not look like
+    noise, it looks like a sustained gale.
+
+    Everything around it was already guarded: wind DIRECTION has
+    _valid_wind_dir(), temperature and humidity have their own filters,
+    and the LOOP2 wind fields check 0x7FFF.  Only the two LOOP wind speed
+    bytes were unfiltered, which is why a dropout produced a snapshot with
+    every other outdoor field None and a plausible-looking number here.
+
+    The manual notes wind speed "is forced to be 0" when the console loses
+    sync, so 255 specifically means no data rather than a real extreme.
+    """
+    if val == 0xFF:
+        return None
+    return val
+
+
+def _valid_clock(val: int) -> Optional[int]:
+    """Return an hour*100+min time if it decodes to a real clock value.
+
+    Guards the sunrise/sunset fields.  A wrong offset here previously went
+    unnoticed for months precisely because nothing rejected implausible
+    values — sunrise read 0 and sunset read 10497, and both flowed
+    straight through to the UI.
+    """
+    # 0 is rejected deliberately.  It decodes to a superficially valid
+    # 00:00, and that is exactly how the old wrong offset survived: it
+    # pointed into a zeroed alarm block, so sunrise came out as "midnight"
+    # rather than as anything obviously broken.  Neither sunrise nor sunset
+    # is ever truly 00:00, so treating 0 as "no reading" costs nothing and
+    # makes a mis-set offset fail loudly instead of silently.
+    if val == 0 or val in (0xFFFF, 0x7FFF):
+        return None
+    hour, minute = divmod(val, 100)
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return val
+
+
 def _decode_extra_temp(raw: int) -> Optional[int]:
     """Decode offset-encoded extra temperature.
 
@@ -190,18 +242,29 @@ def parse_loop(raw: bytes) -> Optional[LoopData]:
       [70]    inside alarms (u8)
       [71]    rain alarms (u8)
       [72:74] outside alarms (u16)
-      [74:82] extra alarms (8 bytes)
-      [82:84] forecast icons (u8) + forecast rule (u8)
-      [84:86] sunrise (u16 LE, hour*100+min)
-      [86:88] sunset (u16 LE, hour*100+min)
-      [88]    \\n (0x0A)
-      [89]    \\r (0x0D)
-      [90:92] reserved or padding
-      [95:97] CRC (u16 BE) — CRC over bytes 0-94
-    Actually the standard layout is:
-      bytes 0-96 = data (97 bytes)
-      bytes 97-98 = CRC (2 bytes, big-endian)
+      [74:82] extra temp/hum alarms (8 bytes)
+      [82:86] soil & leaf alarms (4 bytes)
+      [86]    transmitter battery status (u8 bitmask, bit N = transmitter N+1)
+      [87:89] console battery voltage (u16 LE, ((raw*300)/512)/100.0 volts)
+      [89]    forecast icons (u8)
+      [90]    forecast rule (u8)
+      [91:93] sunrise (u16 LE, hour*100+min)
+      [93:95] sunset (u16 LE, hour*100+min)
+      [95]    \\n (0x0A)
+      [96]    \\r (0x0D)
+      [97:99] CRC (u16 BE) — over bytes 0-96
       Total = 99 bytes
+
+    The tail offsets above were previously wrong: forecast/sunrise/sunset
+    were read at 82/83/84/86, which lands in the alarm block.  On a
+    Vantage Vue (fw 2.12) with no alarms active that region is all zeroes,
+    so sunrise decoded as 0 ("00:00") and sunset as 10497 — not a clock
+    value at all.  Measured against the wire, the manual's offsets give
+    sunrise=515 (05:15) and sunset=1921 (19:21), which match the almanac
+    for 35.38N 78.60W once the console's standard-time setting is
+    accounted for.  Two further fields corroborate the layout: byte 87
+    yields 4.74 V for the console cell, and byte 86 reads 0x01 on a
+    console actively displaying an ISS low-battery warning.
     """
     if len(raw) < LOOP_PACKET_SIZE:
         logger.warning("LOOP packet too short: %d/%d bytes", len(raw), LOOP_PACKET_SIZE)
@@ -243,8 +306,8 @@ def parse_loop(raw: bytes) -> Optional[LoopData]:
     data.outside_humidity = _valid_humidity(raw[33])
 
     # Wind
-    data.wind_speed = raw[14]
-    data.wind_speed_10min = raw[15]
+    data.wind_speed = _valid_wind_speed(raw[14])
+    data.wind_speed_10min = _valid_wind_speed(raw[15])
     data.wind_direction = _valid_wind_dir(struct.unpack_from("<H", raw, 16)[0])
 
     # Rain
@@ -279,13 +342,25 @@ def parse_loop(raw: bytes) -> Optional[LoopData]:
     # Leaf wetnesses (4 values at offsets 66-69)
     data.leaf_wetnesses = [raw[i] if raw[i] != 0xFF else None for i in range(66, 70)]
 
+    # Battery status.  Both bytes have always been present; they were
+    # simply never read.  The manual names byte 86 but documents no bit
+    # layout, so the per-transmitter reading is inference — corroborated
+    # on a Vue whose console showed an ISS low-battery warning while this
+    # byte read 0x01.
+    data.transmitter_battery_status = raw[86]
+    console_raw = struct.unpack_from("<H", raw, 87)[0]
+    data.console_battery_voltage = (
+        round(((console_raw * 300) / 512) / 100.0, 2)
+        if console_raw else None
+    )
+
     # Forecast
-    data.forecast_icons = raw[82] if len(raw) > 82 else None
-    data.forecast_rule = raw[83] if len(raw) > 83 else None
+    data.forecast_icons = raw[89]
+    data.forecast_rule = raw[90]
 
     # Sunrise/sunset
-    data.sunrise = struct.unpack_from("<H", raw, 84)[0] if len(raw) > 85 else None
-    data.sunset = struct.unpack_from("<H", raw, 86)[0] if len(raw) > 87 else None
+    data.sunrise = _valid_clock(struct.unpack_from("<H", raw, 91)[0])
+    data.sunset = _valid_clock(struct.unpack_from("<H", raw, 93)[0])
 
     return data
 
@@ -489,6 +564,16 @@ def loop_to_snapshot(
         extra["sunrise"] = loop.sunrise
     if loop.sunset is not None:
         extra["sunset"] = loop.sunset
+    # Battery status.  Surface the raw bitmask alongside a decoded list of
+    # transmitter IDs so a consumer can show "ISS battery low" without
+    # re-deriving the bit positions.
+    if loop.transmitter_battery_status is not None:
+        extra["transmitter_battery_status"] = loop.transmitter_battery_status
+        low = [n + 1 for n in range(8)
+               if loop.transmitter_battery_status & (1 << n)]
+        extra["transmitters_low_battery"] = low
+    if loop.console_battery_voltage is not None:
+        extra["console_battery_voltage"] = loop.console_battery_voltage
     if loop.storm_rain is not None and loop.storm_rain > 0:
         extra["storm_rain_mm"] = _clicks_to_mm(loop.storm_rain, rain_click_inches)
     if loop.month_rain is not None:
