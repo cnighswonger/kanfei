@@ -1,3 +1,55 @@
+kanfei (0.1.0~beta23) unstable; urgency=medium
+
+  * Fix: wind gust is now the station's real gust.  On Davis Vantage
+    stations the LOOP2 packet — which carries the console's own 10-minute
+    gust, the 2- and 10-minute average wind, THSW index, and 15-minute and
+    hourly rain — was requested incorrectly and never once arrived.  The
+    console sent the first packet and stopped; the second read timed out
+    and was discarded without a word, so the failure was invisible for the
+    life of the install.  On the development station that was 714,779
+    readings without a single LOOP2 value.  Because the published gust
+    falls back to the largest wind reading since midnight when no real
+    gust is available, dashboards, Weather Underground and CWOP/APRS have
+    been receiving the daily maximum in place of a gust.  Expect your
+    reported gust to change after upgrading — the console samples the
+    anemometer far faster than the polling interval, so the old value
+    systematically under-reported.  A missing LOOP2 packet is now logged
+    rather than silently dropped.
+
+  * Fix: an absent wind sensor no longer publishes a 255 mph gust.  When a
+    Vantage transmitter drops out, the console reports the maximum byte
+    value in the wind-speed field to mean "no reading".  That sentinel was
+    stored as a real 255 mph measurement, and because the daily maximum
+    outlives the outage that produced it, every subsequent upload carried
+    the bad gust for the rest of the day — including to CWOP/APRS, where it
+    was publicly visible long after the sensor recovered.  Sentinel values
+    are now rejected on arrival, and the daily high/low figures are checked
+    against each sensor's valid range before publication, a check that
+    charts and CSV exports already applied but the published path did not.
+
+  * Fix: sunrise and sunset times on Vantage stations.  Both were read from
+    the wrong offsets in the LOOP packet, landing in the console's alarm
+    block rather than the sun times, so the displayed values were unrelated
+    to actual sunrise and sunset.  Transmitter battery status and console
+    battery voltage are now read correctly as well, and a console reporting
+    no clock is treated as unknown instead of midnight.
+
+  * Adds full Davis Vantage command support, completing the driver: daily,
+    monthly and yearly high/low retrieval; barometer calibration readout;
+    EEPROM dump; receiver/transmitter status; clearing of stored highs and
+    lows; setting yearly rain and evapotranspiration totals; full archive
+    download; and setting station latitude and longitude over the wire.
+    Several of these correct errors in Davis's own published documentation,
+    each verified against real hardware; the discrepancies are catalogued in
+    the repository for future reference.
+
+  * Fix: station settings and clock controls are now offered based on what
+    the connected station can actually do, rather than on its driver type.
+    Vantage stations were shown controls that did nothing, and hidden from
+    controls they supported.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sun, 02 Aug 2026 01:00:00 +0000
+
 kanfei (0.1.0~beta22) unstable; urgency=medium
 
   * Security: upload credentials no longer reach the systemd journal.  The
