@@ -407,9 +407,22 @@ class VantageDriver(StationDriver):
             return None
 
     def _poll_lps(self) -> Optional[SensorSnapshot]:
-        """LPS 3 1 → one LOOP + one LOOP2 packet (VP2/Vue)."""
+        """LPS 3 2 → one LOOP + one LOOP2 packet (VP2/Vue).
+
+        The second argument is the TOTAL number of packets across all
+        selected types, not the number of rounds.  This asked for
+        ``LPS 3 1`` — bitmask 3 (LOOP + LOOP2), one packet total — so the
+        console sent the LOOP and stopped.  The LOOP2 read that followed
+        always timed out, and because a short read was discarded without
+        logging, every LOOP2 field silently stayed None for the life of
+        the install: 714,779 rows on the production box, not one carrying
+        a LOOP2-derived key.
+
+        The manual's own example is unambiguous (§IX, "LPS"): ``LPS 3 4``
+        is documented as "request 2 LOOP and 2 LOOP2 packets".
+        """
         self.serial.flush()
-        self.serial.send(cmd_lps(3, 1))
+        self.serial.send(cmd_lps(3, 2))
 
         ack = self.serial.receive_byte()
         if ack != ACK:
@@ -424,10 +437,19 @@ class VantageDriver(StationDriver):
         if loop_data is None:
             raise ConnectionError("LOOP parse failed")
 
-        # Read LOOP2 packet
+        # Read LOOP2 packet.  A missing or malformed LOOP2 is not fatal —
+        # every field it carries is supplementary — but it must be LOUD,
+        # or a regression here is invisible again.  The console sleeps
+        # 2.5 s between packets; the 5 s port timeout covers that.
         loop2_raw = self.serial.receive(LOOP2_PACKET_SIZE)
         loop2_data = None
-        if len(loop2_raw) >= LOOP2_PACKET_SIZE:
+        if len(loop2_raw) < LOOP2_PACKET_SIZE:
+            logger.warning(
+                "LOOP2 short read: %d/%d bytes (using LOOP only — "
+                "gust and 2/10-min wind will be unavailable)",
+                len(loop2_raw), LOOP2_PACKET_SIZE,
+            )
+        else:
             loop2_data = parse_loop2(loop2_raw)
             if loop2_data is None:
                 logger.warning("LOOP2 parse failed (using LOOP only)")
