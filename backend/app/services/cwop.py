@@ -282,7 +282,23 @@ class CwopUploader:
         wind_dir = _extract(data, ("wind", "direction", "value"))
         baro_inhg = _extract(data, ("barometer", "value"))
         rain_daily = _extract(data, ("rain", "daily", "value"))
-        wind_gust = _extract(data, ("daily_extremes", "wind_speed_hi", "value"))
+        # Prefer the station's own gust over the daily maximum.
+        #
+        # These are not the same quantity.  The console samples the
+        # anemometer far faster than our poll interval and reports a true
+        # peak over its window; daily_extremes.wind_speed_hi is the max of
+        # our 15 s point samples, which misses any peak falling between
+        # them and so systematically under-reports.  It was also the field
+        # that carried a 255 mph dashed sentinel to findu (#230).
+        #
+        # Gate on the value being present rather than on driver type: a
+        # station that supplies a gust may still drop it mid-session (a
+        # LOOP2 timeout on Vantage, say), and the fallback should engage
+        # then too.  Legacy Monitor II and Ambient never populate it and
+        # keep the old behaviour.
+        wind_gust = _extract(data, ("wind", "gust", "value"))
+        if wind_gust is None:
+            wind_gust = _extract(data, ("daily_extremes", "wind_speed_hi", "value"))
 
         if temp_f is None and "outdoor_temperature" not in muted:
             return None

@@ -34,7 +34,7 @@ FIELD_MAP: dict[str, tuple[str, ...]] = {
     "humidity":         ("humidity", "outside", "value"),
     "indoorhumidity":   ("humidity", "inside", "value"),
     "windspeedmph":     ("wind", "speed", "value"),
-    "windgustmph":      ("daily_extremes", "wind_speed_hi", "value"),
+    "windgustmph":      ("wind", "gust", "value"),
     "winddir":          ("wind", "direction", "value"),
     "windchillf":       ("derived", "wind_chill", "value"),
     "baromin":          ("barometer", "value"),
@@ -45,6 +45,24 @@ FIELD_MAP: dict[str, tuple[str, ...]] = {
     "heatindexf":       ("derived", "heat_index", "value"),
     "solarradiation":   ("solar_radiation", "value"),
     "UV":               ("uv_index", "value"),
+}
+
+# Secondary paths, tried only when the FIELD_MAP path yields nothing.
+#
+# Gust is the one field with a meaningful fallback.  The station's own
+# gust is a true peak over the console's sampling window; the daily
+# maximum is the largest of our 15 s point samples, which misses peaks
+# between polls and under-reports.  Stations that report a gust
+# (Vantage with LOOP2, Ecowitt, Tempest, WeatherLink Live) now publish
+# it; those that never do (legacy Monitor II, Ambient) keep the old
+# behaviour.
+#
+# Keyed on the value being absent rather than on driver type, so a
+# station that normally reports a gust but drops it mid-session — a
+# LOOP2 timeout on Vantage, say — falls back for exactly as long as the
+# value is missing.
+FIELD_FALLBACKS: dict[str, tuple[str, ...]] = {
+    "windgustmph":      ("daily_extremes", "wind_speed_hi", "value"),
 }
 
 
@@ -196,6 +214,10 @@ class WundergroundUploader:
 
         for wu_param, path in FIELD_MAP.items():
             value = _extract(data, path)
+            if value is None:
+                fallback = FIELD_FALLBACKS.get(wu_param)
+                if fallback is not None:
+                    value = _extract(data, fallback)
             if value is not None:
                 params[wu_param] = value
 
