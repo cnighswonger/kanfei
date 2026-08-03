@@ -933,6 +933,7 @@ class LoggerDaemon:
         h(ipc.CMD_FORCE_ARCHIVE, self._h_force_archive)
         h(ipc.CMD_BAROMETER_CAL, self._h_barometer_cal)
         h(ipc.CMD_SET_BAROMETER, self._h_set_barometer)
+        h(ipc.CMD_SIGNAL_QUALITY, self._h_signal_quality)
 
     # ---- IPC handlers ----
 
@@ -1148,6 +1149,44 @@ class LoggerDaemon:
             )
 
         return {"success": ok, "before": _snap(before), "after": _snap(after)}
+
+    async def _h_signal_quality(self, _msg: dict) -> dict[str, Any]:
+        """Console reception diagnostics — RXCHECK plus the heard-Tx list.
+
+        This is the diagnostic for the failure that has cost the most time
+        on this project: a transmitter dropping out, its dashed sentinel
+        being stored as a real reading, and the poisoned daily maximum
+        then being published for the rest of the day (#230).  Until now
+        the only symptom was the data going strange hours later; these
+        counters name the cause while it is happening.
+
+        Gated on the value being reachable rather than on driver type,
+        per #220 / #234 — any driver growing an ``async_rxcheck`` gets
+        this for free.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if not hasattr(drv, "async_rxcheck"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support reception diagnostics"
+            )
+
+        stats = await drv.async_rxcheck()
+        if stats is None:
+            raise RuntimeError("Station did not return reception diagnostics")
+
+        # RECEIVERS is a separate command and a Vue legitimately answers
+        # with an empty list, so a failure here must not sink the whole
+        # response — the RXCHECK counters are the load-bearing part.
+        receivers: Optional[list[int]] = None
+        if hasattr(drv, "async_receivers"):
+            try:
+                receivers = await drv.async_receivers()
+            except Exception as exc:
+                logger.warning("RECEIVERS failed (reporting RXCHECK only): %s", exc)
+
+        return {**stats, "receivers": receivers}
 
     async def _h_sync_station_time(self, _msg: dict) -> dict[str, Any]:
         drv = self.driver

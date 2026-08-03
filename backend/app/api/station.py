@@ -183,6 +183,40 @@ def get_driver_catalog():
     return DRIVER_CATALOG
 
 
+@router.get("/station/signal-quality")
+async def get_signal_quality(_admin=Depends(require_admin)):
+    """Console reception diagnostics — how well it is hearing the sensors.
+
+    The counters reset at station midnight, so a single reading is a
+    since-midnight total rather than a rate.  Two readings apart give the
+    rate; that is the caller's job, not ours.
+
+    Read-only, but admin-gated like the other station endpoints: it holds
+    the serial lock briefly, and on a single-master port that is enough to
+    stall a poll.
+    """
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "signal_quality"}, timeout=20.0)
+        if result.get("ok"):
+            return result["data"]
+        detail = result.get("error", "Failed")
+        # Same split as force-archive (#219): a station that cannot do this
+        # is a 501, anything else is a transient fault.  A command that did
+        # not run must not look like one that did.
+        raise HTTPException(
+            status_code=501 if "does not support" in detail else 503,
+            detail=detail,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
 # --------------- Barometer calibration ---------------
 #
 # Vantage only.  Legacy stations calibrate their barometer through a
