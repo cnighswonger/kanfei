@@ -91,7 +91,14 @@ class Loop2Data:
     day_rain: Optional[int] = None           # clicks
     rain_last_15min: Optional[int] = None    # clicks
     rain_last_hour: Optional[int] = None     # clicks
-    abs_barometer: Optional[int] = None      # thousandths inHg
+    # Barometer block (§X.2 bytes 60-70).  These are what a calibration
+    # tool needs: the raw sensor reading, what the user has already
+    # offset it by, and the corrected values the console displays.
+    bar_reduction_method: Optional[int] = None  # 0=user offset, 1=altimeter, 2=NOAA
+    bar_user_offset: Optional[int] = None    # thousandths inHg, set by BAR=
+    bar_calibration: Optional[int] = None    # thousandths inHg, SIGNED
+    bar_raw_sensor: Optional[int] = None     # thousandths inHg, uncorrected
+    abs_barometer: Optional[int] = None      # thousandths inHg = raw + user offset
     altimeter_barometer: Optional[int] = None  # thousandths inHg
 
 
@@ -494,9 +501,34 @@ def parse_loop2(raw: bytes) -> Optional[Loop2Data]:
     data.uv_index = _valid_uv(raw[43])
     data.solar_radiation = _valid_solar(struct.unpack_from("<H", raw, 44)[0])
 
-    # Pressure variants
-    data.abs_barometer = _valid_barometer(struct.unpack_from("<H", raw, 62)[0])
-    data.altimeter_barometer = _valid_barometer(struct.unpack_from("<H", raw, 64)[0])
+    # Barometer block, §X.2 bytes 60-70.  The whole block was read two
+    # bytes early, so both values straddled the boundary between the
+    # neighbouring fields and were garbage:
+    #
+    #   absolute   read @62 -> 54.272 inHg   correct @67 -> 29.630 inHg
+    #   altimeter  read @64 -> 36.095 inHg   correct @69 -> 29.915 inHg
+    #
+    # Two independent confirmations that the manual's map is the right
+    # one, measured on a Vue (fw 2.12):
+    #
+    #   raw 29580 + user_offset 50 == absolute 29630, the relationship
+    #   the manual states between those three fields; and
+    #
+    #   the calibration number at 63 reads -44 as a SIGNED int16, which
+    #   is exactly what BARDATA independently reports as OFFSET.
+    #
+    # Nothing consumed either field, so no stored data is affected.  They
+    # are wired up now because barometer calibration needs them: the
+    # difference between the raw sensor reading and the altimeter setting
+    # is what a calibration tool has to show.
+    data.bar_reduction_method = raw[60]
+    data.bar_user_offset = struct.unpack_from("<H", raw, 61)[0]
+    # Signed: a negative calibration number is normal, and reading it
+    # unsigned turns -44 into 65492.
+    data.bar_calibration = struct.unpack_from("<h", raw, 63)[0]
+    data.bar_raw_sensor = _valid_barometer(struct.unpack_from("<H", raw, 65)[0])
+    data.abs_barometer = _valid_barometer(struct.unpack_from("<H", raw, 67)[0])
+    data.altimeter_barometer = _valid_barometer(struct.unpack_from("<H", raw, 69)[0])
 
     return data
 
