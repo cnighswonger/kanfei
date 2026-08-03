@@ -187,26 +187,72 @@ class TestNakIsNotSuccess:
         drv._wakeup = lambda: None
         assert drv.set_barometer(29_780, 265) is True
 
-    def test_handler_raises_rather_than_returning_success_false(self):
-        """The fix.  Pinned at the handler because that is where the
-        IPC ok:true wrapping happens — testing only the driver would
-        miss the path that actually reached the API."""
-        import inspect
+    @staticmethod
+    def _daemon_with(nak: bool):
+        """A LoggerDaemon whose driver answers BAR= with OK or NAK.
 
+        Only ``self.driver`` is touched by the handler, so the daemon
+        needs no other setup.
+        """
         from logger_main import LoggerDaemon
 
-        source = inspect.getsource(LoggerDaemon._h_set_barometer)
-        assert "if not ok:" in source, (
-            "handler must branch on the console's answer"
-        )
-        assert "raise RuntimeError" in source, (
-            "a NAK must raise so the IPC server reports ok:false — "
-            "returning normally makes a rejected write look successful"
-        )
-        # The raise has to come before the success return, or it is dead.
-        assert source.index("raise RuntimeError") < source.index(
-            'return {"success": ok'
-        )
+        drv = VantageDriver("/dev/null", 19200)
+        drv.serial = FakeSerial(reply=b"\x21" if nak else b"\n\rOK\n\r")
+        drv._wakeup = lambda: None
+        drv._connected = True
+        # `connected` also checks serial.is_open, which FakeSerial lacks.
+        type(drv).connected = property(lambda self: True)
+
+        daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon.driver = drv
+        return daemon
+
+    @pytest.mark.asyncio
+    async def test_handler_raises_on_nak(self):
+        """The fix, exercised rather than grepped.
+
+        An earlier version of this test asserted on ``inspect.getsource``
+        output.  Codex called that source-text theatre on #248 R2 and was
+        right: it passed whenever the source *contained* the right
+        strings, regardless of what the handler did with them.  This
+        invokes the handler.
+        """
+        daemon = self._daemon_with(nak=True)
+        with pytest.raises(RuntimeError, match="rejected the calibration"):
+            await daemon._h_set_barometer({
+                "bar_thousandths_inhg": 29_780,
+                "elevation_ft": 265,
+            })
+
+    @pytest.mark.asyncio
+    async def test_handler_returns_success_on_ok(self):
+        """The other half — the raise must not fire on a good write, or
+        every calibration would report failure."""
+        daemon = self._daemon_with(nak=False)
+        result = await daemon._h_set_barometer({
+            "bar_thousandths_inhg": 29_780,
+            "elevation_ft": 265,
+        })
+        assert result["success"] is True
+        assert "before" in result and "after" in result
+
+    @pytest.mark.asyncio
+    async def test_nak_message_maps_to_503_not_501_or_400(self):
+        """`_cal_error` routes on substrings: "does not support" → 501,
+        "must be"/"required" → 400.  The rejection message must not
+        collide with either, or a hardware refusal would be reported as
+        an unsupported station or a bad request."""
+        from app.api.station import _cal_error
+
+        daemon = self._daemon_with(nak=True)
+        try:
+            await daemon._h_set_barometer({
+                "bar_thousandths_inhg": 29_780,
+                "elevation_ft": 265,
+            })
+            pytest.fail("expected the NAK to raise")
+        except RuntimeError as exc:
+            assert _cal_error(str(exc)).status_code == 503
 
 
 class TestDriverInterface:
