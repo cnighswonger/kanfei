@@ -31,6 +31,15 @@ from app.protocol.vantage.driver import VantageDriver
 class FakeSerial:
     """Serial stub that replays an OK reply to any command."""
 
+    # VantageDriver.connected is `self._connected and self.serial.is_open`,
+    # so the stub provides this rather than the test patching the property
+    # onto the class.  An earlier version did the latter and never restored
+    # it, leaking a permanently-connected VantageDriver into every
+    # subsequent test in the session (Codex R3 on #248).  It happened to be
+    # harmless, but it would have masked a real connection-state
+    # regression by making every driver look connected.
+    is_open = True
+
     def __init__(self, reply: bytes = b"\n\rOK\n\r"):
         self.sent: list[bytes] = []
         self._reply = reply
@@ -200,8 +209,6 @@ class TestNakIsNotSuccess:
         drv.serial = FakeSerial(reply=b"\x21" if nak else b"\n\rOK\n\r")
         drv._wakeup = lambda: None
         drv._connected = True
-        # `connected` also checks serial.is_open, which FakeSerial lacks.
-        type(drv).connected = property(lambda self: True)
 
         daemon = LoggerDaemon.__new__(LoggerDaemon)
         daemon.driver = drv
