@@ -1,3 +1,53 @@
+kanfei (0.1.0~beta25) unstable; urgency=medium
+
+  * Fix: the Settings page was completely inaccessible on Davis Vantage
+    stations — it rendered as a blank screen with no error shown.  The
+    calibration panel is built around the five adjustment fields the older
+    Weather Monitor and Wizard consoles use; a Vantage stores its
+    calibration differently, so the server correctly reported that those
+    fields do not apply, and the page then failed trying to display them
+    anyway.  This affected every Vantage installation and became visible in
+    beta23, when the reference station here moved to a Vantage Vue.  The
+    calibration panel is now hidden on stations that do not accept those
+    fields, rather than shown and silently ignoring anything you type into
+    it.  A calibration panel suited to each station type is planned.
+
+  * Adds barometer calibration for Vantage stations, matching the procedure
+    used to calibrate the reference station.  Given a trusted sea-level
+    pressure reading and your true elevation, the console works out its own
+    correction; passing a pressure of zero clears any previous correction
+    while keeping the elevation.  This is offered only on stations that
+    support it — the older consoles calibrate their barometer by a different
+    mechanism whose adjustment runs in the opposite direction, and applying
+    this procedure to one would double the error rather than remove it, so
+    they are excluded rather than approximated.  The interface for this is
+    not built yet; this release adds the underlying support.
+
+  * Fix: several barometer readings a Vantage reports for diagnostic
+    purposes were read from the wrong position in the console's data and
+    were meaningless — one showed 54 inches of mercury where the true value
+    was 29.6.  None of them were displayed anywhere, so no recorded weather
+    data was affected, but they are the values a barometer calibration tool
+    needs, so they are corrected now.
+
+  * Fix: the heat index no longer disappears in hot, humid weather.  Above
+    roughly 94 °F with high humidity — precisely when the figure matters
+    most — the reading was being discarded as invalid, leaving the tile
+    blank.  It also went blank below 68 °F, where the correct answer is
+    simply the air temperature.  Both now show a value.
+
+  * Adds the THSW index — a "feels like" figure combining temperature,
+    humidity, sunshine and wind — for stations that report it.  It requires
+    a solar sensor, so stations without one continue to show nothing rather
+    than a fabricated value.
+
+  * Documentation: the WeatherLink IP driver was described as using the
+    Vantage protocol; it in fact uses the older WeatherLink protocol.
+    Corrected, with the discrepancy recorded for confirmation against
+    physical hardware.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Mon, 03 Aug 2026 22:10:00 +0000
+
 kanfei (0.1.0~beta24) unstable; urgency=medium
 
   * Fix: corrects three station-computed values read from Davis Vantage
