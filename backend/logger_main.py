@@ -32,6 +32,7 @@ from app.protocol.base import (
     CAP_ARCHIVE_PERIOD_RW,
     CAP_SAMPLE_PERIOD_RW,
     CAP_CALIBRATION_RW,
+    CAP_BAROMETER_CAL,
 )
 from app.protocol.link_driver import LinkDriver, CalibrationOffsets, _rain_register_to_mm
 from app.protocol.serial_port import list_serial_ports
@@ -930,6 +931,8 @@ class LoggerDaemon:
         h(ipc.CMD_CLEAR_RAIN_DAILY, self._h_clear_rain_daily)
         h(ipc.CMD_CLEAR_RAIN_YEARLY, self._h_clear_rain_yearly)
         h(ipc.CMD_FORCE_ARCHIVE, self._h_force_archive)
+        h(ipc.CMD_BAROMETER_CAL, self._h_barometer_cal)
+        h(ipc.CMD_SET_BAROMETER, self._h_set_barometer)
 
     # ---- IPC handlers ----
 
@@ -1046,6 +1049,80 @@ class LoggerDaemon:
         if result is None:
             logger.warning("read_station_time returned None")
         return result
+
+    def _require_barometer_cal(self) -> StationDriver:
+        """Return the driver if it can calibrate its barometer via BAR=.
+
+        Gated on CAP_BAROMETER_CAL rather than driver type.  That
+        distinction is load-bearing here in a way it is not for most
+        capabilities: legacy stations DO calibrate their barometer, but
+        by a direct BAR_CAL register write with subtract semantics.  A
+        type check that let one through would not merely fail — it would
+        write an offset with the wrong sign and double the error.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if CAP_BAROMETER_CAL not in drv.capabilities:
+            raise RuntimeError(
+                f"{drv.station_name} does not support barometer calibration"
+            )
+        return drv
+
+    async def _h_barometer_cal(self, _msg: dict) -> dict[str, Any]:
+        """Current barometer calibration state, via BARDATA."""
+        drv = self._require_barometer_cal()
+        cal = await drv.async_bardata()
+        if cal is None:
+            raise RuntimeError("Station did not return barometer calibration")
+        return {
+            "barometer_inhg": cal.barometer_inhg,
+            "elevation_ft": cal.elevation_ft,
+            "barcal_inhg": cal.barcal_inhg,
+            # Factory sensor constants.  Surfaced for the audit log the
+            # procedure asks for, NOT for the user to act on — `offset`
+            # in particular is not the field BAR= sets, and confusing the
+            # two is the terminology trap in the procedure doc.
+            "gain": cal.gain,
+            "offset": cal.offset,
+        }
+
+    async def _h_set_barometer(self, msg: dict) -> dict[str, Any]:
+        """Set barometer calibration and elevation via BAR=.
+
+        Reads BARDATA before and after so the caller gets an auditable
+        before/after pair from one round trip — the procedure requires
+        logging both, and doing it here means the serial lock is taken
+        once instead of three times.
+        """
+        drv = self._require_barometer_cal()
+
+        bar = msg.get("bar_thousandths_inhg")
+        elevation = msg.get("elevation_ft")
+        if bar is None or elevation is None:
+            raise RuntimeError(
+                "bar_thousandths_inhg and elevation_ft are both required"
+            )
+
+        before = await drv.async_bardata()
+        try:
+            ok = await drv.async_set_barometer(int(bar), int(elevation))
+        except ValueError as exc:
+            # Out-of-range values are rejected by the driver before they
+            # reach the wire; surface the reason rather than a bare False.
+            raise RuntimeError(str(exc)) from exc
+        after = await drv.async_bardata()
+
+        def _snap(cal) -> Optional[dict]:
+            if cal is None:
+                return None
+            return {
+                "barometer_inhg": cal.barometer_inhg,
+                "elevation_ft": cal.elevation_ft,
+                "barcal_inhg": cal.barcal_inhg,
+            }
+
+        return {"success": ok, "before": _snap(before), "after": _snap(after)}
 
     async def _h_sync_station_time(self, _msg: dict) -> dict[str, Any]:
         drv = self.driver

@@ -24,6 +24,8 @@ CMD_WRITE_CONFIG = "write_config"
 CMD_CLEAR_RAIN_DAILY = "clear_rain_daily"
 CMD_CLEAR_RAIN_YEARLY = "clear_rain_yearly"
 CMD_FORCE_ARCHIVE = "force_archive"
+CMD_BAROMETER_CAL = "barometer_cal"          # read BARDATA
+CMD_SET_BAROMETER = "set_barometer"          # write via BAR=
 
 # --- Wire helpers ---
 
