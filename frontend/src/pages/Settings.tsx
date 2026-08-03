@@ -1835,6 +1835,13 @@ export default function Settings() {
     loadWlConfig();
   }, []);
 
+  // Whether this station accepts the legacy five-field calibration block.
+  // The backend already computes this; the frontend simply never read it.
+  // Falls back to `calibration != null` so a daemon predating the
+  // `supported` block still behaves correctly.
+  const calibrationSupported =
+    wlConfig?.supported?.calibration ?? (wlConfig?.calibration != null);
+
   const loadWlConfig = useCallback(() => {
     setWlLoadStatus("loading");
     setWlLoadError(null);
@@ -1844,7 +1851,14 @@ export default function Settings() {
           setWlConfig(wl);
           if (wl.archive_period != null) setWlArchivePeriod(wl.archive_period);
           if (wl.sample_period != null) setWlSamplePeriod(wl.sample_period);
-          setWlCal(wl.calibration);
+          // The backend returns calibration: null on any station that is
+          // not a LinkDriver — Vantage calibration uses different
+          // addresses and a different write procedure, so #214 reports it
+          // as unsupported rather than forcing it into this five-field
+          // legacy shape.  Assigning that null crashed the whole Settings
+          // page on first render (wlCal.inside_temp).  The neighbouring
+          // period fields were already guarded; this one was not.
+          if (wl.calibration != null) setWlCal(wl.calibration);
           setWlLoadStatus("loaded");
         } else {
           const msg = (wl && "error" in wl && typeof wl.error === "string")
@@ -1980,7 +1994,10 @@ export default function Settings() {
       const update: Record<string, unknown> = {
         archive_period: wlArchivePeriod,
         sample_period: wlSamplePeriod,
-        calibration: wlCal,
+        // Omitted when the station cannot accept it — otherwise a save
+        // would post the untouched default offsets to a station whose
+        // calibration lives somewhere else entirely.
+        ...(calibrationSupported ? { calibration: wlCal } : {}),
       };
       const resp = await updateWeatherLinkConfig(update);
       if ("error" in resp) {
@@ -1989,7 +2006,9 @@ export default function Settings() {
       }
       if (resp.config) {
         setWlConfig(resp.config);
-        setWlCal(resp.config.calibration);
+        // Same null guard as the load path — a save round-trip returns
+        // the same unsupported-calibration null on a Vantage station.
+        if (resp.config.calibration != null) setWlCal(resp.config.calibration);
         if (resp.config.archive_period != null) setWlArchivePeriod(resp.config.archive_period);
         if (resp.config.sample_period != null) setWlSamplePeriod(resp.config.sample_period);
       }
@@ -2609,7 +2628,15 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Calibration row */}
+        {/* Calibration row.
+            Hidden on stations that do not accept these offsets.  The five
+            fields are the legacy WeatherLink shape; Vantage calibration
+            uses different addresses and a different write procedure (#214),
+            so the backend reports calibration unsupported and returns null.
+            Showing an editable panel that the station cannot accept invites
+            a save that silently does nothing.
+            Per-driver calibration panels are tracked in #249. */}
+        {calibrationSupported && (
         <div style={gridTwoCol(isMobile)}>
           <div style={fieldGroup}>
             <label style={labelStyle} title="Added to raw inside temperature reading (tenths of °F). Use to correct a known sensor bias.">
@@ -2672,6 +2699,7 @@ export default function Settings() {
             />
           </div>
         </div>
+        )}
 
         {/* Actions row */}
         <div style={{
