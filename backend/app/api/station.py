@@ -8,7 +8,7 @@ import asyncio
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..ipc.dependencies import get_ipc_client
 from .dependencies import require_admin
@@ -140,7 +140,10 @@ DRIVER_CATALOG = [
         "type": "weatherlink_ip",
         "name": "Davis WeatherLink IP (6555)",
         "connection": "network",
-        "description": "Vantage protocol over TCP for the WeatherLink IP data logger.",
+        # Said "Vantage protocol over TCP" until #247.  The driver wraps
+        # LinkDriver (legacy WRD/WWR), not VantageDriver — corrected here
+        # to match the code.  Which of the two was wrong is still open.
+        "description": "Legacy WeatherLink protocol over TCP for the WeatherLink IP data logger.",
         "config_fields": ["weatherlink_ip", "weatherlink_port"],
     },
     {
@@ -178,3 +181,94 @@ DRIVER_CATALOG = [
 def get_driver_catalog():
     """Return the list of supported station drivers with metadata."""
     return DRIVER_CATALOG
+
+
+# --------------- Barometer calibration ---------------
+#
+# Vantage only.  Legacy stations calibrate their barometer through a
+# different mechanism (direct BAR_CAL register write, subtract semantics)
+# and are excluded by CAP_BAROMETER_CAL, not by a type check here.
+
+
+def _cal_error(detail: str) -> HTTPException:
+    """Map an IPC error string to a status code.
+
+    Follows the force-archive precedent (#219): a station that cannot do
+    this is 501, a rejected argument is 400, anything else is a transient
+    fault.  A command that did not run must never look like one that did.
+    """
+    if "does not support" in detail:
+        return HTTPException(status_code=501, detail=detail)
+    if "must be" in detail or "required" in detail:
+        return HTTPException(status_code=400, detail=detail)
+    return HTTPException(status_code=503, detail=detail)
+
+
+@router.get("/station/barometer-calibration")
+async def get_barometer_calibration(_admin=Depends(require_admin)):
+    """Read the console's current barometer calibration (BARDATA)."""
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "barometer_cal"}, timeout=20.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/barometer-calibration")
+async def set_barometer_calibration(
+    payload: dict,
+    _admin=Depends(require_admin),
+):
+    """Set barometer calibration and elevation via BAR=.
+
+    Body: ``{"bar_thousandths_inhg": int, "elevation_ft": int}``.
+
+    ``bar_thousandths_inhg`` is the sea-level pressure the console should
+    display right now — the console back-solves its own offset against
+    the current raw reading, so the reference must be current rather than
+    remembered.  Pass 0 to clear the offset while keeping elevation.
+
+    Returns before/after BARDATA snapshots so the caller can log the pair
+    the calibration procedure requires.
+    """
+    bar = payload.get("bar_thousandths_inhg")
+    elevation = payload.get("elevation_ft")
+    if bar is None or elevation is None:
+        raise HTTPException(
+            status_code=400,
+            detail="bar_thousandths_inhg and elevation_ft are both required",
+        )
+
+    try:
+        client = get_ipc_client()
+        result = await client.send_command(
+            {
+                "cmd": "set_barometer",
+                "bar_thousandths_inhg": int(bar),
+                "elevation_ft": int(elevation),
+            },
+            timeout=30.0,
+        )
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail="bar_thousandths_inhg and elevation_ft must be integers",
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")

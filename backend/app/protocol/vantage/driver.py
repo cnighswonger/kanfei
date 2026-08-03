@@ -30,6 +30,7 @@ from ..base import (
     CAP_CLOCK_SYNC,
     CAP_RAIN_RESET,
     CAP_HILOWS,
+    CAP_BAROMETER_CAL,
 )
 from ..serial_port import SerialPort
 from ..crc import crc_validate, crc_calculate
@@ -72,6 +73,7 @@ from .commands import (
     cmd_ver,
     cmd_nver,
     cmd_rxcheck,
+    cmd_bar,
     cmd_bardata,
     cmd_receivers,
     cmd_getee,
@@ -194,6 +196,10 @@ class VantageDriver(StationDriver):
             # no equivalent anywhere in the Vantage serial protocol, so it
             # is genuinely unsupported rather than merely unimplemented.
             CAP_ARCHIVE_PERIOD_RW,
+            # BAR= — the only supported way to set barometer calibration
+            # on a Vantage.  Unconditional: BAR= and BARDATA predate
+            # LOOP2, so even a VP1 without has_loop2 can calibrate.
+            CAP_BAROMETER_CAL,
         }
         if self.hw_config.has_loop2:
             caps.add(CAP_HILOWS)
@@ -1239,6 +1245,91 @@ class VantageDriver(StationDriver):
             )
         return cal
 
+    # ---- BAR=: set barometer calibration ----
+
+    # BAR= accepts either 0 or 20.000–32.500 inHg, and elevation
+    # -2000..15000 ft (§IX).  Out-of-range values are NAKed by the
+    # console, so validating here turns a silent wire failure into a
+    # ValueError naming the offending argument.
+    BAR_MIN_THOUSANDTHS = 20_000
+    BAR_MAX_THOUSANDTHS = 32_500
+    ELEVATION_MIN_FT = -2_000
+    ELEVATION_MAX_FT = 15_000
+
+    def set_barometer(
+        self,
+        bar_thousandths_inhg: int,
+        elevation_ft: int,
+    ) -> bool:
+        """Set barometer calibration and elevation via BAR= (§IX).
+
+        This is the ONLY supported way to set these on a Vantage.  The
+        manual's EEPROM table says so explicitly at BAR_CAL (0x05) —
+        *"Use the 'BAR=' command to set this value!"* — and lists both
+        BAR_CAL and ELEVATION among the locations that must not be
+        written with EEWR/EEBWR.  A direct EEPROM write can ACK and read
+        back correctly while leaving the console in a state the firmware
+        does not honour.
+
+        ``bar_thousandths_inhg`` is the sea-level pressure you want the
+        console to display *right now*, in thousandths of an inch of
+        mercury.  The console back-solves its own offset against whatever
+        the raw sensor currently reads, which is why the reference must be
+        current: a stale reference bakes in the drift since it was taken.
+
+        Pass **0** to clear any existing offset — the manual states a zero
+        value "clears out any existing offset value previously set".  That
+        is the supported rollback, not CLRCAL: CLRCAL zeroes temperature
+        and humidity offsets and does not touch the barometer at all.
+
+        Elevation is the primary correction and is applied even when the
+        offset is cleared, so ``set_barometer(0, elev)`` leaves a station
+        correctly reduced but uncalibrated.
+
+        Returns True if the console answered OK.
+        """
+        if bar_thousandths_inhg != 0 and not (
+            self.BAR_MIN_THOUSANDTHS <= bar_thousandths_inhg
+            <= self.BAR_MAX_THOUSANDTHS
+        ):
+            raise ValueError(
+                f"barometer must be 0 or {self.BAR_MIN_THOUSANDTHS}-"
+                f"{self.BAR_MAX_THOUSANDTHS} thousandths inHg, "
+                f"got {bar_thousandths_inhg}"
+            )
+        if not (self.ELEVATION_MIN_FT <= elevation_ft <= self.ELEVATION_MAX_FT):
+            raise ValueError(
+                f"elevation must be {self.ELEVATION_MIN_FT}.."
+                f"{self.ELEVATION_MAX_FT} ft, got {elevation_ft}"
+            )
+
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_bar(bar_thousandths_inhg, elevation_ft))
+            ok = self._read_status_reply()
+
+        if ok:
+            logger.info(
+                "BAR=: set barometer=%d (thousandths inHg), elevation=%d ft",
+                bar_thousandths_inhg, elevation_ft,
+            )
+        else:
+            logger.warning(
+                "BAR=: console did not accept barometer=%d elevation=%d",
+                bar_thousandths_inhg, elevation_ft,
+            )
+        return ok
+
+    def clear_barometer_calibration(self, elevation_ft: int) -> bool:
+        """Clear the barometer offset, preserving elevation (BAR=0 <elev>).
+
+        Named explicitly because ``clear_calibration()`` sends CLRCAL,
+        which does NOT touch barometer calibration — using it for a
+        rollback silently leaves the bad offset in place.
+        """
+        return self.set_barometer(0, elevation_ft)
+
     # ---- HILOWS: current high/low block ----
 
     def hilows(self) -> Optional[VantageHighsLows]:
@@ -1683,6 +1774,20 @@ class VantageDriver(StationDriver):
 
     async def async_bardata(self) -> Optional[BarometerCalibration]:
         return await self._run_in_executor(self.bardata)
+
+    async def async_set_barometer(
+        self,
+        bar_thousandths_inhg: int,
+        elevation_ft: int,
+    ) -> bool:
+        return await self._run_in_executor(
+            self.set_barometer, bar_thousandths_inhg, elevation_ft
+        )
+
+    async def async_clear_barometer_calibration(self, elevation_ft: int) -> bool:
+        return await self._run_in_executor(
+            self.clear_barometer_calibration, elevation_ft
+        )
 
     async def async_receivers(self) -> Optional[list[int]]:
         return await self._run_in_executor(self.receivers)
