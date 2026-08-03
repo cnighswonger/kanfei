@@ -1091,9 +1091,18 @@ class LoggerDaemon:
         """Set barometer calibration and elevation via BAR=.
 
         Reads BARDATA before and after so the caller gets an auditable
-        before/after pair from one round trip — the procedure requires
-        logging both, and doing it here means the serial lock is taken
-        once instead of three times.
+        before/after pair from one IPC round trip — the procedure
+        requires logging both, and doing it here means the caller cannot
+        forget the before-snapshot or take it minutes earlier.
+
+        Note this does NOT hold the serial lock across the sequence:
+        each of the three driver calls enters the executor and takes
+        ``_io_lock`` independently, so a poll can interleave between
+        them.  That is acceptable here — the before/after snapshots are
+        an audit record, not a transaction, and BAR= itself is atomic on
+        the console.  Making it a genuinely locked sequence would need a
+        single combined driver method, which is worth doing only if an
+        interleaved poll is ever shown to matter.
         """
         drv = self._require_barometer_cal()
 
@@ -1121,6 +1130,22 @@ class LoggerDaemon:
                 "elevation_ft": cal.elevation_ft,
                 "barcal_inhg": cal.barcal_inhg,
             }
+
+        if not ok:
+            # A console NAK must not return normally.  The IPC server
+            # wraps any non-raising return as ok:true (server.py:127), so
+            # a rejected write would have surfaced as HTTP 200 carrying
+            # success:false — a write that did not take looking exactly
+            # like one that did.  Raising puts it on the error path,
+            # where the API maps it to 503.
+            #
+            # The after-snapshot goes in the message rather than being
+            # discarded: on a rejection it is the operator's evidence
+            # that the console is unchanged.
+            raise RuntimeError(
+                "Station rejected the calibration (BAR= not acknowledged); "
+                f"calibration unchanged: {_snap(after)}"
+            )
 
         return {"success": ok, "before": _snap(before), "after": _snap(after)}
 

@@ -163,6 +163,52 @@ class TestZeroClearsTheOffset:
         assert driver.serial.sent[0].startswith(b"BAR=")
 
 
+class TestNakIsNotSuccess:
+    """A console rejection must not look like a completed write.
+
+    Codex R1 blocker on #248: `set_barometer()` returning False was
+    passed straight through by the handler, and the IPC server wraps any
+    non-raising return as `ok: true` (`server.py:127`).  A NAKed write
+    therefore surfaced as HTTP 200 carrying `success: false` — a write
+    that did not take, presented as a successful request.
+    """
+
+    def test_driver_reports_nak_as_false(self):
+        """`_read_status_reply` distinguishes OK from NAK; a NAK-only
+        reply must not read as success."""
+        drv = VantageDriver("/dev/null", 19200)
+        drv.serial = FakeSerial(reply=b"\x21")      # bare NAK
+        drv._wakeup = lambda: None
+        assert drv.set_barometer(29_780, 265) is False
+
+    def test_ok_reply_reports_true(self):
+        drv = VantageDriver("/dev/null", 19200)
+        drv.serial = FakeSerial(reply=b"\n\rOK\n\r")
+        drv._wakeup = lambda: None
+        assert drv.set_barometer(29_780, 265) is True
+
+    def test_handler_raises_rather_than_returning_success_false(self):
+        """The fix.  Pinned at the handler because that is where the
+        IPC ok:true wrapping happens — testing only the driver would
+        miss the path that actually reached the API."""
+        import inspect
+
+        from logger_main import LoggerDaemon
+
+        source = inspect.getsource(LoggerDaemon._h_set_barometer)
+        assert "if not ok:" in source, (
+            "handler must branch on the console's answer"
+        )
+        assert "raise RuntimeError" in source, (
+            "a NAK must raise so the IPC server reports ok:false — "
+            "returning normally makes a rejected write look successful"
+        )
+        # The raise has to come before the success return, or it is dead.
+        assert source.index("raise RuntimeError") < source.index(
+            'return {"success": ok'
+        )
+
+
 class TestDriverInterface:
     @pytest.mark.parametrize("method", [
         "set_barometer", "async_set_barometer",
