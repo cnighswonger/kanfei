@@ -9,7 +9,7 @@ Until now the only symptom was the data going strange hours later.
 Measured on the bench Vue (fw 2.12), 2026-08-02:
 
     27152 packets received, 132 missed, 0 resyncs,
-    1770 largest run received, 36 CRC errors   →  99.52% reception
+    1770 longest run received, 36 CRC errors   →  99.52% reception
 
 **Field 4 is "the largest number of packets received IN A ROW"** — manual
 §IX, "RXCHECK". It is a run of *successes*, so a large value is healthy.
@@ -72,7 +72,7 @@ class TestFieldSemantics:
             "packets_received": 27152,
             "missed": 132,
             "resync": 0,
-            "max_consecutive": 1770,
+            "max_consecutive_received": 1770,
             "crc_errors": 36,
         }
 
@@ -81,10 +81,29 @@ class TestFieldSemantics:
         as consecutive misses, 1770 would read as a catastrophic outage on
         a link that is actually 99.5% clean."""
         stats = driver.rxcheck()
-        assert stats["max_consecutive"] <= stats["packets_received"], (
+        assert stats["max_consecutive_received"] <= stats["packets_received"], (
             "a run of received packets cannot exceed total received — "
             "if it does, the field is being read as something else"
         )
+
+    def test_field_four_key_names_what_it_counts(self, driver):
+        """The name is the real guard; the invariant above is weak (it
+        holds for plenty of wrong readings too).  A caller writing an
+        alert threshold sees the key, not this module's docstring, so the
+        key has to say `received`."""
+        stats = driver.rxcheck()
+        assert "max_consecutive_received" in stats
+        assert "max_consecutive" not in stats, (
+            "the bare name reads equally well as consecutive MISSES, "
+            "which inverts the field's meaning"
+        )
+
+    def test_field_four_exceeds_misses_on_a_healthy_link(self, driver):
+        """Directional check the weak invariant misses: on the measured
+        Vue the longest received run (1770) dwarfs total misses (132).
+        Under the inverted reading that relationship is impossible."""
+        stats = driver.rxcheck()
+        assert stats["max_consecutive_received"] > stats["missed"]
 
     def test_reception_rate_is_derivable(self, driver):
         stats = driver.rxcheck()

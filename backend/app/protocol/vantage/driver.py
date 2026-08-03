@@ -1190,7 +1190,22 @@ class VantageDriver(StationDriver):
     # ---- RXCHECK diagnostics ----
 
     def rxcheck(self) -> Optional[dict]:
-        """Read receiver diagnostics via RXCHECK."""
+        """Read receiver diagnostics via RXCHECK (§IX).
+
+        Five counters, all since station midnight or the last manual
+        clear.  One reading is a total, not a rate; two readings apart
+        give the rate, and that is the caller's job.
+
+        ``max_consecutive_received`` is field 4, and the name is
+        deliberately explicit.  The manual defines it as "the largest
+        number of packets received in a row" — a run of SUCCESSES, so a
+        large value is healthy.  Read as consecutive *misses* it inverts
+        completely: on the bench Vue it reads 1770 against 30,265
+        received, which is a clean link but would look like a
+        catastrophic outage.  That misreading is not hypothetical — it
+        was written into a diagnostic script during the investigation
+        that produced this code.
+        """
         with self._io_lock:
             self._wakeup()
             self.serial.flush()
@@ -1203,7 +1218,7 @@ class VantageDriver(StationDriver):
                     "packets_received": int(parts[0]),
                     "missed": int(parts[1]),
                     "resync": int(parts[2]),
-                    "max_consecutive": int(parts[3]),
+                    "max_consecutive_received": int(parts[3]),
                     "crc_errors": int(parts[4]),
                 }
             logger.warning("RXCHECK: unexpected response: %r", response)
