@@ -410,9 +410,9 @@ def parse_loop2(raw: bytes) -> Optional[Loop2Data]:
       [24:26] wind gust direction (u16 LE, degrees)
       [30:32] dew point (i16 LE, °F)
       [33]    outside humidity (u8, %)
-      [34:36] heat index (i16 LE, °F)
-      [36:38] wind chill (i16 LE, °F)
-      [38:40] THSW index (i16 LE, °F)
+      [35:37] heat index (i16 LE, °F)
+      [37:39] wind chill (i16 LE, °F)
+      [39:41] THSW index (i16 LE, °F)
       [41:43] rain rate (u16 LE, clicks/hr)
       [43]    UV index (u8, tenths)
       [44:46] solar radiation (u16 LE, W/m²)
@@ -422,8 +422,20 @@ def parse_loop2(raw: bytes) -> Optional[Loop2Data]:
       [54:56] rain last hour (u16 LE, clicks)
       [56:58] day ET (u16 LE, thousandths inch)
       [58:60] rain last 24 hours (u16 LE, clicks)
-      [62:64] absolute barometric pressure (u16 LE, thousandths inHg)
-      [64:66] altimeter barometric pressure (u16 LE, thousandths inHg)
+      [60]    barometric reduction method (u8)
+      [61:63] user-entered barometric offset (u16 LE, thousandths inHg)
+      [63:65] barometric calibration number (i16 LE, SIGNED, thousandths inHg)
+      [65:67] barometric sensor raw reading (u16 LE, thousandths inHg)
+      [67:69] absolute barometric pressure (u16 LE, thousandths inHg)
+      [69:71] altimeter setting (u16 LE, thousandths inHg)
+
+    This table has twice been the vector for an offset bug: it carried
+    the pre-#235 derived-temperature offsets and the pre-#246 barometer
+    offsets long after the code was corrected, so a later edit copying
+    from it would have reintroduced the fault.  Every entry above is now
+    checked against the code it documents by
+    ``test_docstring_offsets_match_the_code``.  Update both together or
+    that test fails.
       [97:99] CRC (u16 BE)
     """
     if len(raw) < LOOP_PACKET_SIZE:

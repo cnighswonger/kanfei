@@ -131,6 +131,86 @@ class TestManualStatedRelationships:
         assert data.altimeter_barometer == 29915
 
 
+class TestDocstringMatchesCode:
+    """The offset table in ``parse_loop2``'s docstring has twice been the
+    vector for an offset bug — it carried the pre-#235 derived-temperature
+    offsets and the pre-#246 barometer offsets long after the code was
+    corrected.  A later edit copying from the stale table would silently
+    reintroduce the fault.
+
+    Codex flagged the barometer half on PR #246; checking the whole table
+    found five stale entries, three of them from #235.  This test makes
+    the table self-enforcing rather than trusting anyone to update both.
+    """
+
+    def _docstring_offsets(self) -> dict[int, str]:
+        """Parse ``[N]`` / ``[N:M]`` entries out of the docstring table."""
+        import re
+
+        from app.protocol.vantage.loop_packet import parse_loop2
+
+        found = {}
+        for line in (parse_loop2.__doc__ or "").splitlines():
+            m = re.match(r"\s*\[(\d+)(?::(\d+))?\]\s+(.+)", line)
+            if m:
+                found[int(m.group(1))] = m.group(3).strip()
+        return found
+
+    def _code_offsets(self) -> set[int]:
+        """Every byte offset ``parse_loop2`` actually reads."""
+        import inspect
+        import re
+
+        from app.protocol.vantage.loop_packet import parse_loop2
+
+        src = inspect.getsource(parse_loop2)
+        offsets = set()
+        for m in re.finditer(r'unpack_from\("<[hH]", raw, (\d+)\)', src):
+            offsets.add(int(m.group(1)))
+        for m in re.finditer(r"raw\[(\d+)\]", src):
+            offsets.add(int(m.group(1)))
+        return offsets
+
+    def test_every_documented_offset_is_actually_read(self):
+        """A documented offset the code never reads is either a stale
+        entry or an unimplemented field; both mislead the next editor."""
+        documented = set(self._docstring_offsets())
+        code = self._code_offsets()
+        # Documented for completeness but not read as an indexed field:
+        # header/unused entries, and the CRC, which is checked over a
+        # whole-packet slice (crc_validate(raw[:99])) rather than by
+        # unpacking at offset 97.
+        structural = {0, 3, 5, 12, 14, 16, 33, 46, 56, 58, 97}
+        stale = documented - code - structural
+        assert not stale, (
+            f"docstring documents offsets the code does not read: "
+            f"{sorted(stale)} — stale table entries are how the #235 and "
+            f"#246 offset bugs propagated"
+        )
+
+    @pytest.mark.parametrize("offset,expect", [
+        (35, "heat index"),
+        (37, "wind chill"),
+        (39, "THSW"),
+        (61, "user-entered barometric offset"),
+        (63, "barometric calibration"),
+        (65, "barometric sensor raw"),
+        (67, "absolute barometric"),
+        (69, "altimeter"),
+    ])
+    def test_corrected_offsets_are_documented(self, offset, expect):
+        """The specific entries that were wrong, pinned by name so a
+        revert to the old table fails loudly."""
+        documented = self._docstring_offsets()
+        assert offset in documented, f"offset {offset} missing from the table"
+        assert expect.lower() in documented[offset].lower()
+
+    @pytest.mark.parametrize("stale", [34, 36, 38, 62, 64])
+    def test_old_wrong_offsets_are_gone(self, stale):
+        """34/36/38 were #235's; 62/64 were #246's."""
+        assert stale not in self._docstring_offsets()
+
+
 class TestSentinels:
     def test_dashed_pressures_are_none(self):
         """0 means no reading for barometer fields."""
