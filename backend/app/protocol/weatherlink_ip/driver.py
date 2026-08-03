@@ -1,9 +1,24 @@
-"""Davis WeatherLink IP (6555) driver — Vantage protocol over TCP.
+"""Davis WeatherLink IP (6555) driver — LEGACY WeatherLink protocol over TCP.
 
 Thin wrapper around :class:`LinkDriver` with a :class:`TcpTransport`
 injected as the transport layer.  All protocol operations (LOOP polling,
 memory reads, archive sync, calibration, clock sync) are delegated to
 the inner LinkDriver.
+
+UNRESOLVED — see issue #247.  This docstring and the driver catalog entry
+in ``app/api/station.py`` both used to say "Vantage protocol over TCP",
+but the implementation wraps LinkDriver, which speaks the legacy
+WRD/WWR/RRD/SRD command set — no ``BAR=``, no ``bardata()``, no LOOP2.
+The header is corrected here to match what the code actually does, but
+which of the two is *wrong* has not been settled: either the description
+was always stale, or this should wrap VantageDriver and every
+Vantage-only capability is silently missing.  Settling it needs a real
+6555 on the bench.
+
+Consequence for anyone adding a capability: do NOT infer this driver's
+protocol from its name or its docs.  It inherits whatever LinkDriver
+advertises.  This nearly put CAP_BAROMETER_CAL on a driver that cannot
+execute ``BAR=``.
 """
 
 import logging

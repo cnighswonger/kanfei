@@ -140,7 +140,10 @@ DRIVER_CATALOG = [
         "type": "weatherlink_ip",
         "name": "Davis WeatherLink IP (6555)",
         "connection": "network",
-        "description": "Vantage protocol over TCP for the WeatherLink IP data logger.",
+        # Said "Vantage protocol over TCP" until #247.  The driver wraps
+        # LinkDriver (legacy WRD/WWR), not VantageDriver — corrected here
+        # to match the code.  Which of the two was wrong is still open.
+        "description": "Legacy WeatherLink protocol over TCP for the WeatherLink IP data logger.",
         "config_fields": ["weatherlink_ip", "weatherlink_port"],
     },
     {
