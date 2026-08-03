@@ -79,6 +79,22 @@ def init_database() -> None:
             ))
             conn.commit()
 
+    # Migrate: add thsw_index column if missing (issue #236)
+    #
+    # THSW is the one derived value we cannot compute ourselves: it needs
+    # solar radiation, so only a station with a solar sensor can report it.
+    # A station without one sends the dashed sentinel and the column stays
+    # NULL — which is why this is gated on the value arriving rather than
+    # on the driver type.
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("SELECT thsw_index FROM sensor_readings LIMIT 1"))
+        except Exception:
+            conn.execute(text(
+                "ALTER TABLE sensor_readings ADD COLUMN thsw_index INTEGER"
+            ))
+            conn.commit()
+
     # Migrate: cwop_mute_* → channel_mute_* (issue #162)
     # Mute keys were CWOP-specific in beta16; from beta17 they gate every
     # outbound upload, so the prefix is generalised.  Copy old → new for

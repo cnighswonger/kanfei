@@ -91,7 +91,14 @@ class Loop2Data:
     day_rain: Optional[int] = None           # clicks
     rain_last_15min: Optional[int] = None    # clicks
     rain_last_hour: Optional[int] = None     # clicks
-    abs_barometer: Optional[int] = None      # thousandths inHg
+    # Barometer block (§X.2 bytes 60-70).  These are what a calibration
+    # tool needs: the raw sensor reading, what the user has already
+    # offset it by, and the corrected values the console displays.
+    bar_reduction_method: Optional[int] = None  # 0=user offset, 1=altimeter, 2=NOAA
+    bar_user_offset: Optional[int] = None    # thousandths inHg, set by BAR=
+    bar_calibration: Optional[int] = None    # thousandths inHg, SIGNED
+    bar_raw_sensor: Optional[int] = None     # thousandths inHg, uncorrected
+    abs_barometer: Optional[int] = None      # thousandths inHg = raw + user offset
     altimeter_barometer: Optional[int] = None  # thousandths inHg
 
 
@@ -403,9 +410,9 @@ def parse_loop2(raw: bytes) -> Optional[Loop2Data]:
       [24:26] wind gust direction (u16 LE, degrees)
       [30:32] dew point (i16 LE, °F)
       [33]    outside humidity (u8, %)
-      [34:36] heat index (i16 LE, °F)
-      [36:38] wind chill (i16 LE, °F)
-      [38:40] THSW index (i16 LE, °F)
+      [35:37] heat index (i16 LE, °F)
+      [37:39] wind chill (i16 LE, °F)
+      [39:41] THSW index (i16 LE, °F)
       [41:43] rain rate (u16 LE, clicks/hr)
       [43]    UV index (u8, tenths)
       [44:46] solar radiation (u16 LE, W/m²)
@@ -415,8 +422,20 @@ def parse_loop2(raw: bytes) -> Optional[Loop2Data]:
       [54:56] rain last hour (u16 LE, clicks)
       [56:58] day ET (u16 LE, thousandths inch)
       [58:60] rain last 24 hours (u16 LE, clicks)
-      [62:64] absolute barometric pressure (u16 LE, thousandths inHg)
-      [64:66] altimeter barometric pressure (u16 LE, thousandths inHg)
+      [60]    barometric reduction method (u8)
+      [61:63] user-entered barometric offset (u16 LE, thousandths inHg)
+      [63:65] barometric calibration number (i16 LE, SIGNED, thousandths inHg)
+      [65:67] barometric sensor raw reading (u16 LE, thousandths inHg)
+      [67:69] absolute barometric pressure (u16 LE, thousandths inHg)
+      [69:71] altimeter setting (u16 LE, thousandths inHg)
+
+    This table has twice been the vector for an offset bug: it carried
+    the pre-#235 derived-temperature offsets and the pre-#246 barometer
+    offsets long after the code was corrected, so a later edit copying
+    from it would have reintroduced the fault.  Every entry above is now
+    checked against the code it documents by
+    ``test_docstring_offsets_match_the_code``.  Update both together or
+    that test fails.
       [97:99] CRC (u16 BE)
     """
     if len(raw) < LOOP_PACKET_SIZE:
@@ -494,9 +513,34 @@ def parse_loop2(raw: bytes) -> Optional[Loop2Data]:
     data.uv_index = _valid_uv(raw[43])
     data.solar_radiation = _valid_solar(struct.unpack_from("<H", raw, 44)[0])
 
-    # Pressure variants
-    data.abs_barometer = _valid_barometer(struct.unpack_from("<H", raw, 62)[0])
-    data.altimeter_barometer = _valid_barometer(struct.unpack_from("<H", raw, 64)[0])
+    # Barometer block, §X.2 bytes 60-70.  The whole block was read two
+    # bytes early, so both values straddled the boundary between the
+    # neighbouring fields and were garbage:
+    #
+    #   absolute   read @62 -> 54.272 inHg   correct @67 -> 29.630 inHg
+    #   altimeter  read @64 -> 36.095 inHg   correct @69 -> 29.915 inHg
+    #
+    # Two independent confirmations that the manual's map is the right
+    # one, measured on a Vue (fw 2.12):
+    #
+    #   raw 29580 + user_offset 50 == absolute 29630, the relationship
+    #   the manual states between those three fields; and
+    #
+    #   the calibration number at 63 reads -44 as a SIGNED int16, which
+    #   is exactly what BARDATA independently reports as OFFSET.
+    #
+    # Nothing consumed either field, so no stored data is affected.  They
+    # are wired up now because barometer calibration needs them: the
+    # difference between the raw sensor reading and the altimeter setting
+    # is what a calibration tool has to show.
+    data.bar_reduction_method = raw[60]
+    data.bar_user_offset = struct.unpack_from("<H", raw, 61)[0]
+    # Signed: a negative calibration number is normal, and reading it
+    # unsigned turns -44 into 65492.
+    data.bar_calibration = struct.unpack_from("<h", raw, 63)[0]
+    data.bar_raw_sensor = _valid_barometer(struct.unpack_from("<H", raw, 65)[0])
+    data.abs_barometer = _valid_barometer(struct.unpack_from("<H", raw, 67)[0])
+    data.altimeter_barometer = _valid_barometer(struct.unpack_from("<H", raw, 69)[0])
 
     return data
 
@@ -544,6 +588,7 @@ def loop_to_snapshot(
     wind_speed = _mph_to_ms(loop.wind_speed) if loop.wind_speed is not None else None
     wind_direction = loop.wind_direction
     wind_gust = None
+    thsw_index = None
 
     if loop2 is not None:
         if loop2.wind_gust_10min is not None:
@@ -617,8 +662,20 @@ def loop_to_snapshot(
         extra["month_rain_mm"] = _clicks_to_mm(loop.month_rain, rain_click_inches)
 
     if loop2 is not None:
+        # THSW is the one derived value we cannot compute: it needs solar
+        # radiation.  A station without a solar sensor sends the dashed
+        # sentinel, which _valid_derived_temp() has already turned into
+        # None, so this is gated on the value arriving rather than on the
+        # station model — fit a solar sensor and it starts working with no
+        # code change.
+        #
+        # Converted to °C here.  It used to go into extra as raw °F while
+        # every other snapshot field was SI, which would have put a 90 °F
+        # THSW on a °C dashboard.
         if loop2.thsw_index is not None:
-            extra["thsw_index"] = float(loop2.thsw_index)
+            thsw_c = (loop2.thsw_index - 32) * 5.0 / 9.0
+            thsw_index = round(thsw_c, 1)
+            extra["thsw_index_c"] = thsw_index
         if loop2.wind_speed_2min is not None:
             extra["wind_2min_avg_ms"] = _mph_to_ms(round(loop2.wind_speed_2min / 10.0))
         if loop2.wind_speed_10min is not None:
@@ -650,5 +707,6 @@ def loop_to_snapshot(
         soil_moisture=soil_moisture,
         leaf_wetness=leaf_wetness,
         et_daily=et_daily,
+        thsw_index=thsw_index,
         extra=extra,
     )

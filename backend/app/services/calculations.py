@@ -81,6 +81,11 @@ THI_TABLE = [
 THI_BASE_TEMP = 68  # First row temperature
 THI_MAX_TEMP = 122  # Last row temperature
 
+# Davis pads the unreachable upper-right of the table with this value
+# "to facilitate interpolation only" (reference/thitable.h).  Real table
+# entries top out at 144, so any cell at or above 150 is padding.
+THI_PAD_VALUE = 150
+
 # Wind chill factor tables from techref.txt lines 1497-1536
 CHILL_TABLE_ONE = [156, 151, 146, 141, 133, 123, 110, 87, 61, 14, 0]
 CHILL_TABLE_TWO = [0, 16, 16, 16, 25, 33, 41, 74, 82, 152, 0]
@@ -100,11 +105,20 @@ def heat_index(temp_tenths_c: int, humidity: int) -> Optional[int]:
     temp_tenths_f = c_tenths_to_f_tenths(temp_tenths_c)
     temp_f = temp_tenths_f / 10.0
 
-    if temp_f < THI_BASE_TEMP:
-        return None  # Below table range
-    if temp_f > THI_MAX_TEMP:
-        return None  # Above table range
     if humidity < 0 or humidity > 100:
+        return None
+
+    # Below the table, heat index is not a meaningful correction: there is
+    # no humidity-driven warming to add, and the apparent temperature IS
+    # the air temperature.  Returning None here blanked the dashboard tile
+    # for most of the year — the console keeps displaying a value, so an
+    # empty tile reads as a fault rather than as "not applicable".
+    if temp_f < THI_BASE_TEMP:
+        return temp_tenths_c
+
+    # Above 122 °F the table genuinely runs out and there is nothing to
+    # interpolate from.  That is real missing data, so it stays None.
+    if temp_f > THI_MAX_TEMP:
         return None
 
     # Table indices
@@ -125,13 +139,30 @@ def heat_index(temp_tenths_c: int, humidity: int) -> Optional[int]:
     v10 = THI_TABLE[row_hi][col_lo]
     v11 = THI_TABLE[row_hi][col_hi]
 
+    # Reject only where PADDING actually contributed.
+    #
+    # Davis fills the unreachable upper-right corner of the table with 150
+    # "to facilitate interpolation only" (see reference/thitable.h).  The
+    # old guard tested the interpolated RESULT against 125, which threw
+    # away real readings: at 96 °F / 70% RH the interpolation lands exactly
+    # on the cell holding 128 — a genuine Davis value — with the 150 beside
+    # it carrying zero weight, and the result was discarded anyway.
+    #
+    # That is not an edge case here.  The whole hot-and-humid quadrant went
+    # blank: 94 °F/80%, 96 °F/70%, 98 °F/60%, 100 °F/50% and everything
+    # beyond, which is precisely the weather where heat index is the number
+    # someone actually wants.  Testing the CORNERS instead means padding is
+    # rejected only when it genuinely influenced the result.
+    corners = ((v00, 1 - col_frac), (v01, col_frac),
+               (v10, 1 - col_frac), (v11, col_frac))
+    weights = ((1 - row_frac), (1 - row_frac), row_frac, row_frac)
+    if any(v >= THI_PAD_VALUE and cw * rw > 0
+           for (v, cw), rw in zip(corners, weights)):
+        return None
+
     v0 = v00 + (v01 - v00) * col_frac
     v1 = v10 + (v11 - v10) * col_frac
     result = v0 + (v1 - v0) * row_frac
-
-    # Values > 125 are interpolation artifacts, not real
-    if result > 125:
-        return None
 
     # Convert result (whole °F) back to tenths °C
     return f_tenths_to_c_tenths(round(result * 10))

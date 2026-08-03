@@ -58,6 +58,8 @@ export interface DerivedData {
   wind_chill: ValueWithUnit | null;
   feels_like: ValueWithUnit | null;
   theta_e: ValueWithUnit | null;
+  /** Station-computed; null unless the station has a solar sensor. */
+  thsw_index: ValueWithUnit | null;
 }
 
 export interface DailyExtremes {
@@ -580,7 +582,22 @@ export interface WeatherLinkCalibration {
 export interface WeatherLinkConfig {
   archive_period: number | null;
   sample_period: number | null;
-  calibration: WeatherLinkCalibration;
+  /**
+   * Null on any station that is not a LinkDriver. Vantage calibration
+   * uses different addresses and a different write procedure, so the
+   * backend reports it unsupported rather than forcing it into this
+   * five-field legacy shape.
+   *
+   * This was typed non-nullable while the backend had always been able
+   * to return null, so `tsc` could not see the crash that null caused.
+   */
+  calibration: WeatherLinkCalibration | null;
+  /** Which settings this station actually accepts. */
+  supported?: {
+    archive_period: boolean;
+    sample_period: boolean;
+    calibration: boolean;
+  };
 }
 
 export interface WeatherLinkConfigUpdate {

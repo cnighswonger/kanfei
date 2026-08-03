@@ -56,6 +56,13 @@ class SensorSnapshot:
     # Evapotranspiration (mm)
     et_daily: Optional[float] = None
 
+    # Station-computed THSW index (°C).  Every other derived value is
+    # calculated from raw sensor readings in calculations.py; THSW needs
+    # solar radiation, so only a station with a solar sensor can produce
+    # one.  None on stations that lack the sensor, and on drivers that do
+    # not report it at all.
+    thsw_index: Optional[float] = None
+
     # Vendor-specific fields that don't map to the standard schema
     extra: dict = field(default_factory=dict)
 
@@ -90,6 +97,25 @@ CAP_HILOWS = "hilows"                    # Can retrieve hi/low records
 # type test.
 CAP_ARCHIVE_PERIOD_RW = "archive_period_rw"   # Can read/write archive interval
 CAP_SAMPLE_PERIOD_RW = "sample_period_rw"     # Can read/write sample period
+
+# Barometer calibration via the Vantage BAR= primitive.
+#
+# Deliberately narrower than "this station can calibrate its barometer".
+# Legacy WeatherLink stations (Monitor II, Wizard) CAN calibrate theirs,
+# but by an incompatible mechanism: a direct BAR_CAL register write with
+# SUBTRACT semantics (firmware computes Barometer = Barometer - BarCal,
+# reference/techref.txt:1070; LinkDriver negates at the I/O boundary,
+# #154).  A tool written for BAR= that ran against a legacy station would
+# either fail outright or, worse, write an offset with the wrong sign and
+# double the error rather than removing it.
+#
+# So this flag means specifically "speaks BAR=", not "is calibratable".
+# Legacy needs its own capability and its own procedure; see the Vantage
+# scope note in kanfei-phone-sensor's DAVIS-STATION-CALIBRATION.md.
+#
+# NOT on WeatherLink IP: despite the name, that driver wraps LinkDriver
+# and speaks the legacy command set (#247).
+CAP_BAROMETER_CAL = "barometer_cal"           # Can calibrate barometer via BAR=
 
 
 # --------------- Abstract base class ---------------
