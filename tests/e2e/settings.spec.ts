@@ -276,3 +276,108 @@ test.describe('Barometer calibration panel', () => {
     expect(getsAfterPost).toBeGreaterThan(0);
   });
 });
+
+test.describe('Console location reconcile', () => {
+  test.beforeEach(async ({ page }) => {
+    await injectAuthCookie(page);
+  });
+
+  async function stubSupport(page: import('@playwright/test').Page, location: boolean) {
+    await page.route('**/api/weatherlink/config', async (route) => {
+      await route.fulfill({
+        json: {
+          archive_period: 5,
+          sample_period: 5,
+          calibration: null,
+          supported: {
+            archive_period: true, sample_period: true,
+            calibration: false, barometer_cal: false, location,
+          },
+        },
+      });
+    });
+  }
+
+  async function stubLocation(
+    page: import('@playwright/test').Page,
+    latitude: number,
+    longitude: number,
+  ) {
+    await page.route('**/api/station/location', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ json: { latitude, longitude, resolution_deg: 0.1 } });
+        return;
+      }
+      await route.fallback();
+    });
+  }
+
+  test('absent entirely when the station has no console location', async ({ page }) => {
+    // Unlike the calibration panel, silence is right here: the Location
+    // card itself still works, and there is nothing a legacy user could
+    // act on.
+    await stubSupport(page, false);
+    await page.goto('/settings');
+    await expect(page.getByText('Console holds', { exact: false })).toHaveCount(0);
+  });
+
+  test('agrees when the console holds the rounded value', async ({ page }) => {
+    // The fixture configures 35.7796 / -78.6382, which the console can
+    // only store as 35.8 / -78.6.  That is agreement, not a mismatch —
+    // comparing for equality here would nag permanently on a correctly
+    // configured station.
+    await stubSupport(page, true);
+    await stubLocation(page, 35.8, -78.6);
+    await page.goto('/settings');
+
+    // Split across spans by JSX, so match the paragraph rather than a
+    // text node — getByText will not span children.
+    const row = page.locator('p', { hasText: 'Console holds' });
+    await expect(row).toContainText('35.8, -78.6');
+    await expect(row).toContainText('matches your location');
+    await expect(
+      page.getByRole('button', { name: 'Send my location to the console' }),
+    ).toHaveCount(0);
+  });
+
+  test('offers the push when the console holds something else', async ({ page }) => {
+    await stubSupport(page, true);
+    await stubLocation(page, 12.3, 45.6);
+    await page.goto('/settings');
+
+    const row = page.locator('p', { hasText: 'Console holds' });
+    await expect(row).toContainText('12.3, 45.6');
+    await expect(row).toContainText('does not match your location');
+    await expect(
+      page.getByRole('button', { name: 'Send my location to the console' }),
+    ).toBeVisible();
+  });
+
+  test('reports what the console rounded to, not what was sent', async ({ page }) => {
+    await stubSupport(page, true);
+    let written = false;
+    await page.route('**/api/station/location', async (route) => {
+      if (route.request().method() === 'POST') {
+        written = true;
+        await route.fulfill({
+          json: {
+            success: true,
+            before: { latitude: 12.3, longitude: 45.6 },
+            after: { latitude: 35.8, longitude: -78.6 },
+          },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: written
+          ? { latitude: 35.8, longitude: -78.6, resolution_deg: 0.1 }
+          : { latitude: 12.3, longitude: 45.6, resolution_deg: 0.1 },
+      });
+    });
+
+    await page.goto('/settings');
+    await page.getByRole('button', { name: 'Send my location to the console' }).click();
+    // 35.7796 was sent; 35.8 is what the station has.
+    await expect(page.getByText('Console now reads 35.8', { exact: false })).toBeVisible();
+  });
+});
