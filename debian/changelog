@@ -1,3 +1,46 @@
+kanfei (0.1.0~beta26) unstable; urgency=medium
+
+  * Adds a barometer calibration tool for Davis Vantage stations, reachable
+    from Settings.  It shows what your console currently reads, lists nearby
+    airport weather reports with how far away and how recent each one is,
+    and shows the difference between them.  Applying a calibration tells the
+    console what the pressure should be right now, and it works out its own
+    correction.  A separate button clears the correction and returns the
+    console to its uncalibrated reading.  Airport reports are used because
+    they measure pressure the same way a Vantage displays it, so the two
+    figures are directly comparable.  Reports more than half an hour old are
+    flagged, and more than an hour old will not be applied without
+    confirmation — the console calibrates against the pressure at the moment
+    you press the button, so an old reading would bake in whatever the
+    weather has done since.  This tool is offered only on Vantage consoles;
+    the older Weather Monitor and Wizard adjust their barometer by a
+    different mechanism that works in the opposite direction.
+
+  * Fix: a calibration that the console rejected reported "calibration
+    unchanged", which was not true.  Testing against a console found that a
+    rejected command still applies the elevation you sent, even though the
+    pressure is refused.  Failed calibrations now report what the station
+    actually reads afterwards instead of claiming nothing happened.
+
+  * Fix: applying a barometer calibration could report a failure after
+    thirty seconds while having actually succeeded.  Reading the console's
+    calibration took fifteen seconds, because the console signals the end of
+    its reply by falling silent and Kanfei waited the full serial timeout
+    three times over to be sure.  A calibration now completes in under seven
+    seconds and reports its result correctly.
+
+  * Adds console reception diagnostics for Vantage stations: how many sensor
+    transmissions the console has received, missed, or had to correct since
+    midnight.  These are the numbers that show a transmitter going weak
+    before the data starts looking strange.
+
+  * The version number now appears in the page footer and on the About page,
+    and is recorded correctly in backups and in the public weather data.
+    Previously every release reported itself as 0.1.0 regardless of which
+    one it was, so a backup could not say which version produced it.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Tue, 04 Aug 2026 21:45:00 +0000
+
 kanfei (0.1.0~beta25) unstable; urgency=medium
 
   * Fix: the Settings page was completely inaccessible on Davis Vantage
