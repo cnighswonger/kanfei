@@ -1096,11 +1096,11 @@ class LoggerDaemon:
         requires logging both, and doing it here means the caller cannot
         forget the before-snapshot or take it minutes earlier.
 
-        Note this does NOT hold the serial lock across the sequence:
-        each of the three driver calls enters the executor and takes
-        ``_io_lock`` independently, so a poll can interleave between
-        them.  That is acceptable here — the before/after snapshots are
-        an audit record, not a transaction.
+        The whole BARDATA/BAR=/BARDATA sequence runs under one serial
+        lock via ``async_calibrate_barometer``.  It used to be three
+        separate calls, which let a poll interleave and pushed the round
+        trip past the API timeout — the request returned 504 while the
+        write had actually succeeded (#257).
 
         BAR= itself is NOT atomic across its two arguments: a console
         that refuses the pressure value still applies the elevation.
@@ -1116,14 +1116,14 @@ class LoggerDaemon:
                 "bar_thousandths_inhg and elevation_ft are both required"
             )
 
-        before = await drv.async_bardata()
         try:
-            ok = await drv.async_set_barometer(int(bar), int(elevation))
+            before, ok, after = await drv.async_calibrate_barometer(
+                int(bar), int(elevation)
+            )
         except ValueError as exc:
             # Out-of-range values are rejected by the driver before they
             # reach the wire; surface the reason rather than a bare False.
             raise RuntimeError(str(exc)) from exc
-        after = await drv.async_bardata()
 
         def _snap(cal) -> Optional[dict]:
             if cal is None:

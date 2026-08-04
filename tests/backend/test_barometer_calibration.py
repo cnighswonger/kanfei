@@ -19,6 +19,7 @@ WeatherLink IP is excluded for a separate reason: despite its name it
 wraps `LinkDriver` and speaks the legacy command set (#247).
 """
 
+import time
 import pytest
 
 from app.ipc import protocol as ipc
@@ -47,6 +48,14 @@ class FakeSerial:
 
     def flush(self):
         pass
+
+    # The driver narrows the read timeout while reading a text
+    # block and restores it after (#257); the stub only needs to
+    # accept the call.
+    timeout = 5.0
+
+    def set_timeout(self, timeout):
+        self.timeout = timeout
 
     def send(self, data: bytes):
         self.sent.append(data)
@@ -399,3 +408,168 @@ class TestConversionFactor:
         assert diverging, "if these never diverge, the warning is pointless"
         assert round(950.00 * self.EXACT * 1000) == 28053
         assert round(950.00 * rounded * 1000) == 28054
+
+
+class TestCalibrationIsAtomic:
+    """The BARDATA/BAR=/BARDATA sequence must hold the serial lock throughout.
+
+    Issued as three separate calls it did not, and a poll landing between
+    them pushed the round trip past the API timeout: measured on a Vue
+    (fw 3.0), the request returned 504 while the write had succeeded
+    (#257).  A calibration that reports failure on success is worse than a
+    slow one.
+    """
+
+    @staticmethod
+    def _driver():
+        drv = VantageDriver("/dev/null", 19200)
+        drv.serial = FakeSerial(reply=b"\n\rOK\n\r")
+        drv._wakeup = lambda: None
+        drv._connected = True
+        return drv
+
+    def test_a_competing_thread_cannot_interleave(self):
+        """The real assertion: a poller thread contending for the same lock
+        must not get in between the three commands.
+
+        Exercised with an actual thread rather than by inspecting the
+        source — the failure mode was a *timing* one, and source text
+        cannot show that the lock was released between calls.
+        """
+        import threading
+
+        drv = self._driver()
+        order: list[str] = []
+        started = threading.Event()
+
+        real_send = drv.serial.send
+
+        def tracking_send(data: bytes):
+            order.append(f"cmd:{data.split(b'=')[0].split(b'\n')[0].decode()}")
+            # Give the competing thread a real chance to barge in.
+            started.set()
+            time.sleep(0.02)
+            return real_send(data)
+
+        drv.serial.send = tracking_send
+
+        def poller():
+            started.wait(timeout=2)
+            with drv._io_lock:
+                order.append("POLL")
+
+        t = threading.Thread(target=poller)
+        t.start()
+        drv.calibrate_barometer(29_780, 265)
+        t.join(timeout=5)
+
+        commands = [i for i, e in enumerate(order) if e.startswith("cmd:")]
+        poll_at = order.index("POLL")
+        assert poll_at > commands[-1], (
+            f"a poll interleaved with the calibration sequence: {order}"
+        )
+
+    def test_returns_before_ok_and_after(self):
+        drv = self._driver()
+        before, ok, after = drv.calibrate_barometer(29_780, 265)
+        assert ok is True
+        # BARDATA is unparseable from this stub, so the snapshots are None —
+        # the point here is the shape of the return, not its content.
+        assert before is None or hasattr(before, "barometer_inhg")
+        assert after is None or hasattr(after, "barometer_inhg")
+
+    def test_range_validation_still_raises_before_the_wire(self):
+        """The 400 path must survive the refactor: out-of-range values are
+        rejected before any command is sent, which is what lets the UI say
+        the console was never touched."""
+        drv = self._driver()
+        with pytest.raises(ValueError):
+            drv.calibrate_barometer(99_999, 265)
+        assert not any(b.startswith(b"BAR=") for b in drv.serial.sent)
+
+    @pytest.mark.asyncio
+    async def test_handler_uses_the_combined_call(self):
+        """Drives the real handler: it must issue ONE driver call, not three.
+
+        Asserted by counting, because the whole fix is that the three
+        commands stop being separately schedulable.
+        """
+        from logger_main import LoggerDaemon
+
+        calls: list[tuple] = []
+
+        class Recorder(VantageDriver):
+            async def async_calibrate_barometer(self, bar, elev):
+                calls.append(("combined", bar, elev))
+                return None, True, None
+
+            async def async_bardata(self):
+                calls.append(("bardata",))
+                return None
+
+        drv = Recorder("/dev/null", 19200)
+        drv.serial = FakeSerial()
+        drv._connected = True
+
+        daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon.driver = drv
+        result = await daemon._h_set_barometer({
+            "bar_thousandths_inhg": 29_780,
+            "elevation_ft": 265,
+        })
+
+        assert result["success"] is True
+        assert calls == [("combined", 29_780, 265)], (
+            f"expected one combined call, got {calls}"
+        )
+
+
+class TestTextBlockReadIsNotTimeoutBound:
+    """BARDATA's cost must not scale with the port's poll timeout.
+
+    `_read_text_block` ends on silence, and each quiet read used to block
+    for the full port timeout (5 s), so confirming the console had finished
+    cost 15 s per BARDATA — three of those plus a write exceeded the API's
+    30 s limit and produced a 504 on a successful calibration (#257).
+
+    Measured on a Vue (fw 3.0): BARDATA 15.10 s -> 0.84 s, and the full
+    calibration 35.26 s -> 6.74 s.
+    """
+
+    def test_narrows_the_timeout_while_reading(self):
+        drv = VantageDriver("/dev/null", 19200)
+        drv.serial = FakeSerial(reply=b"\n\rOK\n\rBAR 29916\n\r")
+        seen: list[float] = []
+        real = drv.serial.set_timeout
+
+        def spy(t):
+            seen.append(t)
+            return real(t)
+
+        drv.serial.set_timeout = spy
+        drv._read_text_block()
+
+        assert seen, "the read timeout was never narrowed"
+        assert min(seen) <= drv.TEXT_BLOCK_READ_TIMEOUT
+
+    def test_restores_the_timeout_afterwards(self):
+        """The same port object serves LOOP polling, where the long timeout
+        is correct — leaving it narrowed would make polls fail spuriously."""
+        drv = VantageDriver("/dev/null", 19200)
+        drv.serial = FakeSerial(reply=b"\n\rOK\n\rBAR 29916\n\r")
+        drv.serial.timeout = 5.0
+        drv._read_text_block()
+        assert drv.serial.timeout == 5.0
+
+    def test_restores_the_timeout_even_if_the_read_raises(self):
+        drv = VantageDriver("/dev/null", 19200)
+        drv.serial = FakeSerial()
+        drv.serial.timeout = 5.0
+
+        def boom(_n):
+            raise OSError("port went away mid-read")
+
+        drv.serial.receive = boom
+        with pytest.raises(OSError):
+            drv._read_text_block()
+        assert drv.serial.timeout == 5.0

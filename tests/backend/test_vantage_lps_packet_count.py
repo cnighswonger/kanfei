@@ -95,6 +95,14 @@ class FakeSerial:
     def flush(self):
         pass
 
+    # The driver narrows the read timeout while reading a text
+    # block and restores it after (#257); the stub only needs to
+    # accept the call.
+    timeout = 5.0
+
+    def set_timeout(self, timeout):
+        self.timeout = timeout
+
     def send(self, data: bytes):
         self.sent.append(data)
         if not data.startswith(b"LPS "):
