@@ -31,6 +31,7 @@ from ..base import (
     CAP_RAIN_RESET,
     CAP_HILOWS,
     CAP_BAROMETER_CAL,
+    CAP_LOCATION_RW,
 )
 from ..serial_port import SerialPort
 from ..crc import crc_validate, crc_calculate
@@ -206,6 +207,10 @@ class VantageDriver(StationDriver):
             # on a Vantage.  Unconditional: BAR= and BARDATA predate
             # LOOP2, so even a VP1 without has_loop2 can calibrate.
             CAP_BAROMETER_CAL,
+            # Console lat/lon in EEPROM (§XIV).  set_location() issues
+            # the NEWSETUP the manual requires for these two fields
+            # specifically, without which the write may not take.
+            CAP_LOCATION_RW,
         }
         if self.hw_config.has_loop2:
             caps.add(CAP_HILOWS)

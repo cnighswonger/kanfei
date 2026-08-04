@@ -33,6 +33,7 @@ from app.protocol.base import (
     CAP_SAMPLE_PERIOD_RW,
     CAP_CALIBRATION_RW,
     CAP_BAROMETER_CAL,
+    CAP_LOCATION_RW,
 )
 from app.protocol.link_driver import LinkDriver, CalibrationOffsets, _rain_register_to_mm
 from app.protocol.serial_port import list_serial_ports
@@ -934,6 +935,8 @@ class LoggerDaemon:
         h(ipc.CMD_BAROMETER_CAL, self._h_barometer_cal)
         h(ipc.CMD_SET_BAROMETER, self._h_set_barometer)
         h(ipc.CMD_SIGNAL_QUALITY, self._h_signal_quality)
+        h(ipc.CMD_READ_LOCATION, self._h_read_location)
+        h(ipc.CMD_SET_LOCATION, self._h_set_location)
 
     # ---- IPC handlers ----
 
@@ -1161,6 +1164,79 @@ class LoggerDaemon:
 
         return {"success": ok, "before": _snap(before), "after": _snap(after)}
 
+    # ---- Console location (EEPROM lat/lon) ----
+
+    # The console stores signed TENTHS of a degree — ~11 km per step — so
+    # its copy can never equal Kanfei's to full precision.  Callers must
+    # compare at this resolution or a correctly configured station reports
+    # a permanent disagreement.
+    LOCATION_RESOLUTION_DEG = 0.1
+
+    def _require_location_rw(self) -> StationDriver:
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if CAP_LOCATION_RW not in drv.capabilities:
+            raise RuntimeError(
+                f"{drv.station_name} does not support setting its location"
+            )
+        return drv
+
+    async def _h_read_location(self, _msg: dict) -> dict[str, Any]:
+        """The console's own latitude/longitude."""
+        drv = self._require_location_rw()
+        loc = await drv.async_read_location()
+        if loc is None:
+            raise RuntimeError("Station did not return its location")
+        lat, lon = loc
+        return {
+            "latitude": lat,
+            "longitude": lon,
+            "resolution_deg": self.LOCATION_RESOLUTION_DEG,
+        }
+
+    async def _h_set_location(self, msg: dict) -> dict[str, Any]:
+        """Write latitude/longitude to the console, then read it back.
+
+        The read-back is not decoration.  The console rounds to tenths, so
+        what it ends up holding is not what was sent — returning the stored
+        value lets the caller show what the station actually has rather
+        than echoing the request.
+
+        ``set_location`` issues NEWSETUP, which §IX.7 requires for these
+        two fields specifically; without it the write may not take effect.
+        """
+        drv = self._require_location_rw()
+
+        lat = msg.get("latitude")
+        lon = msg.get("longitude")
+        if lat is None or lon is None:
+            raise RuntimeError("latitude and longitude are both required")
+
+        before = await drv.async_read_location()
+        try:
+            ok = await drv.async_set_location(float(lat), float(lon))
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+
+        after = await drv.async_read_location()
+
+        def _pair(loc) -> Optional[dict]:
+            if loc is None:
+                return None
+            return {"latitude": loc[0], "longitude": loc[1]}
+
+        if not ok:
+            # Same rule as the barometer write (#252): a command that did
+            # not take must not return normally, and the message must not
+            # claim the station is unchanged — report what it now reads.
+            raise RuntimeError(
+                "Station did not accept the location "
+                f"(NEWSETUP not acknowledged); station now reads: {_pair(after)}"
+            )
+
+        return {"success": ok, "before": _pair(before), "after": _pair(after)}
+
     async def _h_signal_quality(self, _msg: dict) -> dict[str, Any]:
         """Console reception diagnostics — RXCHECK plus the heard-Tx list.
 
@@ -1306,6 +1382,7 @@ class LoggerDaemon:
                 # sniff, and asking the console would cost a serial round
                 # trip to answer a question the daemon already holds.
                 "barometer_cal": CAP_BAROMETER_CAL in caps,
+                "location": CAP_LOCATION_RW in caps,
             },
         }
 
