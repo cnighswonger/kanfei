@@ -523,4 +523,40 @@ export function fetchLogs(
   return request(`/api/logs?level=${encodeURIComponent(level)}&limit=${limit}`);
 }
 
+// --- Barometer calibration (Vantage) ---
+
+export function fetchBarometerCalibration(): Promise<
+  import("./types.ts").BarometerCalibrationState
+> {
+  return request("/api/station/barometer-calibration");
+}
+
+/**
+ * Set the console's barometer calibration via BAR=.
+ *
+ * `barThousandthsInhg` is the sea-level pressure the console should
+ * display *right now* — it back-solves its own offset against the live
+ * raw reading, so a stale reference bakes in the drift since it was
+ * taken.  Pass 0 to clear the offset while keeping elevation.
+ */
+export function setBarometerCalibration(
+  barThousandthsInhg: number,
+  elevationFt: number,
+): Promise<import("./types.ts").BarometerCalibrationResult> {
+  return request("/api/station/barometer-calibration", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      bar_thousandths_inhg: barThousandthsInhg,
+      elevation_ft: elevationFt,
+    }),
+  });
+}
+
+export function fetchBarometerReference(): Promise<
+  import("./types.ts").MetarReferenceResponse
+> {
+  return request("/api/station/barometer-reference");
+}
+
 export { ApiError };

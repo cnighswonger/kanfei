@@ -6,6 +6,7 @@ import { useTheme } from "../context/ThemeContext.tsx";
 import { useWeatherBackground } from "../context/WeatherBackgroundContext.tsx";
 import { themes } from "../themes/index.ts";
 import ThemeEditor from "../components/settings/ThemeEditor.tsx";
+import BarometerCalibration from "../components/settings/BarometerCalibration.tsx";
 import { ALL_SCENES, SCENE_LABELS, SCENE_GRADIENTS } from "../components/WeatherBackground.tsx";
 import { API_BASE } from "../utils/constants.ts";
 import { getTimezone, setTimezone as storeTimezone, resolveTimezone, getTimezoneOptions } from "../utils/timezone.ts";
@@ -2790,6 +2791,14 @@ export default function Settings() {
         </div>
       </div>
       )}
+
+      {/* Barometer calibration — Vantage only; the component renders its own
+          "not supported" state rather than vanishing, per #249. */}
+      <BarometerCalibration
+        supported={wlConfig?.supported?.barometer_cal ?? false}
+        isMobile={isMobile}
+        configElevationFt={Number(val("elevation")) || 0}
+      />
 
       {/* Location section */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
