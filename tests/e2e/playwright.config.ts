@@ -1,7 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 import path from 'path';
 
-const PORT = 8765;
+// Overridable because 8765 is not reserved — any other service on the
+// dev box that happens to bind it makes the whole suite fail to start,
+// and the failure surfaces as "0 tests ran, PASS" in the report script.
+const PORT = Number(process.env.KANFEI_E2E_PORT) || 8765;
 const BASE_URL = `http://localhost:${PORT}`;
 const IS_CI = !!process.env.CI;
 
