@@ -1300,6 +1300,12 @@ class LoggerDaemon:
                 "archive_period": CAP_ARCHIVE_PERIOD_RW in caps,
                 "sample_period": CAP_SAMPLE_PERIOD_RW in caps,
                 "calibration": calibration is not None,
+                # Reported from the capability rather than from a value
+                # being non-None like `calibration` above: barometer
+                # calibration has no readable block in this response to
+                # sniff, and asking the console would cost a serial round
+                # trip to answer a question the daemon already holds.
+                "barometer_cal": CAP_BAROMETER_CAL in caps,
             },
         }
 

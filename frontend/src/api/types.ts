@@ -597,6 +597,15 @@ export interface WeatherLinkConfig {
     archive_period: boolean;
     sample_period: boolean;
     calibration: boolean;
+    /**
+     * Whether the station accepts BAR= barometer calibration (Vantage only).
+     *
+     * Optional because a daemon predating this key omits it. Read it as
+     * `?? false` rather than sniffing a value the way `calibration` does —
+     * there is no legacy signal to sniff, and false degrades to "panel
+     * hidden on an old daemon", which is the correct behaviour.
+     */
+    barometer_cal?: boolean;
   };
 }
 
