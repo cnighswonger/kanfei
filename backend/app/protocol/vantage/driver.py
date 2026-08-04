@@ -168,6 +168,12 @@ class VantageDriver(StationDriver):
         self._stop_requested = False
         self._io_lock = threading.RLock()
 
+    # Per-byte deadline while reading a multi-line text response.  The
+    # console replies in milliseconds once it starts, so this only needs to
+    # outlast inter-byte gaps — and it is paid `quiet_reads` times on every
+    # such command, which is what made BARDATA cost 15 s (#257).
+    TEXT_BLOCK_READ_TIMEOUT = 0.25
+
     # ---- StationDriver interface ----
 
     @property
@@ -1190,7 +1196,22 @@ class VantageDriver(StationDriver):
     # ---- RXCHECK diagnostics ----
 
     def rxcheck(self) -> Optional[dict]:
-        """Read receiver diagnostics via RXCHECK."""
+        """Read receiver diagnostics via RXCHECK (§IX).
+
+        Five counters, all since station midnight or the last manual
+        clear.  One reading is a total, not a rate; two readings apart
+        give the rate, and that is the caller's job.
+
+        ``max_consecutive_received`` is field 4, and the name is
+        deliberately explicit.  The manual defines it as "the largest
+        number of packets received in a row" — a run of SUCCESSES, so a
+        large value is healthy.  Read as consecutive *misses* it inverts
+        completely: on the bench Vue it reads 1770 against 30,265
+        received, which is a clean link but would look like a
+        catastrophic outage.  That misreading is not hypothetical — it
+        was written into a diagnostic script during the investigation
+        that produced this code.
+        """
         with self._io_lock:
             self._wakeup()
             self.serial.flush()
@@ -1203,7 +1224,7 @@ class VantageDriver(StationDriver):
                     "packets_received": int(parts[0]),
                     "missed": int(parts[1]),
                     "resync": int(parts[2]),
-                    "max_consecutive": int(parts[3]),
+                    "max_consecutive_received": int(parts[3]),
                     "crc_errors": int(parts[4]),
                 }
             logger.warning("RXCHECK: unexpected response: %r", response)
@@ -1286,7 +1307,11 @@ class VantageDriver(StationDriver):
         offset is cleared, so ``set_barometer(0, elev)`` leaves a station
         correctly reduced but uncalibrated.
 
-        Returns True if the console answered OK.
+        Returns True if the console answered OK.  **A False return does
+        not mean nothing changed**: measured on a Vue (fw 3.0), a refused
+        BAR= still commits its elevation argument, so the two arguments
+        are not atomic with the refusal.  Callers reporting a failure
+        must re-read BARDATA rather than asserting the previous state.
         """
         if bar_thousandths_inhg != 0 and not (
             self.BAR_MIN_THOUSANDTHS <= bar_thousandths_inhg
@@ -1320,6 +1345,38 @@ class VantageDriver(StationDriver):
                 bar_thousandths_inhg, elevation_ft,
             )
         return ok
+
+    def calibrate_barometer(
+        self,
+        bar_thousandths_inhg: int,
+        elevation_ft: int,
+    ) -> tuple[Optional[BarometerCalibration], bool, Optional[BarometerCalibration]]:
+        """BARDATA, BAR=, BARDATA as one uninterruptible sequence.
+
+        Returns ``(before, ok, after)``.
+
+        The caller could issue these three separately — and did, until this
+        existed.  The problem is that each one takes ``_io_lock`` on its own
+        and each async wrapper is a separate executor submission, so a poll
+        lands between them.  On a single-master port that pushed the whole
+        sequence past the API's timeout: measured on a Vue (fw 3.0), the
+        HTTP request returned 504 while the write had in fact succeeded
+        (#257).  A calibration that reports failure on success is worse than
+        a slow one.
+
+        Holding the lock across all three delays at most one poll cycle.
+        ``_io_lock`` is an RLock and this runs in a single executor thread,
+        so the nested acquisitions inside the methods below are free.
+
+        The before/after pair also becomes genuinely simultaneous with the
+        write rather than "an audit record" bracketing it — nothing can now
+        move the console between the snapshot and the command it describes.
+        """
+        with self._io_lock:
+            before = self.bardata()
+            ok = self.set_barometer(bar_thousandths_inhg, elevation_ft)
+            after = self.bardata()
+        return before, ok, after
 
     def clear_barometer_calibration(self, elevation_ft: int) -> bool:
         """Clear the barometer offset, preserving elevation (BAR=0 <elev>).
@@ -1682,19 +1739,43 @@ class VantageDriver(StationDriver):
 
         Reads until `quiet_reads` consecutive empty reads once something
         has arrived.
+
+        Those empty reads are the expensive part: each one blocks for the
+        port's full timeout (5 s by default), so confirming the console has
+        finished cost 3 x 5 s = 15 s on every BARDATA.  Three of those plus
+        a write put a calibration over the API's 30 s limit and it returned
+        504 on a write that had actually succeeded (#257).
+
+        The console answers in milliseconds once it starts, so a short
+        per-byte deadline is enough to tell "still sending" from "done".
+        The port timeout is dropped for the duration and restored in the
+        finally block — restoring matters because the same SerialPort
+        object serves LOOP polling, where the long timeout is correct.
         """
         buf = b""
         quiet = 0
-        for _ in range(max_bytes):
-            chunk = self.serial.receive(1)
-            if not chunk:
-                if buf:
-                    quiet += 1
-                    if quiet >= quiet_reads:
-                        break
-                continue
-            quiet = 0
-            buf += chunk
+        restore_to = self.serial.timeout
+        try:
+            self.serial.set_timeout(self.TEXT_BLOCK_READ_TIMEOUT)
+            for _ in range(max_bytes):
+                chunk = self.serial.receive(1)
+                if not chunk:
+                    if buf:
+                        quiet += 1
+                        if quiet >= quiet_reads:
+                            break
+                    else:
+                        # Nothing has arrived yet.  Allow the console the
+                        # full original timeout to begin answering rather
+                        # than giving up after a few hundred milliseconds.
+                        quiet += 1
+                        if quiet >= int(restore_to / self.TEXT_BLOCK_READ_TIMEOUT):
+                            break
+                    continue
+                quiet = 0
+                buf += chunk
+        finally:
+            self.serial.set_timeout(restore_to)
         return buf.decode("ascii", errors="replace")
 
     def _read_ok_response(self, max_bytes: int = 256) -> str:
@@ -1782,6 +1863,16 @@ class VantageDriver(StationDriver):
     ) -> bool:
         return await self._run_in_executor(
             self.set_barometer, bar_thousandths_inhg, elevation_ft
+        )
+
+    async def async_calibrate_barometer(
+        self,
+        bar_thousandths_inhg: int,
+        elevation_ft: int,
+    ) -> tuple[Optional[BarometerCalibration], bool, Optional[BarometerCalibration]]:
+        """One executor submission, so the lock is held for the whole run."""
+        return await self._run_in_executor(
+            self.calibrate_barometer, bar_thousandths_inhg, elevation_ft
         )
 
     async def async_clear_barometer_calibration(self, elevation_ft: int) -> bool:

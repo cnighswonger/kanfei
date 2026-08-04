@@ -53,6 +53,19 @@ class SerialPort:
         )
         logger.info("Opened serial port %s at %d baud", self.port, self.baud_rate)
 
+    def set_timeout(self, timeout: float) -> None:
+        """Change the read timeout on an open port.
+
+        Needed because a few commands want a much shorter per-byte deadline
+        than polling does: BARDATA's terminator is silence, so detecting the
+        end of its response costs one full timeout per quiet read.  Callers
+        must restore the previous value — the same port object serves LOOP
+        polling, where the long timeout is correct.
+        """
+        self.timeout = timeout
+        if self._serial is not None:
+            self._serial.timeout = timeout
+
     def close(self) -> None:
         """Close the serial port."""
         if self._serial is not None:

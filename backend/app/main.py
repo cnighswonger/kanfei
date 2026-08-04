@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 
 from .config import settings
+from .version import VERSION
 from .models.database import init_database
 from .ipc.client import IPCClient
 from .ipc.dependencies import set_ipc_client
@@ -275,7 +276,7 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
         title="Kanfei Weather Station",
-        version="0.1.0",
+        version=VERSION,
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,

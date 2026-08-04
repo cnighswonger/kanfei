@@ -933,6 +933,7 @@ class LoggerDaemon:
         h(ipc.CMD_FORCE_ARCHIVE, self._h_force_archive)
         h(ipc.CMD_BAROMETER_CAL, self._h_barometer_cal)
         h(ipc.CMD_SET_BAROMETER, self._h_set_barometer)
+        h(ipc.CMD_SIGNAL_QUALITY, self._h_signal_quality)
 
     # ---- IPC handlers ----
 
@@ -1095,14 +1096,16 @@ class LoggerDaemon:
         requires logging both, and doing it here means the caller cannot
         forget the before-snapshot or take it minutes earlier.
 
-        Note this does NOT hold the serial lock across the sequence:
-        each of the three driver calls enters the executor and takes
-        ``_io_lock`` independently, so a poll can interleave between
-        them.  That is acceptable here — the before/after snapshots are
-        an audit record, not a transaction, and BAR= itself is atomic on
-        the console.  Making it a genuinely locked sequence would need a
-        single combined driver method, which is worth doing only if an
-        interleaved poll is ever shown to matter.
+        The whole BARDATA/BAR=/BARDATA sequence runs under one serial
+        lock via ``async_calibrate_barometer``.  It used to be three
+        separate calls, which let a poll interleave and pushed the round
+        trip past the API timeout — the request returned 504 while the
+        write had actually succeeded (#257).
+
+        BAR= itself is NOT atomic across its two arguments: a console
+        that refuses the pressure value still applies the elevation.
+        That is why the failure path reports the after-snapshot rather
+        than asserting the station is unchanged.
         """
         drv = self._require_barometer_cal()
 
@@ -1113,14 +1116,14 @@ class LoggerDaemon:
                 "bar_thousandths_inhg and elevation_ft are both required"
             )
 
-        before = await drv.async_bardata()
         try:
-            ok = await drv.async_set_barometer(int(bar), int(elevation))
+            before, ok, after = await drv.async_calibrate_barometer(
+                int(bar), int(elevation)
+            )
         except ValueError as exc:
             # Out-of-range values are rejected by the driver before they
             # reach the wire; surface the reason rather than a bare False.
             raise RuntimeError(str(exc)) from exc
-        after = await drv.async_bardata()
 
         def _snap(cal) -> Optional[dict]:
             if cal is None:
@@ -1139,15 +1142,62 @@ class LoggerDaemon:
             # like one that did.  Raising puts it on the error path,
             # where the API maps it to 503.
             #
-            # The after-snapshot goes in the message rather than being
-            # discarded: on a rejection it is the operator's evidence
-            # that the console is unchanged.
+            # A rejected BAR= is NOT a no-op: measured on a Vue (fw 3.0),
+            # the console refuses the command and applies the elevation
+            # argument anyway (BAR=0 400 -> elev 400; BAR=99999 275 ->
+            # NAK, elev 275).  So the after-snapshot is the only truthful
+            # statement available about the resulting state, and the
+            # message must not claim the station was left untouched.
+            snap = _snap(after)
+            state = (
+                f"station now reads: {snap}" if snap is not None
+                else "could not re-read the station to confirm its state"
+            )
             raise RuntimeError(
-                "Station rejected the calibration (BAR= not acknowledged); "
-                f"calibration unchanged: {_snap(after)}"
+                "Station rejected the calibration (BAR= not acknowledged). "
+                f"The pressure offset was NOT applied, but elevation may "
+                f"have been — {state}"
             )
 
         return {"success": ok, "before": _snap(before), "after": _snap(after)}
+
+    async def _h_signal_quality(self, _msg: dict) -> dict[str, Any]:
+        """Console reception diagnostics — RXCHECK plus the heard-Tx list.
+
+        This is the diagnostic for the failure that has cost the most time
+        on this project: a transmitter dropping out, its dashed sentinel
+        being stored as a real reading, and the poisoned daily maximum
+        then being published for the rest of the day (#230).  Until now
+        the only symptom was the data going strange hours later; these
+        counters name the cause while it is happening.
+
+        Gated on the value being reachable rather than on driver type,
+        per #220 / #234 — any driver growing an ``async_rxcheck`` gets
+        this for free.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if not hasattr(drv, "async_rxcheck"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support reception diagnostics"
+            )
+
+        stats = await drv.async_rxcheck()
+        if stats is None:
+            raise RuntimeError("Station did not return reception diagnostics")
+
+        # RECEIVERS is a separate command and a Vue legitimately answers
+        # with an empty list, so a failure here must not sink the whole
+        # response — the RXCHECK counters are the load-bearing part.
+        receivers: Optional[list[int]] = None
+        if hasattr(drv, "async_receivers"):
+            try:
+                receivers = await drv.async_receivers()
+            except Exception as exc:
+                logger.warning("RECEIVERS failed (reporting RXCHECK only): %s", exc)
+
+        return {**stats, "receivers": receivers}
 
     async def _h_sync_station_time(self, _msg: dict) -> dict[str, Any]:
         drv = self.driver
@@ -1250,6 +1300,12 @@ class LoggerDaemon:
                 "archive_period": CAP_ARCHIVE_PERIOD_RW in caps,
                 "sample_period": CAP_SAMPLE_PERIOD_RW in caps,
                 "calibration": calibration is not None,
+                # Reported from the capability rather than from a value
+                # being non-None like `calibration` above: barometer
+                # calibration has no readable block in this response to
+                # sniff, and asking the console would cost a serial round
+                # trip to answer a question the daemon already holds.
+                "barometer_cal": CAP_BAROMETER_CAL in caps,
             },
         }
 

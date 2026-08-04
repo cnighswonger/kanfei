@@ -569,6 +569,59 @@ export interface ReconnectResult {
   error?: string;
 }
 
+// --- Barometer calibration (Vantage) ---
+
+/**
+ * BARDATA readout.  Every field is nullable because the backend's own
+ * dataclass is Optional throughout and the snapshot helper returns null
+ * outright when a BARDATA read fails — typing these non-null would be
+ * the #250 mistake again, where a lie in the type disabled the one tool
+ * that would have caught the crash.
+ */
+export interface BarometerCalibrationState {
+  barometer_inhg: number | null;
+  elevation_ft: number | null;
+  barcal_inhg: number | null;
+  /** Factory sensor constants. Read-only; NOT what BAR= sets. */
+  gain: number | null;
+  offset: number | null;
+}
+
+export interface BarometerSnapshot {
+  barometer_inhg: number | null;
+  elevation_ft: number | null;
+  barcal_inhg: number | null;
+}
+
+export interface BarometerCalibrationResult {
+  success: boolean;
+  before: BarometerSnapshot | null;
+  after: BarometerSnapshot | null;
+}
+
+export interface MetarReference {
+  station_id: string;
+  station_name: string;
+  distance_miles: number;
+  bearing_cardinal: string;
+  /** ISO 8601 UTC. Age is computed client-side — a server-computed age
+   *  would go stale while the panel sits open. */
+  observed_at: string;
+  altimeter_thousandths_inhg: number;
+  altimeter_inhg: number;
+  raw_metar: string;
+  report_type: string;
+}
+
+export interface MetarReferenceResponse {
+  references: MetarReference[];
+  location_configured: boolean;
+  home_lat: number;
+  home_lon: number;
+  radius_miles: number;
+  fetched_at: string;
+}
+
 // --- WeatherLink Hardware Config ---
 
 export interface WeatherLinkCalibration {
@@ -597,6 +650,15 @@ export interface WeatherLinkConfig {
     archive_period: boolean;
     sample_period: boolean;
     calibration: boolean;
+    /**
+     * Whether the station accepts BAR= barometer calibration (Vantage only).
+     *
+     * Optional because a daemon predating this key omits it. Read it as
+     * `?? false` rather than sniffing a value the way `calibration` does —
+     * there is no legacy signal to sniff, and false degrades to "panel
+     * hidden on an old daemon", which is the correct behaviour.
+     */
+    barometer_cal?: boolean;
   };
 }
 
