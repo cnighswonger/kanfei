@@ -111,6 +111,24 @@ def test_frontend_reads_the_same_file():
         assert "v0.1.0" not in source, f"{path} reintroduced a hardcoded version"
 
 
+def test_public_api_doc_example_matches_the_runtime_value():
+    """The documented `software_version` must be the one the API returns.
+
+    Codex found this one in review: the schema doc still showed the stale
+    `0.1.0` that this whole change exists to eliminate.  A published example
+    of a public-API field is something an integrator writes code against, so
+    correcting the text without a guard just re-arms the trap at the next
+    release.
+    """
+    doc = REPO_ROOT / "docs" / "api" / "public-weather-schema-v1.md"
+    example = re.search(r'"software_version":\s*"([^"]+)"', doc.read_text())
+    assert example, "schema doc no longer shows a software_version example"
+    assert example.group(1) == VERSION, (
+        f"docs/api/public-weather-schema-v1.md advertises "
+        f"{example.group(1)!r} but the API returns {VERSION!r}"
+    )
+
+
 def test_no_stray_version_literals_in_backend():
     """Nothing under app/ may hardcode a version string.
 
