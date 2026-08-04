@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from app.version import VERSION
+from app.version import VERSION, PEP440_VERSION, _to_pep440
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VERSION_FILE = REPO_ROOT / "backend" / "app" / "VERSION"
@@ -49,7 +49,46 @@ def test_pyproject_takes_its_version_from_the_same_file():
         "duplication this file exists to prevent"
     )
     assert (
-        pyproject["tool"]["setuptools"]["dynamic"]["version"]["file"] == "app/VERSION"
+        pyproject["tool"]["setuptools"]["dynamic"]["version"]["attr"]
+        == "app.version.PEP440_VERSION"
+    ), "pyproject must take the PEP 440 spelling; pip rejects the Debian `~`"
+
+
+@pytest.mark.parametrize(
+    "debian,pep440",
+    [
+        ("0.1.0~beta25", "0.1.0b25"),
+        ("0.1.0~alpha3", "0.1.0a3"),
+        ("0.1.0~rc1", "0.1.0rc1"),
+        ("1.2.3", "1.2.3"),
+    ],
+)
+def test_pep440_translation(debian, pep440):
+    assert _to_pep440(debian) == pep440
+
+
+def test_pep440_rejects_what_it_cannot_express():
+    """An unknown prerelease tag must fail loudly at import, not silently mangle.
+
+    setuptools' own failure mode is the reason: given `0.1.0~beta25` it
+    produced `0.1.0-beta25-` and raised InvalidVersion from deep inside a
+    pip build subprocess.  Failing here names the file to edit instead.
+    """
+    with pytest.raises(ValueError, match="cannot express"):
+        _to_pep440("0.1.0~snapshot")
+
+
+def test_installed_version_is_pep440_valid():
+    """What pyproject hands setuptools must satisfy PEP 440.
+
+    This is the check that was missing when CI failed: a local pytest run
+    never invokes `pip install -e`, so an invalid version reached CI.
+    """
+    from packaging.version import Version
+
+    assert Version(PEP440_VERSION)  # raises InvalidVersion if not
+    assert Version(PEP440_VERSION) < Version("0.1.0") or "~" not in VERSION, (
+        "a prerelease must sort before its own release"
     )
 
 

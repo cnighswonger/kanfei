@@ -59,7 +59,9 @@ testing = [
 ]
 
 [tool.setuptools.dynamic]
-version = { file = "app/VERSION" }
+# The PEP 440 spelling, not the file: pip rejects the Debian `~`.
+# app/version.py derives one from the other so there is still one edit.
+version = { attr = "app.version.PEP440_VERSION" }
 
 [tool.setuptools.package-data]
 app = ["VERSION"]
