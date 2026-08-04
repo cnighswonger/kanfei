@@ -15,10 +15,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
+from ..version import VERSION
+
 logger = logging.getLogger(__name__)
 
 MANIFEST_NAME = "backup_manifest.json"
-VERSION = "0.1.0"
 
 
 def _wal_checkpoint(db_path: str) -> None:

@@ -17,6 +17,7 @@ from app.services.backup import (
     generate_backup_filename,
     MANIFEST_NAME,
 )
+from app.version import VERSION
 
 
 @pytest.fixture
@@ -57,7 +58,7 @@ class TestCreateBackup:
         manifest = create_backup(fake_db, output)
 
         assert Path(output).exists()
-        assert manifest["kanfei_version"] == "0.1.0"
+        assert manifest["kanfei_version"] == VERSION
         assert manifest["db_file"] == "kanfei.db"
         assert manifest["row_counts"]["station_config"] == 1
         assert manifest["row_counts"]["sensor_readings"] == 10
