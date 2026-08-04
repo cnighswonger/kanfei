@@ -227,9 +227,16 @@ test.describe('Barometer calibration panel', () => {
     });
 
     await page.goto('/settings');
-    await expect(page.getByText('Console: 314 ft', { exact: false })).toBeVisible();
-    // Stated in the units being calibrated, not just feet.
-    await expect(page.getByText('inHg)', { exact: false })).toBeVisible();
+    // Assert on the row element's full text rather than a substring: this
+    // pins the configured value and the pressure-equivalent figure too, so
+    // a regression dropping either fails here instead of passing on a
+    // loose match.  Matched via the paragraph's text content because JSX
+    // splits the line across several text nodes, which getByText's
+    // per-node matching will not span.
+    const row = page.locator('p', { hasText: 'Console: 314 ft' });
+    await expect(row).toBeVisible();
+    await expect(row).toContainText('Kanfei: 315 ft');
+    await expect(row).toContainText('0.001 inHg');
   });
 
   test('a failed reference refresh disables Apply rather than reusing the old one', async ({ page }) => {
