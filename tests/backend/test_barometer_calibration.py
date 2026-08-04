@@ -479,9 +479,15 @@ class TestCalibrationIsAtomic:
         assert after is None or hasattr(after, "barometer_inhg")
 
     def test_range_validation_still_raises_before_the_wire(self):
-        """The 400 path must survive the refactor: out-of-range values are
-        rejected before any command is sent, which is what lets the UI say
-        the console was never touched."""
+        """The 400 path must survive the refactor.
+
+        Precisely: the before-BARDATA snapshot is taken first, so a read
+        does reach the console — but ``BAR=`` never does, which is the
+        part that matters.  Nothing is written, so the UI can truthfully
+        say the calibration was not applied.  (Wording corrected after
+        Codex flagged the original "before any command is sent" as
+        overstating what the assertion proves.)
+        """
         drv = self._driver()
         with pytest.raises(ValueError):
             drv.calibrate_barometer(99_999, 265)
