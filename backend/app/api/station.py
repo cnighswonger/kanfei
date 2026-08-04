@@ -6,11 +6,16 @@ All hardware operations are proxied to the logger daemon via IPC.
 
 import asyncio
 import logging
-from datetime import datetime
+from dataclasses import asdict
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from ..ipc.dependencies import get_ipc_client
+from ..models.database import get_db
+from ..services.metar_reference import DEFAULT_RADIUS_MILES, fetch_metar_references
+from .config import get_effective_config
 from .dependencies import require_admin
 
 logger = logging.getLogger(__name__)
@@ -306,3 +311,44 @@ async def set_barometer_calibration(
         )
     except (ConnectionRefusedError, OSError):
         raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.get("/station/barometer-reference")
+async def get_barometer_reference(
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    """Nearby METAR observations to calibrate the barometer against.
+
+    A Vantage reports reduction method 1 (Altimeter Setting), so a METAR's
+    ``Axxxx`` group compares like-for-like with what the console displays.
+
+    Returns 200 with ``location_configured: false`` and no references when
+    the station has no coordinates, rather than an error: that is a normal
+    first-run state, and the caller renders a "set your location" prompt
+    pointing at the Location card on the same settings tab.  Treating it as
+    a fault would make an unconfigured install look broken.
+    """
+    cfg = get_effective_config(db)
+    lat = float(cfg.get("latitude", 0.0) or 0.0)
+    lon = float(cfg.get("longitude", 0.0) or 0.0)
+
+    if lat == 0.0 and lon == 0.0:
+        return {
+            "references": [],
+            "location_configured": False,
+            "home_lat": lat,
+            "home_lon": lon,
+            "radius_miles": DEFAULT_RADIUS_MILES,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    references = await fetch_metar_references(lat, lon)
+    return {
+        "references": [asdict(r) for r in references],
+        "location_configured": True,
+        "home_lat": lat,
+        "home_lon": lon,
+        "radius_miles": DEFAULT_RADIUS_MILES,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+    }
