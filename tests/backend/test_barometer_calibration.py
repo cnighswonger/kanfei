@@ -261,6 +261,45 @@ class TestNakIsNotSuccess:
         except RuntimeError as exc:
             assert _cal_error(str(exc)).status_code == 503
 
+    @pytest.mark.asyncio
+    async def test_nak_message_does_not_claim_the_station_is_unchanged(self):
+        """A refused BAR= is not a no-op, so the message must not say it is.
+
+        Measured on the test Vue (fw 3.0) 2026-08-04: the console refuses
+        the command and applies the elevation argument anyway.
+
+            BAR=0 400      -> ACK,  elevation = 400
+            BAR=99999 275  -> NAK,  elevation = 275   (moved)
+
+        The original wording was "calibration unchanged: {after}" — the
+        embedded snapshot was truthful while the prose contradicted it.
+        An operator who reads the sentence rather than the dict is told
+        the console was left alone when its elevation may have moved.
+
+        Asserted on the raised message rather than the source text: this
+        fails if someone reintroduces the claim, in any phrasing that
+        uses these words.
+        """
+        daemon = self._daemon_with(nak=True)
+        with pytest.raises(RuntimeError) as excinfo:
+            await daemon._h_set_barometer({
+                "bar_thousandths_inhg": 29_780,
+                "elevation_ft": 265,
+            })
+
+        message = str(excinfo.value).lower()
+        assert "unchanged" not in message, (
+            "the NAK message claims the station is unchanged; a refused "
+            "BAR= still applies its elevation argument"
+        )
+        # The message must say something concrete about where the console
+        # ended up — either the re-read state, or an explicit admission
+        # that the re-read failed.  This double serves as the guard for
+        # the after=None path, which is what this fake produces.
+        assert ("station now reads" in message
+                or "could not re-read" in message)
+        assert "elevation may have been" in message
+
 
 class TestDriverInterface:
     @pytest.mark.parametrize("method", [

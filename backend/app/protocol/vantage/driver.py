@@ -1301,7 +1301,11 @@ class VantageDriver(StationDriver):
         offset is cleared, so ``set_barometer(0, elev)`` leaves a station
         correctly reduced but uncalibrated.
 
-        Returns True if the console answered OK.
+        Returns True if the console answered OK.  **A False return does
+        not mean nothing changed**: measured on a Vue (fw 3.0), a refused
+        BAR= still commits its elevation argument, so the two arguments
+        are not atomic with the refusal.  Callers reporting a failure
+        must re-read BARDATA rather than asserting the previous state.
         """
         if bar_thousandths_inhg != 0 and not (
             self.BAR_MIN_THOUSANDTHS <= bar_thousandths_inhg
