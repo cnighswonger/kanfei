@@ -105,6 +105,60 @@ class TestCapabilityGate:
         assert ipc.CMD_SET_BAROMETER == "set_barometer"
 
 
+class TestCapabilityReporting:
+    """`read_config` must tell the UI whether this station can calibrate.
+
+    The panel needs to know before it renders — probing by calling the
+    calibration endpoint and treating 501 as "hide" would cost a serial
+    round trip to answer a question the daemon already holds, and would
+    conflate "unsupported" (501) with "daemon down" (503) at exactly the
+    moment the panel decides whether to exist.
+
+    Asserted through the real handler rather than by reading the dict
+    literal, so a change to `_driver_caps` filtering shows up here.
+    """
+
+    @staticmethod
+    async def _supported_for(drv):
+        from logger_main import LoggerDaemon
+
+        # `connected` is `_connected and serial.is_open`, so both halves
+        # are needed — see the FakeSerial docstring for why this is not
+        # done by patching the property onto the class.
+        drv.serial = FakeSerial()
+        drv._connected = True
+        if hasattr(drv, "_wakeup"):
+            drv._wakeup = lambda: None
+
+        daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon.driver = drv
+        daemon._archive_period = None
+        daemon._sample_period = None
+        result = await daemon._h_read_config({})
+        return result["supported"]
+
+    @pytest.mark.asyncio
+    async def test_vantage_reports_barometer_cal_true(self):
+        supported = await self._supported_for(VantageDriver("/dev/null", 19200))
+        assert supported["barometer_cal"] is True
+
+    @pytest.mark.asyncio
+    async def test_legacy_reports_barometer_cal_false(self):
+        """The exclusion that matters: running BAR= against a legacy
+        station would double the error rather than remove it, so the
+        panel must never offer it there."""
+        supported = await self._supported_for(LinkDriver("/dev/null", 2400))
+        assert supported["barometer_cal"] is False
+
+    @pytest.mark.asyncio
+    async def test_existing_keys_still_reported(self):
+        """The `supported` map is a wire contract read by
+        `api/weatherlink.py` and the frontend; adding a key must not
+        drop one."""
+        supported = await self._supported_for(VantageDriver("/dev/null", 19200))
+        assert {"archive_period", "sample_period", "calibration"} <= set(supported)
+
+
 class TestWireFormat:
     def test_command_shape(self):
         """`BAR=` with the equals sign.  `BAR 29780 265` without it is a
