@@ -48,6 +48,12 @@ const SNAPSHOT_MAX_AGE_MINUTES = 10;
 
 const INHG_PER_HPA = 0.029529983071445;
 
+// Pressure falls about 1 hPa per 27 ft near sea level, so a foot of
+// elevation error is ~0.001 inHg — the console's own display resolution.
+// Used to state a discrepancy in the units being calibrated rather than
+// leaving the user to judge whether a difference in feet matters.
+const INHG_PER_FOOT = (1 / 27) * INHG_PER_HPA;
+
 type LoadStatus = "loading" | "loaded" | "error";
 
 interface Outcome {
@@ -579,9 +585,14 @@ export default function BarometerCalibration({
         )}
         {configElevationFt > 0 &&
           cal?.elevation_ft != null &&
-          Math.abs(configElevationFt - cal.elevation_ft) > 10 && (
+          configElevationFt !== cal.elevation_ft && (
             <p style={{ ...body, marginTop: "6px" }}>
-              Console: {cal.elevation_ft} ft · Kanfei: {configElevationFt} ft{" "}
+              Console: {cal.elevation_ft} ft · Kanfei: {configElevationFt} ft
+              {" ("}
+              {Math.abs(
+                (configElevationFt - cal.elevation_ft) * INHG_PER_FOOT,
+              ).toFixed(3)}{" "}
+              inHg){" "}
               <button
                 type="button"
                 onClick={() => {

@@ -204,6 +204,34 @@ test.describe('Barometer calibration panel', () => {
     await expect(apply).toBeEnabled();
   });
 
+  test('shows the elevation reconcile row for a sub-threshold difference', async ({ page }) => {
+    // The fixture configures 315 ft; the console here reports 314 — one
+    // foot apart.  The row used to require a >10 ft gap, which is
+    // ~0.011 inHg, five times the difference the panel reports against the
+    // reference it is calibrating against.  A 50 ft fixture mismatch would
+    // have passed under the old rule too, so the console value is stubbed
+    // to sit just inside it: this test fails if the threshold returns.
+    await stubCapability(page, true);
+    await stubReference(page, freshReference());
+    await page.route('**/api/station/barometer-calibration', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          json: {
+            barometer_inhg: 30.05, elevation_ft: 314,
+            barcal_inhg: 0.0, gain: 0, offset: -36,
+          },
+        });
+        return;
+      }
+      await route.fallback();
+    });
+
+    await page.goto('/settings');
+    await expect(page.getByText('Console: 314 ft', { exact: false })).toBeVisible();
+    // Stated in the units being calibrated, not just feet.
+    await expect(page.getByText('inHg)', { exact: false })).toBeVisible();
+  });
+
   test('a failed reference refresh disables Apply rather than reusing the old one', async ({ page }) => {
     // Found by Codex on #256 R1. The panel used to keep the previously
     // selected METAR when a refresh failed, leaving Apply enabled against
