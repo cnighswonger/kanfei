@@ -26,7 +26,7 @@ export default function Footer({ lastUpdate }: FooterProps) {
         flexShrink: 0,
       }}
     >
-      <span>Kanfei v0.1.0</span>
+      <span>Kanfei v{__KANFEI_VERSION__}</span>
       <span>
         {lastUpdate ? `Last update: ${formatTime(lastUpdate)}` : 'No data received'}
       </span>

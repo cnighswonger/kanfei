@@ -1,6 +1,6 @@
 [project]
 name = "kanfei"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Kanfei — Davis Weather Station dashboard and logger"
 requires-python = ">=3.10"
 dependencies = [
@@ -57,6 +57,14 @@ testing = [
     "cfgrib>=0.9.10",          # GRIB2 reading via xarray (MRMS cross-validation)
     "eccodes>=1.5.0",          # ECMWF GRIB2 C library bindings
 ]
+
+[tool.setuptools.dynamic]
+# The PEP 440 spelling, not the file: pip rejects the Debian `~`.
+# app/version.py derives one from the other so there is still one edit.
+version = { attr = "app.version.PEP440_VERSION" }
+
+[tool.setuptools.package-data]
+app = ["VERSION"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]

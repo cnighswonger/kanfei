@@ -214,6 +214,7 @@ export default function About() {
             gap: "4px 24px",
           }}
         >
+          <InfoRow label="Version" value={__KANFEI_VERSION__} />
           <InfoRow label="Frontend" value="React + TypeScript + Vite" />
           <InfoRow label="Backend" value="Python FastAPI" />
           <InfoRow label="Database" value="SQLite (SQLAlchemy)" />

@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..version import VERSION
 from ..models.database import get_db
 from ..models.sensor_reading import SensorReadingModel
 from ..models.sensor_meta import convert, SENSOR_UNITS
@@ -94,7 +95,7 @@ class PublicMeta(BaseModel):
     timestamp: str = Field(description="ISO 8601 UTC timestamp")
     station_type: Optional[str] = Field(None, description="Hardware model")
     software: str = Field(default="Kanfei", description="Software name")
-    software_version: str = Field(default="0.1.0", description="Software version")
+    software_version: str = Field(default=VERSION, description="Software version")
     api_version: str = Field(default=API_VERSION, description="Schema version")
 
 
