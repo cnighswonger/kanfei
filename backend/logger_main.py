@@ -1100,10 +1100,12 @@ class LoggerDaemon:
         each of the three driver calls enters the executor and takes
         ``_io_lock`` independently, so a poll can interleave between
         them.  That is acceptable here — the before/after snapshots are
-        an audit record, not a transaction, and BAR= itself is atomic on
-        the console.  Making it a genuinely locked sequence would need a
-        single combined driver method, which is worth doing only if an
-        interleaved poll is ever shown to matter.
+        an audit record, not a transaction.
+
+        BAR= itself is NOT atomic across its two arguments: a console
+        that refuses the pressure value still applies the elevation.
+        That is why the failure path reports the after-snapshot rather
+        than asserting the station is unchanged.
         """
         drv = self._require_barometer_cal()
 
@@ -1140,12 +1142,21 @@ class LoggerDaemon:
             # like one that did.  Raising puts it on the error path,
             # where the API maps it to 503.
             #
-            # The after-snapshot goes in the message rather than being
-            # discarded: on a rejection it is the operator's evidence
-            # that the console is unchanged.
+            # A rejected BAR= is NOT a no-op: measured on a Vue (fw 3.0),
+            # the console refuses the command and applies the elevation
+            # argument anyway (BAR=0 400 -> elev 400; BAR=99999 275 ->
+            # NAK, elev 275).  So the after-snapshot is the only truthful
+            # statement available about the resulting state, and the
+            # message must not claim the station was left untouched.
+            snap = _snap(after)
+            state = (
+                f"station now reads: {snap}" if snap is not None
+                else "could not re-read the station to confirm its state"
+            )
             raise RuntimeError(
-                "Station rejected the calibration (BAR= not acknowledged); "
-                f"calibration unchanged: {_snap(after)}"
+                "Station rejected the calibration (BAR= not acknowledged). "
+                f"The pressure offset was NOT applied, but elevation may "
+                f"have been — {state}"
             )
 
         return {"success": ok, "before": _snap(before), "after": _snap(after)}
