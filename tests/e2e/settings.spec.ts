@@ -204,6 +204,37 @@ test.describe('Barometer calibration panel', () => {
     await expect(apply).toBeEnabled();
   });
 
+  test('a failed reference refresh disables Apply rather than reusing the old one', async ({ page }) => {
+    // Found by Codex on #256 R1. The panel used to keep the previously
+    // selected METAR when a refresh failed, leaving Apply enabled against
+    // a value it had just told the user it could not vouch for — a
+    // hardware write against a stale reference.
+    await stubCapability(page, true);
+    await stubCalibration(page);
+
+    let failNext = false;
+    await page.route('**/api/station/barometer-reference', async (route) => {
+      if (failNext) {
+        await route.fulfill({ status: 503, json: { detail: 'upstream unavailable' } });
+        return;
+      }
+      await route.fulfill({ json: freshReference() });
+    });
+
+    await page.goto('/settings');
+    const apply = page.getByRole('button', { name: 'Apply Calibration' });
+    await expect(apply).toBeEnabled();
+
+    failNext = true;
+    await page.getByRole('button', { name: 'Refresh' }).click();
+
+    await expect(page.getByText('Could not fetch reference observations', { exact: false }))
+      .toBeVisible();
+    await expect(apply).toBeDisabled();
+    // The stale row must be gone, not merely unusable.
+    await expect(page.getByText('KHRJ', { exact: true })).toHaveCount(0);
+  });
+
   test('a rejected write reports actual state, not the intended one', async ({ page }) => {
     // The #252 finding as UI: a refused BAR= still applies its elevation,
     // so the panel must re-read and say so rather than claim nothing moved.

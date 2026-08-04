@@ -214,6 +214,13 @@ export default function BarometerCalibration({
       setStaleOverride(false);
       setRefStatus("loaded");
     } catch (err) {
+      // Drop whatever was selected.  Leaving it would let the user apply
+      // the previous METAR immediately after being told the reference
+      // could not be refreshed — a hardware write against a value we have
+      // just admitted we cannot vouch for.
+      setRefs([]);
+      setSelectedId(null);
+      setStaleOverride(false);
       setRefError(err instanceof Error ? err.message : String(err));
       setRefStatus("error");
     }
@@ -263,9 +270,15 @@ export default function BarometerCalibration({
     targetThousandths >= BAR_MIN_THOUSANDTHS &&
     targetThousandths <= BAR_MAX_THOUSANDTHS;
 
+  // Both load statuses are required, not just the presence of a selected
+  // reference: clearing state on failure and gating on status are the same
+  // invariant expressed twice, and the failure that motivated this was one
+  // where a leftover selection outlived the fetch that produced it.
   const canApply =
     !applying &&
     calStatus === "loaded" &&
+    refStatus === "loaded" &&
+    locationConfigured &&
     selected != null &&
     targetValid &&
     elevationValid &&
@@ -599,6 +612,9 @@ export default function BarometerCalibration({
         <button
           type="button"
           onClick={() => {
+            // Clear the audit row: leaving it under freshly refreshed
+            // readings makes it look like it describes them.
+            setOutcome(null);
             void loadCal();
             void loadRefs();
           }}
