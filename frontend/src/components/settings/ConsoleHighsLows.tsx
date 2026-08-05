@@ -94,6 +94,13 @@ interface Row {
   kanfeiLow: (c: CurrentConditions) => ExtremeReading | null;
 }
 
+// These assume `daily_extremes` always reports F/mph/inHg, which is true
+// today because /api/current converts with fixed units.  If per-user unit
+// preferences are ever wired into that endpoint, this panel is where they
+// break: it takes the LABEL from Kanfei's reading but converts to a fixed
+// target, so a station set to metric would show "33.2 C" labelled from
+// Kanfei and "91.8 C" converted here.  Convert to the reported unit at
+// that point rather than to a constant.  (Codex, #268 R1.)
 const cToF = (c: number) => c * 9 / 5 + 32;
 const msToMph = (ms: number) => ms * 2.236936;
 const hpaToInhg = (hpa: number) => hpa * 0.029529983071445;
