@@ -53,9 +53,10 @@ ELEVATION = EEAddr(0x0F, 2)           # i16, feet
 # which performs the documented CALED/CALFIX sequence.
 
 CAL_INSIDE_TEMP = EEAddr(0x32, 1)     # signed i8, tenths °F
-# TEMP_IN_COMP must be written as the 1's complement of CAL_INSIDE_TEMP;
-# the console uses it to validate the inside-temp calibration and will
-# reject or ignore the setting if it does not match.
+# Documented companion byte: the 1's complement of CAL_INSIDE_TEMP.  We
+# write it to keep the documented pair consistent, NOT because the console
+# checks it — fw 3.0 applied an offset carrying a deliberately wrong
+# complement (#273).  What applies a calibration is CALFIX.
 CAL_INSIDE_TEMP_COMP = EEAddr(0x33, 1)
 
 # VERIFIED on hardware (Vantage Vue fw 2.12): writing 10/25/50/-10 moved

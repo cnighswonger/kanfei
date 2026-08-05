@@ -1,13 +1,22 @@
-"""Inside-temperature calibration carries a validation byte.
+"""Inside-temperature calibration writes its companion byte.
 
 TEMP_IN_COMP (0x33) is "1's compliment of TEMP_IN_CAL to validate
 calibration data" (Vantage serial reference v2.6.1, EEPROM table).
-Without it the console holds an offset it will not honour: the write
-ACKs, the value reads back, and the temperature does not move.
 
-That is the same silent-success shape as #209, where writes to the wrong
-humidity address appeared to work and did nothing — which is why this is
-asserted rather than trusted.
+**fw 3.0 does not gate on it.** Measured on the bench Vue, 2026-08-05
+(#273): an offset written with a deliberately wrong complement applied in
+full, +4.0 °F. On that firmware what makes a calibration take effect is
+CALFIX, not this byte. Other firmware is untested — fw 2.12 in particular,
+which is now the production station — so this says nothing about whether
+the gate was ever real. Catalogued with the other doc-vs-hardware
+disagreements in `reference/vantage_dash_values.md`.
+
+These tests therefore assert a **spec conformance** property, not a
+firmware one: we write the pair the reference documents, so the two bytes
+never disagree. That is worth pinning — anything that does check the
+complement (other firmware, third-party tools, a future Davis change)
+would see a consistent pair — but do not read these tests as evidence the
+console requires it.
 """
 
 import pytest
@@ -63,24 +72,24 @@ class TestInsideTempComplement:
         assert _written_to(driver, CAL_INSIDE_TEMP.address) == [bytes([25])]
 
     def test_complement_really_is_the_ones_complement(self, driver):
-        """Not the two's complement, which differs by one and would be
-        rejected just as silently."""
+        """Not the two's complement, which differs by one.  The reference
+        specifies 1's, so that is what we write."""
         driver.write_calibration(CAL_INSIDE_TEMP, 10)
         comp = _written_to(driver, CAL_INSIDE_TEMP_COMP.address)[-1][0]
         assert comp == (~10) & 0xFF
         assert comp != ((-10) & 0xFF), "that is the two's complement"
 
     def test_other_fields_do_not_write_a_complement(self, driver):
-        """Only inside temperature has a validation byte; writing 0x33
+        """Only inside temperature has a companion byte; writing 0x33
         while calibrating outside temperature would corrupt the inside
         setting."""
         driver.write_calibration(CAL_OUTSIDE_TEMP, 25)
         assert _written_to(driver, CAL_INSIDE_TEMP_COMP.address) == []
 
     def test_a_failed_complement_write_fails_the_call(self, driver):
-        """Reporting success with the offset stored but unvalidated is the
-        worst outcome: the user sees it applied and the reading never
-        changes."""
+        """A half-written pair is the worst outcome: 0x32 holds the new
+        offset while 0x33 still describes the old one, so the two
+        disagree and nothing records that."""
         def fail_on_comp(addr, data):
             driver.writes.append((addr, bytes(data)))
             return addr != CAL_INSIDE_TEMP_COMP.address
