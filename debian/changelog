@@ -1,5 +1,51 @@
 kanfei (0.1.0~beta26) unstable; urgency=medium
 
+  * Adds a per-sensor calibration panel for Vantage consoles, covering the
+    inside and outside temperature and humidity offsets your console keeps
+    in its own memory.  These are separate from barometer calibration and
+    work differently: each is a small correction applied to one sensor.
+    Temperature offsets are held in tenths of a degree, so the panel shows
+    and accepts whole degrees to the tenth rather than the raw number —
+    entering 2.5 means two and a half degrees, not twenty-five.
+
+  * Adds a panel showing the console's own record highs and lows for the
+    day, month and year, beside the ones Kanfei has calculated.  The console
+    samples continuously while Kanfei reads it every ten seconds, so the
+    console may have caught a gust or a spike that fell between readings.
+    Where the two disagree, the difference is a measure of what our sampling
+    missed.  Sensors your station does not have are shown as blank rather
+    than as a reading of zero.
+
+  * Adds the ability to send Kanfei's configured location to a Vantage
+    console, which uses it for its own sunrise and sunset times and for
+    part of its pressure correction.  The console stores latitude and
+    longitude only to a tenth of a degree — roughly seven miles — so the
+    panel compares the two at that resolution rather than exactly, and
+    reports what the console actually holds after rounding rather than what
+    was sent.  The push is one-directional: Kanfei's location is the more
+    precise of the two, so it is never overwritten by the console's copy.
+
+  * Adds two console maintenance operations for Vantage stations, each
+    behind a confirmation that first states what it will cost.  Setting the
+    year's rain total overwrites what the console has counted; before doing
+    so, Kanfei shows the console's current total beside the last one it
+    recorded and how long ago that was, so rain that fell since the last
+    reading is visible before it is discarded.  Clearing the archive erases
+    records the console has not yet handed over; Kanfei shows how many it
+    already holds first.  Both refuse to run without explicit confirmation.
+
+  * Fix: the elevation shown in the barometer calibration panel and the one
+    in the Location card below it could disagree by a foot or two and say
+    nothing about it.  Any difference is now shown, stated both in feet and
+    as the pressure error it causes, so a discrepancy too small to matter is
+    visible as such rather than hidden.
+
+  * Fix: your configured elevation was being rounded to whole feet when it
+    was first looked up, which lost precision that the sunrise and sunset
+    calculations and the published weather data both use.  The stored value
+    now keeps its accuracy, and is rounded only when sent to a console,
+    which accepts whole feet.
+
   * Adds a barometer calibration tool for Davis Vantage stations, reachable
     from Settings.  It shows what your console currently reads, lists nearby
     airport weather reports with how far away and how recent each one is,
@@ -39,7 +85,7 @@ kanfei (0.1.0~beta26) unstable; urgency=medium
     Previously every release reported itself as 0.1.0 regardless of which
     one it was, so a backup could not say which version produced it.
 
- -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Tue, 04 Aug 2026 21:45:00 +0000
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 05 Aug 2026 15:40:00 +0000
 
 kanfei (0.1.0~beta25) unstable; urgency=medium
 
