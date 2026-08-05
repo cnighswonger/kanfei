@@ -559,4 +559,32 @@ export function fetchBarometerReference(): Promise<
   return request("/api/station/barometer-reference");
 }
 
+// --- Destructive console operations ---
+
+export function fetchRainPreflight(): Promise<import("./types.ts").RainPreflight> {
+  return request("/api/station/rain-preflight");
+}
+
+/** PUTRAIN — overwrites the console's yearly total. Irreversible. */
+export function setYearlyRain(
+  millimetres: number,
+): Promise<import("./types.ts").SetYearlyRainResult> {
+  return request("/api/station/yearly-rain", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ millimetres }),
+  });
+}
+
+export function fetchArchivePreflight(): Promise<
+  import("./types.ts").ArchivePreflight
+> {
+  return request("/api/station/archive-preflight");
+}
+
+/** CLRLOG — wipes the console's archive memory. Irreversible. */
+export function clearConsoleArchive(): Promise<{ success: boolean }> {
+  return request("/api/station/clear-archive", { method: "POST" });
+}
+
 export { ApiError };

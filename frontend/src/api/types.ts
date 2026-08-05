@@ -622,6 +622,36 @@ export interface MetarReferenceResponse {
   fetched_at: string;
 }
 
+// --- Destructive console operations ---
+
+/**
+ * What overwriting the yearly rain total would cost.
+ *
+ * `difference_mm` is the data at risk: rain the console counted that
+ * Kanfei has not recorded. Null when either side is unknown — a fresh
+ * install has no history, and reporting 0 would imply the console counted
+ * the whole total since the last poll.
+ */
+export interface RainPreflight {
+  console_mm: number | null;
+  last_stored_mm: number | null;
+  last_stored_at: string | null;
+  difference_mm: number | null;
+  /** False means the driver will refuse rather than risk a 2x error. */
+  collector_known: boolean;
+}
+
+export interface SetYearlyRainResult {
+  success: boolean;
+  before_mm: number | null;
+  after_mm: number | null;
+}
+
+export interface ArchivePreflight {
+  records_in_kanfei: number;
+  latest_synced_at: string | null;
+}
+
 // --- WeatherLink Hardware Config ---
 
 export interface WeatherLinkCalibration {
@@ -659,6 +689,8 @@ export interface WeatherLinkConfig {
      * hidden on an old daemon", which is the correct behaviour.
      */
     barometer_cal?: boolean;
+    /** PUTRAIN + CLRLOG (Vantage). */
+    console_data_ops?: boolean;
   };
 }
 

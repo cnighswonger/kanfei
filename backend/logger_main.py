@@ -1470,6 +1470,14 @@ class LoggerDaemon:
                 # sniff, and asking the console would cost a serial round
                 # trip to answer a question the daemon already holds.
                 "barometer_cal": CAP_BAROMETER_CAL in caps,
+                # PUTRAIN + CLRLOG.  Both need the Vantage-shaped
+                # driver methods, not just the coarse rain-reset
+                # capability that legacy also advertises.
+                "console_data_ops": (
+                    CAP_RAIN_RESET in caps
+                    and hasattr(self.driver, "async_set_yearly_rain")
+                    and hasattr(self.driver, "async_clear_log")
+                ),
             },
         }
 
