@@ -559,4 +559,36 @@ export function fetchBarometerReference(): Promise<
   return request("/api/station/barometer-reference");
 }
 
+// --- Vantage sensor calibration ---
+
+export function fetchVantageCalibration(): Promise<
+  import("./types.ts").VantageCalibrationState
+> {
+  return request("/api/station/calibration");
+}
+
+/**
+ * Set one calibration offset.
+ *
+ * `offset` is in the console's native units: TENTHS of a degree
+ * Fahrenheit for temperature, whole percent for humidity.
+ */
+export function setVantageCalibration(
+  field: import("./types.ts").VantageCalibrationField,
+  offset: number,
+): Promise<import("./types.ts").VantageCalibrationResult> {
+  return request("/api/station/calibration", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ field, offset }),
+  });
+}
+
+/** CLRCAL — zeroes every temperature and humidity offset. Not the barometer. */
+export function clearVantageCalibration(): Promise<
+  import("./types.ts").VantageCalibrationResult
+> {
+  return request("/api/station/calibration/clear", { method: "POST" });
+}
+
 export { ApiError };

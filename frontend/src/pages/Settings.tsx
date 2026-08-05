@@ -7,6 +7,7 @@ import { useWeatherBackground } from "../context/WeatherBackgroundContext.tsx";
 import { themes } from "../themes/index.ts";
 import ThemeEditor from "../components/settings/ThemeEditor.tsx";
 import BarometerCalibration from "../components/settings/BarometerCalibration.tsx";
+import VantageCalibration from "../components/settings/VantageCalibration.tsx";
 import { ALL_SCENES, SCENE_LABELS, SCENE_GRADIENTS } from "../components/WeatherBackground.tsx";
 import { API_BASE } from "../utils/constants.ts";
 import { getTimezone, setTimezone as storeTimezone, resolveTimezone, getTimezoneOptions } from "../utils/timezone.ts";
@@ -2798,6 +2799,13 @@ export default function Settings() {
         supported={wlConfig?.supported?.barometer_cal ?? false}
         isMobile={isMobile}
         configElevationFt={Number(val("elevation")) || 0}
+      />
+
+      {/* The other half of #249: a Vantage adjusts temperature and
+          humidity per sensor, not with the legacy five-field block. */}
+      <VantageCalibration
+        supported={wlConfig?.supported?.sensor_calibration ?? false}
+        isMobile={isMobile}
       />
 
       {/* Location section */}

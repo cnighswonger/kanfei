@@ -1415,6 +1415,15 @@ class LoggerDaemon:
                 # sniff, and asking the console would cost a serial round
                 # trip to answer a question the daemon already holds.
                 "barometer_cal": CAP_BAROMETER_CAL in caps,
+                # Per-sensor offsets via CALED/CALFIX.  Distinct from
+                # "calibration" above, which is the legacy five-field
+                # block and is false on a Vantage, and from
+                # "barometer_cal", which is BAR= — a different
+                # mechanism again.  Three separate things.
+                "sensor_calibration": (
+                    CAP_CALIBRATION_RW in caps
+                    and hasattr(self.driver, "CALIBRATION_FIELDS")
+                ),
             },
         }
 
