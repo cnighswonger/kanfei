@@ -308,7 +308,13 @@ export default function BarometerCalibration({
       : null;
 
     try {
-      const result = await setBarometerCalibration(barThousandths, elevationNum);
+      // The console's ELEVATION is whole feet; rounding here rather than
+      // in the field keeps the stored config at full precision while the
+      // wire gets what BAR= can actually absorb.
+      const result = await setBarometerCalibration(
+        barThousandths,
+        Math.round(elevationNum),
+      );
       setOutcome({
         kind: "success",
         message: `${describeAs} applied.`,
@@ -585,19 +591,19 @@ export default function BarometerCalibration({
         )}
         {configElevationFt > 0 &&
           cal?.elevation_ft != null &&
-          configElevationFt !== cal.elevation_ft && (
+          Math.round(configElevationFt) !== cal.elevation_ft && (
             <p style={{ ...body, marginTop: "6px" }}>
-              Console: {cal.elevation_ft} ft · Kanfei: {configElevationFt} ft
+              Console: {cal.elevation_ft} ft · Kanfei: {Math.round(configElevationFt)} ft
               {" ("}
               {Math.abs(
-                (configElevationFt - cal.elevation_ft) * INHG_PER_FOOT,
+                (Math.round(configElevationFt) - cal.elevation_ft) * INHG_PER_FOOT,
               ).toFixed(3)}{" "}
               inHg){" "}
               <button
                 type="button"
                 onClick={() => {
                   elevationTouched.current = true;
-                  setElevationFt(String(configElevationFt));
+                  setElevationFt(String(Math.round(configElevationFt)));
                 }}
                 style={{ ...body, background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--color-accent)" }}
               >

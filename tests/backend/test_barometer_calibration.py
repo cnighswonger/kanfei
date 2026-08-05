@@ -579,3 +579,64 @@ class TestTextBlockReadIsNotTimeoutBound:
         with pytest.raises(OSError):
             drv._read_text_block()
         assert drv.serial.timeout == 5.0
+
+
+class TestElevationPrecisionAtTheConsoleBoundary:
+    """`station_config.elevation` holds sub-foot precision; BAR= does not.
+
+    The console stores ELEVATION as whole feet (confirmed on the bench Vue,
+    fw 3.0: BARDATA replies "ELEVATION 250"), so the value has to be
+    rounded somewhere.  Doing it in the stored config would throw away
+    precision that astronomy and the public data schema read directly, so
+    the rounding belongs here, at the wire.
+
+    `int()` is the trap: it truncates toward zero, so a caller holding
+    265.7 ft would calibrate against 265 — most of a foot discarded, and
+    at ~0.001 inHg/ft that is real pressure error in the one place whose
+    purpose is removing it.
+    """
+
+    @staticmethod
+    async def _elevation_sent(payload_elevation):
+        """Return the elevation_ft that reached the IPC layer."""
+        import app.api.station as station_api
+
+        captured = {}
+
+        class FakeClient:
+            async def send_command(self, msg, timeout=None):
+                captured.update(msg)
+                return {"ok": True, "data": {"before": None, "after": None}}
+
+        station_api.get_ipc_client = lambda: FakeClient()
+        await station_api.set_barometer_calibration(
+            payload={
+                "bar_thousandths_inhg": 29_780,
+                "elevation_ft": payload_elevation,
+            },
+            _admin=None,
+        )
+        return captured["elevation_ft"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "given,expected",
+        [
+            (265.7, 266),    # int() would give 265 — the bug
+            (265.5, 266),
+            (265.4, 265),
+            (-75.7, -76),    # negative elevations are legal; int() gives -75
+            (265, 265),      # already whole, unchanged
+            (265.0, 265),
+        ],
+    )
+    async def test_rounds_rather_than_truncates(self, given, expected):
+        assert await self._elevation_sent(given) == expected
+
+    @pytest.mark.asyncio
+    async def test_sends_an_int_not_a_float(self):
+        """`BAR=29780 265.0` is not a command the console accepts —
+        cmd_bar formats whatever it is handed straight into the string."""
+        sent = await self._elevation_sent(265.4)
+        assert isinstance(sent, int)
+        assert cmd_bar(29_780, sent) == b"BAR=29780 265\n"

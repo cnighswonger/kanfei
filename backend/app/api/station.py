@@ -292,7 +292,11 @@ async def set_barometer_calibration(
             {
                 "cmd": "set_barometer",
                 "bar_thousandths_inhg": int(bar),
-                "elevation_ft": int(elevation),
+                # round(), not int(): the console takes whole feet, and
+                # truncating 265.7 to 265 discards most of a foot the
+                # caller measured.  Callers may hold sub-foot precision
+                # because station_config.elevation does.
+                "elevation_ft": round(float(elevation)),
             },
             timeout=30.0,
         )

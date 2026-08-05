@@ -239,6 +239,32 @@ test.describe('Barometer calibration panel', () => {
     await expect(row).toContainText('0.001 inHg');
   });
 
+  test('compares elevation at the resolution the console can hold', async ({ page }) => {
+    // The fixture stores 315.4 ft; the console reports 315.  Those agree
+    // as far as the hardware is concerned — ELEVATION is whole feet — so
+    // the reconcile row must stay hidden.  Without rounding the comparison
+    // this shows a permanent disagreement no user can ever resolve: typing
+    // 315.4 into a console that stores 315 leaves it reading 315 forever.
+    await stubCapability(page, true);
+    await stubReference(page, freshReference());
+    await page.route('**/api/station/barometer-calibration', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          json: {
+            barometer_inhg: 30.05, elevation_ft: 315,
+            barcal_inhg: 0.0, gain: 0, offset: -36,
+          },
+        });
+        return;
+      }
+      await route.fallback();
+    });
+
+    await page.goto('/settings');
+    await expect(page.getByText('Barometer Calibration')).toBeVisible();
+    await expect(page.locator('p', { hasText: 'Console: 315 ft' })).toHaveCount(0);
+  });
+
   test('a failed reference refresh disables Apply rather than reusing the old one', async ({ page }) => {
     // Found by Codex on #256 R1. The panel used to keep the previously
     // selected METAR when a refresh failed, leaving Apply enabled against

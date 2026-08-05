@@ -87,7 +87,10 @@ CONFIG = {
     "rain_unit": "in",
     "latitude": "35.7796",
     "longitude": "-78.6382",
-    "elevation": "315",
+    # Fractional on purpose: station_config holds sub-foot precision from
+    # the DEM, while the console takes whole feet.  A whole-foot fixture
+    # would not exercise the rounding at that boundary.
+    "elevation": "315.4",
     "serial_port": "/dev/ttyUSB0",
     "baud_rate": "2400",
     "rain_yesterday": "0.12",
