@@ -273,8 +273,12 @@ class TestConcurrentSessionValidation:
     the slide-expiry write — the UPDATE then matches zero rows and
     SQLAlchemy raises StaleDataError out of commit(), which leaves the
     request handler as an unhandled exception and 500s an ordinary page
-    load.  Traced from intermittent login failures in
-    tests/e2e/login.spec.ts (#275).
+    load (#275).
+
+    Found while investigating intermittent failures in
+    tests/e2e/login.spec.ts, but it is NOT their cause — fixing this did
+    not change that spec's pass rate, and its failures show no server-side
+    exception.  Recorded so the two are not conflated again.
     """
 
     def test_row_deleted_mid_validation_does_not_raise(self, db, monkeypatch):
