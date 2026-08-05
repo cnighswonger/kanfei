@@ -3,12 +3,13 @@
 TEMP_IN_COMP (0x33) is "1's compliment of TEMP_IN_CAL to validate
 calibration data" (Vantage serial reference v2.6.1, EEPROM table).
 
-**The firmware does not actually gate on it.** Measured on fw 3.0 (bench
-Vue, 2026-08-05, #273): an offset written with a deliberately wrong
-complement applied in full, +4.0 °F. What makes a calibration take effect
-is CALFIX, not this byte. The vendor doc is wrong here, which puts it
-alongside the other cases catalogued in
-`reference/vantage_dash_values.md`.
+**fw 3.0 does not gate on it.** Measured on the bench Vue, 2026-08-05
+(#273): an offset written with a deliberately wrong complement applied in
+full, +4.0 °F. On that firmware what makes a calibration take effect is
+CALFIX, not this byte. Other firmware is untested — fw 2.12 in particular,
+which is now the production station — so this says nothing about whether
+the gate was ever real. Catalogued with the other doc-vs-hardware
+disagreements in `reference/vantage_dash_values.md`.
 
 These tests therefore assert a **spec conformance** property, not a
 firmware one: we write the pair the reference documents, so the two bytes

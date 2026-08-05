@@ -701,17 +701,17 @@ class VantageDriver(StationDriver):
             # TEMP_IN_COMP is "1's compliment of TEMP_IN_CAL to validate
             # calibration data" (serial ref v2.6.1, EEPROM table).
             #
-            # Measured on fw 3.0 (bench Vue, 2026-08-05, #273): the
+            # Measured on fw 3.0 (bench Vue, 2026-08-05, #273): that
             # firmware does NOT gate on it.  An offset written with a
-            # deliberately wrong complement still applied in full.  What
-            # actually makes a calibration take effect is the CALFIX in
-            # step 4 below, not this byte.
+            # deliberately wrong complement still applied in full.  There,
+            # what makes a calibration take effect is the CALFIX in step 4
+            # below, not this byte.  fw 2.12 was not tested.
             #
             # Kept anyway: the reference documents the pair, leaving the
             # two bytes inconsistent is a trap for anything that does
             # check them, and it costs one EEPROM write.  Do not restate
-            # it as a validation gate — that claim is measurably false
-            # here, and may or may not hold on other firmware.
+            # it as a validation gate on the strength of one firmware
+            # revision — in either direction.
             if field.address == CAL_INSIDE_TEMP.address:
                 comp = (~offset) & 0xFF
                 if not self._eeprom_write(
