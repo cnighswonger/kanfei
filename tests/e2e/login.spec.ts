@@ -38,11 +38,16 @@ test.describe('Login page', () => {
     // enough: the assertions can pass and a later re-mount still clears
     // the fields.
     //
-    // This does not make the test deterministic — roughly a quarter of
-    // runs still fail, landing back on an empty form after a valid
-    // submit.  That residue is #275, a race in validate_session() that
-    // 500s one of the concurrent auth requests, and it is a backend bug
-    // rather than anything this spec can synchronise around.
+    // This does not make the test deterministic — it still fails perhaps
+    // a third of the time, and the retry loop only narrows the window.
+    // The observed failure is an empty form with Sign In disabled and NO
+    // backend error, i.e. a re-mount landing after the loop and before
+    // the click.  Cause not yet identified (#272).
+    //
+    // An earlier version of this comment blamed #275, a StaleDataError
+    // race in validate_session().  That was wrong: fixing #275 did not
+    // improve the pass rate, and the failing runs show no server-side
+    // exception at all.
     await expect(async () => {
       await user.fill(TEST_ADMIN.username);
       await pass.fill(TEST_ADMIN.password);
