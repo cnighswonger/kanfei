@@ -84,10 +84,15 @@ def _supports_hilows(driver: StationDriver | None) -> bool:
     `supported` map that says yes while the handler says 501 renders the
     panel and then makes it vanish.
 
-    LinkDriver has declared CAP_HILOWS since the initial commit and
-    implements no hilows() at all, so the capability alone would reach an
-    AttributeError.  The method alone would miss a VP1 whose CAP_HILOWS is
-    correctly absent because it has no LOOP2.
+    The capability alone is not enough: a driver can declare CAP_HILOWS
+    without implementing the method, which reaches an AttributeError
+    rather than a clean 501.  LinkDriver did exactly that from the initial
+    commit until #270 withdrew the flag — fixed at the source now, but the
+    check stays because nothing prevents it recurring.
+
+    The method alone is not enough either, and that case is still live: a
+    VP1 has no LOOP2, so VantageDriver omits CAP_HILOWS while the method
+    remains present on the class.
     """
     if driver is None or not driver.connected:
         return False

@@ -50,7 +50,6 @@ from .base import (
     CAP_SAMPLE_PERIOD_RW,
     CAP_CLOCK_SYNC,
     CAP_RAIN_RESET,
-    CAP_HILOWS,
 )
 
 logger = logging.getLogger(__name__)
@@ -1158,7 +1157,6 @@ class LinkDriver(StationDriver):
             CAP_CALIBRATION_RW,
             CAP_CLOCK_SYNC,
             CAP_RAIN_RESET,
-            CAP_HILOWS,
             CAP_ARCHIVE_PERIOD_RW,
             CAP_SAMPLE_PERIOD_RW,
         }
