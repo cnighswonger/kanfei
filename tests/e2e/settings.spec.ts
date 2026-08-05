@@ -204,6 +204,68 @@ test.describe('Barometer calibration panel', () => {
     await expect(apply).toBeEnabled();
   });
 
+  test('shows the elevation reconcile row for a sub-threshold difference', async ({ page }) => {
+    // The fixture stores 315.4 ft, which the row displays as 315; the
+    // console here reports 314 — one foot apart.  The row used to require
+    // a >10 ft gap, which is ~0.011 inHg, five times the difference the
+    // panel reports against the reference it is calibrating against.  A
+    // 50 ft fixture mismatch would have passed under the old rule too, so
+    // the console value is stubbed to sit just inside it: this test fails
+    // if the threshold returns.
+    await stubCapability(page, true);
+    await stubReference(page, freshReference());
+    await page.route('**/api/station/barometer-calibration', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          json: {
+            barometer_inhg: 30.05, elevation_ft: 314,
+            barcal_inhg: 0.0, gain: 0, offset: -36,
+          },
+        });
+        return;
+      }
+      await route.fallback();
+    });
+
+    await page.goto('/settings');
+    // Assert on the row element's full text rather than a substring: this
+    // pins the configured value and the pressure-equivalent figure too, so
+    // a regression dropping either fails here instead of passing on a
+    // loose match.  Matched via the paragraph's text content because JSX
+    // splits the line across several text nodes, which getByText's
+    // per-node matching will not span.
+    const row = page.locator('p', { hasText: 'Console: 314 ft' });
+    await expect(row).toBeVisible();
+    await expect(row).toContainText('Kanfei: 315 ft');
+    await expect(row).toContainText('0.001 inHg');
+  });
+
+  test('compares elevation at the resolution the console can hold', async ({ page }) => {
+    // The fixture stores 315.4 ft; the console reports 315.  Those agree
+    // as far as the hardware is concerned — ELEVATION is whole feet — so
+    // the reconcile row must stay hidden.  Without rounding the comparison
+    // this shows a permanent disagreement no user can ever resolve: typing
+    // 315.4 into a console that stores 315 leaves it reading 315 forever.
+    await stubCapability(page, true);
+    await stubReference(page, freshReference());
+    await page.route('**/api/station/barometer-calibration', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          json: {
+            barometer_inhg: 30.05, elevation_ft: 315,
+            barcal_inhg: 0.0, gain: 0, offset: -36,
+          },
+        });
+        return;
+      }
+      await route.fallback();
+    });
+
+    await page.goto('/settings');
+    await expect(page.getByText('Barometer Calibration')).toBeVisible();
+    await expect(page.locator('p', { hasText: 'Console: 315 ft' })).toHaveCount(0);
+  });
+
   test('a failed reference refresh disables Apply rather than reusing the old one', async ({ page }) => {
     // Found by Codex on #256 R1. The panel used to keep the previously
     // selected METAR when a refresh failed, leaving Apply enabled against
