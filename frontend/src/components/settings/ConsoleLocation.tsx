@@ -42,14 +42,29 @@ interface Props {
   longitude: number;
 }
 
-/** True when the two agree as closely as the console's format allows. */
+/** True when the two agree as closely as the console's format allows.
+ *
+ * Compares the *distance* rather than re-deriving what the console should
+ * hold. Replicating the rounding here is wrong in two ways at once:
+ * Python's `round` is banker's rounding (35.85 and 35.75 both give 358
+ * tenths) while JavaScript's `Math.round` goes half-up toward positive
+ * infinity (35.85 -> 35.9, -78.75 -> -78.7). At a half-step coordinate the
+ * comparator and the writer therefore disagree, and a console that was
+ * just written correctly shows as permanently wrong. Found by Codex on
+ * #265 R1.
+ *
+ * Any console value within half a step of Kanfei's is as close as the
+ * format can get, whichever way the writer broke the tie.
+ */
 function agreesAtResolution(
   kanfei: number,
   console_: number,
   resolutionDeg: number,
 ): boolean {
   const step = resolutionDeg || 0.1;
-  return Math.abs(Math.round(kanfei / step) * step - console_) < step / 2;
+  // Epsilon absorbs binary-float error in the stored value and in the
+  // subtraction; it is orders of magnitude below a tenth of a degree.
+  return Math.abs(kanfei - console_) <= step / 2 + 1e-9;
 }
 
 export default function ConsoleLocation({

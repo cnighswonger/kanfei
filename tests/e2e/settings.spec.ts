@@ -316,9 +316,53 @@ test.describe('Console location reconcile', () => {
     // Unlike the calibration panel, silence is right here: the Location
     // card itself still works, and there is nothing a legacy user could
     // act on.
+    //
+    // Asserting absence alone would pass if the whole card failed to
+    // render, so this also pins that the card IS there, that no
+    // "unsupported" message appears, and that the endpoint is never
+    // called — Codex flagged the weaker version on #265 R1.
+    const requests: string[] = [];
+    await page.route('**/api/station/location', async (route) => {
+      requests.push(route.request().method());
+      await route.fulfill({ json: { latitude: 0, longitude: 0, resolution_deg: 0.1 } });
+    });
     await stubSupport(page, false);
     await page.goto('/settings');
+
+    await expect(page.getByRole('heading', { name: 'Location' })).toBeVisible();
     await expect(page.getByText('Console holds', { exact: false })).toHaveCount(0);
+    // Scoped to location: the barometer panel legitimately renders its
+    // own "does not support" message under this same stub, and a bare
+    // match caught that instead.
+    await expect(
+      page.getByText('does not support setting its location', { exact: false }),
+    ).toHaveCount(0);
+    await expect(page.getByText('console cannot store', { exact: false })).toHaveCount(0);
+    expect(requests).toEqual([]);
+  });
+
+  test('half-step coordinates still read as agreement', async ({ page }) => {
+    // The #265 R1 blocker.  Python's round() is banker's rounding, so
+    // 35.85 and 35.75 both store as 358 tenths; JavaScript's Math.round
+    // goes half-up toward +Infinity, giving 35.9 and 35.8.  Re-deriving
+    // the rounding in the comparator therefore disagreed with the writer
+    // at exactly these values, and a console that had just been written
+    // correctly showed as permanently wrong.
+    await stubSupport(page, true);
+    await page.route('**/api/config', async (route) => {
+      const body = await (await route.fetch()).json();
+      for (const item of body) {
+        if (item.key === 'latitude') item.value = 35.85;
+        if (item.key === 'longitude') item.value = -78.75;
+      }
+      await route.fulfill({ json: body });
+    });
+    // What Python's banker's rounding actually writes for those inputs.
+    await stubLocation(page, 35.8, -78.8);
+    await page.goto('/settings');
+
+    const row = page.locator('p', { hasText: 'Console holds' });
+    await expect(row).toContainText('matches your location');
   });
 
   test('agrees when the console holds the rounded value', async ({ page }) => {

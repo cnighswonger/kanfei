@@ -223,3 +223,29 @@ class TestHandlers:
             await daemon._h_set_location({"latitude": 35.0})
         # "required" routes to 400, not 503.
         assert _cal_error(str(excinfo.value)).status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_a_failed_post_write_read_reports_null_not_the_request(self):
+        """If the console cannot be re-read after a successful write, say so.
+
+        Echoing the sent value here would be the worst outcome: the user
+        would see 35.3809 and believe the console holds it, when the
+        console cannot hold that value at all and we do not know what it
+        settled on.  Codex asked for this branch to be pinned (#265 R1).
+        """
+        async def fake_read():
+            return None
+
+        async def fake_set(lat, lon, newsetup=True):
+            return True
+
+        daemon = self._daemon(self._vantage(
+            async_read_location=fake_read, async_set_location=fake_set,
+        ))
+        result = await daemon._h_set_location({
+            "latitude": 35.3809, "longitude": -78.5982,
+        })
+
+        assert result["success"] is True
+        assert result["after"] is None
+        assert result["before"] is None
