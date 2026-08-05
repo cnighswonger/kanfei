@@ -1229,9 +1229,16 @@ class LoggerDaemon:
         if field is None or offset is None:
             raise RuntimeError("field and offset are both required")
         if field not in self._VANTAGE_CAL_FIELDS:
+            # "must be" is what api/station.py::_cal_error routes to 400.
+            # An earlier wording here said "unknown calibration field",
+            # which matched no rule and surfaced a client error as a 503
+            # server fault — the same bug as the offset range message one
+            # branch below, which I fixed while leaving this one (Codex,
+            # #267 R1).
             raise RuntimeError(
-                f"unknown calibration field {field!r}; expected one of "
+                f"calibration field must be one of "
                 + ", ".join(sorted(self._VANTAGE_CAL_FIELDS))
+                + f"; got {field!r}"
             )
 
         addr = getattr(vantage_eeprom, self._VANTAGE_CAL_FIELDS[field])

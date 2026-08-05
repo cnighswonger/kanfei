@@ -150,6 +150,26 @@ class TestWriteHandler:
         assert "inside_temp" in str(excinfo.value)
 
     @pytest.mark.asyncio
+    async def test_an_unknown_field_maps_to_400_not_503(self):
+        """A bad field name is the caller's error, not a station fault.
+
+        `_cal_error` routes on substrings, so the wording is load-bearing:
+        an earlier version said "unknown calibration field", matched no
+        rule, and surfaced as a 503 — telling the user the hardware had a
+        transient problem when they had simply named a field that does
+        not exist.  Codex found this on #267 R1, one branch away from the
+        identical bug I had just fixed on the offset message.
+
+        Asserted through `_cal_error` rather than by matching the string,
+        so a rewording that keeps the meaning still passes and one that
+        loses the 400 does not.
+        """
+        daemon = self._daemon(**self._ok_driver({}))
+        with pytest.raises(RuntimeError) as excinfo:
+            await daemon._h_write_vantage_cal({"field": "barometer", "offset": 5})
+        assert _cal_error(str(excinfo.value)).status_code == 400
+
+    @pytest.mark.asyncio
     async def test_barometer_is_not_a_field_here(self):
         """The barometer is BAR= and has its own panel.  Accepting it here
         would write an EEPROM byte that does nothing for pressure."""
