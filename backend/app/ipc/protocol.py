@@ -27,6 +27,10 @@ CMD_FORCE_ARCHIVE = "force_archive"
 CMD_BAROMETER_CAL = "barometer_cal"          # read BARDATA
 CMD_SET_BAROMETER = "set_barometer"          # write via BAR=
 CMD_SIGNAL_QUALITY = "signal_quality"
+CMD_RAIN_PREFLIGHT = "rain_preflight"        # console vs last stored
+CMD_SET_YEARLY_RAIN = "set_yearly_rain"      # PUTRAIN — irreversible
+CMD_ARCHIVE_PREFLIGHT = "archive_preflight"  # unsynced record count
+CMD_CLEAR_ARCHIVE = "clear_archive"          # CLRLOG — irreversible
 
 # --- Wire helpers ---
 

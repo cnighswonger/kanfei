@@ -33,6 +33,7 @@ from app.protocol.base import (
     CAP_SAMPLE_PERIOD_RW,
     CAP_CALIBRATION_RW,
     CAP_BAROMETER_CAL,
+    CAP_RAIN_RESET,
 )
 from app.protocol.link_driver import LinkDriver, CalibrationOffsets, _rain_register_to_mm
 from app.protocol.serial_port import list_serial_ports
@@ -934,6 +935,10 @@ class LoggerDaemon:
         h(ipc.CMD_BAROMETER_CAL, self._h_barometer_cal)
         h(ipc.CMD_SET_BAROMETER, self._h_set_barometer)
         h(ipc.CMD_SIGNAL_QUALITY, self._h_signal_quality)
+        h(ipc.CMD_RAIN_PREFLIGHT, self._h_rain_preflight)
+        h(ipc.CMD_SET_YEARLY_RAIN, self._h_set_yearly_rain)
+        h(ipc.CMD_ARCHIVE_PREFLIGHT, self._h_archive_preflight)
+        h(ipc.CMD_CLEAR_ARCHIVE, self._h_clear_archive)
 
     # ---- IPC handlers ----
 
@@ -1160,6 +1165,165 @@ class LoggerDaemon:
             )
 
         return {"success": ok, "before": _snap(before), "after": _snap(after)}
+
+    # ---- Destructive console operations (PUTRAIN / CLRLOG) ----
+    #
+    # Both destroy data on the console and both are safe only with context
+    # Kanfei already holds.  The pattern is the same for each: a
+    # *preflight* read that shows the cost, then the write.  Chris's
+    # design call (#264): a confirmation that shows what will be lost is a
+    # decision; an undo offered afterwards is a consolation.
+
+    def _last_stored_rain_yearly(self) -> tuple[Optional[float], Optional[str]]:
+        """Most recent recorded yearly rain, in mm, with its timestamp.
+
+        Stored as tenths of a mm, hence the divide.  The timestamp is the
+        point of the whole thing: it tells the caller how much rain could
+        have fallen since, which is exactly what a restore would discard.
+        """
+        db = SessionLocal()
+        try:
+            from app.models.sensor_reading import SensorReadingModel as S
+
+            row = (
+                db.query(S.rain_yearly, S.timestamp)
+                .filter(S.rain_yearly.isnot(None))
+                .order_by(S.timestamp.desc())
+                .first()
+            )
+            if row is None:
+                return None, None
+            return row[0] / 10.0, row[1].isoformat()
+        finally:
+            db.close()
+
+    async def _h_rain_preflight(self, _msg: dict) -> dict[str, Any]:
+        """What overwriting the yearly rain total would cost.
+
+        Returns the console's current total, the last one Kanfei recorded,
+        and when that was.  The difference between them is rain that fell
+        since the last poll — precisely what a naive "restore the last
+        value" would throw away.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if CAP_RAIN_RESET not in drv.capabilities:
+            raise RuntimeError(
+                f"{drv.station_name} does not support setting the rain total"
+            )
+
+        snapshot = await drv.poll()
+        console_mm = snapshot.rain_yearly if snapshot else None
+        stored_mm, stored_at = self._last_stored_rain_yearly()
+
+        return {
+            "console_mm": console_mm,
+            "last_stored_mm": stored_mm,
+            "last_stored_at": stored_at,
+            # Signed: positive means the console has counted rain Kanfei
+            # has not recorded yet.
+            "difference_mm": (
+                None if console_mm is None or stored_mm is None
+                else round(console_mm - stored_mm, 2)
+            ),
+            # The collector determines the click size, and the driver
+            # refuses to write without it rather than risk a 2x error.
+            "collector_known": bool(
+                getattr(getattr(drv, "hw_config", None), "rain_click_inches", None)
+            ),
+        }
+
+    async def _h_set_yearly_rain(self, msg: dict) -> dict[str, Any]:
+        """PUTRAIN — overwrite the console's yearly total.  IRREVERSIBLE.
+
+        Takes millimetres.  The driver converts to clicks using the
+        collector this station reported at connect time; a raw click count
+        means three different rainfall totals on three different
+        collectors, which is why nothing here accepts one.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if CAP_RAIN_RESET not in drv.capabilities:
+            raise RuntimeError(
+                f"{drv.station_name} does not support setting the rain total"
+            )
+        if not hasattr(drv, "async_set_yearly_rain"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support setting the rain total"
+            )
+
+        millimetres = msg.get("millimetres")
+        if millimetres is None:
+            raise RuntimeError("millimetres is required")
+
+        before = await drv.poll()
+        try:
+            ok = await drv.async_set_yearly_rain(float(millimetres))
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+        after = await drv.poll()
+
+        if not ok:
+            raise RuntimeError(
+                "Station did not accept the rain total; console now reads: "
+                f"{after.rain_yearly if after else 'unknown'} mm"
+            )
+
+        return {
+            "success": ok,
+            "before_mm": before.rain_yearly if before else None,
+            "after_mm": after.rain_yearly if after else None,
+        }
+
+    async def _h_archive_preflight(self, _msg: dict) -> dict[str, Any]:
+        """What clearing the console's archive would cost.
+
+        Kanfei has already downloaded records into archive_records, so
+        the data is not lost from Kanfei's side — but anything the console
+        holds that has NOT been synced goes with the clear.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if not hasattr(drv, "async_clear_log"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support clearing its archive"
+            )
+
+        db = SessionLocal()
+        try:
+            from app.models.archive_record import ArchiveRecordModel as A
+
+            total = db.query(A).count()
+            latest = (
+                db.query(A.record_time)
+                .order_by(A.record_time.desc())
+                .first()
+            )
+        finally:
+            db.close()
+
+        return {
+            "records_in_kanfei": total,
+            "latest_synced_at": latest[0].isoformat() if latest and latest[0] else None,
+        }
+
+    async def _h_clear_archive(self, _msg: dict) -> dict[str, Any]:
+        """CLRLOG — wipe the console's archive memory.  IRREVERSIBLE."""
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if not hasattr(drv, "async_clear_log"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support clearing its archive"
+            )
+
+        ok = await drv.async_clear_log()
+        if not ok:
+            raise RuntimeError("Station did not accept CLRLOG")
+        return {"success": ok}
 
     async def _h_signal_quality(self, _msg: dict) -> dict[str, Any]:
         """Console reception diagnostics — RXCHECK plus the heard-Tx list.

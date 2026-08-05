@@ -628,12 +628,13 @@ class VantageDriver(StationDriver):
         """
         if field.n_bytes != 1:
             raise ValueError(
-                f"write_calibration expects a 1-byte field, "
+                f"calibration field must be a single byte, "
                 f"got {field.n_bytes} at 0x{field.address:02X}"
             )
         if not CAL_BLOCK_START <= field.address <= CAL_BLOCK_END:
             raise ValueError(
-                f"0x{field.address:02X} is outside the calibration block "
+                f"calibration address must be inside the block: "
+                f"0x{field.address:02X} is outside "
                 f"(0x{CAL_BLOCK_START:02X}..0x{CAL_BLOCK_END:02X})"
             )
         if not -128 <= offset <= 127:
