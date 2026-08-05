@@ -20,13 +20,6 @@ from app.protocol.vantage.eeprom import (
 )
 
 
-class RecordingDriver:
-    """Captures EEPROM writes without touching a port."""
-
-    def __init__(self):
-        self.writes: list[tuple[int, bytes]] = []
-
-
 @pytest.fixture
 def driver():
     drv = VantageDriver("/dev/null", 19200)
