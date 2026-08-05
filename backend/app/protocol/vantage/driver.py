@@ -697,21 +697,29 @@ class VantageDriver(StationDriver):
                 )
                 return False
 
-            # 3a. Inside temperature alone carries a validation byte:
+            # 3a. Inside temperature alone carries a companion byte:
             # TEMP_IN_COMP is "1's compliment of TEMP_IN_CAL to validate
-            # calibration data" (serial ref v2.6.1, EEPROM table).  Without
-            # it the console has an offset it will not honour — the write
-            # ACKs, the value reads back, and the temperature does not
-            # move.  That is the same silent-success shape as #209, where
-            # writes to the wrong humidity address appeared to work.
+            # calibration data" (serial ref v2.6.1, EEPROM table).
+            #
+            # Measured on fw 3.0 (bench Vue, 2026-08-05, #273): the
+            # firmware does NOT gate on it.  An offset written with a
+            # deliberately wrong complement still applied in full.  What
+            # actually makes a calibration take effect is the CALFIX in
+            # step 4 below, not this byte.
+            #
+            # Kept anyway: the reference documents the pair, leaving the
+            # two bytes inconsistent is a trap for anything that does
+            # check them, and it costs one EEPROM write.  Do not restate
+            # it as a validation gate — that claim is measurably false
+            # here, and may or may not hold on other firmware.
             if field.address == CAL_INSIDE_TEMP.address:
                 comp = (~offset) & 0xFF
                 if not self._eeprom_write(
                     CAL_INSIDE_TEMP_COMP.address, bytes([comp])
                 ):
                     logger.error(
-                        "write_calibration: TEMP_IN_COMP write failed; the "
-                        "inside-temp offset will not be honoured"
+                        "write_calibration: TEMP_IN_COMP write failed; "
+                        "0x32 and 0x33 are now inconsistent"
                     )
                     return False
 

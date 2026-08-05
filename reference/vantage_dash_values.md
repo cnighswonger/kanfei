@@ -72,6 +72,27 @@ The documented dash value is a legitimate reading. **Do not filter these.**
   tables do. So the LOOP sentinels above are inferred from the archive
   equivalents and confirmed on the wire, which is precisely why LOOP is
   where all the parsing bugs were.
+- **`TEMP_IN_COMP` (EEPROM 0x33) does not validate anything.** The EEPROM
+  table describes it as "1's compliment of TEMP_IN_CAL to validate
+  calibration data", which reads as a gate: write `TEMP_IN_CAL` (0x32)
+  without it and the console should ignore the offset. It does not.
+  Measured on fw 3.0 (#273): `0x32 = +40` tenths with `0x33` left at
+  `0xFF` — a deliberately *wrong* complement — moved the displayed inside
+  temperature by the full +4.0 °F.
+
+  What actually applies a calibration is **CALFIX**. The EEPROM write
+  alone is inert (offset written, no CALFIX → 0.0 °F change); the same
+  write followed by CALFIX applies in full regardless of 0x33.
+
+  We still write the pair, because the reference documents it and leaving
+  the two bytes inconsistent is a trap for anything that *does* check
+  them. But do not describe it as a validation gate. Not tested on fw
+  2.12 — the gating may be real on older firmware.
+
+  Note the measurement trap: writing 0x33 *after* a calibration has
+  already been applied triggers a second CALFIX and a second, cumulative
+  shift. That reads as "the complement made it work" when it is simply
+  the offset applied twice.
 
 ## Measured, not documented
 

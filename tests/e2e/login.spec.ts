@@ -23,11 +23,28 @@ test.describe('Login page', () => {
     await page.goto('/settings');
     await expect(page.getByText('Sign in to continue')).toBeVisible();
 
-    await page.locator('input[autocomplete="username"]').fill(TEST_ADMIN.username);
-    await page.locator('input[autocomplete="current-password"]').fill(TEST_ADMIN.password);
-    await page.getByRole('button', { name: 'Sign In' }).click();
+    // Fill, then assert the values landed before clicking.  The form
+    // re-mounts as the auth check resolves, which silently clears an
+    // early fill() and leaves Sign In disabled — the failure was a login
+    // page with empty fields, not a redirect that went wrong (#272).
+    const user = page.locator('input[autocomplete="username"]');
+    const pass = page.locator('input[autocomplete="current-password"]');
+    await user.fill(TEST_ADMIN.username);
+    await pass.fill(TEST_ADMIN.password);
+    await expect(user).toHaveValue(TEST_ADMIN.username);
+    await expect(pass).toHaveValue(TEST_ADMIN.password);
 
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    const signIn = page.getByRole('button', { name: 'Sign In' });
+    await expect(signIn).toBeEnabled();
+    await signIn.click();
+
+    // exact: true, or this matches a second heading whose text merely
+    // contains "settings" — the WeatherLink card renders
+    // "WeatherLink settings could not be read" when no station is
+    // attached, which is the normal state for the fixture (#272).
+    await expect(
+      page.getByRole('heading', { name: 'Settings', exact: true }),
+    ).toBeVisible();
   });
 
   test('invalid credentials show error', async ({ page }) => {
