@@ -27,6 +27,7 @@ CMD_FORCE_ARCHIVE = "force_archive"
 CMD_BAROMETER_CAL = "barometer_cal"          # read BARDATA
 CMD_SET_BAROMETER = "set_barometer"          # write via BAR=
 CMD_SIGNAL_QUALITY = "signal_quality"
+CMD_HIGHS_LOWS = "highs_lows"                # HILOWS, read-only
 
 # --- Wire helpers ---
 

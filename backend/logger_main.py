@@ -15,7 +15,8 @@ import logging
 import os
 import signal
 import sys
-from datetime import datetime, timedelta, timezone
+from dataclasses import asdict
+from datetime import datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
@@ -33,6 +34,7 @@ from app.protocol.base import (
     CAP_SAMPLE_PERIOD_RW,
     CAP_CALIBRATION_RW,
     CAP_BAROMETER_CAL,
+    CAP_HILOWS,
 )
 from app.protocol.link_driver import LinkDriver, CalibrationOffsets, _rain_register_to_mm
 from app.protocol.serial_port import list_serial_ports
@@ -934,6 +936,7 @@ class LoggerDaemon:
         h(ipc.CMD_BAROMETER_CAL, self._h_barometer_cal)
         h(ipc.CMD_SET_BAROMETER, self._h_set_barometer)
         h(ipc.CMD_SIGNAL_QUALITY, self._h_signal_quality)
+        h(ipc.CMD_HIGHS_LOWS, self._h_highs_lows)
 
     # ---- IPC handlers ----
 
@@ -1161,6 +1164,56 @@ class LoggerDaemon:
 
         return {"success": ok, "before": _snap(before), "after": _snap(after)}
 
+    async def _h_highs_lows(self, _msg: dict) -> dict[str, Any]:
+        """The console's own daily/monthly/yearly extremes (HILOWS).
+
+        Worth having alongside Kanfei's computed extremes rather than
+        instead of them.  Ours come from 10-second polls; the console
+        samples continuously, so it catches a gust or a spike that fell
+        between our polls.  When the two disagree, the disagreement
+        bounds what our sampling misses — which is the same class of
+        problem as #230, where a poisoned daily maximum survived all day
+        before anyone noticed.
+
+        Read-only.  Clearing the console's highs and lows is a separate,
+        destructive operation and deliberately not reachable from here.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        # Both checks are needed, and the second is not belt-and-braces.
+        # LinkDriver advertises CAP_HILOWS and implements no hilows() at
+        # all — a live instance of the advertise-what-you-cannot-do bug
+        # that motivated #221.  The capability alone would let a legacy
+        # station through to an AttributeError; the method alone would
+        # miss a VP1 whose CAP_HILOWS is correctly absent because it has
+        # no LOOP2.
+        if CAP_HILOWS not in drv.capabilities or not hasattr(
+            drv, "async_hilows"
+        ):
+            raise RuntimeError(
+                f"{drv.station_name} does not support highs and lows"
+            )
+
+        block = await drv.async_hilows()
+        if block is None:
+            raise RuntimeError("Station did not return highs and lows")
+
+        # `time` is not JSON-serialisable and the IPC layer encodes with
+        # default=str, which would give "14:35:00" — fine, but implicit.
+        # Convert here so the wire format is a deliberate choice rather
+        # than a side effect of the encoder.
+        def _clean(value):
+            if isinstance(value, dt_time):
+                return value.strftime("%H:%M")
+            if isinstance(value, dict):
+                return {k: _clean(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [_clean(v) for v in value]
+            return value
+
+        return {"highs_lows": _clean(asdict(block))}
+
     async def _h_signal_quality(self, _msg: dict) -> dict[str, Any]:
         """Console reception diagnostics — RXCHECK plus the heard-Tx list.
 
@@ -1306,6 +1359,9 @@ class LoggerDaemon:
                 # sniff, and asking the console would cost a serial round
                 # trip to answer a question the daemon already holds.
                 "barometer_cal": CAP_BAROMETER_CAL in caps,
+                # Conditional on has_loop2 in the driver, so a VP1
+                # without LOOP2 correctly reports false.
+                "highs_lows": CAP_HILOWS in caps,
             },
         }
 

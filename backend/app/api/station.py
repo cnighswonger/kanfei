@@ -352,3 +352,33 @@ async def get_barometer_reference(
         "radius_miles": DEFAULT_RADIUS_MILES,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# --------------- Console highs and lows ---------------
+
+
+@router.get("/station/highs-lows")
+async def get_station_highs_lows(_admin=Depends(require_admin)):
+    """The console's own daily/monthly/yearly extremes (HILOWS).
+
+    Read-only.  Worth having alongside Kanfei's computed extremes rather
+    than instead of them: ours come from 10-second polls, the console
+    samples continuously, and a disagreement bounds what our sampling
+    misses.
+
+    Admin-gated like the other station endpoints — it holds the serial
+    lock briefly, which on a single-master port is enough to stall a poll.
+    """
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "highs_lows"}, timeout=25.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
