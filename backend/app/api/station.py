@@ -324,7 +324,11 @@ async def set_barometer_calibration(
             {
                 "cmd": "set_barometer",
                 "bar_thousandths_inhg": int(bar),
-                "elevation_ft": int(elevation),
+                # round(), not int(): the console takes whole feet, and
+                # truncating 265.7 to 265 discards most of a foot the
+                # caller measured.  Callers may hold sub-foot precision
+                # because station_config.elevation does.
+                "elevation_ft": round(float(elevation)),
             },
             timeout=30.0,
         )
@@ -384,7 +388,6 @@ async def get_barometer_reference(
         "radius_miles": DEFAULT_RADIUS_MILES,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
-
 
 # --------------- Destructive console operations ---------------
 #
@@ -510,6 +513,189 @@ async def clear_archive(payload: dict | None = None, _admin=Depends(require_admi
         if result.get("ok"):
             return result["data"]
         raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+# --------------- Console highs and lows ---------------
+
+
+@router.get("/station/highs-lows")
+async def get_station_highs_lows(_admin=Depends(require_admin)):
+    """The console's own daily/monthly/yearly extremes (HILOWS).
+
+    Read-only.  Worth having alongside Kanfei's computed extremes rather
+    than instead of them: ours come from 10-second polls, the console
+    samples continuously, and a disagreement bounds what our sampling
+    misses.
+
+    Admin-gated like the other station endpoints — it holds the serial
+    lock briefly, which on a single-master port is enough to stall a poll.
+    """
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "highs_lows"}, timeout=25.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+# --------------- Vantage temperature/humidity calibration ---------------
+#
+# Distinct from the barometer panel above.  A Vantage adjusts temperature
+# and humidity by per-sensor EEPROM offsets applied through CALED/CALFIX;
+# the barometer is BAR= and lives elsewhere.  Putting a barometer row in
+# this panel would be the terminology trap the barometer handler warns
+# about, so the two are deliberately separate surfaces.
+
+
+@router.get("/station/calibration")
+async def get_station_calibration(_admin=Depends(require_admin)):
+    """Current temperature/humidity offsets, in the console's own units."""
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "read_vantage_cal"}, timeout=25.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/calibration")
+async def set_station_calibration(payload: dict, _admin=Depends(require_admin)):
+    """Set one calibration offset.
+
+    Body: ``{"field": str, "offset": int}`` where field is one of
+    inside_temp, outside_temp, inside_humidity, outside_humidity.
+
+    ``offset`` is in the console's native units — TENTHS of a degree
+    Fahrenheit for temperature, whole percent for humidity.  Getting that
+    wrong is a tenfold error, so the units are returned by the GET rather
+    than left for the caller to assume.
+    """
+    field = payload.get("field")
+    offset = payload.get("offset")
+    if field is None or offset is None:
+        raise HTTPException(
+            status_code=400, detail="field and offset are both required",
+        )
+
+    try:
+        client = get_ipc_client()
+        result = await client.send_command(
+            {"cmd": "write_vantage_cal", "field": str(field), "offset": int(offset)},
+            timeout=40.0,
+        )
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="offset must be an integer")
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/calibration/clear")
+async def clear_station_calibration(_admin=Depends(require_admin)):
+    """CLRCAL — zero every temperature and humidity offset.
+
+    Does not touch barometer calibration, which is a separate mechanism.
+    """
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "clear_vantage_cal"}, timeout=40.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+# --------------- Console location ---------------
+#
+# Vantage only.  The console keeps its own latitude/longitude in EEPROM
+# and uses them for its sunrise/sunset calculation and pressure
+# correction, so a disagreement with Kanfei's configured location
+# produces quietly wrong derived data rather than an obvious failure.
+
+
+@router.get("/station/location")
+async def get_station_location(_admin=Depends(require_admin)):
+    """Read the console's own latitude/longitude."""
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "read_location"}, timeout=20.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/location")
+async def set_station_location(payload: dict, _admin=Depends(require_admin)):
+    """Push Kanfei's configured location to the console.
+
+    Body: ``{"latitude": float, "longitude": float}``.
+
+    One-directional by design.  The console stores signed tenths of a
+    degree (~11 km per step), so copying its value back into Kanfei would
+    discard precision Kanfei actually holds.  The response returns what
+    the console now reads, which is the rounded value rather than what
+    was sent.
+    """
+    lat = payload.get("latitude")
+    lon = payload.get("longitude")
+    if lat is None or lon is None:
+        raise HTTPException(
+            status_code=400,
+            detail="latitude and longitude are both required",
+        )
+
+    try:
+        client = get_ipc_client()
+        result = await client.send_command(
+            {"cmd": "set_location", "latitude": float(lat), "longitude": float(lon)},
+            timeout=30.0,
+        )
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400, detail="latitude and longitude must be numbers",
+        )
     except asyncio.TimeoutError:
         raise HTTPException(
             status_code=504,
