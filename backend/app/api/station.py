@@ -239,14 +239,24 @@ async def get_signal_quality(_admin=Depends(require_admin)):
 # Adding a phrase here is cheaper than rewording every raise site, and
 # unlike a reworded message it cannot be undone by someone rephrasing an
 # error later.
+# Scoped deliberately.  A bare "unknown" was too greedy and matched a
+# STATION fault: "Station did not accept the rain total; console now
+# reads: unknown mm" routed to 400, sending a UI down a fix-your-input
+# path for hardware that had refused a write.  My own new message, in the
+# same PR that widened this list — Codex caught it on #269 R1.
+#
+# The rule these follow: match the phrasing of an ARGUMENT complaint, not
+# a word that could appear anywhere in a sentence about the station.
 _CLIENT_ERROR_PHRASES = (
     "must be",
     "must not be",
-    "cannot be",
-    "required",
+    "cannot be negative",
+    "is required",
+    "are both required",
     "out of range",
-    "unknown",
+    "unknown calibration field",
     "expected one of",
+    "outside the calibration block",
 )
 
 
@@ -418,6 +428,22 @@ async def set_yearly_rain(payload: dict, _admin=Depends(require_admin)):
     using the collector this station reported, and refuses rather than
     guessing if that is unknown.
     """
+    # Typed confirmation, matching the precedent for destructive DB
+    # operations (db_admin.py requires confirm == "PURGE"/"COMPACT").
+    #
+    # The React panel confirms too, but a dialog protects only the users
+    # who go through that panel.  An authenticated script, a browser
+    # console call, a stale client or a future code path would otherwise
+    # reach an irreversible hardware write with no acknowledgement that
+    # the loss was understood.  Codex, #269 R1: the safety mechanism has
+    # to be structural, not cosmetic.
+    if payload.get("confirm") != "OVERWRITE":
+        raise HTTPException(
+            status_code=400,
+            detail="Confirmation required: set confirm to 'OVERWRITE'. This "
+                   "permanently replaces the console's yearly rain total.",
+        )
+
     millimetres = payload.get("millimetres")
     if millimetres is None:
         raise HTTPException(status_code=400, detail="millimetres is required")
@@ -461,12 +487,23 @@ async def get_archive_preflight(_admin=Depends(require_admin)):
 
 
 @router.post("/station/clear-archive")
-async def clear_archive(_admin=Depends(require_admin)):
+async def clear_archive(payload: dict | None = None, _admin=Depends(require_admin)):
     """CLRLOG — wipe the console's archive memory.  IRREVERSIBLE.
 
     Records Kanfei has already downloaded are unaffected; anything the
     console holds that has not been synced is destroyed.
+
+    Requires ``{"confirm": "CLEAR"}`` for the same reason as the rain
+    total: a UI dialog protects only the users who go through the UI.
     """
+    if (payload or {}).get("confirm") != "CLEAR":
+        raise HTTPException(
+            status_code=400,
+            detail="Confirmation required: set confirm to 'CLEAR'. This "
+                   "permanently erases archive records the console has not "
+                   "yet handed over.",
+        )
+
     try:
         client = get_ipc_client()
         result = await client.send_command({"cmd": "clear_archive"}, timeout=40.0)

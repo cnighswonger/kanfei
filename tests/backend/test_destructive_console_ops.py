@@ -190,25 +190,92 @@ class TestArchivePreflight:
         assert result["latest_synced_at"].startswith("2026-08-04T23:30")
 
 
-class TestNoAccidentalExposure:
-    """The dangerous commands must not be reachable by accident."""
+class TestPreflightsDestroyNothing:
+    """A preflight is a READ that a UI may poll.  If one destroyed
+    anything, a panel would wipe data on every render.
 
-    def test_clearing_rain_is_not_bundled_into_a_read(self):
-        """The preflight is a READ.  If it also cleared, a UI that polled
-        it would destroy data on every render."""
-        import inspect
-        from logger_main import LoggerDaemon
+    Asserted by counting calls to fake destructive methods rather than by
+    grepping the source: an earlier version used inspect.getsource, which
+    Codex has rightly called source-text theatre — it would miss
+    destruction through a helper or a renamed method.
+    """
 
-        source = inspect.getsource(LoggerDaemon._h_rain_preflight)
-        assert "set_yearly_rain" not in source
-        assert "clear" not in source.lower().replace("collector", "")
+    @staticmethod
+    def _counting_driver():
+        calls = {"set_rain": 0, "clear_log": 0, "clear_var": 0}
 
-    def test_archive_preflight_does_not_clear(self):
-        import inspect
-        from logger_main import LoggerDaemon
+        async def poll():
+            return SensorSnapshot(rain_yearly=31.2)
 
-        source = inspect.getsource(LoggerDaemon._h_archive_preflight)
-        assert "async_clear_log()" not in source
+        async def set_rain(mm):
+            calls["set_rain"] += 1
+            return True
+
+        async def clear_log():
+            calls["clear_log"] += 1
+            return True
+
+        async def clear_variable(var):
+            calls["clear_var"] += 1
+            return True
+
+        drv = _vantage(
+            poll=poll,
+            async_set_yearly_rain=set_rain,
+            async_clear_log=clear_log,
+            async_clear_variable=clear_variable,
+        )
+        return drv, calls
+
+    @pytest.mark.asyncio
+    async def test_rain_preflight_writes_nothing(self, monkeypatch):
+        drv, calls = self._counting_driver()
+        daemon = _daemon(drv)
+        monkeypatch.setattr(
+            type(daemon), "_last_stored_rain_yearly", lambda self: (29.5, "x"),
+        )
+
+        await daemon._h_rain_preflight({})
+        assert calls == {"set_rain": 0, "clear_log": 0, "clear_var": 0}
+
+    @pytest.mark.asyncio
+    async def test_archive_preflight_writes_nothing(self, monkeypatch):
+        class _Q:
+            def count(self): return 1
+            def order_by(self, *a): return self
+            def first(self): return (datetime(2026, 8, 4, 12, 0),)
+
+        class _DB:
+            def query(self, *a): return _Q()
+            def close(self): pass
+
+        import logger_main
+        monkeypatch.setattr(logger_main, "SessionLocal", lambda: _DB())
+
+        drv, calls = self._counting_driver()
+        await _daemon(drv)._h_archive_preflight({})
+        assert calls == {"set_rain": 0, "clear_log": 0, "clear_var": 0}
+
+    @pytest.mark.asyncio
+    async def test_polling_a_preflight_repeatedly_stays_harmless(self, monkeypatch):
+        """The realistic failure: a panel that refetches on an interval."""
+        drv, calls = self._counting_driver()
+        daemon = _daemon(drv)
+        monkeypatch.setattr(
+            type(daemon), "_last_stored_rain_yearly", lambda self: (29.5, "x"),
+        )
+
+        for _ in range(5):
+            await daemon._h_rain_preflight({})
+        assert calls["set_rain"] == 0
+
+    @pytest.mark.asyncio
+    async def test_the_write_path_does_reach_the_driver(self):
+        """The counter would also read zero if the fakes were never wired
+        up, so prove the instrument works."""
+        drv, calls = self._counting_driver()
+        await _daemon(drv)._h_set_yearly_rain({"millimetres": 0})
+        assert calls["set_rain"] == 1
 
 
 class TestErrorRoutingIsNotWhackAMole:
@@ -296,3 +363,84 @@ class TestErrorRoutingIsNotWhackAMole:
             "driver ValueErrors that would surface as a station fault "
             f"rather than a bad request: {misrouted}"
         )
+
+
+class TestServerSideConfirmation:
+    """The dialog protects only users who go through the UI.
+
+    An authenticated script, a browser-console call, a stale client or a
+    future code path can reach these endpoints directly — so the refusal
+    has to live on the server, matching the precedent for destructive DB
+    operations (db_admin requires confirm == "PURGE"/"COMPACT").
+    Codex, #269 R1: the safety mechanism must be structural.
+    """
+
+    @pytest.mark.asyncio
+    async def test_yearly_rain_refuses_without_the_token(self):
+        from fastapi import HTTPException
+        from app.api.station import set_yearly_rain
+
+        with pytest.raises(HTTPException) as excinfo:
+            await set_yearly_rain({"millimetres": 0}, _admin=None)
+        assert excinfo.value.status_code == 400
+        # The message has to name the token, or a caller cannot comply.
+        assert "OVERWRITE" in excinfo.value.detail
+
+    @pytest.mark.asyncio
+    async def test_yearly_rain_refuses_a_wrong_token(self):
+        from fastapi import HTTPException
+        from app.api.station import set_yearly_rain
+
+        with pytest.raises(HTTPException) as excinfo:
+            await set_yearly_rain(
+                {"millimetres": 0, "confirm": "yes"}, _admin=None,
+            )
+        assert excinfo.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_clear_archive_refuses_without_the_token(self):
+        from fastapi import HTTPException
+        from app.api.station import clear_archive
+
+        for payload in (None, {}, {"confirm": "CLEAR_ARCHIVE"}):
+            with pytest.raises(HTTPException) as excinfo:
+                await clear_archive(payload, _admin=None)
+            assert excinfo.value.status_code == 400
+            assert "CLEAR" in excinfo.value.detail
+
+    def test_the_client_sends_the_tokens(self):
+        """The server refusing is only half of it — if the shipped client
+        does not send the token, the panel is broken rather than safe."""
+        from pathlib import Path
+
+        client = (
+            Path(__file__).resolve().parents[2] / "frontend/src/api/client.ts"
+        ).read_text()
+        assert 'confirm: "OVERWRITE"' in client
+        assert 'confirm: "CLEAR"' in client
+
+
+class TestUnknownIsNotTooGreedy:
+    """The phrase list must not swallow station faults.
+
+    A bare "unknown" in `_CLIENT_ERROR_PHRASES` matched
+    "Station did not accept the rain total; console now reads: unknown mm"
+    — a message this very PR introduced — and routed a refused hardware
+    write to 400.  Codex found it on #269 R1.  The rule the list follows
+    now: match the phrasing of an ARGUMENT complaint, not a word that can
+    appear anywhere in a sentence about the station.
+    """
+
+    @pytest.mark.parametrize("message", [
+        "Station did not accept the rain total; console now reads: unknown mm",
+        "Station returned an unknown response",
+        "Station did not accept CLRLOG",
+        "Station reported an unknown model code",
+    ])
+    def test_station_faults_mentioning_unknown_stay_503(self, message):
+        assert _cal_error(message).status_code == 503
+
+    def test_the_scoped_calibration_phrase_still_works(self):
+        assert _cal_error(
+            "unknown calibration field 'barometer'"
+        ).status_code == 400
