@@ -117,6 +117,18 @@ CAP_SAMPLE_PERIOD_RW = "sample_period_rw"     # Can read/write sample period
 # and speaks the legacy command set (#247).
 CAP_BAROMETER_CAL = "barometer_cal"           # Can calibrate barometer via BAR=
 
+# Station latitude/longitude held in console EEPROM.
+#
+# Distinct from Kanfei's own configured location: the console keeps its
+# own copy and uses it for its sunrise/sunset calculation and pressure
+# correction, so the two disagreeing produces quietly wrong derived data
+# rather than an obvious failure.
+#
+# Vantage only.  The value is stored as signed tenths of a degree, which
+# is ~11 km per step — coarser than anything Kanfei stores, so the two
+# can never be compared for exact equality.
+CAP_LOCATION_RW = "location_rw"               # Can read/write console lat/lon
+
 
 # --------------- Abstract base class ---------------
 

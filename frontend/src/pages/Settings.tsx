@@ -7,6 +7,7 @@ import { useWeatherBackground } from "../context/WeatherBackgroundContext.tsx";
 import { themes } from "../themes/index.ts";
 import ThemeEditor from "../components/settings/ThemeEditor.tsx";
 import BarometerCalibration from "../components/settings/BarometerCalibration.tsx";
+import ConsoleLocation from "../components/settings/ConsoleLocation.tsx";
 import { ALL_SCENES, SCENE_LABELS, SCENE_GRADIENTS } from "../components/WeatherBackground.tsx";
 import { API_BASE } from "../utils/constants.ts";
 import { getTimezone, setTimezone as storeTimezone, resolveTimezone, getTimezoneOptions } from "../utils/timezone.ts";
@@ -2812,6 +2813,13 @@ export default function Settings() {
             if (partial.longitude !== undefined) updateField("longitude", partial.longitude);
             if (partial.elevation !== undefined) updateField("elevation", partial.elevation);
           }}
+        />
+        {/* The console keeps its own copy of these coordinates and uses
+            them for its sunrise/sunset and pressure correction (#261). */}
+        <ConsoleLocation
+          supported={wlConfig?.supported?.location ?? false}
+          latitude={Number(val("latitude")) || 0}
+          longitude={Number(val("longitude")) || 0}
         />
       </div>
       </>)}

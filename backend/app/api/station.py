@@ -356,3 +356,71 @@ async def get_barometer_reference(
         "radius_miles": DEFAULT_RADIUS_MILES,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# --------------- Console location ---------------
+#
+# Vantage only.  The console keeps its own latitude/longitude in EEPROM
+# and uses them for its sunrise/sunset calculation and pressure
+# correction, so a disagreement with Kanfei's configured location
+# produces quietly wrong derived data rather than an obvious failure.
+
+
+@router.get("/station/location")
+async def get_station_location(_admin=Depends(require_admin)):
+    """Read the console's own latitude/longitude."""
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "read_location"}, timeout=20.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/location")
+async def set_station_location(payload: dict, _admin=Depends(require_admin)):
+    """Push Kanfei's configured location to the console.
+
+    Body: ``{"latitude": float, "longitude": float}``.
+
+    One-directional by design.  The console stores signed tenths of a
+    degree (~11 km per step), so copying its value back into Kanfei would
+    discard precision Kanfei actually holds.  The response returns what
+    the console now reads, which is the rounded value rather than what
+    was sent.
+    """
+    lat = payload.get("latitude")
+    lon = payload.get("longitude")
+    if lat is None or lon is None:
+        raise HTTPException(
+            status_code=400,
+            detail="latitude and longitude are both required",
+        )
+
+    try:
+        client = get_ipc_client()
+        result = await client.send_command(
+            {"cmd": "set_location", "latitude": float(lat), "longitude": float(lon)},
+            timeout=30.0,
+        )
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400, detail="latitude and longitude must be numbers",
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
