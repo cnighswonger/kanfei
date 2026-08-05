@@ -15,7 +15,8 @@ import logging
 import os
 import signal
 import sys
-from datetime import datetime, timedelta, timezone
+from dataclasses import asdict
+from datetime import datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
@@ -33,6 +34,7 @@ from app.protocol.base import (
     CAP_SAMPLE_PERIOD_RW,
     CAP_CALIBRATION_RW,
     CAP_BAROMETER_CAL,
+    CAP_HILOWS,
     CAP_LOCATION_RW,
 )
 from app.protocol.link_driver import LinkDriver, CalibrationOffsets, _rain_register_to_mm
@@ -71,6 +73,28 @@ def _driver_model_code(driver: StationDriver) -> int:
     if isinstance(value, int):
         return value
     return STATION_TYPE_UNKNOWN
+
+
+def _supports_hilows(driver: StationDriver | None) -> bool:
+    """Whether this driver can actually answer a HILOWS request.
+
+    Both halves are load-bearing, and one predicate serves both the
+    capability report and the command gate so they cannot drift: a
+    `supported` map that says yes while the handler says 501 renders the
+    panel and then makes it vanish.
+
+    LinkDriver has declared CAP_HILOWS since the initial commit and
+    implements no hilows() at all, so the capability alone would reach an
+    AttributeError.  The method alone would miss a VP1 whose CAP_HILOWS is
+    correctly absent because it has no LOOP2.
+    """
+    if driver is None or not driver.connected:
+        return False
+    try:
+        declared = set(driver.capabilities)
+    except Exception:          # pragma: no cover — defensive
+        return False
+    return CAP_HILOWS in declared and hasattr(driver, "async_hilows")
 
 
 def _create_driver(driver_type: str, config: dict) -> StationDriver:
@@ -935,6 +959,7 @@ class LoggerDaemon:
         h(ipc.CMD_BAROMETER_CAL, self._h_barometer_cal)
         h(ipc.CMD_SET_BAROMETER, self._h_set_barometer)
         h(ipc.CMD_SIGNAL_QUALITY, self._h_signal_quality)
+        h(ipc.CMD_HIGHS_LOWS, self._h_highs_lows)
         h(ipc.CMD_READ_VANTAGE_CAL, self._h_read_vantage_cal)
         h(ipc.CMD_WRITE_VANTAGE_CAL, self._h_write_vantage_cal)
         h(ipc.CMD_CLEAR_VANTAGE_CAL, self._h_clear_vantage_cal)
@@ -1167,6 +1192,46 @@ class LoggerDaemon:
 
         return {"success": ok, "before": _snap(before), "after": _snap(after)}
 
+    async def _h_highs_lows(self, _msg: dict) -> dict[str, Any]:
+        """The console's own daily/monthly/yearly extremes (HILOWS).
+
+        Worth having alongside Kanfei's computed extremes rather than
+        instead of them.  Ours come from 10-second polls; the console
+        samples continuously, so it catches a gust or a spike that fell
+        between our polls.  When the two disagree, the disagreement
+        bounds what our sampling misses — which is the same class of
+        problem as #230, where a poisoned daily maximum survived all day
+        before anyone noticed.
+
+        Read-only.  Clearing the console's highs and lows is a separate,
+        destructive operation and deliberately not reachable from here.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if not _supports_hilows(drv):
+            raise RuntimeError(
+                f"{drv.station_name} does not support highs and lows"
+            )
+
+        block = await drv.async_hilows()
+        if block is None:
+            raise RuntimeError("Station did not return highs and lows")
+
+        # `time` is not JSON-serialisable and the IPC layer encodes with
+        # default=str, which would give "14:35:00" — fine, but implicit.
+        # Convert here so the wire format is a deliberate choice rather
+        # than a side effect of the encoder.
+        def _clean(value):
+            if isinstance(value, dt_time):
+                return value.strftime("%H:%M")
+            if isinstance(value, dict):
+                return {k: _clean(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [_clean(v) for v in value]
+            return value
+
+        return {"highs_lows": _clean(asdict(block))}
     # ---- Vantage temperature/humidity calibration ----
 
     # Maps the wire field name to its EEPROM address.  Deliberately a
@@ -1497,6 +1562,7 @@ class LoggerDaemon:
                 # sniff, and asking the console would cost a serial round
                 # trip to answer a question the daemon already holds.
                 "barometer_cal": CAP_BAROMETER_CAL in caps,
+                "highs_lows": _supports_hilows(self.driver),
                 # Per-sensor offsets via CALED/CALFIX.  Distinct from
                 # "calibration" above, which is the legacy five-field
                 # block and is false on a Vantage, and from

@@ -338,6 +338,118 @@ test.describe('Barometer calibration panel', () => {
     expect(getsAfterPost).toBeGreaterThan(0);
   });
 });
+test.describe('Console highs and lows panel', () => {
+  test.beforeEach(async ({ page }) => {
+    await injectAuthCookie(page);
+  });
+
+  async function stubSupport(page: import('@playwright/test').Page, highsLows: boolean) {
+    await page.route('**/api/weatherlink/config', async (route) => {
+      await route.fulfill({
+        json: {
+          archive_period: 5, sample_period: 5, calibration: null,
+          supported: {
+            archive_period: true, sample_period: true, calibration: false,
+            barometer_cal: false, highs_lows: highsLows,
+          },
+        },
+      });
+    });
+  }
+
+  /** SI values, as the HILOWS endpoint returns them. */
+  function siBlock() {
+    const hiLo = (low: number | null, high: number | null) => ({
+      low, high, time_low: '05:12', time_high: '14:35',
+    });
+    const hiOnly = (value: number | null) => ({ value, time: '14:35' });
+    const period = (low: number | null, high: number | null) => ({
+      day: hiLo(low, high), month: hiLo(null, null), year: hiLo(null, null),
+    });
+    const hiPeriod = (value: number | null) => ({
+      day: hiOnly(value), month: hiOnly(null), year: hiOnly(null),
+    });
+    return {
+      highs_lows: {
+        barometer: period(1010.0, 1018.5),
+        wind_speed: hiPeriod(8.9),          // 8.9 m/s ≈ 19.9 mph
+        inside_temp: period(20.0, 24.0),
+        inside_humidity: period(40, 55),
+        outside_temp: period(18.2, 33.2),   // 33.2 °C = 91.8 °F
+        dew_point: period(12.0, 22.0),
+        wind_chill: hiPeriod(null),
+        heat_index: hiPeriod(38.0),
+        thsw_index: hiPeriod(null),
+        solar_radiation: hiPeriod(null),
+        uv_index: hiPeriod(null),
+        rain_rate: hiPeriod(0),
+        rain_rate_hour_hi: null,
+        humidities: [period(41, 84)],
+      },
+    };
+  }
+
+  test('absent when the station cannot report highs and lows', async ({ page }) => {
+    // A VP1 without LOOP2 genuinely cannot answer HILOWS, and the
+    // dashboard still shows Kanfei's own extremes, so there is nothing
+    // for the user to act on.
+    await stubSupport(page, false);
+    await page.goto('/settings');
+    await expect(page.getByText('Console Highs', { exact: false })).toHaveCount(0);
+  });
+
+  test('converts the console SI values into Kanfei units', async ({ page }) => {
+    // The endpoints disagree: HILOWS is SI, daily_extremes has already
+    // been converted for display. Showing 33.2 beside 91.8 for the same
+    // temperature would be worse than showing nothing.
+    await stubSupport(page, true);
+    await page.route('**/api/station/highs-lows', async (route) => {
+      await route.fulfill({ json: siBlock() });
+    });
+    await page.route('**/api/current', async (route) => {
+      const body = await (await route.fetch()).json();
+      body.daily_extremes = {
+        outside_temp_hi: { value: 91.8, unit: 'F', at: null },
+        outside_temp_lo: { value: 64.8, unit: 'F', at: null },
+        wind_speed_hi: { value: 19.9, unit: 'mph', at: null },
+        barometer_hi: { value: 30.08, unit: 'inHg', at: null },
+        barometer_lo: { value: 29.83, unit: 'inHg', at: null },
+        humidity_hi: { value: 84, unit: '%', at: null },
+        humidity_lo: { value: 41, unit: '%', at: null },
+      };
+      await route.fulfill({ json: body });
+    });
+    await page.goto('/settings');
+
+    const row = page.locator('tr', { hasText: 'Outside temperature' });
+    // 33.2 °C must render as 91.8 F, matching Kanfei's own figure.
+    await expect(row).toContainText('91.8');
+    await expect(row).not.toContainText('33.2');
+    await expect(row).toContainText('14:35');
+
+    // 8.9 m/s -> 19.9 mph, not 8.9.
+    const wind = page.locator('tr', { hasText: 'Wind speed' });
+    await expect(wind).toContainText('19.9');
+  });
+
+  test('renders the console column alone when ours is unavailable', async ({ page }) => {
+    await stubSupport(page, true);
+    await page.route('**/api/station/highs-lows', async (route) => {
+      await route.fulfill({ json: siBlock() });
+    });
+    await page.route('**/api/current', async (route) => {
+      await route.fulfill({ status: 503, json: { detail: 'down' } });
+    });
+    await page.goto('/settings');
+
+    await expect(
+      page.getByText("Kanfei's own extremes could not be loaded", { exact: false }),
+    ).toBeVisible();
+    // The console figure still converts, using the fallback unit.
+    await expect(page.locator('tr', { hasText: 'Outside temperature' })).toContainText('91.8');
+  });
+});
+
 test.describe('Vantage sensor calibration panel', () => {
   test.beforeEach(async ({ page }) => {
     await injectAuthCookie(page);
