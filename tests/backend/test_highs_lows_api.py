@@ -83,7 +83,14 @@ class TestCapability:
         assert not hasattr(drv, "async_hilows")
 
     @pytest.mark.asyncio
-    async def test_legacy_is_refused_despite_advertising_the_capability(self):
+    async def test_legacy_is_refused_with_a_501(self):
+        """Named for what it now checks.
+
+        It used to be "refused despite advertising the capability", which
+        described the state before #270 withdrew the false flag.  The
+        refusal still matters — it is the handler half of the gate — but
+        the driver no longer advertises anything to be refused despite.
+        """
         drv = LinkDriver("/dev/null", 2400)
         drv.serial = FakeSerial()
         drv._connected = True
