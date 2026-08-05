@@ -31,6 +31,7 @@ from ..base import (
     CAP_RAIN_RESET,
     CAP_HILOWS,
     CAP_BAROMETER_CAL,
+    CAP_LOCATION_RW,
 )
 from ..serial_port import SerialPort
 from ..crc import crc_validate, crc_calculate
@@ -110,6 +111,7 @@ from .eeprom import (
     EEAddr,
     SETUP_BITS,
     CAL_INSIDE_TEMP,
+    CAL_INSIDE_TEMP_COMP,
     CAL_OUTSIDE_TEMP,
     CAL_INSIDE_HUM,
     CAL_OUTSIDE_HUM,
@@ -206,6 +208,10 @@ class VantageDriver(StationDriver):
             # on a Vantage.  Unconditional: BAR= and BARDATA predate
             # LOOP2, so even a VP1 without has_loop2 can calibrate.
             CAP_BAROMETER_CAL,
+            # Console lat/lon in EEPROM (§XIV).  set_location() issues
+            # the NEWSETUP the manual requires for these two fields
+            # specifically, without which the write may not take.
+            CAP_LOCATION_RW,
         }
         if self.hw_config.has_loop2:
             caps.add(CAP_HILOWS)
@@ -628,16 +634,22 @@ class VantageDriver(StationDriver):
         """
         if field.n_bytes != 1:
             raise ValueError(
-                f"write_calibration expects a 1-byte field, "
+                f"calibration field must be a single byte, "
                 f"got {field.n_bytes} at 0x{field.address:02X}"
             )
         if not CAL_BLOCK_START <= field.address <= CAL_BLOCK_END:
             raise ValueError(
-                f"0x{field.address:02X} is outside the calibration block "
+                f"calibration address must be inside the block: "
+                f"0x{field.address:02X} is outside "
                 f"(0x{CAL_BLOCK_START:02X}..0x{CAL_BLOCK_END:02X})"
             )
         if not -128 <= offset <= 127:
-            raise ValueError(f"calibration offset {offset} out of range")
+            # Wording matters: api/station.py::_cal_error routes on
+            # substrings, and "must be" is what marks a rejected
+            # argument as a 400 rather than a 503 server fault.
+            raise ValueError(
+                f"calibration offset must be -128..127, got {offset}"
+            )
 
         with self._io_lock:
             # 1. current calibrated sensor values
@@ -685,6 +697,24 @@ class VantageDriver(StationDriver):
                 )
                 return False
 
+            # 3a. Inside temperature alone carries a validation byte:
+            # TEMP_IN_COMP is "1's compliment of TEMP_IN_CAL to validate
+            # calibration data" (serial ref v2.6.1, EEPROM table).  Without
+            # it the console has an offset it will not honour — the write
+            # ACKs, the value reads back, and the temperature does not
+            # move.  That is the same silent-success shape as #209, where
+            # writes to the wrong humidity address appeared to work.
+            if field.address == CAL_INSIDE_TEMP.address:
+                comp = (~offset) & 0xFF
+                if not self._eeprom_write(
+                    CAL_INSIDE_TEMP_COMP.address, bytes([comp])
+                ):
+                    logger.error(
+                        "write_calibration: TEMP_IN_COMP write failed; the "
+                        "inside-temp offset will not be honoured"
+                    )
+                    return False
+
             # 4. push un-calibrated values so the console re-applies cal
             if not self._calfix(bytes(block)):
                 logger.error("write_calibration: CALFIX failed")
@@ -695,6 +725,45 @@ class VantageDriver(StationDriver):
                 field.address, offset,
             )
             return True
+
+    # The four offsets a user can meaningfully set on a station with no
+    # extra sensors.  Extra/soil/leaf temps and the extra humidities exist
+    # in the block but are inert without the hardware fitted, and showing
+    # seven empty humidity rows would be worse than showing none.
+    CALIBRATION_FIELDS = (
+        ("inside_temp", CAL_INSIDE_TEMP),
+        ("outside_temp", CAL_OUTSIDE_TEMP),
+        ("inside_humidity", CAL_INSIDE_HUM),
+        ("outside_humidity", CAL_OUTSIDE_HUM),
+    )
+
+    def read_calibration(self) -> Optional[dict[str, int]]:
+        """Current temperature/humidity calibration offsets.
+
+        Values are in the console's native units — tenths of a degree
+        Fahrenheit for temperature, whole percent for humidity — and are
+        signed: the offset is added to the raw reading.
+
+        Returns None only if the EEPROM cannot be read at all.  An
+        individual field that reads back empty is omitted rather than
+        reported as zero, because zero is a legitimate calibration and
+        "no offset" and "could not read" must not look alike.
+        """
+        offsets: dict[str, int] = {}
+        with self._io_lock:
+            for name, field in self.CALIBRATION_FIELDS:
+                raw = self._eeprom_read(field.address, 1)
+                if not raw:
+                    logger.warning(
+                        "read_calibration: 0x%02X (%s) unreadable",
+                        field.address, name,
+                    )
+                    continue
+                offsets[name] = struct.unpack("b", raw)[0]
+        return offsets or None
+
+    async def async_read_calibration(self) -> Optional[dict[str, int]]:
+        return await self._run_in_executor(self.read_calibration)
 
     def clear_calibration(self) -> bool:
         """CLRCAL — zero every temperature and humidity calibration offset.
@@ -1516,7 +1585,18 @@ class VantageDriver(StationDriver):
         """Write station latitude/longitude to EEPROM (§XIV, 0x0B / 0x0D).
 
         Both are stored as signed 16-bit TENTHS of a degree, so precision
-        is limited to 0.1 deg (~7 km) by the format, not by this code.
+        is limited by the format, not by this code.  A 0.1 deg step is
+        11.1 km of latitude and 11.1 km of longitude at the equator,
+        narrowing with the cosine of latitude (9.1 km at 35 deg); the
+        worst-case rounding error is half that.  Callers comparing this
+        against a more precise source must do so at this resolution or a
+        correctly configured station reports a permanent disagreement.
+
+        Rounding here is Python's — banker's rounding, so 35.85 and 35.75
+        both store as 358 tenths.  A caller re-deriving the expected value
+        in another language may break the tie the other way; compare
+        distance rather than replicating this (#265).
+
         Negative latitude is southern hemisphere, negative longitude is
         western.
 

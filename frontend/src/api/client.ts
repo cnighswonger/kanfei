@@ -559,4 +559,107 @@ export function fetchBarometerReference(): Promise<
   return request("/api/station/barometer-reference");
 }
 
+// --- Destructive console operations ---
+
+export function fetchRainPreflight(): Promise<import("./types.ts").RainPreflight> {
+  return request("/api/station/rain-preflight");
+}
+
+/**
+ * PUTRAIN — overwrites the console's yearly total. Irreversible.
+ *
+ * The `confirm` token is required by the server, not decoration: a UI
+ * dialog protects only users who go through the UI, so the endpoint
+ * demands proof the caller meant it.
+ */
+export function setYearlyRain(
+  millimetres: number,
+): Promise<import("./types.ts").SetYearlyRainResult> {
+  return request("/api/station/yearly-rain", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ millimetres, confirm: "OVERWRITE" }),
+  });
+}
+
+export function fetchArchivePreflight(): Promise<
+  import("./types.ts").ArchivePreflight
+> {
+  return request("/api/station/archive-preflight");
+}
+
+/** CLRLOG — wipes the console's archive memory. Irreversible. */
+export function clearConsoleArchive(): Promise<{ success: boolean }> {
+  return request("/api/station/clear-archive", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm: "CLEAR" }),
+  });
+}
+
+// --- Console highs and lows (Vantage) ---
+
+export function fetchConsoleHighsLows(): Promise<
+  import("./types.ts").ConsoleHighsLowsResponse
+> {
+  return request("/api/station/highs-lows");
+}
+
+// --- Vantage sensor calibration ---
+
+export function fetchVantageCalibration(): Promise<
+  import("./types.ts").VantageCalibrationState
+> {
+  return request("/api/station/calibration");
+}
+
+/**
+ * Set one calibration offset.
+ *
+ * `offset` is in the console's native units: TENTHS of a degree
+ * Fahrenheit for temperature, whole percent for humidity.
+ */
+export function setVantageCalibration(
+  field: import("./types.ts").VantageCalibrationField,
+  offset: number,
+): Promise<import("./types.ts").VantageCalibrationResult> {
+  return request("/api/station/calibration", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ field, offset }),
+  });
+}
+
+/** CLRCAL — zeroes every temperature and humidity offset. Not the barometer. */
+export function clearVantageCalibration(): Promise<
+  import("./types.ts").VantageCalibrationResult
+> {
+  return request("/api/station/calibration/clear", { method: "POST" });
+}
+
+// --- Console location (Vantage) ---
+
+export function fetchConsoleLocation(): Promise<
+  import("./types.ts").ConsoleLocation
+> {
+  return request("/api/station/location");
+}
+
+/**
+ * Push Kanfei's location to the console.
+ *
+ * One-directional by design: the console stores tenths of a degree, so
+ * copying its value back would discard precision Kanfei holds.
+ */
+export function setConsoleLocation(
+  latitude: number,
+  longitude: number,
+): Promise<import("./types.ts").ConsoleLocationResult> {
+  return request("/api/station/location", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ latitude, longitude }),
+  });
+}
+
 export { ApiError };

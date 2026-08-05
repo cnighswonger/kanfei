@@ -229,6 +229,37 @@ async def get_signal_quality(_admin=Depends(require_admin)):
 # and are excluded by CAP_BAROMETER_CAL, not by a type check here.
 
 
+# Phrases that mark a message as the caller's fault rather than the
+# station's.  This list exists because matching on "must be" alone was
+# wrong three separate times: "out of range" (#267), "unknown calibration
+# field" (#267 again), and "cannot be negative" (#264) all described bad
+# arguments and all routed to 503 — telling the user their hardware had a
+# transient fault when they had simply sent something invalid.
+#
+# Adding a phrase here is cheaper than rewording every raise site, and
+# unlike a reworded message it cannot be undone by someone rephrasing an
+# error later.
+# Scoped deliberately.  A bare "unknown" was too greedy and matched a
+# STATION fault: "Station did not accept the rain total; console now
+# reads: unknown mm" routed to 400, sending a UI down a fix-your-input
+# path for hardware that had refused a write.  My own new message, in the
+# same PR that widened this list — Codex caught it on #269 R1.
+#
+# The rule these follow: match the phrasing of an ARGUMENT complaint, not
+# a word that could appear anywhere in a sentence about the station.
+_CLIENT_ERROR_PHRASES = (
+    "must be",
+    "must not be",
+    "cannot be negative",
+    "is required",
+    "are both required",
+    "out of range",
+    "unknown calibration field",
+    "expected one of",
+    "outside the calibration block",
+)
+
+
 def _cal_error(detail: str) -> HTTPException:
     """Map an IPC error string to a status code.
 
@@ -238,7 +269,8 @@ def _cal_error(detail: str) -> HTTPException:
     """
     if "does not support" in detail:
         return HTTPException(status_code=501, detail=detail)
-    if "must be" in detail or "required" in detail:
+    lowered = detail.lower()
+    if any(phrase in lowered for phrase in _CLIENT_ERROR_PHRASES):
         return HTTPException(status_code=400, detail=detail)
     return HTTPException(status_code=503, detail=detail)
 
@@ -292,7 +324,11 @@ async def set_barometer_calibration(
             {
                 "cmd": "set_barometer",
                 "bar_thousandths_inhg": int(bar),
-                "elevation_ft": int(elevation),
+                # round(), not int(): the console takes whole feet, and
+                # truncating 265.7 to 265 discards most of a foot the
+                # caller measured.  Callers may hold sub-foot precision
+                # because station_config.elevation does.
+                "elevation_ft": round(float(elevation)),
             },
             timeout=30.0,
         )
@@ -352,3 +388,318 @@ async def get_barometer_reference(
         "radius_miles": DEFAULT_RADIUS_MILES,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
+
+# --------------- Destructive console operations ---------------
+#
+# PUTRAIN and CLRLOG both destroy data on the console.  Each is paired
+# with a preflight endpoint that reports what the operation would cost,
+# so the UI can show the price before the user pays it rather than
+# offering to undo afterwards.
+
+
+@router.get("/station/rain-preflight")
+async def get_rain_preflight(_admin=Depends(require_admin)):
+    """Console yearly rain vs the last total Kanfei recorded.
+
+    The difference is rain that fell since the last poll — exactly what
+    restoring the stored value would discard.
+    """
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "rain_preflight"}, timeout=25.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/yearly-rain")
+async def set_yearly_rain(payload: dict, _admin=Depends(require_admin)):
+    """PUTRAIN — overwrite the console's yearly rain total.  IRREVERSIBLE.
+
+    Body: ``{"millimetres": float}``.
+
+    Millimetres, never clicks: a click is 0.01in, 0.2 mm or 0.1 mm
+    depending on the collector fitted, so the same integer means three
+    different totals on three different stations.  The driver converts
+    using the collector this station reported, and refuses rather than
+    guessing if that is unknown.
+    """
+    # Typed confirmation, matching the precedent for destructive DB
+    # operations (db_admin.py requires confirm == "PURGE"/"COMPACT").
+    #
+    # The React panel confirms too, but a dialog protects only the users
+    # who go through that panel.  An authenticated script, a browser
+    # console call, a stale client or a future code path would otherwise
+    # reach an irreversible hardware write with no acknowledgement that
+    # the loss was understood.  Codex, #269 R1: the safety mechanism has
+    # to be structural, not cosmetic.
+    if payload.get("confirm") != "OVERWRITE":
+        raise HTTPException(
+            status_code=400,
+            detail="Confirmation required: set confirm to 'OVERWRITE'. This "
+                   "permanently replaces the console's yearly rain total.",
+        )
+
+    millimetres = payload.get("millimetres")
+    if millimetres is None:
+        raise HTTPException(status_code=400, detail="millimetres is required")
+
+    try:
+        client = get_ipc_client()
+        result = await client.send_command(
+            {"cmd": "set_yearly_rain", "millimetres": float(millimetres)},
+            timeout=40.0,
+        )
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="millimetres must be a number")
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.get("/station/archive-preflight")
+async def get_archive_preflight(_admin=Depends(require_admin)):
+    """What clearing the console's archive memory would cost."""
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "archive_preflight"}, timeout=25.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/clear-archive")
+async def clear_archive(payload: dict | None = None, _admin=Depends(require_admin)):
+    """CLRLOG — wipe the console's archive memory.  IRREVERSIBLE.
+
+    Records Kanfei has already downloaded are unaffected; anything the
+    console holds that has not been synced is destroyed.
+
+    Requires ``{"confirm": "CLEAR"}`` for the same reason as the rain
+    total: a UI dialog protects only the users who go through the UI.
+    """
+    if (payload or {}).get("confirm") != "CLEAR":
+        raise HTTPException(
+            status_code=400,
+            detail="Confirmation required: set confirm to 'CLEAR'. This "
+                   "permanently erases archive records the console has not "
+                   "yet handed over.",
+        )
+
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "clear_archive"}, timeout=40.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+# --------------- Console highs and lows ---------------
+
+
+@router.get("/station/highs-lows")
+async def get_station_highs_lows(_admin=Depends(require_admin)):
+    """The console's own daily/monthly/yearly extremes (HILOWS).
+
+    Read-only.  Worth having alongside Kanfei's computed extremes rather
+    than instead of them: ours come from 10-second polls, the console
+    samples continuously, and a disagreement bounds what our sampling
+    misses.
+
+    Admin-gated like the other station endpoints — it holds the serial
+    lock briefly, which on a single-master port is enough to stall a poll.
+    """
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "highs_lows"}, timeout=25.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+# --------------- Vantage temperature/humidity calibration ---------------
+#
+# Distinct from the barometer panel above.  A Vantage adjusts temperature
+# and humidity by per-sensor EEPROM offsets applied through CALED/CALFIX;
+# the barometer is BAR= and lives elsewhere.  Putting a barometer row in
+# this panel would be the terminology trap the barometer handler warns
+# about, so the two are deliberately separate surfaces.
+
+
+@router.get("/station/calibration")
+async def get_station_calibration(_admin=Depends(require_admin)):
+    """Current temperature/humidity offsets, in the console's own units."""
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "read_vantage_cal"}, timeout=25.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/calibration")
+async def set_station_calibration(payload: dict, _admin=Depends(require_admin)):
+    """Set one calibration offset.
+
+    Body: ``{"field": str, "offset": int}`` where field is one of
+    inside_temp, outside_temp, inside_humidity, outside_humidity.
+
+    ``offset`` is in the console's native units — TENTHS of a degree
+    Fahrenheit for temperature, whole percent for humidity.  Getting that
+    wrong is a tenfold error, so the units are returned by the GET rather
+    than left for the caller to assume.
+    """
+    field = payload.get("field")
+    offset = payload.get("offset")
+    if field is None or offset is None:
+        raise HTTPException(
+            status_code=400, detail="field and offset are both required",
+        )
+
+    try:
+        client = get_ipc_client()
+        result = await client.send_command(
+            {"cmd": "write_vantage_cal", "field": str(field), "offset": int(offset)},
+            timeout=40.0,
+        )
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="offset must be an integer")
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/calibration/clear")
+async def clear_station_calibration(_admin=Depends(require_admin)):
+    """CLRCAL — zero every temperature and humidity offset.
+
+    Does not touch barometer calibration, which is a separate mechanism.
+    """
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "clear_vantage_cal"}, timeout=40.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+# --------------- Console location ---------------
+#
+# Vantage only.  The console keeps its own latitude/longitude in EEPROM
+# and uses them for its sunrise/sunset calculation and pressure
+# correction, so a disagreement with Kanfei's configured location
+# produces quietly wrong derived data rather than an obvious failure.
+
+
+@router.get("/station/location")
+async def get_station_location(_admin=Depends(require_admin)):
+    """Read the console's own latitude/longitude."""
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "read_location"}, timeout=20.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/location")
+async def set_station_location(payload: dict, _admin=Depends(require_admin)):
+    """Push Kanfei's configured location to the console.
+
+    Body: ``{"latitude": float, "longitude": float}``.
+
+    One-directional by design.  The console stores signed tenths of a
+    degree (~11 km per step), so copying its value back into Kanfei would
+    discard precision Kanfei actually holds.  The response returns what
+    the console now reads, which is the rounded value rather than what
+    was sent.
+    """
+    lat = payload.get("latitude")
+    lon = payload.get("longitude")
+    if lat is None or lon is None:
+        raise HTTPException(
+            status_code=400,
+            detail="latitude and longitude are both required",
+        )
+
+    try:
+        client = get_ipc_client()
+        result = await client.send_command(
+            {"cmd": "set_location", "latitude": float(lat), "longitude": float(lon)},
+            timeout=30.0,
+        )
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400, detail="latitude and longitude must be numbers",
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")

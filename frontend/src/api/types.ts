@@ -622,6 +622,154 @@ export interface MetarReferenceResponse {
   fetched_at: string;
 }
 
+// --- Destructive console operations ---
+
+/**
+ * What overwriting the yearly rain total would cost.
+ *
+ * `difference_mm` is the data at risk: rain the console counted that
+ * Kanfei has not recorded. Null when either side is unknown — a fresh
+ * install has no history, and reporting 0 would imply the console counted
+ * the whole total since the last poll.
+ */
+export interface RainPreflight {
+  console_mm: number | null;
+  last_stored_mm: number | null;
+  last_stored_at: string | null;
+  difference_mm: number | null;
+  /** False means the driver will refuse rather than risk a 2x error. */
+  collector_known: boolean;
+}
+
+export interface SetYearlyRainResult {
+  success: boolean;
+  before_mm: number | null;
+  after_mm: number | null;
+}
+
+export interface ArchivePreflight {
+  records_in_kanfei: number;
+  latest_synced_at: string | null;
+}
+
+// --- Console highs and lows (Vantage HILOWS) ---
+
+/** A hi/lo pair with the times each occurred. Times are day-only. */
+export interface ConsoleHiLo {
+  low: number | null;
+  high: number | null;
+  time_low: string | null;   // "HH:MM"
+  time_high: string | null;
+}
+
+export interface ConsoleHiOnly {
+  value: number | null;
+  time: string | null;
+}
+
+export interface ConsolePeriod {
+  day: ConsoleHiLo;
+  month: ConsoleHiLo;
+  year: ConsoleHiLo;
+}
+
+export interface ConsoleHiOnlyPeriod {
+  day: ConsoleHiOnly;
+  month: ConsoleHiOnly;
+  year: ConsoleHiOnly;
+}
+
+/**
+ * The console's own extremes, sampled continuously.
+ *
+ * Every value is nullable: an unpopulated sensor or a dashed reading
+ * comes back as null rather than 0, which the parser works to preserve.
+ */
+export interface ConsoleHighsLows {
+  barometer: ConsolePeriod;
+  wind_speed: ConsoleHiOnlyPeriod;
+  inside_temp: ConsolePeriod;
+  inside_humidity: ConsolePeriod;
+  outside_temp: ConsolePeriod;
+  dew_point: ConsolePeriod;
+  wind_chill: ConsoleHiOnlyPeriod;
+  heat_index: ConsoleHiOnlyPeriod;
+  thsw_index: ConsoleHiOnlyPeriod;
+  solar_radiation: ConsoleHiOnlyPeriod;
+  uv_index: ConsoleHiOnlyPeriod;
+  rain_rate: ConsoleHiOnlyPeriod;
+  rain_rate_hour_hi: number | null;
+  /** Index 0 is the outside sensor; 1-7 are extras. Empty on a
+   *  block that could not be parsed, so index with care. */
+  humidities: ConsolePeriod[];
+}
+
+export interface ConsoleHighsLowsResponse {
+  highs_lows: ConsoleHighsLows;
+}
+
+// --- Vantage sensor calibration ---
+
+/**
+ * Per-sensor temperature/humidity offsets held in console EEPROM.
+ *
+ * Distinct from barometer calibration, which uses BAR= and has its own
+ * types above. A field is absent when the console could not be read —
+ * zero is a real calibration and must not stand in for "unknown".
+ */
+export interface VantageCalibrationOffsets {
+  inside_temp?: number;
+  outside_temp?: number;
+  inside_humidity?: number;
+  outside_humidity?: number;
+}
+
+export interface VantageCalibrationState {
+  offsets: VantageCalibrationOffsets;
+  /** "tenths_f" — a caller assuming whole degrees is off by 10x. */
+  temp_units: string;
+  humidity_units: string;
+}
+
+export interface VantageCalibrationResult {
+  success: boolean;
+  before: VantageCalibrationOffsets | null;
+  after: VantageCalibrationOffsets | null;
+}
+
+export type VantageCalibrationField =
+  | "inside_temp"
+  | "outside_temp"
+  | "inside_humidity"
+  | "outside_humidity";
+
+// --- Console location (Vantage) ---
+
+/**
+ * The console's own latitude/longitude, held in its EEPROM.
+ *
+ * Stored as signed tenths of a degree — ~11 km per step — so this can
+ * never equal Kanfei's configured location exactly. Compare at
+ * `resolution_deg`, not for equality.
+ */
+export interface ConsoleLocation {
+  latitude: number;
+  longitude: number;
+  resolution_deg: number;
+}
+
+export interface ConsoleLocationPair {
+  latitude: number;
+  longitude: number;
+}
+
+export interface ConsoleLocationResult {
+  success: boolean;
+  before: ConsoleLocationPair | null;
+  /** What the console holds after rounding — not what was sent. */
+  after: ConsoleLocationPair | null;
+}
+
 // --- WeatherLink Hardware Config ---
 
 export interface WeatherLinkCalibration {
@@ -659,6 +807,18 @@ export interface WeatherLinkConfig {
      * hidden on an old daemon", which is the correct behaviour.
      */
     barometer_cal?: boolean;
+    /** PUTRAIN + CLRLOG (Vantage). */
+    console_data_ops?: boolean;
+    /** Console-held highs/lows (Vantage with LOOP2). */
+    highs_lows?: boolean;
+    /**
+     * Per-sensor temperature/humidity offsets (Vantage, CALED/CALFIX).
+     * Not `calibration` — that is the legacy five-field block, false
+     * on a Vantage — and not `barometer_cal`, which is BAR=.
+     */
+    sensor_calibration?: boolean;
+    /** Whether the console holds its own lat/lon (Vantage). */
+    location?: boolean;
   };
 }
 

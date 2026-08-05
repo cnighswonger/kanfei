@@ -48,6 +48,12 @@ const SNAPSHOT_MAX_AGE_MINUTES = 10;
 
 const INHG_PER_HPA = 0.029529983071445;
 
+// Pressure falls about 1 hPa per 27 ft near sea level, so a foot of
+// elevation error is ~0.001 inHg — the console's own display resolution.
+// Used to state a discrepancy in the units being calibrated rather than
+// leaving the user to judge whether a difference in feet matters.
+const INHG_PER_FOOT = (1 / 27) * INHG_PER_HPA;
+
 type LoadStatus = "loading" | "loaded" | "error";
 
 interface Outcome {
@@ -302,7 +308,13 @@ export default function BarometerCalibration({
       : null;
 
     try {
-      const result = await setBarometerCalibration(barThousandths, elevationNum);
+      // The console's ELEVATION is whole feet; rounding here rather than
+      // in the field keeps the stored config at full precision while the
+      // wire gets what BAR= can actually absorb.
+      const result = await setBarometerCalibration(
+        barThousandths,
+        Math.round(elevationNum),
+      );
       setOutcome({
         kind: "success",
         message: `${describeAs} applied.`,
@@ -579,14 +591,19 @@ export default function BarometerCalibration({
         )}
         {configElevationFt > 0 &&
           cal?.elevation_ft != null &&
-          Math.abs(configElevationFt - cal.elevation_ft) > 10 && (
+          Math.round(configElevationFt) !== cal.elevation_ft && (
             <p style={{ ...body, marginTop: "6px" }}>
-              Console: {cal.elevation_ft} ft · Kanfei: {configElevationFt} ft{" "}
+              Console: {cal.elevation_ft} ft · Kanfei: {Math.round(configElevationFt)} ft
+              {" ("}
+              {Math.abs(
+                (Math.round(configElevationFt) - cal.elevation_ft) * INHG_PER_FOOT,
+              ).toFixed(3)}{" "}
+              inHg){" "}
               <button
                 type="button"
                 onClick={() => {
                   elevationTouched.current = true;
-                  setElevationFt(String(configElevationFt));
+                  setElevationFt(String(Math.round(configElevationFt)));
                 }}
                 style={{ ...body, background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--color-accent)" }}
               >

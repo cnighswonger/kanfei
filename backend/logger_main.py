@@ -15,7 +15,8 @@ import logging
 import os
 import signal
 import sys
-from datetime import datetime, timedelta, timezone
+from dataclasses import asdict
+from datetime import datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
@@ -33,6 +34,9 @@ from app.protocol.base import (
     CAP_SAMPLE_PERIOD_RW,
     CAP_CALIBRATION_RW,
     CAP_BAROMETER_CAL,
+    CAP_RAIN_RESET,
+    CAP_HILOWS,
+    CAP_LOCATION_RW,
 )
 from app.protocol.link_driver import LinkDriver, CalibrationOffsets, _rain_register_to_mm
 from app.protocol.serial_port import list_serial_ports
@@ -70,6 +74,28 @@ def _driver_model_code(driver: StationDriver) -> int:
     if isinstance(value, int):
         return value
     return STATION_TYPE_UNKNOWN
+
+
+def _supports_hilows(driver: StationDriver | None) -> bool:
+    """Whether this driver can actually answer a HILOWS request.
+
+    Both halves are load-bearing, and one predicate serves both the
+    capability report and the command gate so they cannot drift: a
+    `supported` map that says yes while the handler says 501 renders the
+    panel and then makes it vanish.
+
+    LinkDriver has declared CAP_HILOWS since the initial commit and
+    implements no hilows() at all, so the capability alone would reach an
+    AttributeError.  The method alone would miss a VP1 whose CAP_HILOWS is
+    correctly absent because it has no LOOP2.
+    """
+    if driver is None or not driver.connected:
+        return False
+    try:
+        declared = set(driver.capabilities)
+    except Exception:          # pragma: no cover — defensive
+        return False
+    return CAP_HILOWS in declared and hasattr(driver, "async_hilows")
 
 
 def _create_driver(driver_type: str, config: dict) -> StationDriver:
@@ -934,6 +960,16 @@ class LoggerDaemon:
         h(ipc.CMD_BAROMETER_CAL, self._h_barometer_cal)
         h(ipc.CMD_SET_BAROMETER, self._h_set_barometer)
         h(ipc.CMD_SIGNAL_QUALITY, self._h_signal_quality)
+        h(ipc.CMD_RAIN_PREFLIGHT, self._h_rain_preflight)
+        h(ipc.CMD_SET_YEARLY_RAIN, self._h_set_yearly_rain)
+        h(ipc.CMD_ARCHIVE_PREFLIGHT, self._h_archive_preflight)
+        h(ipc.CMD_CLEAR_ARCHIVE, self._h_clear_archive)
+        h(ipc.CMD_HIGHS_LOWS, self._h_highs_lows)
+        h(ipc.CMD_READ_VANTAGE_CAL, self._h_read_vantage_cal)
+        h(ipc.CMD_WRITE_VANTAGE_CAL, self._h_write_vantage_cal)
+        h(ipc.CMD_CLEAR_VANTAGE_CAL, self._h_clear_vantage_cal)
+        h(ipc.CMD_READ_LOCATION, self._h_read_location)
+        h(ipc.CMD_SET_LOCATION, self._h_set_location)
 
     # ---- IPC handlers ----
 
@@ -1161,6 +1197,389 @@ class LoggerDaemon:
 
         return {"success": ok, "before": _snap(before), "after": _snap(after)}
 
+    # ---- Destructive console operations (PUTRAIN / CLRLOG) ----
+    #
+    # Both destroy data on the console and both are safe only with context
+    # Kanfei already holds.  The pattern is the same for each: a
+    # *preflight* read that shows the cost, then the write.  Chris's
+    # design call (#264): a confirmation that shows what will be lost is a
+    # decision; an undo offered afterwards is a consolation.
+
+    def _last_stored_rain_yearly(self) -> tuple[Optional[float], Optional[str]]:
+        """Most recent recorded yearly rain, in mm, with its timestamp.
+
+        Stored as tenths of a mm, hence the divide.  The timestamp is the
+        point of the whole thing: it tells the caller how much rain could
+        have fallen since, which is exactly what a restore would discard.
+        """
+        db = SessionLocal()
+        try:
+            from app.models.sensor_reading import SensorReadingModel as S
+
+            row = (
+                db.query(S.rain_yearly, S.timestamp)
+                .filter(S.rain_yearly.isnot(None))
+                .order_by(S.timestamp.desc())
+                .first()
+            )
+            if row is None:
+                return None, None
+            return row[0] / 10.0, row[1].isoformat()
+        finally:
+            db.close()
+
+    async def _h_rain_preflight(self, _msg: dict) -> dict[str, Any]:
+        """What overwriting the yearly rain total would cost.
+
+        Returns the console's current total, the last one Kanfei recorded,
+        and when that was.  The difference between them is rain that fell
+        since the last poll — precisely what a naive "restore the last
+        value" would throw away.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if CAP_RAIN_RESET not in drv.capabilities:
+            raise RuntimeError(
+                f"{drv.station_name} does not support setting the rain total"
+            )
+
+        snapshot = await drv.poll()
+        console_mm = snapshot.rain_yearly if snapshot else None
+        stored_mm, stored_at = self._last_stored_rain_yearly()
+
+        return {
+            "console_mm": console_mm,
+            "last_stored_mm": stored_mm,
+            "last_stored_at": stored_at,
+            # Signed: positive means the console has counted rain Kanfei
+            # has not recorded yet.
+            "difference_mm": (
+                None if console_mm is None or stored_mm is None
+                else round(console_mm - stored_mm, 2)
+            ),
+            # The collector determines the click size, and the driver
+            # refuses to write without it rather than risk a 2x error.
+            "collector_known": bool(
+                getattr(getattr(drv, "hw_config", None), "rain_click_inches", None)
+            ),
+        }
+
+    async def _h_set_yearly_rain(self, msg: dict) -> dict[str, Any]:
+        """PUTRAIN — overwrite the console's yearly total.  IRREVERSIBLE.
+
+        Takes millimetres.  The driver converts to clicks using the
+        collector this station reported at connect time; a raw click count
+        means three different rainfall totals on three different
+        collectors, which is why nothing here accepts one.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if CAP_RAIN_RESET not in drv.capabilities:
+            raise RuntimeError(
+                f"{drv.station_name} does not support setting the rain total"
+            )
+        if not hasattr(drv, "async_set_yearly_rain"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support setting the rain total"
+            )
+
+        millimetres = msg.get("millimetres")
+        if millimetres is None:
+            raise RuntimeError("millimetres is required")
+
+        before = await drv.poll()
+        try:
+            ok = await drv.async_set_yearly_rain(float(millimetres))
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+        after = await drv.poll()
+
+        if not ok:
+            raise RuntimeError(
+                "Station did not accept the rain total; console now reads: "
+                f"{after.rain_yearly if after else 'unknown'} mm"
+            )
+
+        return {
+            "success": ok,
+            "before_mm": before.rain_yearly if before else None,
+            "after_mm": after.rain_yearly if after else None,
+        }
+
+    async def _h_archive_preflight(self, _msg: dict) -> dict[str, Any]:
+        """What clearing the console's archive would cost.
+
+        Kanfei has already downloaded records into archive_records, so
+        the data is not lost from Kanfei's side — but anything the console
+        holds that has NOT been synced goes with the clear.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if not hasattr(drv, "async_clear_log"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support clearing its archive"
+            )
+
+        db = SessionLocal()
+        try:
+            from app.models.archive_record import ArchiveRecordModel as A
+
+            total = db.query(A).count()
+            latest = (
+                db.query(A.record_time)
+                .order_by(A.record_time.desc())
+                .first()
+            )
+        finally:
+            db.close()
+
+        return {
+            "records_in_kanfei": total,
+            "latest_synced_at": latest[0].isoformat() if latest and latest[0] else None,
+        }
+
+    async def _h_clear_archive(self, _msg: dict) -> dict[str, Any]:
+        """CLRLOG — wipe the console's archive memory.  IRREVERSIBLE."""
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if not hasattr(drv, "async_clear_log"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support clearing its archive"
+            )
+
+        ok = await drv.async_clear_log()
+        if not ok:
+            raise RuntimeError("Station did not accept CLRLOG")
+        return {"success": ok}
+    async def _h_highs_lows(self, _msg: dict) -> dict[str, Any]:
+        """The console's own daily/monthly/yearly extremes (HILOWS).
+
+        Worth having alongside Kanfei's computed extremes rather than
+        instead of them.  Ours come from 10-second polls; the console
+        samples continuously, so it catches a gust or a spike that fell
+        between our polls.  When the two disagree, the disagreement
+        bounds what our sampling misses — which is the same class of
+        problem as #230, where a poisoned daily maximum survived all day
+        before anyone noticed.
+
+        Read-only.  Clearing the console's highs and lows is a separate,
+        destructive operation and deliberately not reachable from here.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if not _supports_hilows(drv):
+            raise RuntimeError(
+                f"{drv.station_name} does not support highs and lows"
+            )
+
+        block = await drv.async_hilows()
+        if block is None:
+            raise RuntimeError("Station did not return highs and lows")
+
+        # `time` is not JSON-serialisable and the IPC layer encodes with
+        # default=str, which would give "14:35:00" — fine, but implicit.
+        # Convert here so the wire format is a deliberate choice rather
+        # than a side effect of the encoder.
+        def _clean(value):
+            if isinstance(value, dt_time):
+                return value.strftime("%H:%M")
+            if isinstance(value, dict):
+                return {k: _clean(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [_clean(v) for v in value]
+            return value
+
+        return {"highs_lows": _clean(asdict(block))}
+    # ---- Vantage temperature/humidity calibration ----
+
+    # Maps the wire field name to its EEPROM address.  Deliberately a
+    # closed set: write_calibration() refuses anything outside the
+    # calibration block, but an explicit allowlist means a typo in a
+    # request is a clear error rather than an address computed from user
+    # input.
+    _VANTAGE_CAL_FIELDS = {
+        "inside_temp": "CAL_INSIDE_TEMP",
+        "outside_temp": "CAL_OUTSIDE_TEMP",
+        "inside_humidity": "CAL_INSIDE_HUM",
+        "outside_humidity": "CAL_OUTSIDE_HUM",
+    }
+
+    def _require_vantage_cal(self) -> StationDriver:
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if CAP_CALIBRATION_RW not in drv.capabilities:
+            raise RuntimeError(
+                f"{drv.station_name} does not support calibration offsets"
+            )
+        # NOT a hasattr check: LinkDriver also has async_read_calibration,
+        # but it returns a five-field CalibrationOffsets dataclass in the
+        # legacy shape, not the Vantage per-sensor dict.  The two are
+        # indistinguishable by attribute presence, which is precisely the
+        # trap that made a legacy station look supported here.  Gate on
+        # the concrete capability the Vantage driver declares instead.
+        if not hasattr(drv, "CALIBRATION_FIELDS"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support per-sensor "
+                "calibration offsets"
+            )
+        return drv
+
+    async def _h_read_vantage_cal(self, _msg: dict) -> dict[str, Any]:
+        """Current temperature/humidity offsets, in the console's units."""
+        drv = self._require_vantage_cal()
+        offsets = await drv.async_read_calibration()
+        if offsets is None:
+            raise RuntimeError("Station did not return calibration offsets")
+        return {
+            "offsets": offsets,
+            # Units are not obvious and getting them wrong is a tenfold
+            # error: temperature is TENTHS of a degree F.
+            "temp_units": "tenths_f",
+            "humidity_units": "percent",
+        }
+
+    async def _h_write_vantage_cal(self, msg: dict) -> dict[str, Any]:
+        """Set one calibration offset, then read every field back.
+
+        One field per call, matching the driver.  The manual's block form
+        writes 43 bytes from 0x32, which runs past the calibration block
+        and over the graph defaults and alarm thresholds.
+        """
+        from app.protocol.vantage import eeprom as vantage_eeprom
+
+        drv = self._require_vantage_cal()
+
+        field = msg.get("field")
+        offset = msg.get("offset")
+        if field is None or offset is None:
+            raise RuntimeError("field and offset are both required")
+        if field not in self._VANTAGE_CAL_FIELDS:
+            # "must be" is what api/station.py::_cal_error routes to 400.
+            # An earlier wording here said "unknown calibration field",
+            # which matched no rule and surfaced a client error as a 503
+            # server fault — the same bug as the offset range message one
+            # branch below, which I fixed while leaving this one (Codex,
+            # #267 R1).
+            raise RuntimeError(
+                f"calibration field must be one of "
+                + ", ".join(sorted(self._VANTAGE_CAL_FIELDS))
+                + f"; got {field!r}"
+            )
+
+        addr = getattr(vantage_eeprom, self._VANTAGE_CAL_FIELDS[field])
+        before = await drv.async_read_calibration()
+        try:
+            ok = await drv.async_write_calibration(addr, int(offset))
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+        after = await drv.async_read_calibration()
+
+        if not ok:
+            # Same rule as the barometer write (#252): a failed write must
+            # not return normally, and must not claim nothing changed.
+            raise RuntimeError(
+                "Station did not accept the calibration; "
+                f"offsets now read: {after}"
+            )
+
+        return {"success": ok, "before": before, "after": after}
+
+    async def _h_clear_vantage_cal(self, _msg: dict) -> dict[str, Any]:
+        """CLRCAL — zero every temperature and humidity offset.
+
+        Note this does NOT touch barometer calibration, which lives
+        behind BAR= and has its own panel.  Naming it "clear calibration"
+        in the UI without that qualifier would imply more than it does.
+        """
+        drv = self._require_vantage_cal()
+        before = await drv.async_read_calibration()
+        ok = await drv.async_clear_calibration()
+        after = await drv.async_read_calibration()
+
+        if not ok:
+            raise RuntimeError(
+                f"Station did not accept CLRCAL; offsets now read: {after}"
+            )
+        return {"success": ok, "before": before, "after": after}
+    # ---- Console location (EEPROM lat/lon) ----
+
+    # The console stores signed TENTHS of a degree — ~11 km per step — so
+    # its copy can never equal Kanfei's to full precision.  Callers must
+    # compare at this resolution or a correctly configured station reports
+    # a permanent disagreement.
+    LOCATION_RESOLUTION_DEG = 0.1
+
+    def _require_location_rw(self) -> StationDriver:
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if CAP_LOCATION_RW not in drv.capabilities:
+            raise RuntimeError(
+                f"{drv.station_name} does not support setting its location"
+            )
+        return drv
+
+    async def _h_read_location(self, _msg: dict) -> dict[str, Any]:
+        """The console's own latitude/longitude."""
+        drv = self._require_location_rw()
+        loc = await drv.async_read_location()
+        if loc is None:
+            raise RuntimeError("Station did not return its location")
+        lat, lon = loc
+        return {
+            "latitude": lat,
+            "longitude": lon,
+            "resolution_deg": self.LOCATION_RESOLUTION_DEG,
+        }
+
+    async def _h_set_location(self, msg: dict) -> dict[str, Any]:
+        """Write latitude/longitude to the console, then read it back.
+
+        The read-back is not decoration.  The console rounds to tenths, so
+        what it ends up holding is not what was sent — returning the stored
+        value lets the caller show what the station actually has rather
+        than echoing the request.
+
+        ``set_location`` issues NEWSETUP, which §IX.7 requires for these
+        two fields specifically; without it the write may not take effect.
+        """
+        drv = self._require_location_rw()
+
+        lat = msg.get("latitude")
+        lon = msg.get("longitude")
+        if lat is None or lon is None:
+            raise RuntimeError("latitude and longitude are both required")
+
+        before = await drv.async_read_location()
+        try:
+            ok = await drv.async_set_location(float(lat), float(lon))
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+
+        after = await drv.async_read_location()
+
+        def _pair(loc) -> Optional[dict]:
+            if loc is None:
+                return None
+            return {"latitude": loc[0], "longitude": loc[1]}
+
+        if not ok:
+            # Same rule as the barometer write (#252): a command that did
+            # not take must not return normally, and the message must not
+            # claim the station is unchanged — report what it now reads.
+            raise RuntimeError(
+                "Station did not accept the location "
+                f"(NEWSETUP not acknowledged); station now reads: {_pair(after)}"
+            )
+
+        return {"success": ok, "before": _pair(before), "after": _pair(after)}
+
     async def _h_signal_quality(self, _msg: dict) -> dict[str, Any]:
         """Console reception diagnostics — RXCHECK plus the heard-Tx list.
 
@@ -1306,6 +1725,25 @@ class LoggerDaemon:
                 # sniff, and asking the console would cost a serial round
                 # trip to answer a question the daemon already holds.
                 "barometer_cal": CAP_BAROMETER_CAL in caps,
+                # PUTRAIN + CLRLOG.  Both need the Vantage-shaped
+                # driver methods, not just the coarse rain-reset
+                # capability that legacy also advertises.
+                "console_data_ops": (
+                    CAP_RAIN_RESET in caps
+                    and hasattr(self.driver, "async_set_yearly_rain")
+                    and hasattr(self.driver, "async_clear_log")
+                ),
+                "highs_lows": _supports_hilows(self.driver),
+                # Per-sensor offsets via CALED/CALFIX.  Distinct from
+                # "calibration" above, which is the legacy five-field
+                # block and is false on a Vantage, and from
+                # "barometer_cal", which is BAR= — a different
+                # mechanism again.  Three separate things.
+                "sensor_calibration": (
+                    CAP_CALIBRATION_RW in caps
+                    and hasattr(self.driver, "CALIBRATION_FIELDS")
+                ),
+                "location": CAP_LOCATION_RW in caps,
             },
         }
 
