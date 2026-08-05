@@ -7,6 +7,7 @@ import { useWeatherBackground } from "../context/WeatherBackgroundContext.tsx";
 import { themes } from "../themes/index.ts";
 import ThemeEditor from "../components/settings/ThemeEditor.tsx";
 import BarometerCalibration from "../components/settings/BarometerCalibration.tsx";
+import ConsoleDataOperations from "../components/settings/ConsoleDataOperations.tsx";
 import ConsoleHighsLows from "../components/settings/ConsoleHighsLows.tsx";
 import VantageCalibration from "../components/settings/VantageCalibration.tsx";
 import ConsoleLocation from "../components/settings/ConsoleLocation.tsx";
@@ -2801,6 +2802,13 @@ export default function Settings() {
         supported={wlConfig?.supported?.barometer_cal ?? false}
         isMobile={isMobile}
         configElevationFt={Number(val("elevation")) || 0}
+      />
+
+      {/* Destructive console operations, each behind a preflight that
+          states the cost (#264). */}
+      <ConsoleDataOperations
+        supported={wlConfig?.supported?.console_data_ops ?? false}
+        isMobile={isMobile}
       />
 
       {/* The console's own extremes beside ours — the disagreement is

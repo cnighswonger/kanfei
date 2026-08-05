@@ -338,6 +338,123 @@ test.describe('Barometer calibration panel', () => {
     expect(getsAfterPost).toBeGreaterThan(0);
   });
 });
+test.describe('Console data operations', () => {
+  test.beforeEach(async ({ page }) => {
+    await injectAuthCookie(page);
+  });
+
+  async function stubSupport(page: import('@playwright/test').Page, ops: boolean) {
+    await page.route('**/api/weatherlink/config', async (route) => {
+      await route.fulfill({
+        json: {
+          archive_period: 5, sample_period: 5, calibration: null,
+          supported: {
+            archive_period: true, sample_period: true, calibration: false,
+            barometer_cal: false, console_data_ops: ops,
+          },
+        },
+      });
+    });
+  }
+
+  async function stubPreflights(
+    page: import('@playwright/test').Page,
+    rain: Record<string, unknown>,
+  ) {
+    await page.route('**/api/station/rain-preflight', async (route) => {
+      await route.fulfill({ json: rain });
+    });
+    await page.route('**/api/station/archive-preflight', async (route) => {
+      await route.fulfill({
+        json: { records_in_kanfei: 4211, latest_synced_at: new Date().toISOString() },
+      });
+    });
+  }
+
+  test('absent when the station cannot do these operations', async ({ page }) => {
+    await stubSupport(page, false);
+    await page.goto('/settings');
+    await expect(page.getByText('Console Data', { exact: false })).toHaveCount(0);
+  });
+
+  test('names the rainfall that would be discarded', async ({ page }) => {
+    // The whole design: show the cost before it is paid. 31.2 on the
+    // console vs 29.5 recorded means 1.7 mm of real rain would vanish.
+    await stubSupport(page, true);
+    await stubPreflights(page, {
+      console_mm: 31.2,
+      last_stored_mm: 29.5,
+      last_stored_at: new Date(Date.now() - 12 * 60_000).toISOString(),
+      difference_mm: 1.7,
+      collector_known: true,
+    });
+    await page.goto('/settings');
+
+    // Split across a <strong> by JSX, so match the paragraph.
+    const warning = page.locator('p', { hasText: 'that Kanfei has not recorded' });
+    await expect(warning).toContainText('1.7 mm');
+    await expect(warning).toContainText('discards that rainfall');
+  });
+
+  test('refuses to offer the write when the collector is unknown', async ({ page }) => {
+    // The driver would refuse anyway rather than risk a 2x error; saying
+    // so up front beats letting the user type a number and be rejected.
+    await stubSupport(page, true);
+    await stubPreflights(page, {
+      console_mm: 31.2, last_stored_mm: 29.5,
+      last_stored_at: new Date().toISOString(),
+      difference_mm: 1.7, collector_known: false,
+    });
+    await page.goto('/settings');
+
+    await expect(
+      page.locator('p', { hasText: 'rain collector type is unknown' }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Overwrite total' })).toBeDisabled();
+  });
+
+  test('states what survives an archive clear', async ({ page }) => {
+    // Kanfei's downloaded records are safe; only unsynced ones are lost.
+    // Saying which is which is the difference between an informed choice
+    // and a leap.
+    await stubSupport(page, true);
+    await stubPreflights(page, {
+      console_mm: 10, last_stored_mm: 10,
+      last_stored_at: new Date().toISOString(),
+      difference_mm: 0, collector_known: true,
+    });
+    await page.goto('/settings');
+
+    await expect(page.getByText('4,211', { exact: false })).toBeVisible();
+    await expect(
+      page.getByText('only records the console has not yet handed over', { exact: false }),
+    ).toBeVisible();
+  });
+
+  test('a dismissed confirmation writes nothing', async ({ page }) => {
+    // The confirm is the safety mechanism, so cancelling it must not
+    // reach the wire at all.
+    await stubSupport(page, true);
+    await stubPreflights(page, {
+      console_mm: 31.2, last_stored_mm: 29.5,
+      last_stored_at: new Date().toISOString(),
+      difference_mm: 1.7, collector_known: true,
+    });
+    let posted = false;
+    await page.route('**/api/station/yearly-rain', async (route) => {
+      posted = true;
+      await route.fulfill({ json: { success: true, before_mm: 31.2, after_mm: 0 } });
+    });
+    page.on('dialog', (d) => d.dismiss());
+
+    await page.goto('/settings');
+    await page.getByLabel('New yearly rain total').fill('0');
+    await page.getByRole('button', { name: 'Overwrite total' }).click();
+    await page.waitForTimeout(500);
+
+    expect(posted).toBe(false);  });
+});
+
 test.describe('Console highs and lows panel', () => {
   test.beforeEach(async ({ page }) => {
     await injectAuthCookie(page);
@@ -703,6 +820,5 @@ test.describe('Console location reconcile', () => {
     await page.goto('/settings');
     await page.getByRole('button', { name: 'Send my location to the console' }).click();
     // 35.7796 was sent; 35.8 is what the station has.
-    await expect(page.getByText('Console now reads 35.8', { exact: false })).toBeVisible();
-  });
+    await expect(page.getByText('Console now reads 35.8', { exact: false })).toBeVisible();  });
 });

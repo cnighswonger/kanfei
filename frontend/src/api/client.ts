@@ -559,6 +559,44 @@ export function fetchBarometerReference(): Promise<
   return request("/api/station/barometer-reference");
 }
 
+// --- Destructive console operations ---
+
+export function fetchRainPreflight(): Promise<import("./types.ts").RainPreflight> {
+  return request("/api/station/rain-preflight");
+}
+
+/**
+ * PUTRAIN — overwrites the console's yearly total. Irreversible.
+ *
+ * The `confirm` token is required by the server, not decoration: a UI
+ * dialog protects only users who go through the UI, so the endpoint
+ * demands proof the caller meant it.
+ */
+export function setYearlyRain(
+  millimetres: number,
+): Promise<import("./types.ts").SetYearlyRainResult> {
+  return request("/api/station/yearly-rain", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ millimetres, confirm: "OVERWRITE" }),
+  });
+}
+
+export function fetchArchivePreflight(): Promise<
+  import("./types.ts").ArchivePreflight
+> {
+  return request("/api/station/archive-preflight");
+}
+
+/** CLRLOG — wipes the console's archive memory. Irreversible. */
+export function clearConsoleArchive(): Promise<{ success: boolean }> {
+  return request("/api/station/clear-archive", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm: "CLEAR" }),
+  });
+}
+
 // --- Console highs and lows (Vantage) ---
 
 export function fetchConsoleHighsLows(): Promise<
