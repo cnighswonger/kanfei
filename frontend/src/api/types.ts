@@ -657,6 +657,33 @@ export type VantageCalibrationField =
   | "inside_humidity"
   | "outside_humidity";
 
+// --- Console location (Vantage) ---
+
+/**
+ * The console's own latitude/longitude, held in its EEPROM.
+ *
+ * Stored as signed tenths of a degree — ~11 km per step — so this can
+ * never equal Kanfei's configured location exactly. Compare at
+ * `resolution_deg`, not for equality.
+ */
+export interface ConsoleLocation {
+  latitude: number;
+  longitude: number;
+  resolution_deg: number;
+}
+
+export interface ConsoleLocationPair {
+  latitude: number;
+  longitude: number;
+}
+
+export interface ConsoleLocationResult {
+  success: boolean;
+  before: ConsoleLocationPair | null;
+  /** What the console holds after rounding — not what was sent. */
+  after: ConsoleLocationPair | null;
+}
+
 // --- WeatherLink Hardware Config ---
 
 export interface WeatherLinkCalibration {
@@ -700,6 +727,8 @@ export interface WeatherLinkConfig {
      * on a Vantage — and not `barometer_cal`, which is BAR=.
      */
     sensor_calibration?: boolean;
+    /** Whether the console holds its own lat/lon (Vantage). */
+    location?: boolean;
   };
 }
 

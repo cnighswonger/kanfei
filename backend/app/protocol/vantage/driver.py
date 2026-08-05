@@ -31,6 +31,7 @@ from ..base import (
     CAP_RAIN_RESET,
     CAP_HILOWS,
     CAP_BAROMETER_CAL,
+    CAP_LOCATION_RW,
 )
 from ..serial_port import SerialPort
 from ..crc import crc_validate, crc_calculate
@@ -207,6 +208,10 @@ class VantageDriver(StationDriver):
             # on a Vantage.  Unconditional: BAR= and BARDATA predate
             # LOOP2, so even a VP1 without has_loop2 can calibrate.
             CAP_BAROMETER_CAL,
+            # Console lat/lon in EEPROM (§XIV).  set_location() issues
+            # the NEWSETUP the manual requires for these two fields
+            # specifically, without which the write may not take.
+            CAP_LOCATION_RW,
         }
         if self.hw_config.has_loop2:
             caps.add(CAP_HILOWS)
@@ -1579,7 +1584,18 @@ class VantageDriver(StationDriver):
         """Write station latitude/longitude to EEPROM (§XIV, 0x0B / 0x0D).
 
         Both are stored as signed 16-bit TENTHS of a degree, so precision
-        is limited to 0.1 deg (~7 km) by the format, not by this code.
+        is limited by the format, not by this code.  A 0.1 deg step is
+        11.1 km of latitude and 11.1 km of longitude at the equator,
+        narrowing with the cosine of latitude (9.1 km at 35 deg); the
+        worst-case rounding error is half that.  Callers comparing this
+        against a more precise source must do so at this resolution or a
+        correctly configured station reports a permanent disagreement.
+
+        Rounding here is Python's — banker's rounding, so 35.85 and 35.75
+        both store as 358 tenths.  A caller re-deriving the expected value
+        in another language may break the tie the other way; compare
+        distance rather than replicating this (#265).
+
         Negative latitude is southern hemisphere, negative longitude is
         western.
 

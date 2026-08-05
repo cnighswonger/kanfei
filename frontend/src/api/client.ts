@@ -591,4 +591,29 @@ export function clearVantageCalibration(): Promise<
   return request("/api/station/calibration/clear", { method: "POST" });
 }
 
+// --- Console location (Vantage) ---
+
+export function fetchConsoleLocation(): Promise<
+  import("./types.ts").ConsoleLocation
+> {
+  return request("/api/station/location");
+}
+
+/**
+ * Push Kanfei's location to the console.
+ *
+ * One-directional by design: the console stores tenths of a degree, so
+ * copying its value back would discard precision Kanfei holds.
+ */
+export function setConsoleLocation(
+  latitude: number,
+  longitude: number,
+): Promise<import("./types.ts").ConsoleLocationResult> {
+  return request("/api/station/location", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ latitude, longitude }),
+  });
+}
+
 export { ApiError };
