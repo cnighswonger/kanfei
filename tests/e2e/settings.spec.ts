@@ -205,12 +205,13 @@ test.describe('Barometer calibration panel', () => {
   });
 
   test('shows the elevation reconcile row for a sub-threshold difference', async ({ page }) => {
-    // The fixture configures 315 ft; the console here reports 314 — one
-    // foot apart.  The row used to require a >10 ft gap, which is
-    // ~0.011 inHg, five times the difference the panel reports against the
-    // reference it is calibrating against.  A 50 ft fixture mismatch would
-    // have passed under the old rule too, so the console value is stubbed
-    // to sit just inside it: this test fails if the threshold returns.
+    // The fixture stores 315.4 ft, which the row displays as 315; the
+    // console here reports 314 — one foot apart.  The row used to require
+    // a >10 ft gap, which is ~0.011 inHg, five times the difference the
+    // panel reports against the reference it is calibrating against.  A
+    // 50 ft fixture mismatch would have passed under the old rule too, so
+    // the console value is stubbed to sit just inside it: this test fails
+    // if the threshold returns.
     await stubCapability(page, true);
     await stubReference(page, freshReference());
     await page.route('**/api/station/barometer-calibration', async (route) => {

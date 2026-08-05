@@ -623,6 +623,12 @@ class TestElevationPrecisionAtTheConsoleBoundary:
         "given,expected",
         [
             (265.7, 266),    # int() would give 265 — the bug
+            # 265.5 rounds up only because 265 is odd: Python rounds ties
+            # to even, so 264.5 gives 264 while JS Math.round gives 265.
+            # Not pinned as a contract — the tie is a twentieth of the
+            # console's own resolution, and asserting either way would
+            # invent a policy the UI path never exercises (it sends
+            # Math.round'ed integers).
             (265.5, 266),
             (265.4, 265),
             (-75.7, -76),    # negative elevations are legal; int() gives -75
