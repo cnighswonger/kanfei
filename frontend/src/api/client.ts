@@ -559,4 +559,12 @@ export function fetchBarometerReference(): Promise<
   return request("/api/station/barometer-reference");
 }
 
+// --- Console highs and lows (Vantage) ---
+
+export function fetchConsoleHighsLows(): Promise<
+  import("./types.ts").ConsoleHighsLowsResponse
+> {
+  return request("/api/station/highs-lows");
+}
+
 export { ApiError };

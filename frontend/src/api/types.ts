@@ -622,6 +622,62 @@ export interface MetarReferenceResponse {
   fetched_at: string;
 }
 
+// --- Console highs and lows (Vantage HILOWS) ---
+
+/** A hi/lo pair with the times each occurred. Times are day-only. */
+export interface ConsoleHiLo {
+  low: number | null;
+  high: number | null;
+  time_low: string | null;   // "HH:MM"
+  time_high: string | null;
+}
+
+export interface ConsoleHiOnly {
+  value: number | null;
+  time: string | null;
+}
+
+export interface ConsolePeriod {
+  day: ConsoleHiLo;
+  month: ConsoleHiLo;
+  year: ConsoleHiLo;
+}
+
+export interface ConsoleHiOnlyPeriod {
+  day: ConsoleHiOnly;
+  month: ConsoleHiOnly;
+  year: ConsoleHiOnly;
+}
+
+/**
+ * The console's own extremes, sampled continuously.
+ *
+ * Every value is nullable: an unpopulated sensor or a dashed reading
+ * comes back as null rather than 0, which the parser works to preserve.
+ */
+export interface ConsoleHighsLows {
+  barometer: ConsolePeriod;
+  wind_speed: ConsoleHiOnlyPeriod;
+  inside_temp: ConsolePeriod;
+  inside_humidity: ConsolePeriod;
+  outside_temp: ConsolePeriod;
+  dew_point: ConsolePeriod;
+  wind_chill: ConsoleHiOnlyPeriod;
+  heat_index: ConsoleHiOnlyPeriod;
+  thsw_index: ConsoleHiOnlyPeriod;
+  solar_radiation: ConsoleHiOnlyPeriod;
+  uv_index: ConsoleHiOnlyPeriod;
+  rain_rate: ConsoleHiOnlyPeriod;
+  rain_rate_hour_hi: number | null;
+  /** Index 0 is the outside sensor; 1-7 are extras. Empty on a
+   *  block that could not be parsed, so index with care. */
+  humidities: ConsolePeriod[];
+}
+
+export interface ConsoleHighsLowsResponse {
+  highs_lows: ConsoleHighsLows;
+}
+
 // --- WeatherLink Hardware Config ---
 
 export interface WeatherLinkCalibration {
@@ -659,6 +715,8 @@ export interface WeatherLinkConfig {
      * hidden on an old daemon", which is the correct behaviour.
      */
     barometer_cal?: boolean;
+    /** Console-held highs/lows (Vantage with LOOP2). */
+    highs_lows?: boolean;
   };
 }
 
