@@ -111,6 +111,7 @@ from .eeprom import (
     EEAddr,
     SETUP_BITS,
     CAL_INSIDE_TEMP,
+    CAL_INSIDE_TEMP_COMP,
     CAL_OUTSIDE_TEMP,
     CAL_INSIDE_HUM,
     CAL_OUTSIDE_HUM,
@@ -689,6 +690,24 @@ class VantageDriver(StationDriver):
                     "write_calibration: EEBWR 0x%02X failed", field.address,
                 )
                 return False
+
+            # 3a. Inside temperature alone carries a validation byte:
+            # TEMP_IN_COMP is "1's compliment of TEMP_IN_CAL to validate
+            # calibration data" (serial ref v2.6.1, EEPROM table).  Without
+            # it the console has an offset it will not honour — the write
+            # ACKs, the value reads back, and the temperature does not
+            # move.  That is the same silent-success shape as #209, where
+            # writes to the wrong humidity address appeared to work.
+            if field.address == CAL_INSIDE_TEMP.address:
+                comp = (~offset) & 0xFF
+                if not self._eeprom_write(
+                    CAL_INSIDE_TEMP_COMP.address, bytes([comp])
+                ):
+                    logger.error(
+                        "write_calibration: TEMP_IN_COMP write failed; the "
+                        "inside-temp offset will not be honoured"
+                    )
+                    return False
 
             # 4. push un-calibrated values so the console re-applies cal
             if not self._calfix(bytes(block)):
