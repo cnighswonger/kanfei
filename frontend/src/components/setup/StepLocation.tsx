@@ -118,7 +118,11 @@ export default function StepLocation({
           const data = await resp.json();
           const meters = data.elevation?.[0];
           if (typeof meters === "number") {
-            onChange({ elevation: Math.round(meters * 3.28084) });
+            // Kept to a tenth rather than rounded to whole feet: this value
+            // is the stored one, and astronomy and the public data schema
+            // read it directly.  The Vantage only absorbs whole feet, so
+            // rounding happens at that boundary, not here.
+            onChange({ elevation: Math.round(meters * 3.28084 * 10) / 10 });
           }
         }
       } catch {
@@ -295,7 +299,7 @@ export default function StepLocation({
           <input
             style={inputStyle}
             type="number"
-            step="1"
+            step="0.1"
             value={elevation || ""}
             onChange={(e) =>
               onChange({ elevation: parseFloat(e.target.value) || 0 })
