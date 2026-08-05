@@ -935,6 +935,9 @@ class LoggerDaemon:
         h(ipc.CMD_BAROMETER_CAL, self._h_barometer_cal)
         h(ipc.CMD_SET_BAROMETER, self._h_set_barometer)
         h(ipc.CMD_SIGNAL_QUALITY, self._h_signal_quality)
+        h(ipc.CMD_READ_VANTAGE_CAL, self._h_read_vantage_cal)
+        h(ipc.CMD_WRITE_VANTAGE_CAL, self._h_write_vantage_cal)
+        h(ipc.CMD_CLEAR_VANTAGE_CAL, self._h_clear_vantage_cal)
         h(ipc.CMD_READ_LOCATION, self._h_read_location)
         h(ipc.CMD_SET_LOCATION, self._h_set_location)
 
@@ -1164,6 +1167,118 @@ class LoggerDaemon:
 
         return {"success": ok, "before": _snap(before), "after": _snap(after)}
 
+    # ---- Vantage temperature/humidity calibration ----
+
+    # Maps the wire field name to its EEPROM address.  Deliberately a
+    # closed set: write_calibration() refuses anything outside the
+    # calibration block, but an explicit allowlist means a typo in a
+    # request is a clear error rather than an address computed from user
+    # input.
+    _VANTAGE_CAL_FIELDS = {
+        "inside_temp": "CAL_INSIDE_TEMP",
+        "outside_temp": "CAL_OUTSIDE_TEMP",
+        "inside_humidity": "CAL_INSIDE_HUM",
+        "outside_humidity": "CAL_OUTSIDE_HUM",
+    }
+
+    def _require_vantage_cal(self) -> StationDriver:
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if CAP_CALIBRATION_RW not in drv.capabilities:
+            raise RuntimeError(
+                f"{drv.station_name} does not support calibration offsets"
+            )
+        # NOT a hasattr check: LinkDriver also has async_read_calibration,
+        # but it returns a five-field CalibrationOffsets dataclass in the
+        # legacy shape, not the Vantage per-sensor dict.  The two are
+        # indistinguishable by attribute presence, which is precisely the
+        # trap that made a legacy station look supported here.  Gate on
+        # the concrete capability the Vantage driver declares instead.
+        if not hasattr(drv, "CALIBRATION_FIELDS"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support per-sensor "
+                "calibration offsets"
+            )
+        return drv
+
+    async def _h_read_vantage_cal(self, _msg: dict) -> dict[str, Any]:
+        """Current temperature/humidity offsets, in the console's units."""
+        drv = self._require_vantage_cal()
+        offsets = await drv.async_read_calibration()
+        if offsets is None:
+            raise RuntimeError("Station did not return calibration offsets")
+        return {
+            "offsets": offsets,
+            # Units are not obvious and getting them wrong is a tenfold
+            # error: temperature is TENTHS of a degree F.
+            "temp_units": "tenths_f",
+            "humidity_units": "percent",
+        }
+
+    async def _h_write_vantage_cal(self, msg: dict) -> dict[str, Any]:
+        """Set one calibration offset, then read every field back.
+
+        One field per call, matching the driver.  The manual's block form
+        writes 43 bytes from 0x32, which runs past the calibration block
+        and over the graph defaults and alarm thresholds.
+        """
+        from app.protocol.vantage import eeprom as vantage_eeprom
+
+        drv = self._require_vantage_cal()
+
+        field = msg.get("field")
+        offset = msg.get("offset")
+        if field is None or offset is None:
+            raise RuntimeError("field and offset are both required")
+        if field not in self._VANTAGE_CAL_FIELDS:
+            # "must be" is what api/station.py::_cal_error routes to 400.
+            # An earlier wording here said "unknown calibration field",
+            # which matched no rule and surfaced a client error as a 503
+            # server fault — the same bug as the offset range message one
+            # branch below, which I fixed while leaving this one (Codex,
+            # #267 R1).
+            raise RuntimeError(
+                f"calibration field must be one of "
+                + ", ".join(sorted(self._VANTAGE_CAL_FIELDS))
+                + f"; got {field!r}"
+            )
+
+        addr = getattr(vantage_eeprom, self._VANTAGE_CAL_FIELDS[field])
+        before = await drv.async_read_calibration()
+        try:
+            ok = await drv.async_write_calibration(addr, int(offset))
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+        after = await drv.async_read_calibration()
+
+        if not ok:
+            # Same rule as the barometer write (#252): a failed write must
+            # not return normally, and must not claim nothing changed.
+            raise RuntimeError(
+                "Station did not accept the calibration; "
+                f"offsets now read: {after}"
+            )
+
+        return {"success": ok, "before": before, "after": after}
+
+    async def _h_clear_vantage_cal(self, _msg: dict) -> dict[str, Any]:
+        """CLRCAL — zero every temperature and humidity offset.
+
+        Note this does NOT touch barometer calibration, which lives
+        behind BAR= and has its own panel.  Naming it "clear calibration"
+        in the UI without that qualifier would imply more than it does.
+        """
+        drv = self._require_vantage_cal()
+        before = await drv.async_read_calibration()
+        ok = await drv.async_clear_calibration()
+        after = await drv.async_read_calibration()
+
+        if not ok:
+            raise RuntimeError(
+                f"Station did not accept CLRCAL; offsets now read: {after}"
+            )
+        return {"success": ok, "before": before, "after": after}
     # ---- Console location (EEPROM lat/lon) ----
 
     # The console stores signed TENTHS of a degree — ~11 km per step — so
@@ -1382,6 +1497,15 @@ class LoggerDaemon:
                 # sniff, and asking the console would cost a serial round
                 # trip to answer a question the daemon already holds.
                 "barometer_cal": CAP_BAROMETER_CAL in caps,
+                # Per-sensor offsets via CALED/CALFIX.  Distinct from
+                # "calibration" above, which is the legacy five-field
+                # block and is false on a Vantage, and from
+                # "barometer_cal", which is BAR= — a different
+                # mechanism again.  Three separate things.
+                "sensor_calibration": (
+                    CAP_CALIBRATION_RW in caps
+                    and hasattr(self.driver, "CALIBRATION_FIELDS")
+                ),
                 "location": CAP_LOCATION_RW in caps,
             },
         }

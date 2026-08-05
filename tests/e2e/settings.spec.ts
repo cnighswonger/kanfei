@@ -338,6 +338,113 @@ test.describe('Barometer calibration panel', () => {
     expect(getsAfterPost).toBeGreaterThan(0);
   });
 });
+test.describe('Vantage sensor calibration panel', () => {
+  test.beforeEach(async ({ page }) => {
+    await injectAuthCookie(page);
+  });
+
+  async function stubSupport(
+    page: import('@playwright/test').Page,
+    sensorCalibration: boolean,
+  ) {
+    await page.route('**/api/weatherlink/config', async (route) => {
+      await route.fulfill({
+        json: {
+          archive_period: 5, sample_period: 5, calibration: null,
+          supported: {
+            archive_period: true, sample_period: true, calibration: false,
+            barometer_cal: false, sensor_calibration: sensorCalibration,
+          },
+        },
+      });
+    });
+  }
+
+  async function stubCal(
+    page: import('@playwright/test').Page,
+    offsets: Record<string, number>,
+  ) {
+    await page.route('**/api/station/calibration', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          json: { offsets, temp_units: 'tenths_f', humidity_units: 'percent' },
+        });
+        return;
+      }
+      await route.fallback();
+    });
+  }
+
+  test('explains itself rather than vanishing when unsupported', async ({ page }) => {
+    // #249: this is the panel a Vantage user goes looking for, so
+    // silence would read as a missing feature.
+    await stubSupport(page, false);
+    await page.goto('/settings');
+    await expect(
+      page.getByText('does not support per-sensor calibration', { exact: false }),
+    ).toBeVisible();
+  });
+
+  test('shows tenths of a degree as whole degrees', async ({ page }) => {
+    // The console stores 25 meaning +2.5 °F. Showing the raw integer
+    // would read as a 25-degree trim — a tenfold error in the direction
+    // that looks plausible.
+    await stubSupport(page, true);
+    await stubCal(page, { outside_temp: 25, inside_temp: -6, outside_humidity: 3 });
+    await page.goto('/settings');
+
+    await expect(page.getByText('+2.5 °F', { exact: false })).toBeVisible();
+    await expect(page.getByText('-0.6 °F', { exact: false })).toBeVisible();
+    // Humidity is whole percent, not tenths — the same number must not
+    // be divided by ten here.
+    await expect(page.getByText('+3 %', { exact: false })).toBeVisible();
+  });
+
+  test('an unreadable field says so rather than showing zero', async ({ page }) => {
+    // Zero is a real calibration. Rendering an absent field as 0 would
+    // make "no offset" and "could not read" identical on screen.
+    await stubSupport(page, true);
+    await stubCal(page, { outside_temp: 0 });
+    await page.goto('/settings');
+
+    // Zero renders unsigned — a "+" on nothing reads oddly.
+    await expect(page.getByText('0.0 °F', { exact: false })).toBeVisible();
+    // The three fields the stub omitted must say so, not show 0.
+    await expect(page.getByText('unreadable', { exact: false })).toHaveCount(3);
+  });
+
+  test('sends tenths, not degrees', async ({ page }) => {
+    await stubSupport(page, true);
+    let sent: Record<string, unknown> | null = null;
+    await page.route('**/api/station/calibration', async (route) => {
+      if (route.request().method() === 'POST') {
+        sent = route.request().postDataJSON();
+        await route.fulfill({
+          json: {
+            success: true,
+            before: { outside_temp: 0 },
+            after: { outside_temp: 25 },
+          },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          offsets: { outside_temp: 0 },
+          temp_units: 'tenths_f', humidity_units: 'percent',
+        },
+      });
+    });
+    await page.goto('/settings');
+
+    await page.getByLabel('Outside temperature offset').fill('2.5');
+    await page.getByRole('button', { name: 'Apply' }).first().click();
+
+    await expect(page.getByText('set to 2.5 °F', { exact: false })).toBeVisible();
+    // 2.5 °F must reach the wire as 25 tenths.
+    expect(sent).toEqual({ field: 'outside_temp', offset: 25 });
+  });
+});
 
 test.describe('Console location reconcile', () => {
   test.beforeEach(async ({ page }) => {

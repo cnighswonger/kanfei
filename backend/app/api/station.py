@@ -358,6 +358,93 @@ async def get_barometer_reference(
     }
 
 
+# --------------- Vantage temperature/humidity calibration ---------------
+#
+# Distinct from the barometer panel above.  A Vantage adjusts temperature
+# and humidity by per-sensor EEPROM offsets applied through CALED/CALFIX;
+# the barometer is BAR= and lives elsewhere.  Putting a barometer row in
+# this panel would be the terminology trap the barometer handler warns
+# about, so the two are deliberately separate surfaces.
+
+
+@router.get("/station/calibration")
+async def get_station_calibration(_admin=Depends(require_admin)):
+    """Current temperature/humidity offsets, in the console's own units."""
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "read_vantage_cal"}, timeout=25.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/calibration")
+async def set_station_calibration(payload: dict, _admin=Depends(require_admin)):
+    """Set one calibration offset.
+
+    Body: ``{"field": str, "offset": int}`` where field is one of
+    inside_temp, outside_temp, inside_humidity, outside_humidity.
+
+    ``offset`` is in the console's native units — TENTHS of a degree
+    Fahrenheit for temperature, whole percent for humidity.  Getting that
+    wrong is a tenfold error, so the units are returned by the GET rather
+    than left for the caller to assume.
+    """
+    field = payload.get("field")
+    offset = payload.get("offset")
+    if field is None or offset is None:
+        raise HTTPException(
+            status_code=400, detail="field and offset are both required",
+        )
+
+    try:
+        client = get_ipc_client()
+        result = await client.send_command(
+            {"cmd": "write_vantage_cal", "field": str(field), "offset": int(offset)},
+            timeout=40.0,
+        )
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="offset must be an integer")
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/calibration/clear")
+async def clear_station_calibration(_admin=Depends(require_admin)):
+    """CLRCAL — zero every temperature and humidity offset.
+
+    Does not touch barometer calibration, which is a separate mechanism.
+    """
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "clear_vantage_cal"}, timeout=40.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
 # --------------- Console location ---------------
 #
 # Vantage only.  The console keeps its own latitude/longitude in EEPROM

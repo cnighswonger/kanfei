@@ -622,6 +622,41 @@ export interface MetarReferenceResponse {
   fetched_at: string;
 }
 
+// --- Vantage sensor calibration ---
+
+/**
+ * Per-sensor temperature/humidity offsets held in console EEPROM.
+ *
+ * Distinct from barometer calibration, which uses BAR= and has its own
+ * types above. A field is absent when the console could not be read —
+ * zero is a real calibration and must not stand in for "unknown".
+ */
+export interface VantageCalibrationOffsets {
+  inside_temp?: number;
+  outside_temp?: number;
+  inside_humidity?: number;
+  outside_humidity?: number;
+}
+
+export interface VantageCalibrationState {
+  offsets: VantageCalibrationOffsets;
+  /** "tenths_f" — a caller assuming whole degrees is off by 10x. */
+  temp_units: string;
+  humidity_units: string;
+}
+
+export interface VantageCalibrationResult {
+  success: boolean;
+  before: VantageCalibrationOffsets | null;
+  after: VantageCalibrationOffsets | null;
+}
+
+export type VantageCalibrationField =
+  | "inside_temp"
+  | "outside_temp"
+  | "inside_humidity"
+  | "outside_humidity";
+
 // --- Console location (Vantage) ---
 
 /**
@@ -686,6 +721,12 @@ export interface WeatherLinkConfig {
      * hidden on an old daemon", which is the correct behaviour.
      */
     barometer_cal?: boolean;
+    /**
+     * Per-sensor temperature/humidity offsets (Vantage, CALED/CALFIX).
+     * Not `calibration` — that is the legacy five-field block, false
+     * on a Vantage — and not `barometer_cal`, which is BAR=.
+     */
+    sensor_calibration?: boolean;
     /** Whether the console holds its own lat/lon (Vantage). */
     location?: boolean;
   };

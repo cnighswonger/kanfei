@@ -27,6 +27,9 @@ CMD_FORCE_ARCHIVE = "force_archive"
 CMD_BAROMETER_CAL = "barometer_cal"          # read BARDATA
 CMD_SET_BAROMETER = "set_barometer"          # write via BAR=
 CMD_SIGNAL_QUALITY = "signal_quality"
+CMD_READ_VANTAGE_CAL = "read_vantage_cal"    # temp/humidity offsets
+CMD_WRITE_VANTAGE_CAL = "write_vantage_cal"  # one field, via CALED/CALFIX
+CMD_CLEAR_VANTAGE_CAL = "clear_vantage_cal"  # CLRCAL — zeroes all
 CMD_READ_LOCATION = "read_location"          # console lat/lon from EEPROM
 CMD_SET_LOCATION = "set_location"            # write + NEWSETUP
 

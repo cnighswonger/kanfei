@@ -643,7 +643,12 @@ class VantageDriver(StationDriver):
                 f"(0x{CAL_BLOCK_START:02X}..0x{CAL_BLOCK_END:02X})"
             )
         if not -128 <= offset <= 127:
-            raise ValueError(f"calibration offset {offset} out of range")
+            # Wording matters: api/station.py::_cal_error routes on
+            # substrings, and "must be" is what marks a rejected
+            # argument as a 400 rather than a 503 server fault.
+            raise ValueError(
+                f"calibration offset must be -128..127, got {offset}"
+            )
 
         with self._io_lock:
             # 1. current calibrated sensor values
@@ -719,6 +724,45 @@ class VantageDriver(StationDriver):
                 field.address, offset,
             )
             return True
+
+    # The four offsets a user can meaningfully set on a station with no
+    # extra sensors.  Extra/soil/leaf temps and the extra humidities exist
+    # in the block but are inert without the hardware fitted, and showing
+    # seven empty humidity rows would be worse than showing none.
+    CALIBRATION_FIELDS = (
+        ("inside_temp", CAL_INSIDE_TEMP),
+        ("outside_temp", CAL_OUTSIDE_TEMP),
+        ("inside_humidity", CAL_INSIDE_HUM),
+        ("outside_humidity", CAL_OUTSIDE_HUM),
+    )
+
+    def read_calibration(self) -> Optional[dict[str, int]]:
+        """Current temperature/humidity calibration offsets.
+
+        Values are in the console's native units — tenths of a degree
+        Fahrenheit for temperature, whole percent for humidity — and are
+        signed: the offset is added to the raw reading.
+
+        Returns None only if the EEPROM cannot be read at all.  An
+        individual field that reads back empty is omitted rather than
+        reported as zero, because zero is a legitimate calibration and
+        "no offset" and "could not read" must not look alike.
+        """
+        offsets: dict[str, int] = {}
+        with self._io_lock:
+            for name, field in self.CALIBRATION_FIELDS:
+                raw = self._eeprom_read(field.address, 1)
+                if not raw:
+                    logger.warning(
+                        "read_calibration: 0x%02X (%s) unreadable",
+                        field.address, name,
+                    )
+                    continue
+                offsets[name] = struct.unpack("b", raw)[0]
+        return offsets or None
+
+    async def async_read_calibration(self) -> Optional[dict[str, int]]:
+        return await self._run_in_executor(self.read_calibration)
 
     def clear_calibration(self) -> bool:
         """CLRCAL — zero every temperature and humidity calibration offset.
