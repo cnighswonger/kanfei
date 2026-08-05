@@ -194,6 +194,12 @@ export default function ConsoleHighsLows({ supported, isMobile }: Props) {
     else setStatus("unsupported");
   }, [supported, load]);
 
+  // Deliberately blank, unlike BarometerCalibration's explicit "not
+  // supported" card.  #249 is about a user hunting for an action and
+  // finding nothing; this panel offers no action and only restates
+  // extremes the dashboard already shows, so a permanent apology card on
+  // every legacy install would be noise.  The 501 branch is now only
+  // reachable as a race — `supported.highs_lows` no longer lies.
   if (status === "unsupported") return null;
 
   return (

@@ -74,6 +74,28 @@ def _driver_model_code(driver: StationDriver) -> int:
     return STATION_TYPE_UNKNOWN
 
 
+def _supports_hilows(driver: StationDriver | None) -> bool:
+    """Whether this driver can actually answer a HILOWS request.
+
+    Both halves are load-bearing, and one predicate serves both the
+    capability report and the command gate so they cannot drift: a
+    `supported` map that says yes while the handler says 501 renders the
+    panel and then makes it vanish.
+
+    LinkDriver has declared CAP_HILOWS since the initial commit and
+    implements no hilows() at all, so the capability alone would reach an
+    AttributeError.  The method alone would miss a VP1 whose CAP_HILOWS is
+    correctly absent because it has no LOOP2.
+    """
+    if driver is None or not driver.connected:
+        return False
+    try:
+        declared = set(driver.capabilities)
+    except Exception:          # pragma: no cover — defensive
+        return False
+    return CAP_HILOWS in declared and hasattr(driver, "async_hilows")
+
+
 def _create_driver(driver_type: str, config: dict) -> StationDriver:
     """Create a StationDriver instance based on config.
 
@@ -1181,16 +1203,7 @@ class LoggerDaemon:
         drv = self.driver
         if drv is None or not drv.connected:
             raise RuntimeError("Not connected")
-        # Both checks are needed, and the second is not belt-and-braces.
-        # LinkDriver advertises CAP_HILOWS and implements no hilows() at
-        # all — a live instance of the advertise-what-you-cannot-do bug
-        # that motivated #221.  The capability alone would let a legacy
-        # station through to an AttributeError; the method alone would
-        # miss a VP1 whose CAP_HILOWS is correctly absent because it has
-        # no LOOP2.
-        if CAP_HILOWS not in drv.capabilities or not hasattr(
-            drv, "async_hilows"
-        ):
+        if not _supports_hilows(drv):
             raise RuntimeError(
                 f"{drv.station_name} does not support highs and lows"
             )
@@ -1359,9 +1372,7 @@ class LoggerDaemon:
                 # sniff, and asking the console would cost a serial round
                 # trip to answer a question the daemon already holds.
                 "barometer_cal": CAP_BAROMETER_CAL in caps,
-                # Conditional on has_loop2 in the driver, so a VP1
-                # without LOOP2 correctly reports false.
-                "highs_lows": CAP_HILOWS in caps,
+                "highs_lows": _supports_hilows(self.driver),
             },
         }
 

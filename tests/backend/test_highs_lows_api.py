@@ -69,13 +69,13 @@ class TestCapability:
 
     def test_legacy_advertises_it_but_cannot_do_it(self):
         """LinkDriver claims CAP_HILOWS and implements no hilows() — the
-        advertise-what-you-cannot-do bug that motivated #221, still live
-        in the legacy driver.
+        advertise-what-you-cannot-do bug that motivated #221, live in the
+        legacy driver since the initial commit.
 
-        Not fixed here: withdrawing a capability from LinkDriver is a
+        The capability itself is left alone: withdrawing it is a
         wire-contract change to a driver this PR does not otherwise
-        touch.  Pinned instead, so the handler's second check is
-        understood as load-bearing rather than defensive noise.
+        touch.  Pinned here so the reason `_supports_hilows` cannot
+        simply trust `capabilities` stays visible.
         """
         drv = LinkDriver("/dev/null", 2400)
         assert CAP_HILOWS in drv.capabilities
@@ -89,6 +89,81 @@ class TestCapability:
         with pytest.raises(RuntimeError) as excinfo:
             await _daemon(drv)._h_highs_lows({})
         assert _cal_error(str(excinfo.value)).status_code == 501
+
+
+class TestConfigGateMatchesCommandGate:
+    """The `supported` map and the handler must answer identically.
+
+    They did not: the handler checked capability *and* method, the config
+    map reported the raw capability, so a legacy station advertised
+    highs_lows, rendered the panel, called the endpoint, took a 501 and
+    watched the panel disappear.  A support bit that can lie is worse
+    than no support bit — the panel has already committed to existing by
+    the time the truth arrives.
+    """
+
+    @staticmethod
+    async def _supported_for(drv):
+        from logger_main import LoggerDaemon
+
+        drv.serial = FakeSerial()
+        drv._connected = True
+        if hasattr(drv, "_wakeup"):
+            drv._wakeup = lambda: None
+
+        daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon.driver = drv
+        daemon._archive_period = None
+        daemon._sample_period = None
+        result = await daemon._h_read_config({})
+        return result["supported"]
+
+    @pytest.mark.asyncio
+    async def test_vantage_reports_true(self):
+        drv = VantageDriver("/dev/null", 19200)
+        drv.hw_config.has_loop2 = True
+        assert (await self._supported_for(drv))["highs_lows"] is True
+
+    @pytest.mark.asyncio
+    async def test_legacy_reports_false(self):
+        """The regression under test: CAP_HILOWS is present on
+        LinkDriver, so anything reading the capability directly reports
+        True here."""
+        drv = LinkDriver("/dev/null", 2400)
+        assert (await self._supported_for(drv))["highs_lows"] is False
+
+    @pytest.mark.asyncio
+    async def test_vp1_without_loop2_reports_false(self):
+        drv = VantageDriver("/dev/null", 19200)
+        drv.hw_config.has_loop2 = False
+        assert (await self._supported_for(drv))["highs_lows"] is False
+
+    @pytest.mark.asyncio
+    async def test_the_two_gates_agree_for_every_driver(self):
+        """Stated as the invariant rather than as three separate cases,
+        so a driver added later is covered by construction."""
+        vantage = VantageDriver("/dev/null", 19200)
+        vantage.hw_config.has_loop2 = True
+        vp1 = VantageDriver("/dev/null", 19200)
+        vp1.hw_config.has_loop2 = False
+
+        for drv in (vantage, vp1, LinkDriver("/dev/null", 2400)):
+            advertised = (await self._supported_for(drv))["highs_lows"]
+            # Only a 501 counts as refusal.  A supported driver gets past
+            # the gate and then fails on FakeSerial, which is the pass
+            # condition here — reaching the wire at all means the gate
+            # let it through.
+            try:
+                await _daemon(drv)._h_highs_lows({})
+                refused = False
+            except RuntimeError as exc:
+                refused = _cal_error(str(exc)).status_code == 501
+            except Exception:
+                refused = False
+            assert advertised is not refused, (
+                f"{type(drv).__name__} advertises {advertised} "
+                f"but the handler refuses={refused}"
+            )
 
     @pytest.mark.asyncio
     async def test_unsupported_maps_to_501(self):
