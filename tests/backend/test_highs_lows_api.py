@@ -67,22 +67,30 @@ class TestCapability:
         drv.hw_config.has_loop2 = False
         assert CAP_HILOWS not in drv.capabilities
 
-    def test_legacy_advertises_it_but_cannot_do_it(self):
-        """LinkDriver claims CAP_HILOWS and implements no hilows() — the
-        advertise-what-you-cannot-do bug that motivated #221, live in the
-        legacy driver since the initial commit.
+    def test_legacy_neither_claims_nor_implements_it(self):
+        """LinkDriver declared CAP_HILOWS from the initial commit while
+        implementing no hilows() under any name — the
+        advertise-what-you-cannot-do bug that motivated #221.
 
-        The capability itself is left alone: withdrawing it is a
-        wire-contract change to a driver this PR does not otherwise
-        touch.  Pinned here so the reason `_supports_hilows` cannot
-        simply trust `capabilities` stays visible.
+        #268 contained the symptom by making `_supports_hilows` require
+        both the capability and the method; #270 withdrew the flag, so the
+        two now agree at the source.  Both halves are asserted: the flag
+        must stay gone, and no implementation must appear without the
+        capability being reinstated deliberately.
         """
         drv = LinkDriver("/dev/null", 2400)
-        assert CAP_HILOWS in drv.capabilities
+        assert CAP_HILOWS not in drv.capabilities
         assert not hasattr(drv, "async_hilows")
 
     @pytest.mark.asyncio
-    async def test_legacy_is_refused_despite_advertising_the_capability(self):
+    async def test_legacy_is_refused_with_a_501(self):
+        """Named for what it now checks.
+
+        It used to be "refused despite advertising the capability", which
+        described the state before #270 withdrew the false flag.  The
+        refusal still matters — it is the handler half of the gate — but
+        the driver no longer advertises anything to be refused despite.
+        """
         drv = LinkDriver("/dev/null", 2400)
         drv.serial = FakeSerial()
         drv._connected = True

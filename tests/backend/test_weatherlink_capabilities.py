@@ -37,8 +37,18 @@ class TestCapabilityDeclarations:
         """The legacy station is the one in production; guard it."""
         caps = LinkDriver("/dev/null").capabilities
         for expected in ("archive_sync", "calibration_rw", "clock_sync",
-                         "rain_reset", "hilows"):
+                         "rain_reset"):
             assert expected in caps
+
+    def test_legacy_does_not_claim_hilows(self):
+        """It never could.  LinkDriver declared CAP_HILOWS from the initial
+        commit and implements no hilows() under any name — the legacy
+        protocol has no HILOWS equivalent to implement (#270).
+
+        This guard used to assert the opposite, which is how the false
+        flag survived: the capability was wrong and the test pinned it.
+        """
+        assert "hilows" not in LinkDriver("/dev/null").capabilities
 
 
 class TestVantageArchivePeriod:
