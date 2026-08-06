@@ -15,6 +15,8 @@ A self-hosted weather station dashboard and data logger with pluggable hardware 
 - **Data uploads**: Weather Underground PWS and CWOP/APRS-IS for NWS citizen weather data
 - **Backup and restore**: scheduled automatic backups with rotation, CLI commands, REST API, and Settings UI with download/restore
 - **Database admin**: stats, JSON export, sensor data compaction, and tiered purge
+- **Console management** (Davis Vantage): barometer calibration against nearby airport reports, per-sensor temperature/humidity offsets, the console's own record highs and lows, location push, and reception diagnostics
+- **Accounts**: single admin account created on first run; the dashboard is public, configuration and hardware commands require sign-in
 - **Calculated parameters**: heat index, dew point, wind chill, feels-like composite, equivalent potential temperature (theta-e)
 - **Weather backgrounds**: condition-driven gradients with custom image uploads per scene
 - **Three themes**: Dark, Light, and Classic Instrumental (brass/cream analog aesthetic)
@@ -47,6 +49,8 @@ python station.py run
 ```
 
 Open **http://localhost:8000** in your browser.
+
+On first run you are prompted to create an admin account. The dashboard, history, and forecast pages are public; Settings and any command that touches the station require signing in.
 
 If no station hardware is connected, the server starts in degraded mode — the UI loads and is fully navigable, but sensor readings will show placeholder values.
 
@@ -159,6 +163,13 @@ frontend/src/
 | GET | `/api/forecast` | Zambretti + NWS blended forecast |
 | GET | `/api/astronomy` | Sun/moon times, twilight, moon phase |
 | GET | `/api/station` | Station type, connection status, diagnostics |
+| GET | `/api/station/signal-quality` | Console reception statistics since midnight |
+| GET/POST | `/api/station/barometer-calibration` | Read/set barometer offset and elevation (Vantage) |
+| GET | `/api/station/barometer-reference` | Nearby airport pressure reports for calibration |
+| GET/POST | `/api/station/calibration` | Read/set per-sensor temperature and humidity offsets |
+| POST | `/api/station/calibration/clear` | Zero every sensor offset (does not affect the barometer) |
+| GET | `/api/station/highs-lows` | The console's own day/month/year extremes |
+| GET/POST | `/api/station/location` | Read the console's coordinates, or push Kanfei's |
 | GET/PUT | `/api/config` | Read/update configuration |
 | GET | `/api/spray/products` | Spray product definitions |
 | GET | `/api/spray/schedules` | Spray schedules with evaluations |
@@ -186,7 +197,7 @@ All drivers implement a common `StationDriver` interface. Drivers marked "in tes
 |--------|--------|------------|--------|
 | **Legacy serial** | Weather Monitor II, Wizard III, Wizard II, Perception II, GroWeather, Energy, Health | RS-232 serial (2400 baud) | Stable |
 | **Vantage Pro/Pro2** | VP1, VP2 (6150, 6152, 6153, 6160, 6162, 6163) | RS-232 serial or USB (19200 baud) | [In testing (#1)](https://github.com/cnighswonger/kanfei/issues/1) |
-| **Vantage Vue** | Vue (6250, 6351) | RS-232 serial or USB (19200 baud) | [In testing (#1)](https://github.com/cnighswonger/kanfei/issues/1) |
+| **Vantage Vue** | Vue (6250, 6351) | RS-232 serial or USB (19200 baud) | Stable — reference station since 2026-08-01 |
 | **WeatherLink IP** | 6555 | Ethernet TCP (port 22222) | [In testing (#6)](https://github.com/cnighswonger/kanfei/issues/6) |
 | **WeatherLink Live** | 6100 | WiFi — HTTP + UDP | [In testing (#5)](https://github.com/cnighswonger/kanfei/issues/5) |
 
