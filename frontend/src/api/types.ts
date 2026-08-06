@@ -708,6 +708,33 @@ export interface ConsoleHighsLowsResponse {
   highs_lows: ConsoleHighsLows;
 }
 
+// --- Console reception diagnostics (Vantage) ---
+
+/**
+ * RXCHECK counters, plus the transmitter IDs the console reports hearing.
+ *
+ * Every counter is a total since station midnight, not a rate. One reading
+ * says how the day has gone; two readings apart say how it is going now.
+ *
+ * `max_consecutive_received` counts a run of SUCCESSES — the manual's
+ * "largest number of packets received in a row" — so a large value is
+ * healthy. Read as consecutive misses it inverts completely, which is a
+ * mistake that has already been made once in a diagnostic script.
+ */
+export interface SignalQuality {
+  packets_received: number;
+  missed: number;
+  resync: number;
+  max_consecutive_received: number;
+  crc_errors: number;
+  /**
+   * Null when RECEIVERS failed, empty when the console answered with no
+   * IDs — a Vue legitimately does the latter. Neither means "hearing
+   * nothing"; the RXCHECK counters are what say that.
+   */
+  receivers: number[] | null;
+}
+
 // --- Vantage sensor calibration ---
 
 /**
@@ -819,6 +846,8 @@ export interface WeatherLinkConfig {
     sensor_calibration?: boolean;
     /** Whether the console holds its own lat/lon (Vantage). */
     location?: boolean;
+    /** RXCHECK reception diagnostics (Vantage). */
+    signal_quality?: boolean;
   };
 }
 

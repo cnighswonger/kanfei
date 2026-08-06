@@ -103,6 +103,24 @@ def _supports_hilows(driver: StationDriver | None) -> bool:
     return CAP_HILOWS in declared and hasattr(driver, "async_hilows")
 
 
+def _supports_signal_quality(driver: StationDriver | None) -> bool:
+    """Whether this driver can answer an RXCHECK request.
+
+    There is no capability flag for reception diagnostics, so unlike
+    _supports_hilows this is a method check alone.  It still exists as a
+    named predicate rather than an inline hasattr because the capability
+    report and the command gate must not drift — #268 was exactly that
+    divergence, and a shared predicate is what prevents it recurring here.
+
+    RECEIVERS is deliberately not part of the test: a Vue answers it with
+    an empty list and the handler treats that as non-fatal, so requiring
+    it would withdraw the panel from stations that can serve most of it.
+    """
+    if driver is None or not driver.connected:
+        return False
+    return hasattr(driver, "async_rxcheck")
+
+
 def _create_driver(driver_type: str, config: dict) -> StationDriver:
     """Create a StationDriver instance based on config.
 
@@ -1602,7 +1620,7 @@ class LoggerDaemon:
         drv = self.driver
         if drv is None or not drv.connected:
             raise RuntimeError("Not connected")
-        if not hasattr(drv, "async_rxcheck"):
+        if not _supports_signal_quality(drv):
             raise RuntimeError(
                 f"{drv.station_name} does not support reception diagnostics"
             )
@@ -1739,6 +1757,7 @@ class LoggerDaemon:
                     and hasattr(self.driver, "async_clear_log")
                 ),
                 "highs_lows": _supports_hilows(self.driver),
+                "signal_quality": _supports_signal_quality(self.driver),
                 # Per-sensor offsets via CALED/CALFIX.  Distinct from
                 # "calibration" above, which is the legacy five-field
                 # block and is false on a Vantage, and from

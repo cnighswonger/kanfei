@@ -605,6 +605,14 @@ export function fetchConsoleHighsLows(): Promise<
   return request("/api/station/highs-lows");
 }
 
+// --- Console reception diagnostics (Vantage) ---
+
+export function fetchSignalQuality(): Promise<
+  import("./types.ts").SignalQuality
+> {
+  return request("/api/station/signal-quality");
+}
+
 // --- Vantage sensor calibration ---
 
 export function fetchVantageCalibration(): Promise<
