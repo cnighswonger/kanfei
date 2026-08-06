@@ -167,6 +167,7 @@ frontend/src/
 | GET/POST | `/api/station/barometer-calibration` | Read/set barometer offset and elevation (Vantage) |
 | GET | `/api/station/barometer-reference` | Nearby airport pressure reports for calibration |
 | GET/POST | `/api/station/calibration` | Read/set per-sensor temperature and humidity offsets |
+| POST | `/api/station/calibration/clear` | Zero every sensor offset (does not affect the barometer) |
 | GET | `/api/station/highs-lows` | The console's own day/month/year extremes |
 | GET/POST | `/api/station/location` | Read the console's coordinates, or push Kanfei's |
 | GET/PUT | `/api/config` | Read/update configuration |
