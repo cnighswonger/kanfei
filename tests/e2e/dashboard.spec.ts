@@ -82,15 +82,19 @@ test.describe('Wind tile display toggle', () => {
     // browser attaches the injected knf_session cookie automatically,
     // whereas page.request runs in its own APIRequestContext where the
     // cookie handling is unreliable.
-    await page.evaluate(async () => {
-      await fetch('/api/config', {
+    const status = await page.evaluate(async () => {
+      const resp = await fetch('/api/config', {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify([{ key: 'ui_dashboard_layout', value: '' }]),
       });
       try { localStorage.removeItem('ui_dashboard_layout'); } catch {}
+      return { ok: resp.ok, status: resp.status };
     });
+    if (!status.ok) {
+      throw new Error(`resetLayout: PUT /api/config failed with ${status.status}`);
+    }
   }
 
   test.beforeEach(async ({ page }) => {
@@ -148,9 +152,12 @@ test.describe('Wind tile display toggle', () => {
 
     await page.getByRole('button', { name: 'Switch to Rose' }).click();
 
-    // WindRose renders a Highcharts polar chart; assert the container
-    // mounts rather than what the chart drew (per #128 out-of-scope).
-    await expect(page.locator('.highcharts-container').first()).toBeVisible();
+    // WindRose-specific footer text — stronger than .highcharts-container
+    // (which would match any Highcharts consumer if one is added to the
+    // dashboard front face later). Renders only after WindRose's first
+    // fetch resolves, so it's evidence the component is functional, not
+    // just mounted (per #128 out-of-scope: not what the chart drew).
+    await expect(page.getByText(/3h distribution \(calm filtered\)/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Switch to Compass' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Switch to Compass' }).click();
@@ -180,8 +187,9 @@ test.describe('Wind tile display toggle', () => {
     await page.reload();
     await currentReady;
 
-    // Rose survives reload — assert the mount, not the drawing.
-    await expect(page.locator('.highcharts-container').first()).toBeVisible();
+    // Rose survives reload — use the WindRose-specific footer, not the
+    // generic .highcharts-container wrapper.
+    await expect(page.getByText(/3h distribution \(calm filtered\)/)).toBeVisible();
 
     // Poll on the persisted layout — .highcharts-container mounting only
     // proves React state is rose (populated by the async syncUIPrefs).
@@ -203,17 +211,28 @@ test.describe('Wind tile display toggle', () => {
 
   test('compass state is stored as absent windDisplay, not "compass"', async ({ page }) => {
     // Round-trip: rose -> compass, then inspect what actually got saved.
+    // Wait for the rose write to land before setting up the compass
+    // waiter — otherwise the compass waiter can race with, and match,
+    // the still-pending rose PUT.
     await enterEditMode(page);
-    await page.getByRole('button', { name: 'Switch to Rose' }).click();
 
-    const backToCompass = page.waitForResponse(
+    const roseWrite = page.waitForResponse(
+      (resp) =>
+        resp.url().includes('/api/config') &&
+        resp.request().method() === 'PUT' &&
+        resp.status() === 200,
+    );
+    await page.getByRole('button', { name: 'Switch to Rose' }).click();
+    await roseWrite;
+
+    const compassWrite = page.waitForResponse(
       (resp) =>
         resp.url().includes('/api/config') &&
         resp.request().method() === 'PUT' &&
         resp.status() === 200,
     );
     await page.getByRole('button', { name: 'Switch to Compass' }).click();
-    await backToCompass;
+    await compassWrite;
 
     const stored = await page.evaluate(() =>
       localStorage.getItem('ui_dashboard_layout'),

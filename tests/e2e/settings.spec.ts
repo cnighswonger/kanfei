@@ -94,8 +94,8 @@ test.describe('Custom theme editor', () => {
   // page.request runs in its own APIRequestContext where cookie handling
   // is unreliable.
   async function resetTheme(page: import('@playwright/test').Page) {
-    await page.evaluate(async () => {
-      await fetch('/api/config', {
+    const status = await page.evaluate(async () => {
+      const resp = await fetch('/api/config', {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -108,7 +108,11 @@ test.describe('Custom theme editor', () => {
         localStorage.removeItem('ui_custom_theme');
         localStorage.setItem('ui_theme', 'dark');
       } catch { /* localStorage unavailable */ }
+      return { ok: resp.ok, status: resp.status };
     });
+    if (!status.ok) {
+      throw new Error(`resetTheme: PUT /api/config failed with ${status.status}`);
+    }
   }
 
   test.beforeEach(async ({ page }) => {
