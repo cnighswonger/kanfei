@@ -9,6 +9,7 @@ import ThemeEditor from "../components/settings/ThemeEditor.tsx";
 import BarometerCalibration from "../components/settings/BarometerCalibration.tsx";
 import ConsoleDataOperations from "../components/settings/ConsoleDataOperations.tsx";
 import ConsoleHighsLows from "../components/settings/ConsoleHighsLows.tsx";
+import SignalQuality from "../components/settings/SignalQuality.tsx";
 import VantageCalibration from "../components/settings/VantageCalibration.tsx";
 import ConsoleLocation from "../components/settings/ConsoleLocation.tsx";
 import { ALL_SCENES, SCENE_LABELS, SCENE_GRADIENTS } from "../components/WeatherBackground.tsx";
@@ -2815,6 +2816,13 @@ export default function Settings() {
           the diagnostic (#263). */}
       <ConsoleHighsLows
         supported={wlConfig?.supported?.highs_lows ?? false}
+        isMobile={isMobile}
+      />
+
+      {/* Reception diagnostics — names the transmitter dropout behind
+          #230 while it is happening, not hours later. */}
+      <SignalQuality
+        supported={wlConfig?.supported?.signal_quality ?? false}
         isMobile={isMobile}
       />
 

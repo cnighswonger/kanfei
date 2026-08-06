@@ -28,6 +28,10 @@ from app.protocol.vantage.driver import VantageDriver
 class FakeSerial:
     """Serial stub that replays a scripted OK-response for RXCHECK."""
 
+    # `connected` reads through to the port, so the capability gate needs
+    # this to be answerable rather than an AttributeError.
+    is_open = True
+
     def __init__(self, payload: bytes = b"\n\rOK\n\r 27152 132 0 1770 36\n\r"):
         self.sent: list[bytes] = []
         self._pending = bytearray(payload)
@@ -161,3 +165,93 @@ class TestEmptyReceiversIsNotAFailure:
         console hears nothing addressable. Collapsing them loses the
         difference between a broken link and a Vue."""
         assert [] != None      # noqa: E711 — the point is the distinction
+
+
+class TestConfigGateMatchesCommandGate:
+    """The `supported` map and the handler must answer identically.
+
+    This is the #268 regression restated for reception diagnostics. There
+    the config map reported a raw capability while the handler also
+    required the method, so a legacy station advertised the feature,
+    rendered the panel, took a 501 and watched the panel vanish. A support
+    bit that can lie is worse than no support bit — the UI has already
+    committed to existing by the time the truth arrives.
+
+    Both sides now call `_supports_signal_quality`, so these assert the
+    property that made a shared predicate necessary rather than the
+    implementation detail that it is shared.
+    """
+
+    @staticmethod
+    async def _supported_for(drv):
+        from logger_main import LoggerDaemon
+
+        drv.serial = FakeSerial()
+        drv._connected = True
+        if hasattr(drv, "_wakeup"):
+            drv._wakeup = lambda: None
+
+        daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon.driver = drv
+        daemon._archive_period = None
+        daemon._sample_period = None
+        result = await daemon._h_read_config({})
+        return result["supported"]
+
+    @staticmethod
+    def _daemon(drv):
+        from logger_main import LoggerDaemon
+
+        daemon = LoggerDaemon.__new__(LoggerDaemon)
+        daemon.driver = drv
+        return daemon
+
+    @pytest.mark.asyncio
+    async def test_vantage_reports_true(self):
+        drv = VantageDriver("/dev/null", 19200)
+        assert (await self._supported_for(drv))["signal_quality"] is True
+
+    @pytest.mark.asyncio
+    async def test_legacy_reports_false(self):
+        from app.protocol.link_driver import LinkDriver
+
+        drv = LinkDriver("/dev/null", 2400)
+        assert (await self._supported_for(drv))["signal_quality"] is False
+
+    @pytest.mark.asyncio
+    async def test_legacy_is_refused_with_a_501(self):
+        from app.api.station import _cal_error
+        from app.protocol.link_driver import LinkDriver
+
+        drv = LinkDriver("/dev/null", 2400)
+        drv.serial = FakeSerial()
+        drv._connected = True
+        with pytest.raises(RuntimeError) as excinfo:
+            await self._daemon(drv)._h_signal_quality({})
+        assert _cal_error(str(excinfo.value)).status_code == 501
+
+    @pytest.mark.asyncio
+    async def test_the_two_gates_agree_for_every_driver(self):
+        """Stated as the invariant rather than as a case per driver, so a
+        driver added later is covered by construction."""
+        from app.api.station import _cal_error
+        from app.protocol.link_driver import LinkDriver
+
+        for drv in (VantageDriver("/dev/null", 19200),
+                    LinkDriver("/dev/null", 2400)):
+            advertised = (await self._supported_for(drv))["signal_quality"]
+            # Only a 501 counts as refusal. A supported driver gets past
+            # the gate and then fails on the exhausted FakeSerial, which is
+            # the pass condition — reaching the wire means the gate let it
+            # through.
+            try:
+                await self._daemon(drv)._h_signal_quality({})
+                refused = False
+            except RuntimeError as exc:
+                refused = _cal_error(str(exc)).status_code == 501
+            except Exception:
+                refused = False
+            assert advertised is not refused, (
+                f"{type(drv).__name__} advertises {advertised} "
+                f"but the handler refuses={refused}"
+            )
