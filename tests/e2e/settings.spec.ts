@@ -10,7 +10,10 @@ test.describe('Settings page', () => {
     );
     await page.goto('/settings');
     await configReady;
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    // exact: true — the WeatherLink card renders a heading containing
+    // "settings could not be read" when no station is attached (the fixture's
+    // normal state), which otherwise collides with the page heading.
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   });
 
   function driverSelect(page: import('@playwright/test').Page) {
@@ -66,6 +69,196 @@ test.describe('Settings page', () => {
   test('Backup tab is accessible', async ({ page }) => {
     await page.getByRole('button', { name: 'Backup' }).click();
     await expect(page.getByText('Backup', { exact: false }).first()).toBeVisible();
+  });
+
+  test('timezone dropdown is in Units section, not Display', async ({ page }) => {
+    // Units and Display cards live under the Display tab.
+    await page.getByRole('button', { name: 'Display' }).click();
+
+    // Each card is a sibling <div style={cardStyle}> starting with an <h3>.
+    // The parent-of-heading pattern scopes reliably to the card, unlike
+    // a generic .filter({has:}) on 'div' which bubbles up to any ancestor.
+    const unitsCard = page.getByRole('heading', { name: 'Units' }).locator('..');
+    await expect(unitsCard.getByLabel('Timezone')).toBeVisible();
+
+    const displayCard = page.getByRole('heading', { name: 'Display' }).locator('..');
+    await expect(displayCard.getByLabel('Timezone')).toHaveCount(0);
+  });
+});
+
+test.describe('Custom theme editor', () => {
+  // Reset both localStorage and backend-persisted prefs.  ThemeContext
+  // reconciles from /api/config on mount, so a stale backend value would
+  // otherwise leak between tests.  The reset runs via an in-page fetch
+  // so the injected knf_session cookie is attached automatically —
+  // page.request runs in its own APIRequestContext where cookie handling
+  // is unreliable.
+  async function resetTheme(page: import('@playwright/test').Page) {
+    const status = await page.evaluate(async () => {
+      const resp = await fetch('/api/config', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([
+          { key: 'ui_theme', value: 'dark' },
+          { key: 'ui_custom_theme', value: '' },
+        ]),
+      });
+      try {
+        localStorage.removeItem('ui_custom_theme');
+        localStorage.setItem('ui_theme', 'dark');
+      } catch { /* localStorage unavailable */ }
+      return { ok: resp.ok, status: resp.status };
+    });
+    if (!status.ok) {
+      throw new Error(`resetTheme: PUT /api/config failed with ${status.status}`);
+    }
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await injectAuthCookie(page);
+    // Initial load so page.evaluate has a document to run in — then reset
+    // and reload so ThemeContext picks up the clean state.
+    const configReady1 = page.waitForResponse(
+      (resp) => resp.url().includes('/api/config') && resp.status() === 200,
+    );
+    await page.goto('/settings');
+    await configReady1;
+    await resetTheme(page);
+    const configReady2 = page.waitForResponse(
+      (resp) => resp.url().includes('/api/config') && resp.status() === 200,
+    );
+    await page.reload();
+    await configReady2;
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Display' }).click();
+    await expect(page.getByLabel('Theme', { exact: true })).toBeVisible();
+  });
+
+  test.afterAll(async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await injectAuthCookie(page);
+    await page.goto('/settings');
+    await resetTheme(page);
+    await ctx.close();
+  });
+
+  test('selecting Custom reveals the editor', async ({ page }) => {
+    await page.getByLabel('Theme', { exact: true }).selectOption('custom');
+    await expect(page.getByLabel('Base theme')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Save Custom Theme|Saved!/ })).toBeVisible();
+  });
+
+  // The Accent color field row is a flex div whose first child is a
+  // label div containing exactly "Accent" (fontWeight 500).  The
+  // section header "Accent & Status" contains substring "Accent" but
+  // not exact — exact-text plus a parent-hop lands us in the row.
+  function accentHexInput(page: import('@playwright/test').Page) {
+    const row = page.getByText('Accent', { exact: true }).locator('..');
+    return row.locator('input[type="text"]');
+  }
+
+  test('changing accent color via hex input applies to DOM', async ({ page }) => {
+    await page.getByLabel('Theme', { exact: true }).selectOption('custom');
+
+    const input = accentHexInput(page);
+    await input.fill('#ff0000');
+    await input.blur();
+
+    await expect.poll(() =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim(),
+      ),
+    ).toBe('#ff0000');
+  });
+
+  test('Save persists custom theme across reload', async ({ page }) => {
+    await page.getByLabel('Theme', { exact: true }).selectOption('custom');
+
+    await accentHexInput(page).fill('#00ff00');
+
+    const configWrite = page.waitForResponse(
+      (resp) =>
+        resp.url().includes('/api/config') &&
+        resp.request().method() === 'PUT' &&
+        resp.status() === 200,
+    );
+    await page.getByRole('button', { name: 'Save Custom Theme' }).click();
+    await configWrite;
+
+    await expect(page.getByRole('button', { name: 'Saved!' })).toBeVisible();
+
+    const configReady = page.waitForResponse(
+      (resp) => resp.url().includes('/api/config') && resp.status() === 200,
+    );
+    await page.reload();
+    await configReady;
+    // Settings resets to the Station tab on reload — re-select Display.
+    await page.getByRole('button', { name: 'Display' }).click();
+
+    await expect(page.getByLabel('Theme', { exact: true })).toHaveValue('custom');
+    await expect.poll(() =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim(),
+      ),
+    ).toBe('#00ff00');
+  });
+
+  test('switching to Dark then back to Custom restores the saved theme', async ({ page }) => {
+    await page.getByLabel('Theme', { exact: true }).selectOption('custom');
+    await accentHexInput(page).fill('#0000ff');
+
+    const savedWrite = page.waitForResponse(
+      (resp) =>
+        resp.url().includes('/api/config') &&
+        resp.request().method() === 'PUT' &&
+        resp.status() === 200,
+    );
+    await page.getByRole('button', { name: 'Save Custom Theme' }).click();
+    await savedWrite;
+
+    await page.getByLabel('Theme', { exact: true }).selectOption('dark');
+    // Dark preset accent is not #0000ff — confirm we actually left custom
+    await expect.poll(() =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim(),
+      ),
+    ).not.toBe('#0000ff');
+
+    await page.getByLabel('Theme', { exact: true }).selectOption('custom');
+    await expect.poll(() =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim(),
+      ),
+    ).toBe('#0000ff');
+  });
+
+  test('Cancel discards draft without persisting', async ({ page }) => {
+    // Establish a known baseline: dark preset's accent
+    const baseline = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim(),
+    );
+
+    await page.getByLabel('Theme', { exact: true }).selectOption('custom');
+    await accentHexInput(page).fill('#abcdef');
+
+    await expect.poll(() =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim(),
+      ),
+    ).toBe('#abcdef');
+
+    await page.getByRole('button', { name: 'Cancel' }).click();
+
+    // No custom theme was saved, so Settings.tsx falls back to dark and the
+    // committed theme's accent is reapplied.
+    await expect(page.getByLabel('Theme', { exact: true })).toHaveValue('dark');
+    await expect.poll(() =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim(),
+      ),
+    ).toBe(baseline);
   });
 });
 

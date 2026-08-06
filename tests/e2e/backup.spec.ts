@@ -10,7 +10,7 @@ test.describe('Backup operations', () => {
     );
     await page.goto('/settings');
     await configReady;
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Backup' }).click();
     await expect(page.getByRole('button', { name: /backup now/i })).toBeVisible();
   });
@@ -43,7 +43,7 @@ test.describe('Backup operations', () => {
     );
     await page.goto('/settings');
     await configReady;
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Backup' }).click();
 
     await expect(page.getByText('kanfei-backup-').first()).toBeVisible();
@@ -61,7 +61,7 @@ test.describe('Backup operations', () => {
     );
     await page.goto('/settings');
     await configReady;
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Backup' }).click();
 
     await expect(page.getByText('kanfei-backup-').first()).toBeVisible();
