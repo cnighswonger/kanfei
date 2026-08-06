@@ -155,6 +155,10 @@ frontend/src/
 
 ### API Endpoints
 
+Common endpoints. The [API Reference](https://github.com/cnighswonger/kanfei/wiki/API-Reference)
+wiki page is the full inventory, including the destructive station commands that
+require an explicit confirmation token.
+
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/current` | Latest sensor reading + all derived values |
