@@ -672,6 +672,47 @@ test.describe('Vantage sensor calibration panel', () => {
     await expect(page.getByText('set to 2.5 °F', { exact: false })).toBeVisible();
     // 2.5 °F must reach the wire as 25 tenths.
     expect(sent).toEqual({ field: 'outside_temp', offset: 25 });
+
+    // Outside temperature applied in ~1s on hardware, so the lag note
+    // would be misleading here (#276).
+    await expect(
+      page.getByText('may take up to a minute', { exact: false }),
+    ).toHaveCount(0);
+  });
+
+  test('warns that an onboard sensor reading lags the offset', async ({ page }) => {
+    // Inside temp/humidity come from the console's own sensor, which
+    // reports about once a minute — measured at ~30s on fw 3.0.  The
+    // offset changes at once but the reading does not, and without
+    // saying so a user concludes the write failed (#276).
+    await stubSupport(page, true);
+    await page.route('**/api/station/calibration', async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          json: {
+            success: true,
+            before: { inside_humidity: 0 },
+            after: { inside_humidity: 3 },
+          },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          offsets: { inside_humidity: 0 },
+          temp_units: 'tenths_f', humidity_units: 'percent',
+        },
+      });
+    });
+    await page.goto('/settings');
+
+    await page.getByLabel('Inside humidity offset').fill('3');
+    await page.getByRole('button', { name: 'Apply' }).last().click();
+
+    await expect(page.getByText('set to 3 %', { exact: false })).toBeVisible();
+    await expect(
+      page.getByText('may take up to a minute', { exact: false }),
+    ).toBeVisible();
   });
 });
 

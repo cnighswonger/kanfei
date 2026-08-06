@@ -31,6 +31,24 @@ type LoadStatus = "loading" | "loaded" | "error" | "unsupported";
 const OFFSET_MIN = -128;
 const OFFSET_MAX = 127;
 
+// Appended to success messages for the console's own onboard sensors.
+//
+// The EEPROM offset changes at once — which is what this panel shows — but
+// the console only folds it into the reading when that sensor next reports
+// (serial ref §XIV.1).  Measured on fw 3.0 (#276): inside humidity took
+// ~30s, because the onboard sensor reports about once a minute.  Outside
+// temperature applied in ~1s in the same test, so the note would be
+// misleading there — hence per-field rather than blanket.  The cause is
+// most likely onboard-sensor vs transmitter, but that is inference: only
+// a transmitter-less unit was available.  The flag is therefore named for
+// what was observed, not for why.
+//
+// Barometer calibration does NOT behave this way — BAR= applies
+// immediately — so do not copy this note into that panel.
+const APPLY_LAG_NOTE =
+  " The console folds this into its reading when the sensor next reports," +
+  " so the displayed value may take up to a minute to catch up.";
+
 interface FieldDef {
   key: VantageCalibrationField;
   label: string;
@@ -39,6 +57,17 @@ interface FieldDef {
   unit: string;
   step: number;
   hint: string;
+  /**
+   * The displayed reading is known to lag this offset — see
+   * APPLY_LAG_NOTE.  Named for the observed behaviour rather than a cause:
+   * the two fields set here are the console's onboard sensors, which is
+   * the likely explanation, but CALFIX sends all four fields and the
+   * vendor rule is the broader "data packet for that sensor".  Only a
+   * transmitter-less bench unit was available, so the outside fields are
+   * untested on a station that actually receives them.  If one is ever
+   * seen to lag, set this from the measurement (Codex, #280 R1).
+   */
+  readingLags?: boolean;
 }
 
 const FIELDS: FieldDef[] = [
@@ -48,7 +77,7 @@ const FIELDS: FieldDef[] = [
     perUnit: 10,
     unit: "°F",
     step: 0.1,
-    hint: "Verified on hardware: writing 2.5 °F moved the reading by 2.5 °F.",
+    hint: "Verified on hardware (fw 2.12 and fw 3.0): writing 2.5 °F moved the reading by 2.5 °F.",
   },
   {
     key: "inside_temp",
@@ -57,6 +86,7 @@ const FIELDS: FieldDef[] = [
     unit: "°F",
     step: 0.1,
     hint: "",
+    readingLags: true,
   },
   {
     key: "outside_humidity",
@@ -73,6 +103,7 @@ const FIELDS: FieldDef[] = [
     unit: "%",
     step: 1,
     hint: "",
+    readingLags: true,
   },
 ];
 
@@ -211,7 +242,7 @@ export default function VantageCalibration({ supported, isMobile }: Props) {
             ? `${field.label} written, but the console could not be re-read.`
             : `${field.label} set to ${(applied / field.perUnit).toFixed(
                 field.perUnit === 10 ? 1 : 0,
-              )} ${field.unit}.`,
+              )} ${field.unit}.` + (field.readingLags ? APPLY_LAG_NOTE : ""),
       });
       if (result.after) setOffsets(result.after);
       setDrafts((d) => ({ ...d, [field.key]: "" }));
@@ -240,7 +271,11 @@ export default function VantageCalibration({ supported, isMobile }: Props) {
     try {
       const result = await clearVantageCalibration();
       if (result.after) setOffsets(result.after);
-      setOutcome({ kind: "ok", text: "All sensor offsets cleared." });
+      // clearAll touches every field, including the onboard sensors.
+      setOutcome({
+        kind: "ok",
+        text: "All sensor offsets cleared." + APPLY_LAG_NOTE,
+      });
       setDrafts({});
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
