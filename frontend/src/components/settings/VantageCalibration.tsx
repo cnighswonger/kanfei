@@ -38,7 +38,10 @@ const OFFSET_MAX = 127;
 // (serial ref §XIV.1).  Measured on fw 3.0 (#276): inside humidity took
 // ~30s, because the onboard sensor reports about once a minute.  Outside
 // temperature applied in ~1s in the same test, so the note would be
-// misleading there — hence per-field rather than blanket.
+// misleading there — hence per-field rather than blanket.  The cause is
+// most likely onboard-sensor vs transmitter, but that is inference: only
+// a transmitter-less unit was available.  The flag is therefore named for
+// what was observed, not for why.
 //
 // Barometer calibration does NOT behave this way — BAR= applies
 // immediately — so do not copy this note into that panel.
@@ -54,8 +57,17 @@ interface FieldDef {
   unit: string;
   step: number;
   hint: string;
-  /** Console's own onboard sensor, so the reading lags — see APPLY_LAG_NOTE. */
-  onboardSensor?: boolean;
+  /**
+   * The displayed reading is known to lag this offset — see
+   * APPLY_LAG_NOTE.  Named for the observed behaviour rather than a cause:
+   * the two fields set here are the console's onboard sensors, which is
+   * the likely explanation, but CALFIX sends all four fields and the
+   * vendor rule is the broader "data packet for that sensor".  Only a
+   * transmitter-less bench unit was available, so the outside fields are
+   * untested on a station that actually receives them.  If one is ever
+   * seen to lag, set this from the measurement (Codex, #280 R1).
+   */
+  readingLags?: boolean;
 }
 
 const FIELDS: FieldDef[] = [
@@ -74,7 +86,7 @@ const FIELDS: FieldDef[] = [
     unit: "°F",
     step: 0.1,
     hint: "",
-    onboardSensor: true,
+    readingLags: true,
   },
   {
     key: "outside_humidity",
@@ -91,7 +103,7 @@ const FIELDS: FieldDef[] = [
     unit: "%",
     step: 1,
     hint: "",
-    onboardSensor: true,
+    readingLags: true,
   },
 ];
 
@@ -230,7 +242,7 @@ export default function VantageCalibration({ supported, isMobile }: Props) {
             ? `${field.label} written, but the console could not be re-read.`
             : `${field.label} set to ${(applied / field.perUnit).toFixed(
                 field.perUnit === 10 ? 1 : 0,
-              )} ${field.unit}.` + (field.onboardSensor ? APPLY_LAG_NOTE : ""),
+              )} ${field.unit}.` + (field.readingLags ? APPLY_LAG_NOTE : ""),
       });
       if (result.after) setOffsets(result.after);
       setDrafts((d) => ({ ...d, [field.key]: "" }));
