@@ -50,4 +50,47 @@ test.describe('Login page', () => {
 
     await expect(page.getByText(/invalid username|login failed/i)).toBeVisible();
   });
+
+  test('a 401 issued before login does not eject the user after it', async ({ page }) => {
+    // Regression for the class of "pre-login request whose 401 arrives after
+    // login" — the frontend guard in `client.ts` snapshots auth state at
+    // send time.  Hold `/api/mute/status` (a request AppShell fires on mount)
+    // and release its 401 AFTER the user is on /settings.  Without the
+    // request-time snapshot, the guard would read the post-login flag,
+    // dispatch `kanfei:auth-required`, and bounce the user back to /login.
+    //
+    // times:1 is load-bearing.  useMuteStatus polls every 30 s; a handler
+    // without the limit would also intercept a request issued AFTER login,
+    // whose 401 is a legitimate ejection signal, not this bug.
+    //
+    // The paired backend/harness fix that makes this test's setup reliable
+    // (fresh uvicorn per invocation, so the SQLAlchemy pool doesn't hold
+    // stale file handles across DB rebuilds) is in this same PR — see #286.
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route(
+      '**/api/mute/status',
+      async (route) => {
+        await held;
+        await route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({ detail: 'Authentication required' }),
+        });
+      },
+      { times: 1 },
+    );
+
+    await page.goto('/settings');
+    await expect(page.getByText('Sign in to continue')).toBeVisible();
+    await page.locator('input[autocomplete="username"]').fill(TEST_ADMIN.username);
+    await page.locator('input[autocomplete="current-password"]').fill(TEST_ADMIN.password);
+    await page.getByRole('button', { name: 'Sign In' }).click();
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+
+    release!();
+
+    await expect(page.getByText('Sign in to continue')).toHaveCount(0);
+    expect(new URL(page.url()).pathname).toBe('/settings');
+  });
 });
