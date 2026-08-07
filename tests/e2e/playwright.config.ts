@@ -33,8 +33,6 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
 
-  globalSetup: './global-setup.ts',
-
   webServer: {
     // The DB rebuild lives INSIDE `command` (before uvicorn starts) rather
     // than in `globalSetup`.  Playwright starts `webServer` before
