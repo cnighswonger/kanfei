@@ -36,14 +36,26 @@ export default defineConfig({
   globalSetup: './global-setup.ts',
 
   webServer: {
-    // Call uvicorn directly (station.py hardcodes port 8000)
+    // The DB rebuild lives INSIDE `command` (before uvicorn starts) rather
+    // than in `globalSetup`.  Playwright starts `webServer` before
+    // `globalSetup`, so a rebuild in globalSetup would replace the DB
+    // *after* uvicorn's SQLAlchemy pool (default QueuePool, 5 connections)
+    // already had file handles open to the previous inode.  Those stale
+    // handles cause `attempt to write a readonly database` on POST /api/auth/login
+    // and stale-inode `validate_session` misses that 401 post-login
+    // requests, bouncing the freshly authenticated user back to /login.
+    // Rebuilding before startup means the pool opens against the current
+    // file.  Paired with `reuseExistingServer: false` below so a stale
+    // uvicorn from a prior invocation cannot linger.  See #286.
     command: [
+      venvPython, path.join(__dirname, 'build-test-db.py'), path.join(__dirname, 'fixtures'),
+      '&&',
       venvPython, '-m', 'uvicorn', 'app.main:app',
       '--host', '127.0.0.1', '--port', String(PORT), '--log-level', 'info',
     ].join(' '),
     cwd: path.join(projectRoot, 'backend'),
     url: `${BASE_URL}/api/setup/status`,
-    reuseExistingServer: !IS_CI,
+    reuseExistingServer: false,
     timeout: IS_CI ? 60_000 : 30_000,
     env: {
       ...process.env,
