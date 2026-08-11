@@ -1648,9 +1648,13 @@ class LoggerDaemon:
     async def _h_set_rain_season(self, msg: dict) -> dict[str, Any]:
         """Set the console's yearly-rain-reset month, then read it back.
 
-        Read-back is the honest report: an EEBWR that ACKs still needs the
-        register to say the new value on re-read, and the barometer-cal
-        precedent (#252) is that a failed write must not return normally.
+        Success requires BOTH an ACK from the EEBWR AND a matching value
+        on the read-back.  A bare ACK is not enough — #252 established
+        (on the barometer BAR= path) that the console can NAK, ACK-then-
+        drop, or ACK-then-write-a-different-value, and the operator has
+        to be told which of those actually happened.  So the contract
+        here mirrors the barometer write: return normally only when the
+        register reads exactly the requested month; otherwise raise.
         """
         drv = self._require_rain_season_rw()
 
@@ -1676,6 +1680,19 @@ class LoggerDaemon:
             raise RuntimeError(
                 "Station did not accept the rain-year-start month; "
                 f"register now reads: {after}"
+            )
+
+        # ACK is not enough — verify the register actually holds what we
+        # asked for.  Three shapes fail here: read-back returned None
+        # (garbage register value or EEBRD failure), read-back matches the
+        # BEFORE value (write silently dropped), or read-back is some
+        # OTHER month (write went to the wrong address, or a concurrent
+        # write on the console clobbered ours).  All three are the same
+        # class of "silent no-op" bug and get the same shape of error.
+        if after != month_int:
+            raise RuntimeError(
+                "Station acknowledged the write but the register does "
+                f"not reflect it — requested {month_int}, reads {after}"
             )
 
         return {"success": ok, "before": before, "after": after}

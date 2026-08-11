@@ -144,3 +144,108 @@ class TestIpcCommandsRegistered:
 
         assert ipc.CMD_READ_RAIN_SEASON == "read_rain_season"
         assert ipc.CMD_SET_RAIN_SEASON == "set_rain_season"
+
+
+class _FakeVantageForHandler:
+    """Async-compatible fake for exercising the daemon's _h_set_rain_season.
+
+    Distinct from _RecordingDriver above: that one tests the sync driver
+    methods, this one tests the handler-level contract that a bare ACK is
+    not sufficient.  The handler must ALSO check the read-back matches
+    the requested month.
+    """
+
+    def __init__(
+        self,
+        *,
+        write_returns: bool,
+        read_before: int,
+        read_after: int | None,
+    ) -> None:
+        from app.protocol.base import CAP_RAIN_SEASON_RW
+
+        self._connected = True
+        self.capabilities = {CAP_RAIN_SEASON_RW}
+        self.station_name = "Fake Vue"
+        self._write_returns = write_returns
+        self._read_before = read_before
+        self._read_after = read_after
+        self._writes_done = 0
+
+    @property
+    def connected(self):
+        return self._connected
+
+    async def async_read_rain_year_start(self):
+        return self._read_before if self._writes_done == 0 else self._read_after
+
+    async def async_set_rain_year_start(self, _month):
+        self._writes_done += 1
+        return self._write_returns
+
+
+def _daemon_with(drv):
+    from logger_main import LoggerDaemon
+    daemon = LoggerDaemon.__new__(LoggerDaemon)
+    daemon.driver = drv
+    return daemon
+
+
+class TestHandlerReadBackContract:
+    """Regression: _h_set_rain_season must fail on any read-back mismatch.
+
+    #252 established this shape on the barometer BAR= path.  The console
+    can NAK, ACK-then-drop the write, or ACK-then-write-a-different-value,
+    and the operator has to be told which happened.  A bare ACK means
+    nothing on its own.
+    """
+
+    @pytest.mark.asyncio
+    async def test_ack_but_readback_still_old_raises(self):
+        # The write ACKed but the register still holds the pre-write
+        # value.  Classic silent no-op.
+        drv = _FakeVantageForHandler(
+            write_returns=True, read_before=1, read_after=1,
+        )
+        with pytest.raises(RuntimeError, match="does not reflect it"):
+            await _daemon_with(drv)._h_set_rain_season({"month": 7})
+
+    @pytest.mark.asyncio
+    async def test_ack_but_readback_wrong_month_raises(self):
+        # ACKed but ended up holding a completely different month.
+        # Would be routed to the wrong address, or clobbered by a
+        # concurrent console-side change.  Either way not success.
+        drv = _FakeVantageForHandler(
+            write_returns=True, read_before=1, read_after=4,
+        )
+        with pytest.raises(RuntimeError, match="does not reflect it"):
+            await _daemon_with(drv)._h_set_rain_season({"month": 7})
+
+    @pytest.mark.asyncio
+    async def test_ack_but_readback_none_raises(self):
+        # ACKed but the read-back failed / returned garbage.  We do not
+        # know what the station has, so we cannot claim success.
+        drv = _FakeVantageForHandler(
+            write_returns=True, read_before=1, read_after=None,
+        )
+        with pytest.raises(RuntimeError, match="does not reflect it"):
+            await _daemon_with(drv)._h_set_rain_season({"month": 7})
+
+    @pytest.mark.asyncio
+    async def test_nak_raises(self):
+        # Sanity: pre-existing NAK branch still fires.  This was the only
+        # failure mode the original handler caught.
+        drv = _FakeVantageForHandler(
+            write_returns=False, read_before=1, read_after=1,
+        )
+        with pytest.raises(RuntimeError, match="did not accept"):
+            await _daemon_with(drv)._h_set_rain_season({"month": 7})
+
+    @pytest.mark.asyncio
+    async def test_ack_and_matching_readback_returns_success(self):
+        # Happy path: ACK + read-back == requested month.
+        drv = _FakeVantageForHandler(
+            write_returns=True, read_before=1, read_after=7,
+        )
+        result = await _daemon_with(drv)._h_set_rain_season({"month": 7})
+        assert result == {"success": True, "before": 1, "after": 7}
