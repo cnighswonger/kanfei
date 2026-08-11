@@ -143,3 +143,59 @@ class TestSyncFiresOutsideLegacyBlock:
         assert "async_write_station_time" in connect_body, (
             "_connect must call async_write_station_time somewhere"
         )
+
+
+class TestNoStrayLegacyAccessAfterHoist:
+    """R1 blocker: hoisting the sync out of `if link is not None:` must
+    not leave any `link.*` dereference in the capability-gated branch or
+    below it.  On Vantage `link is None`, so a `link.station_model`
+    reference in a code path Vantage reaches would AttributeError.
+
+    Codex caught exactly this on PR #300 R1: my first hoist moved the
+    clock-sync out but left `station_type_code = link.station_model.value`
+    inside the new `if hasattr(...)` branch.  Vantage would have crashed
+    during `_connect()`.  This test catches that class of regression.
+    """
+
+    def test_no_link_dereference_in_capability_branch(self):
+        """The `if hasattr(..., 'async_write_station_time'):` block must
+        not touch `link` — that's the whole point of the hoist."""
+        import re
+        from pathlib import Path
+
+        src = (
+            Path(__file__).parent.parent.parent
+            / "backend"
+            / "logger_main.py"
+        ).read_text()
+
+        start = src.index("async def _connect(")
+        rest = src[start:]
+        end = rest.index("\n    async def ", 1)
+        connect_body = rest[:end]
+
+        # Isolate the capability-gated branch body.
+        gate = "if hasattr(self.driver, \"async_write_station_time\"):"
+        assert gate in connect_body, (
+            f"Expected `{gate}` in _connect — has the sync been renamed?"
+        )
+        gate_start = connect_body.index(gate)
+        # Everything from the gate to the next same-indent statement (or
+        # end of function).  The lines inside are indented one extra
+        # level; find the first line at the same indent or shallower.
+        after_gate = connect_body[gate_start:]
+        lines = after_gate.split("\n")
+        # First line is the `if` itself; subsequent lines are the body
+        # while they stay deeper-indented.
+        body_lines = [lines[0]]
+        for line in lines[1:]:
+            if line.strip() and not line.startswith(" " * 12):
+                break
+            body_lines.append(line)
+        branch = "\n".join(body_lines)
+
+        assert not re.search(r"\blink\.", branch), (
+            "capability-gated branch must not dereference `link.` — "
+            "on Vantage `link is None` and this AttributeErrors the "
+            "whole _connect().  Class of #300 R1 regression."
+        )

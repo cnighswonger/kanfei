@@ -292,6 +292,8 @@ class LoggerDaemon:
             # Archive sync in background (shares _io_lock with poller)
             asyncio.create_task(self._bg_archive_sync())
 
+            station_type_code = link.station_model.value if link.station_model else 0
+
         # Sync station clock to system time — gated on capability, not on
         # driver type.  Before #296 this was inside the `link is not None`
         # block above, so Vantage never got an on-connect sync and had to
@@ -299,14 +301,17 @@ class LoggerDaemon:
         # catch clock drift.  The auto-sync path in `api/station.py` still
         # runs for both; this just closes the on-connect gap so the first
         # sync fires immediately, matching the LinkDriver behaviour.
+        #
+        # This block MUST NOT dereference `link` — Vantage's `link is None`
+        # and would crash.  #300 R1 caught exactly that.  The regression
+        # test in `test_onconnect_clock_sync.py` greps this branch for
+        # `link.` and fails if it reappears.
         if hasattr(self.driver, "async_write_station_time"):
             now = datetime.now()
             if await self.driver.async_write_station_time(now):
                 logger.info("Station clock synced to %s", now.strftime("%H:%M:%S"))
             else:
                 logger.warning("Failed to sync station clock")
-
-            station_type_code = link.station_model.value if link.station_model else 0
 
         poll_interval = int(config.get("poll_interval", settings.poll_interval_sec))
         self.poller = Poller(
