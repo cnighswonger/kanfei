@@ -1,0 +1,2940 @@
+®
+FCC Part 15 Class B Registration Warning
+This equipment has been tested and found to comply with the limits for a Class B digital device, pursuant to
+Part 15 of the FCC Rules. These limits are designed to provide reasonable protection against harmful interfer-
+ence in a residential installation. This equipment generates, uses, and can radiate radio frequency energy and,
+if not installed and used in accordance with the instructions, may cause harmful interference to radio communi-
+cations.
+However, there is no guarantee that interference will not occur in a particular installation. If this equipment
+does cause harmful interference to radio or television reception, which can be determined by turning the
+equipment on and off, the user is encouraged to try to correct the interference by one or more of the following
+measures:
+• Reorient or relocate the receiving antenna.
+• Increase the separation between the equipment and receiver.
+• Connect the equipment into an outlet on a circuit different from that to which the receiver is connected.
+• Consult the dealer or an experienced radio/TV technician for help.
+Changes or modification not expressly approved in writing by Davis Instruments may void the warranty and
+void the user's authority to operate this equipment.
+FCC ID: IR2DWW6351
+IC: 3788A-6351
+EC EMC Compliance
+This product complies with the essential protection requirements of the EC EMC Directive 2004/108/EC; Low Voltage Directive
+2006/95/EC; and Eco-Design Directive 2005/32/EC >0.5 watt no-load adaptor.
+RoHS Compliant
+
+Vantage Vue Console Manual
+Document Part Number: 07395.261                                                            Rev. F, August 22, 2013
+For Vantage Vue Consoles #6351
+And Vantage Vue Weather Stations #6250, 6357
+
+Vantage Vue® and Vantage Pro2™ are trademarks of Davis Instruments Corp., Hayward, CA.
+© Davis Instruments Corp. 2013. All rights reserved. Davis Instruments Quality Management
+System is ISO 9001 certified.
+Information in this document subject to change without notice.
+                                                                                 ®
+
+
+
+
+                                3465 Diablo Avenue, Hayward, CA 94545-2778 U.S.A.
+                                          510-732-9229 • Fax: 510-732-9188
+                                   E-mail: info@davisnet.com • www.davisnet.com
+Table of Contents
+Welcome to Vantage Vue ................................................................................................1
+   Console Features: Keyboard & Display ..................................................................... 1
+   In This Manual ........................................................................................................... 2
+   Vantage Vue System Installation Steps ...................................................................... 2
+Installing the Console .....................................................................................................3
+   Powering the Console ................................................................................................ 3
+   Installing Batteries ..................................................................................................... 3
+   Installing the AC Power Adapter (Optional) ............................................................. 4
+   Console Location ....................................................................................................... 4
+   Table & Shelf Placement ........................................................................................... 5
+   Wall Mounting ........................................................................................................... 5
+Using Your Weather Station ...........................................................................................6
+   Console Modes ........................................................................................................... 6
+   Setup Mode ................................................................................................................ 6
+   Setup Mode Commands ............................................................................................. 6
+   Screen 1: Time & Date ............................................................................................... 7
+   Screen 2: Time Zone .................................................................................................. 7
+   Screen 3: Daylight Saving Settings ............................................................................ 8
+   Screen 4: Daylight Saving Status ............................................................................... 8
+   Screen 5: Active Transmitters .................................................................................... 8
+   Screen 6: Configuring Transmitter IDs ...................................................................... 9
+   Screen 7: Retransmit ................................................................................................ 10
+   Screens 8 and 9: Latitude and Longitude ................................................................. 10
+   Screen 10: Elevation ................................................................................................ 11
+   Screen 11: Barometric Reduction Setting ................................................................ 11
+   Screen 12: Wind Cup Type (Optional) .................................................................... 12
+   Screen 13: Rain Collector ........................................................................................ 12
+   Screen 14: Rain Season ............................................................................................ 13
+   Screens 15 and 16: Cooling and Heating Degree Day Base .................................... 13
+   Screens 17 and 18: Commentary and Key Beep ...................................................... 14
+   Screen 19: Baud Rate (Optional) ............................................................................. 14
+   Exiting Setup Mode ................................................................................................. 15
+   Clear All Command ................................................................................................. 15
+   Current Weather Mode ............................................................................................. 15
+   Current Weather Mode Commands ......................................................................... 16
+   Displaying Weather Variables ................................................................................. 16
+   Time & Date, Sunrise & Sunset Time, Moon Phase, Forecast Icons ...................... 17
+   Wind Speed and Direction ....................................................................................... 17
+   Inside and Outside Temperature .............................................................................. 18
+   Humidity .................................................................................................................. 20
+   Barometric Pressure ................................................................................................. 20
+   Pressure Trend .......................................................................................................... 22
+   Wind Chill ................................................................................................................ 22
+
+
+                                                                                                                                    i
+   Dew Point ................................................................................................................. 22
+   Heat Index ................................................................................................................ 23
+   Rain .......................................................................................................................... 23
+   Evapotranspiration (ET) (Optional) ......................................................................... 25
+   Weather Center ........................................................................................................ 25
+   Light ......................................................................................................................... 26
+   Selecting Units of Measure ...................................................................................... 26
+   Calibrating, Setting, and Clearing Variables ........................................................... 27
+   Calibrating Temperature and Humidity ................................................................... 27
+   Calibrating Wind Direction Reading ....................................................................... 27
+   Calibrating Barometric Pressure .............................................................................. 28
+   Calibrating Rain ....................................................................................................... 28
+   Setting Weather Variables ....................................................................................... 28
+   Clearing Weather Variables Accumulations & Calibrations ................................... 29
+   Clear All Command ................................................................................................. 29
+   Highs and Lows Mode ............................................................................................. 30
+   Viewing Highs and Lows ......................................................................................... 30
+   Alarm Mode ............................................................................................................. 31
+   Special Alarms ......................................................................................................... 32
+   Setting Alarms ......................................................................................................... 32
+   Setting the Time Alarm............................................................................................ 33
+   Clearing Alarm Settings........................................................................................... 33
+   Silencing Alarms ...................................................................................................... 33
+   Changing Alarm Sound............................................................................................. 33
+   Graph Mode ............................................................................................................. 33
+   Viewing Graphs ....................................................................................................... 34
+Troubleshooting and Maintenance ................................................................................ 36
+   Vantage Vue Troubleshooting Guide ...................................................................... 36
+   Troubleshooting Reception Problems...................................................................... 37
+   Check Console Reception ........................................................................................ 38
+   Console Diagnostic Mode ........................................................................................ 38
+   Diagnostic Screen Commands ................................................................................. 38
+   Screen 1: Statistical Diagnostic Screen .................................................................... 39
+   Screen 2: Reception Diagnostic Screen ................................................................... 40
+   Console Maintenance ............................................................................................... 41
+   Changing Batteries ................................................................................................... 41
+   Console Firmware Versions ..................................................................................... 41
+   One Year Limited Warranty .................................................................................... 41
+   Contacting Davis Technical Support ....................................................................... 41
+Appendix A: Weather Data ........................................................................................... 42
+Appendix B: Specifications .......................................................................................... 47
+Appendix C: Wireless Repeater Configuration ............................................................ 51
+
+
+
+
+ii
+Chapter 1
+Welcome to Vantage Vue
+
+  The console of your new Vantage Vue wireless weather station displays and records your
+  station’s weather data, provides graph and alarm functions, and interfaces to a computer using
+  our optional WeatherLink® software.
+
+  Your Vantage Vue station also includes an outdoor Integrated Sensor Suite (ISS) that transmits
+  outside sensor data to the console via a low-power radio. The console displays all the
+  information coming from the ISS in an easy-to-use format. It can also receive data from a
+  Davis Vantage Pro2™ weather station. The Vantage Vue Quick Reference Guide included with
+  your station provides an easy-to-use reference for most console functions.
+
+Console Features: Keyboard & Display
+                    HEAT       DEW         CHILL      ET
+
+        LIGHT      TEMP       HUM         WIND      RAIN       BAR
+
+
+         2ND       WXCEN     GRAPH HI/LOW           TIME      DONE
+                    ALARM       SET        CLEAR    UNITS      SETUP
+
+                                      Vantage Vue Keyboard
+
+
+  Use the keyboard to access and scroll through current and historical data for individual
+  variables, set and clear alarms, enter calibration values, set up and view graphs, and view
+  detailed weather information available for each variable.
+
+  The keyboard consists of 12 command keys and four navigation keys.
+  A weather variable or console command is printed on each command key. Just              HEAT
+  press a key to select the variable or function printed on that key.
+                                                                                        TEMP
+
+  Each command key also has a secondary function which is printed above the
+  first row of keys or below the second row of keys. To select the secondary             2ND
+  function, press and release 2ND and then immediately press the key for that
+  function.
+
+  After pressing 2ND, the 2nd icon displays above the moon phase icon on the screen
+  indicating that all secondary key functions are enabled. Keys resume normal operation after
+  the icon disappears (about 7-8 seconds).
+
+  The + and - navigation keys along with the < and > navigation keys are
+  used to select command options, adjust values, and to provide additional
+  functions when used in combination with a command key.
+
+  An arrow      appears next to the variable selected in the display.
+
+
+                                                                                                 1
+                                                                       Console Features: Keyboard & Display
+
+
+In Current Weather Mode, the display shows the time and date, the likely forecast within the
+next 12 hours, current moon phase, and weather information for up to 8 different weather
+variables at a time. It also displays additional information pertinent to a selected variable in the
+Weather Center in the bottom right section of the console screen.
+
+                                                 Arrow shows
+                           Time & Date           which variable        Inside & Outside
+                          Sunrise/Sunset          is selected            Temperature
+
+                                     am                                F                            F
+         Moon phase,
+           alarm, &                  N                       INSIDE               OUTSIDE               Inside & Outside
+        forecast icons        NW            NE                                                              Humidity
+
+           Wind                                                                                            Barometric
+        Compass Rose      W                      E                                                      Pressure & Trend
+                                                                                      in
+                                                     CHILL            RAIN RATE
+                                                                                                        Rain data & ET*
+       Antenna icon           SW            SE                F
+
+       shows active                  S                                                      in/hr
+                              WIND                                                                       Wind Chill/Heat
+       transmission                                                                                     Index/Dew Point
+
+                                                                                                         Weather Center
+          Graph of
+                                                                                                         with additional
+      selected variable
+                                                                                                          information
+
+                          *ET, optional, available only when used with a Vantage Pro2
+                          Plus or a Vantage Pro2 with Solar Radiation sensor.
+
+In This Manual
+This manual contains all the information you will need to power, set up, and use your console.
+It also includes a troubleshooting section for solving some basic console issues.
+• See “Installing the Console” on page 3 for information on powering and placing or mount-
+     ing your Vantage Vue console.
+• See “Setup Mode” on page 6 for information on configuring and setting up your console.
+• See “Current Weather Mode” on page 15 for information on displaying current weather
+     information.
+• See “Troubleshooting and Maintenance” on page 36 for information on troubleshooting
+     console issues and routine maintenance.
+
+
+Vantage Vue System Installation Steps
+•   Prepare the Integrated Sensor Suite (ISS) for Installation. See your Vantage Vue Integrated
+    Sensor Suite Installation Manual.
+•   Install, power and set up the console
+•   Mount the ISS
+
+
+
+
+                                                                                                                      2
+Chapter 2
+Installing the Console
+
+        The Vantage Vue console is designed to give extremely accurate readings. As with any
+        precision instrument, use care in its assembly and handling. Although installing the console is
+        relatively simple, following the steps outlined in this chapter and assembling the Vantage Vue
+        correctly from the start will help ensure that you enjoy all of its features with a minimum of
+        time and effort.
+
+Powering the Console
+        The Vantage Vue console does not require the use of an AC adapter. You may use the included
+        adapter if you wish, but three C-cell batteries (not included) should power a wireless console
+        for up to nine months. You can use either of these or both together, with the batteries providing
+        backup power for the adapter.
+Note:      The console will display messages if any of your system’s batteries are low.
+           LOW CONSOLE BATTERIES: Replace the console batteries
+           LOW BATTERY TRANSMITTER (ID#): Replace the battery in your outdoor Integrated
+           Sensor Suite (ISS) or any optional transmitting station you may have added.
+
+        Installing Batteries
+        1. Remove the battery cover located on the back of the console by pressing down on the two
+           latches at the top of the cover.
+
+
+
+
+                                    Installing batteries into the Vantage Vue
+        2. Insert three C batteries into the battery channels as shown.
+        3. Place the battery cover back onto the console and click it closed.
+        4. Check to make sure the console runs through a brief self-test procedure successfully.
+           On power up, the console displays all the LCD segments and beeps three times (four times
+           if you have a data logger plugged in). A message displays at the bottom of the console,
+           followed by the first screen of Setup Mode. Press DONE to skip the message and enter into
+           Setup Mode. Setup Mode guides you through steps required to configure the station. See
+           “Setup Mode” on page 6 for more information.
+Note:      The console does not recharge the batteries. Because of this, and because NiCad batteries
+           do not power the console as long as alkaline batteries, we do not recommend using NiCad
+           batteries.
+
+
+
+
+                                                                                                        3
+Console Location
+
+
+        Installing the AC Power Adapter (Optional)
+        1. Find the power jack located on the left side of the
+            console case.
+        2. Insert the power adapter plug into the console power
+           jack, then plug the other end of the adapter into an
+           appropriate power outlet.
+        3. Check to make sure the console runs through a brief
+           self-test procedure successfully. See “Installing
+           Batteries” on page 3 for information on the self-test
+           procedure.                                                  Plugging in the AC adapter
+
+Note:      When using an AC power adapter, be sure to use the power adapter supplied with your
+           Vantage Vue console. Your console may be damaged by connecting the wrong power
+           adapter. You must use AC power when using WeatherLinkIP.
+
+
+Console Location
+        Place the console in a location where the keyboard is easily accessible and the display is easy
+        to read. For more accurate readings, follow these suggestions.
+        • Avoid placing the console in direct sunlight. This may cause erroneous inside temperature
+             and humidity readings and may damage the unit.
+        • Avoid placing the console near radiators or heating/air conditioning ducts.
+        • If you are mounting the console on a wall, choose an interior wall. Avoid exterior walls
+             that tend to heat up or cool down depending on the weather.
+        • Avoid positioning a wireless console near large metallic appliances such as refrigerators,
+             televisions, heaters, or air conditioners.
+        • The console antenna does not rotate in a complete circle. Avoid forcing the console
+             antenna when rotating it.
+        • Be aware of possible interference from cordless phones or other devices. To prevent
+             interference, maintain a distance of 10 feet (3 meters) between the Vantage Vue console
+             and a cordless phone (handset and base).
+
+
+
+
+4
+                                                                        Console Location
+
+
+Table & Shelf Placement
+The console comes with a kickstand so that the console can be displayed on any flat
+surface. To install the kickstand:
+
+1. Locate the two keyholes on the back of the console.
+2. Place the two round tabs on the kickstand into the
+   to keyholes and slide the kickstand up into place.
+
+
+
+
+                                                              Securing the kickstand
+
+
+3. Install the two round rubber feet on the bottom of
+   the console.
+4. Install the two rubber channel feet on the kickstand.
+
+
+
+
+                                                           Installing the rubber feet
+
+
+
+Wall Mounting
+The console mounts to the wall using two keyholes located on the back of the case (the
+same two keyholes are used to hold the console kickstand in place) and two #6 x 1'' pan
+head self-threading screws included in the hardware kit.
+To mount the console on a wall:
+1. Use a ruler to mark two mounting
+   hole positions on the wall 4 15/16''
+   inches (125 mm) apart. Use the guide
+   holes on the kickstand as a template
+   for the keyhole spacing.
+2. Use a drill and a 3/32” or 7/64'' (2.4 or
+   2.8 mm) drill bit to drill two pilot
+   holes for the screws.
+3. Using a screwdriver, drive the two #6
+   x 1'' pan head self-threading screws
+   into the wall. Leave at least 1/8'' (3
+   mm) between the wall and the heads
+   of the screws.
+                                                Mounting the console on a wall
+4. Guide the two keyholes on the back
+   of the console over the two screws.
+
+
+                                                                                          5
+Setup Mode
+
+
+Chapter 3
+Using Your Weather Station
+        The console LCD screen and keyboard provide easy access to your weather information. The
+        LCD display shows current and past weather conditions as well as a forecast of future
+        conditions. The keyboard controls console functions for viewing current and historical
+        weather information, setting and clearing alarms, viewing and/or changing station settings,
+        setting up and viewing graphs, and more.
+        Console Modes
+        The Vantage Vue console operates in five different modes:
+               Mode                                             Description
+
+                            Use Setup Mode to enter the time, date, and other information required to calculate
+            Setup           and display weather data such as latitude, longitude and elevation. See “Setup Mode”
+                            on this page.
+
+                            Use Current Weather Mode to see current weather information, change measurement
+            Current         units, and to set, clear or calibrate weather readings. See “Current Weather Mode” on
+            Weather         page 15.
+
+                            Use High/Low Mode to display the daily, monthly or yearly high and low readings. See
+            High/Low        “Highs and Lows Mode” on page 30.
+
+                            Use Alarm Mode to set, clear, and review alarm settings for up to 30 different
+            Alarm           variables/settings. See “Alarm Mode” on page 31.
+
+                            Use Graph Mode to display your weather data in the graph section of the console for
+            Graph           the current and last 25 time intervals (hours, days, months or even years) in over 50
+                            different graphs. See “Graph Mode” on page 33.
+
+
+Note:        When the console is first powered, or repowered, the Time & Date screen appears. If
+             nothing is done for 10 minutes, the screen will time out and go to the Current Weather
+             screen. (This is true for any setup screen except for the Active Transmitters screen.)
+
+
+Setup Mode
+        Setup Mode provides access to the station configuration settings that control how the station
+        operates. Setup Mode consists of a series of screens for selecting console and weather station
+        configuration options.
+        Setup Mode Commands
+        Setup Mode displays when the console is first powered. This mode can be displayed at any
+        time to change any of the console options.
+        Use the following commands to enter, exit and navigate Setup Mode:
+        • Enter Setup Mode by pressing and releasing 2ND and then SETUP.
+                                                                                                 2ND         DONE
+                                                                                                             SETUP
+        •     Press DONE to move to the next screen in the Setup Mode.
+                                                                                                             DONE
+
+
+6
+                                                                                              Setup Mode
+
+        •    Press BAR to display the previous screen in the Setup Mode.
+                                                                                                   BAR
+        •    Press the < and > keys to move to the different segments and options in
+             the Setup Mode screens.
+        •    Press the + and - keys to scroll through the different options available.
+
+
+        •    Press 2ND and UNITS to change units of measure when applicable.
+        •    Exit Setup Mode by pressing and holding DONE until the Current                2ND     TIME
+
+             Weather screen displays. See “Current Weather Mode” on page 15                        UNITS
+
+             for more information.
+        Screen 1: Time & Date
+        The very first time you power the console, you should enter the correct date and local time.
+        To change the time and date:
+                                                                    am
+        1. Press the < and > keys to select the hour,
+           minute, month, day or year segments. The
+           selected time or date setting blinks on and
+           off.
+                                                                                                   YEAR
+        2. Press the + and - keys to adjust a value up
+           or down.
+           To choose between a 12-hour or 24-hour
+           clock, first select either the hour or minute
+           setting, then press 2ND and immediately
+           press UNITS. This toggles the clock
+           setting between the two clock types.                          Screen 1: Time & Date
+           To choose between a MM/DD or DD.MM
+           display for the date, first select either the day or month setting, then press 2ND and imme-
+           diately press UNITS. This switches the console from one date display to the other.
+        3. Press DONE to move to the next screen.
+Note: Whenever the console is repowered after power is off or lost, it will open to this screen. This
+      allows you to enter the correct time if needed. If nothing is done after 10 minutes, the screen will
+      time-out and go to the Current Weather screen.
+
+            Screen 2: Time Zone
+        The console is pre-programmed with a
+        combination of US time zones and the names
+        of major cities representing time zones around
+        the world. You can also configure your time
+        zone using the Universal Time Coordinate
+        (UTC, also known as Greenwich Mean Time or GMT) offset.
+Note:        UTC offset measures the difference between the time in any time zone and a standard time,
+             set by convention as the time at the Royal Observatory in Greenwich, England. Hayward,
+             California, the home of Davis Instruments, observes Pacific Standard Time. The UTC offset
+             for Pacific Standard Time is -8:00, or eight hours behind Universal Time (UTC). When
+             daylight saving time is observed, an hour is added to the offset time automatically. Use this
+             function in correlation with “Screen 3: Daylight Saving Settings” on page 8.
+
+
+                                                                                                           7
+Setup Mode
+
+     1. Press the + and - keys to cycle through time zones.
+     2. If your time zone is not shown, press 2ND then press the + and - keys to set your UTC
+        offset (UTC offset uses 15 minute increments).
+     3. Press DONE to select the time zone or UTC offset shown on the screen and move to the
+        next screen.
+     Screen 3: Daylight Saving Settings
+     In most of the United States and Canada (except Saskatchewan, Arizona, and Hawaii) and
+     Europe you should use the AUTO Daylight Saving setting. The console is pre-programmed to
+     use the correct starting and stopping dates for daylight saving time in these areas, based on the
+     time zone setting in Screen 2: Time Zone.
+     Weather stations located outside the United
+     States, Canada, and Europe, or in areas that
+     do not observe daylight saving time should
+     use the MANUAL setting.
+
+     1. Press the + and - keys to choose Auto or Manual.
+     2. Press DONE to move to the next screen.
+     Screen 4: Daylight Saving Status
+     Use this screen to either verify the correct
+     automatic daylight saving status or to set
+     daylight saving manually.
+
+     1. If the daylight saving setting is MANUAL,
+        press the + and - keys to turn daylight saving time on or off on the appropriate days of the
+        year. This will advance the time by one hour. (Similarly, if you turn daylight saving time
+        off, the time will be set back one hour.)
+        If you have an AUTO daylight saving setting, the console displays the appropriate setting
+        based on the current time and date.
+     2. Press DONE to move to the next screen.
+     Screen 5: Active Transmitters
+     Screen 5 displays the message “Receiving from...” and shows the ID number of any
+     transmitters being received by the console. The rest of the screen is blank.
+     If your ISS uses the factory settings and your
+     console is receiving the signal, the screen
+     displays “RECEIVING FROM 1.” The antenna
+     icon displays if any station’s signal has been
+     received. The antenna icon will not display if
+     the console has not received a signal from a station.
+     If you have installed a Vantage Pro2 ISS or Anemometer Transmitter kit, or if a nearby
+     neighbor has a Davis weather station, or if you are receiving from another console in
+     retransmit mode, its ID number will also be displayed.
+
+
+
+
+8
+                                                                                             Setup Mode
+
+
+Note:       A Vantage Vue or Vantage Pro2 ISS or a Vantage Pro2 Anemometer Transmitter Kit must be
+            powered for the console to recognize it. Refer to the Integrated Sensor Suite Installation
+            Manual or other station manual for more information. It may take several minutes for the
+            console to acquire and display a transmitter ID after power is applied to both units.
+
+        1. Make a note of the station number(s) listed on the screen.
+        2. Press DONE to move to the next screen.
+        Screen 6: Configuring Transmitter IDs
+        Setup Screen 6 allows you to change the ISS
+        transmitter ID and to add or remove optional
+        transmitter stations.
+        The default transmitter ID setting is “1 VUE
+        ISS” (refers to a Vantage Vue ISS), which is
+        appropriate for most installations. If you are using only the Vantage Vue ISS with ID 1 press
+        DONE to move to the next screen.
+Note:       Typically, you can use the default transmitter ID setting of 1 unless a nearby neighbor has a
+            Vantage Pro2 or Vantage Vue station that uses transmitter ID 1.
+
+        If you wish to change this default transmitter ID:
+        1. Press the < and > keys to select a transmitter ID.
+            When you select a transmitter ID (1 - 8), the ID number is displayed on the screen as well
+            as its current configuration (OFF, VUE ISS, VP2 ISS or WIND).
+        2. Press the + or - keys to toggle console reception of signals from transmitters using that ID
+            on and off.
+Note:       Make sure any unused ID numbers are set to OFF.
+
+        To change the station type for the transmitter ID:
+        1. Press GRAPH to change the type of station assigned from VUE ISS to VP2 ISS or WIND.
+           • VUE ISS - Refers to the Vantage Vue ISS (whether direct transmission or retransmis-
+              sion from another console).
+           • VP2 ISS - Refers to the Vantage Pro2 ISS (whether direct transmission or retransmis-
+              sion from another console).
+           • WIND - Refers to an optional Anemometer Transmitter Kit (direct transmission only).
+        2. Press DONE to move to the next screen.
+Note:      This screen contains functionality for enabling repeaters. If the word “Repeater” displays in
+           the right corner of the screen and you are not using repeaters as part of your network, see
+           “Clearing Repeater ID” on page 51. If you are using repeaters as part of your network see
+           “Wireless Repeater Configuration” (Appendix C) on page 51.
+
+
+
+
+                                                                                                           9
+Setup Mode
+
+
+        Screen 7: Retransmit
+        The console can take data it receives from all
+        three station types and retransmit it to other
+        Vantage Vue or Vantage Pro2 consoles using
+        the retransmit feature. By toggling the feature
+        on, the console becomes another transmitter
+        that requires its own unique ID to transmit the data received from the ISS.
+        1. Press the + or - key to turn the retransmit function on and off. The first available transmitter
+           ID not assigned to a station in Screen 6: Configuring Transmitter IDs will be assigned to
+           the console.
+Note:       Make sure no other wireless Davis weather station is transmitting on the same ID.
+
+           The Vantage Vue console can only retransmit data from either a Vantage Vue ISS or
+           console; or a Vantage Pro2 ISS or console. Data from other stations will not retransmit.
+           When retransmit has already been enabled, pressing the < or > keys changes the transmitter
+           ID used for retransmit.
+        2. Use the > key to scroll through the list of available transmitter IDs and select the ID for
+           your console.
+        3. Press DONE to move to the next screen.
+Note:       Make a note of the ID selected for retransmit and the transmitter type (ISS or VP2) the
+            console is retransmitting. Make sure the console that is receiving the retransmitted data is
+            configured to the correct transmitter type. See “Screen 6: Configuring Transmitter IDs” on
+            page 9 for more information.
+
+        Screens 8 and 9: Latitude and Longitude
+        The console uses latitude and longitude to determine your location, allowing it to adjust the
+        forecast and calculate the times for sunset and sunrise.
+        • Latitude measures distance north or south of the equator.
+        • Longitude measures distance east or west of the Prime Meridian, an imaginary line
+             running north and south through Greenwich, England.
+        If you do not know your latitude and longitude, there are several ways to find out. Many
+        atlases and maps include latitude and longitude lines. You can also talk to the reference
+        department of your local library, call your local airport, or search on the Internet. An easy way
+        to find your latitude and longitude is to download Google Earth (http://earth.google.com).
+        The more accurate you are, the better; however, a reasonable estimate will work, too.
+        1. Press the < and > keys to move between
+            fields.
+        2. Press the + and - keys to change the
+            settings up or down.
+        3. Press 2ND and then UNITS to select
+            between SOUTH or NORTH.
+        4. Press DONE to move to the Longitude screen.
+
+
+
+
+10
+                                                                                              Setup Mode
+
+        1. Press the < and > keys to move between
+           fields.
+        2. Press the + and - keys to change the
+           settings up or down.
+        3. To select EAST or WEST, press 2ND, then
+           UNITS.
+        4. Press DONE to move to the next screen.
+        Screen 10: Elevation
+        Your station’s elevation is used in determining
+        your barometric pressure. Meteorologists
+        standardize barometric pressure data to sea
+        level so that surface readings are comparable,
+        whether they are taken on a mountainside or
+        by the ocean. To use this same standardization
+        and ensure consistent readings, enter your elevation in this screen.
+        If you do not know your elevation, there are several ways to find out. Many atlases and
+        almanacs include elevation for cities and towns. You can also check with the reference
+        department of your local library, or use Google Maps (in “terrain” view).
+        The more accurate you are, the better; but a reasonable estimate works too.
+        1. Press the < and > keys to move from one value to another.
+        2. Press the + and - keys to adjust a numeral up or down.
+        3. To switch between feet and meters, press 2ND then press UNITS.
+        4. If your location is below sea level, such as in Death Valley or the Salton Sea, first enter the
+            elevation as a positive number. Select the “0” immediately to the left of the left-most non-
+            zero digit (the second zero from the left in 0026, for example, or the first zero from the left
+            in 0207) and press and hold the + or - key until it cycles from 0 to 9 and then -.
+Note:       You can only set the elevation to negative after you have entered a non-zero digit and when
+            the zero in the position immediately to the left of the left-most non-zero digit has been
+            selected. If you need to enter an elevation below -999 feet, select meters and enter the
+            converted number (multiply your elevation in feet by 0.3048).
+
+        5. Press DONE to move to the next screen.
+
+
+
+
+                                                                                                        11
+Setup Mode
+
+
+        Screen 11: Barometric Reduction Setting
+        The Barometric Reduction Setting screen indicates the method by which barometric pressure
+        is to be determined and calculated. The factory default is NOAA, but in this screen you may
+        select a different method.
+
+        To change the barometric reduction setting:
+        1. Press + or - to change the barometer
+           reduction setting type:
+           • NOAA (Default Setting) — The
+              barometer is reduced to sea level using a
+              technique that factors in the humidity and temperature of the column of air.
+           • ALT SETTING (Altimeter Setting) — The barometer is reduced to sea level using a
+              “standard” column of air, often referred to as a “standard atmosphere.”
+           • NONE — Reports a raw barometric pressure reading unadjusted for elevation/altitude.
+        2. Press DONE to move to the next screen.
+Note:       See “Calibrating Barometric Pressure” on page 28 to learn how to fine-tune your barometric
+            pressure to a local source.
+
+        Screen 12: Wind Cup Type (Optional)
+        The Wind Cup Type screen displays if you selected VP2 or WIND in Screen 6 of the Setup
+        Mode. This screen does not display if you have selected a Vantage Vue ISS. See “Screen 6:
+        Configuring Transmitter IDs” on page 9 for more information.
+
+        The Wind Cup Type screen contains three options: LARGE, SMALL, or OTHER. In most
+        Vantage Pro2 anemometer or ISS Installations, LARGE is the cup type that is shipped with all
+        Vantage Pro2 anemometers. See the Vantage Pro2 Console Manual for more information.
+        To change the wind cup type:
+        1. Press the + and - keys to scroll through the
+           three wind cup options.
+        2. Press DONE to use the selected setting and
+           move to the next screen.
+Note:       Do not change the wind cup type from LARGE if you are using the wind cups that were
+            shipped with your system.
+
+        Screen 13: Rain Collector
+        The tipping spoon in the Vantage Vue rain collector
+        has been calibrated at the factory to measure either                                       in
+
+
+
+        0.01'' or 0.2mm of rain with each tip depending on
+        the model. This screen is used at the factory for this
+        calibration. The typical user will not need to change
+        it and can skip this screen.
+Note:       This screen will not change the units on your display. To change the units on your display
+            from inches to mm, or vice versa, see “Selecting Units of Measure” on page 26.
+
+
+
+
+12
+                                                                                             Setup Mode
+
+        Screen 14: Rain Season
+        Because rainy seasons begin and end at different times in different parts of the world, you
+        must specify the month you wish your yearly rain data to begin. January 1st is the default
+        setting.
+        The date the rain season begins affects yearly
+        rain rate highs and lows as well as the yearly
+        rain totals.
+
+        1. Press the + and - keys to select the month
+           for the start of the rainy season.
+        2. Press DONE to move to the next screen.
+Note:       This setting determines when the yearly rain total is reset to zero. Davis Instruments
+            recommends a January rain season setting (the default), unless you reside on the west
+            coast of the United States, the Mediterranean Coast, or experience dry winters in the
+            southern hemisphere. If so, change the rain season setting to July 1st. If you are performing
+            hydrology studies in any of these climates in the Northern Hemisphere, change the rain
+            season setting to October 1st.
+
+        Screens 15 and 16: Cooling and Heating Degree Day Base
+        The Cooling and Heating Degree Day Base screens let you determine the temperature base
+        that is used to calculate the number of cooling or heating degree days. A cooling degree day is
+        used to determine the amount of energy or fuel used to keep a structure like your home or
+        business cool. A heating degree day is used to determine the amount of energy or fuel used to
+        keep a structure like your home or business warm.
+        One cooling degree/day is the amount of cooling required to keep a structure cool when the
+        outside temperature remains 1°F above the 65°F threshold for 24 hours. One cooling degree/
+        day is also the amount of cooling required when the temperature remains 24°F above the 65°F
+        threshold for one hour.
+        One heating degree/day is the amount of heat required to keep a structure warm when the
+        outside temperature remains 1°F below the 65°F threshold for 24 hours. One heating degree/
+        day is also the amount of heat required when the temperature remains 24°F below the 65°F
+        threshold for one hour.
+        The cooling and heating degree days (similar to growing degree days and chilling requirement
+        in agriculture) are used for agricultural purposes, as well as for energy use analysis. Our
+        optional WeatherLink software (#6510USB, 6510SER, 6555) calculates degree day totals. Our
+        optional Agricultural/Turf Management Software Module (#6511) adds the special reporting
+        features to the WeatherLink software that include evapotranspiration and chilling requirement.
+        The Cooling and Heating Degree Day Bases are used to determine the Cooling Degree Day
+        Daily Total and Heating Degree Day Daily Total, which display as part of the Weather Center
+        when the outside temperature variable is selected. See “Inside and Outside Temperature” on
+        page 18 for more information.
+        A base setting for both the Cooling and Heating Degree Day temperature is not set at the
+        factory, allowing you to choose. A base of 65°F (15°C in Europe) is suitable for most
+        applications.
+
+                                                                                                       13
+Setup Mode
+
+        To set your cooling degree day base:
+                                                                                       F
+        1. Press 2ND and SET. The value of 65°
+           appears. Use the < and > keys to select a
+           segment of the value.
+        2. Press the + and - keys to adjust the value of
+           the selected segment.
+        3. Press 2ND and UNITS to change the
+           temperature setting between Fahrenheit and Celsius.
+        4. Press DONE to move to the next screen.
+           The Heating Degree Day Base displays:                                   F
+
+
+        To set your heating degree day base, follow
+        steps 1 through 4 above.
+        To turn the degree day function off, press 2ND
+        and then clear. The value changes to dashes.
+
+
+Note:      If a base temperature is displayed, degree day data is being accumulated. If the value shows
+           dashes, the degree day function is off and will not appear in the Weather Center.
+
+        Screens 17 and 18: Commentary and Key Beep
+        Commentary refers to the extra information and comments on current weather conditions,
+        such as lunar and solar eclipses, meteor showers and other information, that displays on the
+        console in the Weather Center.
+        Key Beep is a sound that indicates a key has been pressed. (It is different from the “error”
+        sound. To change this sound, See “Changing Alarm Sound” on page 33.)
+        These functions can be turned off or on.
+        1. Press the + and - keys to toggle the setting
+           to OFF or ON.
+        2. Adjust key beep volume using the < and >
+           keys.
+        3. Press DONE to move to the next screen.
+        Screen 19: Baud Rate (Optional)
+        The Baud Rate screen displays only if a WeatherLink data logger is installed in the console.
+        The console uses a serial, USB, or Ethernet port to communicate with a computer. If you are
+        connecting the console directly to your computer via USB or Ethernet connection, leave the
+        setting at 19200, the highest rate for the port.
+Note:       The baud rate setting on your console must match the baud rate setting in the software on
+            your computer. If you are using WeatherLink for Vantage Vue, refer to WeatherLink Help for
+            instructions on setting the serial port baud rate on your computer.
+
+
+
+
+14
+                                                                                    Current Weather Mode
+
+   1. Press the + and - keys to select the baud
+      rate.
+      Your Vantage Vue console supports baud
+      rates of 1200, 2400, 4800, 9600, 14400,
+      and 19200.
+   2. Press DONE to save the baud rate settings.
+   Exiting Setup Mode
+   You have successfully completed all the screens in the Setup Mode. To exit Setup Mode, press
+   and hold DONE for several seconds until the Current Weather screen appears.
+   Clear All Command
+   After you have completed the above set up procedures and have exited the Setup Mode and
+   once the Vantage Vue ISS, Vantage Pro2 ISS or Anemometer Transmitter kit has been
+   installed, use the Clear All command before putting your weather station into service.
+   The Clear All command clears all stored high and low weather data including monthly and
+   yearly highs and lows, and clears the alarm settings. The command is recommended to
+   properly clear the console of any erroneous data when first putting your station into use.
+   1. Press WIND to display wind speed on the console.
+   2. Press 2ND, then press and hold CLEAR for at least six seconds.
+   3. Release CLEAR when you see “CLEARING NOW” displayed at the bottom of the
+      console’s screen.
+
+Current Weather Mode
+   In the Current Weather Mode you can display the current data readings from your station,
+   select units of measure, and calibrate, set, or clear weather variables.
+   You can see up to eight weather                            am                              F                            F
+   variables on the screen at the same time,
+                                                              N                     INSIDE               OUTSIDE
+   as well as the time and date, moon phase            NW          NE
+
+   and forecast icons, and a graph of the
+   currently selected variable.                    W                    E
+                                                                                                             in
+                                                                            CHILL            RAIN RATE
+   Some variables are always visible on the            SW          SE                F
+
+   console screen while most variables                 WIND   S                                                    in/hr
+
+   share their location with one or more
+   variables. You can select any variable
+   not currently on the screen to display it.
+
+
+
+
+                                                                                                                           15
+Displaying Weather Variables
+
+
+     Current Weather Mode Commands
+     Select a weather variable to display its data on the screen if it isn’t already visible, or to graph
+     the data available for that variable.
+     Weather variables are selected via the console command keys:
+     • If the variable is printed on a key, press the key to select the variable.
+
+                                 TEMP            HUM           WIND               RAIN          BAR
+
+     •    The same field can display multiple values for each variable. Press the variable key to
+          scroll through all the values
+     •    Multiple variables may share the same field on the display.
+
+                                         MPH                  CHILL               RAIN RATE
+                                  SW              SE                          F
+
+                                          S                                                            in/hr
+                                  WIND
+
+                                                  DEW                                   HEAT
+                                                         F                                F
+
+
+
+
+                                 Wind chill, dew point, heat index share the
+                                   same field in Current Weather Mode
+
+     •    If a variable is printed above or below a key, first press and release 2ND, then quickly
+          press the key below the printed variable to select that variable.
+                                          HEAT          DEW           CHILL        ET
+
+                               LIGHT     TEMP          HUM            WIND        RAIN         BAR
+           2ND
+                               2ND       WXCEN     GRAPH HI/LOW                   TIME         DONE
+                                         ALARM          SET           CLEAR       UNITS        SETUP
+
+
+
+
+         After pressing 2ND, the 2nd icon displays on the screen for eight
+         seconds. Key secondary functions are enabled during this time. The                                    2ND
+         keys return to normal operation after the icon disappears.
+         • Select a variable and press WxCEN to display information
+            pertinent to the selected variable in the Weather Center. Continue
+            to press WxCEN to scroll through all the information available for the                             WXCEN
+            variable.
+         • You can also select any variable currently displayed on the LCD screen
+            using the navigation keys. Press the + key to move the selection arrow up
+            the screen. Press the - key to move it down the screen. Push the < key to
+            move it left and push the > key to move it right.
+
+Displaying Weather Variables
+     The variables are arranged below in the order they are viewed on the console screen; left to
+     right, top to bottom, starting with Time and Date.
+
+
+
+16
+                                                                                                           Displaying Weather Variables
+
+        Time and Date, Sunrise and Sunset Time, Moon Phase, Forecast
+        Icons
+        The time and date display in the upper left hand corner of the console screen, above the wind
+        compass rose.
+        • Press TIME to display the sunrise and sunset time for the current day. Press
+           TIME again to redisplay the time and date.                                          TIME
+
+           The phase of the moon is described in the                                               am                                            F                    F
+                                                                                                                            pm
+           Weather Center section of the console when the                            Sunrise
+                                                                                                       N
+                                                                                                           Sunset
+                                                                                                                                       INSIDE          OUTSIDE
+
+           sunrise and sunset times are displayed. The moon                                NW                      NE
+
+
+
+
+           phase icon corresponds to the moon phase                                  W                                  E
+                                                                                                                                                           in
+                                                                                                   MPH                           DEW            RAIN      DAY
+           description in the Weather Center. See “Moon                                    SW                      SE                   F
+
+           Phases” on page 42.                                                             WIND        S                                                         in
+
+
+
+
+           The current forecast icon displays underneath the
+           current moon phase icon. The forecast icons show
+           what weather conditions may occur within the        Sunrise and sunset times, moon phase
+                                                                  and forecast icons, with the moon
+           next 12 hours. See “Forecast” on page 43 for           phase listed in the Weather Center
+           more information on the forecast icons and
+           descriptions of the forecasted weather they represent.
+
+Note:       See “Screen 1: Time & Date” on page 7 to change the console time and date or to select a
+            12- or 24-hour clock.
+
+        Wind Speed and Direction
+        Wind speed and direction are displayed in the compass rose in the upper left section of the
+        console screen:
+                                               am                              F                               F
+
+                                               N                      INSIDE           OUTSIDE
+                                        NW           NE
+
+
+
+
+                                    W                     E
+                                                                                                  mb
+                                               MPH            CHILL            RAIN RATE
+                                        SW           SE                F
+
+                                               S                                                       in/hr
+                                        WIND
+
+
+
+
+                                      Wind speed, direction and wind
+                                 information displayed in the Weather Center
+
+        1. Press WIND to select wind speed.
+           Wind speed may be displayed in miles per hour (MPH), kilometers per                                                                            WIND
+           hour (km/h), meters per second (m/s), or knots. See “Selecting Units of
+           Measure” on page 26 for more information on changing the unit of
+           measure. The graph will show the current and last 25 hours of readings.
+
+
+
+
+                                                                                                                                                                          17
+Displaying Weather Variables
+
+        A solid arrow within the compass rose indicates the current wind direc-
+        tion. Open arrows indicate up to six different 10-minute dominant wind
+        directions to provide a history of the dominant wind directions for the
+        past hour.
+     2. Press WIND a second time to display the wind direction in degrees instead of the wind
+        speed.
+        Each additional WIND key press toggles the display between
+                                                                                                           360˚ N
+        wind speed and wind direction in degrees. When displayed in                   315˚ NW                   ˚          45˚ NE
+        degrees, due north displays as 360°.                                                        ˚                  ˚
+
+        If the solar panel on your ISS is not facing due south, you                  270˚ W
+                                                                                              ˚                               ˚ 90˚ E
+        should recalibrate the wind direction reading on your console.
+                                                                                       225˚ SW ˚                        ˚ 135˚ SE
+        See “Calibrating Wind Direction Reading” on page 27.
+                                                                                                             ˚ S
+                                                                                                           180˚
+     3. Press WxCEN to display the weather information available for
+        wind in the Weather Center.
+     4. Press WxCEN multiple times to scroll through all the wind-related Weather Center screens,
+        which include:
+        • Maximum Wind Speed — Displays the highest wind speed recorded for the day.
+           Includes the time the speed was recorded.
+        • Last 10 Minute Gust — Displays the high wind gust in the last 10 minutes with the
+           direction of the highest gust displayed in degrees.
+        • Average Wind Speed — Displays the average speed over the past two minutes and over
+           the past ten minutes.
+        • Beaufort Scale — Toggles between a description of the wind speed and how the wind
+           ranks on the Beaufort Scale. (See “Beaufort Scale” on page 44 for more information.)
+        • Wind Direction — Displays the current wind direction in degrees.
+     Inside and Outside Temperature                                   pm                                    F                           F
+
+     Inside and outside temperature are displayed in                  N                           INSIDE            OUTSIDE
+                                                               NW           NE
+     the top right portion on the console screen. The
+     inside temperature is located above the word          W                     E
+                                                                                                                           mb
+     INSIDE and the outside temperature is located                    MPH            CHILL                 RAIN RATE
+     above the word OUTSIDE.                                   SW           SE                     F
+
+                                                                      S                                                         in/hr
+                                                               WIND
+
+
+
+
+                                                                Inside and outside temperature with
+                                                                   information displayed in the
+                                                                        Weather Center
+
+     1. Press TEMP to select the outside temperature.
+        Temperature may be displayed in degrees Fahrenheit (°F) or Celsius (°C).             TEMP
+        Temperatures can also be displayed in degrees or in tenths of a degree. See
+        “Selecting Units of Measure” on page 26 for more information on changing
+        the unit measure or displaying the temperature in tenths of a degree. If the unit of measure
+
+
+
+
+18
+                                                                          Displaying Weather Variables
+
+          is changed for inside or outside temperature, the unit of measure also changes for all
+          temperature-related weather variables, such as wind chill, dew point and heat index.
+Note:      The unit of measure also affects the cooling degree day and heating degree day bases and
+           the value entered in both screens is automatically converted to the unit of measure selected.
+           Check the values for both of these bases in the Setup Mode to make sure the value is still
+           accurate for the new unit of measure. See “Screens 15 and 16: Cooling and Heating Degree
+           Day Base” on page 13 for more information.
+
+        2. Press WxCEN to display weather information available for the outside temperature
+           variable in the Weather Center.
+        3. Press WxCEN multiple times to scroll through all the outside-temperature-related Weather
+           Center screens, which include:
+           • Maximum Temperature — Displays the highest temperature for the day with the time
+              the temperature was recorded.
+           • Minimum Temperature — Displays the lowest temperature for the day with the time
+              the temperature was recorded.
+           • Temperature Change Per 24 Hours — Displays the difference between the tempera-
+              ture currently recorded and the temperature recorded at the same time the day before.
+              (Updated on the hour.)
+           • Temperature Change Per Hour — Displays the difference between the temperature
+              currently recorded and the temperature recorded the hour before. (Updated every 15
+              minutes.)
+           • Maximum Outside Temperature Today and Over the Last 25 days — Displays the
+              highest temperature today and over the last 25 days and the date the temperature was
+              recorded.
+           • Minimum Outside Temperature Today and Over the Last 25 days — Displays the
+              lowest temperature today and over the last 25 days and the date the temperature was
+              recorded.
+           • Number of Cooling Degree Days — Displays the number of cooling degree days
+              logged on the console since it was first powered up or the value was reset. (Displays
+              only if a threshold has been set.)
+           • Number of Heating Degree Days — Displays the number of heating degree days
+              logged on the console since it was first powered up or the value was reset. (Displays
+              only if a threshold has been set.)
+        4. Press TEMP again to select the inside temperature.
+        5. Press WxCEN to display the weather information available for the inside temperatures in
+           the Weather Center.
+        6. Continue pressing WxCEN to scroll through all the inside-temperature- related Weather
+           Center screens, which include:
+           • Maximum Temperature — Displays the highest inside temperature for the day with
+              the time the temperature was recorded.
+           • Minimum Temperature — Displays the lowest inside temperature for the day with the
+              time the temperature was recorded.
+
+
+
+
+                                                                                                     19
+Displaying Weather Variables
+
+
+     Humidity                                                        am                               C                        C
+
+
+     Inside and outside humidity are displayed in the                N                      INSIDE           OUTSIDE
+                                                              NW           NE
+     top right portion on the console screen, below
+     the temperature variables. The inside humidity       W                     E
+                                                                                                                  mb
+     is located below the word INSIDE and the                        MPH            CHILL            RAIN RATE
+                                                                                             C
+     outside humidity is located below the word               SW
+
+                                                                      S
+                                                                           SE
+
+                                                                                                                       in/hr
+                                                              WIND
+     OUTSIDE.
+
+
+
+                                                        Inside and outside humidity with information
+                                                               displayed in the Weather Center
+     1. Press HUM to select outside humidity.
+        Humidity is displayed in percent relative humidity.                                HUM
+     2. Continue pressing WxCEN to display the information available for
+        outside humidity in the Weather Center and to scroll through the outside humidity-related
+        Weather Center screens, which include:
+        • Maximum Outside Humidity — Displays the highest humidity measurement for the
+           day and the time it was recorded.
+        • Minimum Outside Humidity — Displays the lowest humidity measurement for the
+           day and the time it was recorded.
+     3. Press HUM a second time to select inside humidity.
+     4. Press WxCEN to display the information available for inside humidity in the Weather
+        Center. Continue pressing WxCEN to scroll through the inside humidity-related Weather
+        Center screens, which include:
+        • Maximum Inside Humidity — Displays the highest inside humidity measurement for
+           the day and the time it was recorded.
+        • Minimum Inside Humidity — Displays the lowest inside humidity measurement F
+                                                                                             forF
+           the day and the time it was recorded.
+     Barometric Pressure
+                                                          W                     E
+     Barometric pressure and pressure trend display                                                               in
+                                                                     MPH            CHILL            RAIN RATE
+     below inside and outside humidity.                       SW           SE                FF
+
+                                                                     S                                                 in/hr
+                                                              WIND
+
+
+
+
+                                                           Barometric Pressure with information
+                                                            displayed in the Weather Center
+
+     1. Press BAR to select barometric pressure.
+        Barometric pressure may be displayed in inches (in), millimeters (mm),            BAR
+        millibars (mb) or hectoPascals (hPa). See “Selecting Units of Measure” on
+        page 26 for more information on changing the unit measure.
+     2. Press WxCEN to display the information available for the barometric pressure trend in the
+        Weather Center.
+
+
+20
+                                                                  Displaying Weather Variables
+
+3. Continue pressing WxCEN to scroll through all the barometric pressure-related Weather
+   Center screens, which include:
+   • Barometric Pressure Change Per 24 hours — Displays the difference between the
+     barometric pressure currently recorded and the barometric pressure recorded at the same
+     time yesterday. (Updated on the hour.)
+   • Maximum Barometric Pressure — Displays the highest barometric pressure reading
+     for the day and the time the measurement was recorded.
+   • Minimum Barometric Pressure — Displays the lowest barometric pressure reading for
+     the day and the time the measurement was recorded.
+   • Altimeter Setting — Displays the barometric pressure that would display if “ALT SET-
+     TING” was selected in Screen 11: Barometric Reduction Setting. The barometric pres-
+     sure reading and the altimeter setting reading will be the same if the altimeter setting
+     was selected. See “Screen 11: Barometric Reduction Setting” on page 12 for more infor-
+     mation.
+   • Absolute Pressure — Displays the barometric pressure that would display if “NONE”
+     was selected in Screen 11: Barometric Reduction Setting. The barometric pressure read-
+     ing and the absolute pressure reading will be the same if none was selected. See “Screen
+     11: Barometric Reduction Setting” on page 12 for more information.
+   • Barometric Pressure Trend — Describes the current barometric trend and the numeric
+     change in the barometric pressure over the last three hours. The barometric pressure
+     trend listed in the Weather Center corresponds to the pressure trend arrows displayed
+     next to the barometric pressure variable. The trends are:
+     • Bar Rising Rapidly — Refers to a rise in pressure greater than or equal to 0.06'' (2
+        hPa) over the last three hours.
+     • Bar Rising Slowly — Refers to a rise in pressure greater than or equal to 0.02'' (0.7
+        hPa) but less than 0.06'' (2 hPa) over the last three hours.
+     • Bar Steady —Refers to no change or a change of less than
+        0.02'' (0.7 hPa) either rising or falling over the last three hours.
+     • Bar Falling Slowly — Refers to a fall in pressure greater than or equal to 0.02'' (0.7
+        hPa) but less than 0.06'' (2 hPa) over the last three hours.
+     • Bar Falling Rapidly — Refers to a fall in pressure greater than or equal to 0.06'' (2
+        hPa) over the last three hours.
+Pressure Trend
+The pressure trend arrow indicates the current barometric trend, measured over
+the last three hours. The pressure trend is updated every 15 minutes. The
+pressure trend requires three hours of data in order to be calculated so it won’t
+display right away on a new station. The pressure trend is indicated on the
+console screen, as long as the required data is available.
+
+
+
+
+                                                                                           21
+Displaying Weather Variables
+
+
+     Wind Chill                                            MPH          CHILL            RAIN RATE
+                                                   SW            SE                  F
+     Wind chill shares the same section on
+                                                   WIND     S                                        in/hr
+     the console as dew point and heat index,
+     below the barometric pressure variable,
+     next to the wind compass rose.
+
+
+                                                        Wind chill with information displayed
+                                                              in the Weather Center
+
+     1. Press 2ND then press CHILL to                                                        CHILL
+        select wind chill. Wind chill is displayed in either Fahrenheit (°F) or
+                                                                                    2ND     WIND
+        Celsius (°C) in whole degrees. See “Selecting Units of Measure” on
+        page 26 for more information on changing the unit of measure.
+        If the unit of measure for any temperature-related weather variable is changed, the unit of
+        measure also changes for all temperature-related variables. See “Inside and Outside
+        Temperature” on page 18 for more information.
+        The console uses the ten-minute average wind speed to calculate wind chill.
+     2. Press WxCEN to display the weather information available for wind chill in the Weather
+        Center.
+     3. Press WxCEN twice to scroll through the wind chill-related Weather Center screens, which
+        include:
+        • Minimum Wind Chill — Displays lowest wind chill measurement for the day and the
+            time it was recorded.
+        • Maximum Wind Speed — Displays the maximum wind speed for the day and the time
+            it was recorded.
+
+
+
+     Dew Point                                            MPH              DEW           RAIN RATE
+                                                   SW            SE              F
+     Dew point (outside only) shares the
+                                                   WIND    S                                          in/hr
+     same section on the console as wind
+     chill and heat index, below the
+     barometric pressure variable, next to the
+     wind compass rose.
+                                                    Dew Point with information displayed in
+                                                              the Weather Center
+
+
+
+
+22
+                                                                      Displaying Weather Variables
+
+1. Press 2ND then press DEW to select dew point. Dew point is                                    DEW
+
+   displayed in either Fahrenheit (°F) or Celsius (°C) in whole degrees.            2ND          HUM
+   See “Selecting Units of Measure” on page 26 for more information on
+   changing the unit of measure.
+   If the unit of measure for any temperature-related weather variable is changed, the unit of
+   measure also changes for all temperature-related variables. See “Inside and Outside
+   Temperature” on page 18 for more information.
+2. Press WxCEN to display the weather information available for dew point in the Weather
+   Center. Press WxCEN twice to scroll through the Weather Center screens, which include:
+   • Maximum Dew Point — Displays the highest dew point measurement for the day with
+      the time it was recorded.
+   • Minimum Dew Point — Displays the lowest dew point measurement for the day with
+      the time it was recorded.
+
+
+
+Heat Index                                                 MPH               HEAT    RAIN RATE
+                                                    SW           SE           F
+Heat index (outside only) shares the same           WIND   S                                        in/hr
+
+section on the console as wind chill and dew
+point, below the barometric pressure
+variable, next to the wind compass rose.
+
+                                                     Heat Index with information displayed
+                                                            in the Weather Center
+
+
+Press 2ND then press HEAT to display the heat index. Heat index is                               HEAT
+
+displayed in either Fahrenheit (°F) or Celsius (°C) in whole degrees.               2ND          TEMP
+
+See “Selecting Units of Measure” on page 26 for more information on
+changing the unit of measure. If the unit of measure for any temperature-related weather
+variable is changed, the unit of measure also changes for all temperature-related variables. See
+“Inside and Outside Temperature” on page 18 for more information.
+
+The Maximum Heat Index (the highest Heat Index measurement recorded for the day) along
+with the time it occurred displays in the Weather Center section of the console.
+
+
+
+
+                                                                                                        23
+Displaying Weather Variables
+
+
+     Rain                                                   MPH                HEAT   RAIN   DAY
+
+     All the rain values are displayed in the       SW             SE            F
+
+                                                             S                                     in
+     same section on the console below the          WIND
+
+     barometric pressure variable, on the
+     right side.
+     The rain values include RAIN RATE,
+     RAIN DAY (current day’s rain total),
+     RAIN MO (monthly rain total), and                   Daily Rain Total with information displayed
+     RAIN YEAR (yearly rain total).                               in the Weather Center
+
+
+     1. Press RAIN to display the current rain rate.
+                                                                                               RAIN
+
+        Rain rate will display a number other than zero and the umbrella icon appears
+        when two tips of the rain spoon have occurred within a 15-minute period.
+     2. Press RAIN again to display RAIN DAY, the rain accumulated since 12:00
+        midnight.
+     3. Press RAIN a third time to select the month-to-date precipitation data. Monthly rain
+        displays the precipitation accumulated since the calendar month began.
+     4. Press RAIN a fourth time to display the year-to-date precipitation data. Yearly rain displays
+        the precipitation accumulated since the first of the month you’ve chosen as the beginning of
+        your rain season in Setup Mode. (See “Screen 14: Rain Season” on page 13.)
+        All rain measurements may be displayed as either inches per hour (in/hr) or millimeters per
+        hour (mm/hr). See “Selecting Units of Measure” on page 26 for more information on
+        changing the unit of measure.
+     5. Press WxCEN to display the weather information available for all of the rain variables in
+        the Weather Center.
+     6. Press WxCEN multiple times to scroll through the rain-related Weather Center screens,
+        which include:
+        • Rain Rate — Displays the current rate of rain (unless already displayed).
+        • Rain Rate Maximum — Displays the maximum rain rate for the day and the time the
+           rate occurred.
+        • Rain Last 15 Minutes — Displays the total amount of rain recorded over the last 15
+           minutes.
+        • Rain Last 24 Hours — Displays the total amount of rain recorded over the last 24
+           hours.
+        • Rain Day — Displays rain since midnight (unless already displayed).
+        • Last Storm — Displays the rain total from the last rain event and the date on which the
+           most recent storm ended. It takes two tips of the rain spoon to begin a storm event and
+           24 hours without rain to end a storm event.
+        • Rain Last __ Days — Displays the total rain amount over a user-selected number of
+           days. To change the number of days over which the total rain amount is displayed, press
+           the + and - keys when this screen is displayed in the Weather Center. The number of
+           days allowable is 26 (the last 25 days plus the current day).
+
+
+
+
+24
+                                                                         Displaying Weather Variables
+
+        Evapotranspiration (ET) (Optional)
+        All the evapotranspiration values share              MPH               HEAT          ET DAY
+        the same section on the console as rain       SW           SE           F
+
+                                                             S                                        in
+        values, below the barometric pressure         WIND
+
+        variable, on the right side.
+
+
+
+                                                    Daily Evapotranspiration with Solar Radiation
+                                                    information displayed in the Weather Center
+
+Note:       Evapotranspiration, solar radiation and UV index measurements are available only when the
+            Vantage Vue console is “listening to” a Vantage Pro2 Plus ISS or other Vantage Pro2 ISS in
+            which a solar radiation (and a UV sensor, for UV index) has been installed and “VP2 ISS”
+            has been selected in Screen 6 of the Setup Mode. See “Screen 6: Configuring Transmitter
+            IDs” on page 9.
+
+        1. Press and release 2ND then press ET to display the daily                                   ET
+           evapotranspiration reading.
+                                                                                       2ND        RAIN
+
+
+Note:      If you hear an error beep when selecting ET, it means the station the console is selected to
+           “hear” is not a Vantage Pro2 station with a solar radiation sensor.
+
+        2. Press and release 2ND then press ET again to display the monthly evapotranspiration
+           reading.
+        3. Press and release 2ND then press ET a third time to display the evapotranspiration reading
+           since January 1st of the current year.
+        4. Press WxCEN to display the weather information available for all of the ET variables in the
+           Weather Center.
+        5. Press WxCEN multiple times to scroll through the ET-related Weather Center screens,
+           which include:
+           • ET Last __ Days — Displays the total ET amount over a user-selected number of days.
+              To change the number of days over which the total ET amount is displayed, press the +
+              and - keys when this screen is displayed in the Weather Center. The number of days
+              allowable is 26 (the last 25 days plus the current day).
+           • Solar Radiation — Displays the current solar radiation measurement for the day.
+           • UV Index — Displays the current UV index.
+        Weather Center
+        Press WxCEN to view added information in the Weather Center section of
+        the console for each variable. See each individual variable for a list of               WXCEN
+        Weather Center screens available for each variable.
+
+
+
+
+                                                                                                           25
+Selecting Units of Measure
+
+
+        Light
+        Press LIGHT to turn on the backlight for the screen display. Press LIGHT
+        again to turn the backlight off.
+        Use the backlight when the LCD is not clearly visible. When the console is
+        battery operated, the backlight remains on as long as keys are being pressed. If no keys are
+        being used, the backlight automatically turns off about fifteen seconds after it is turned on. If
+        any key is pressed while it is turned on, it will stay illuminated for 60 seconds from the last
+        key press. When battery power is low, the backlight does not light.
+
+Note:       When the console receives power from the AC adapter, the backlight remains on until it is
+            toggled off. Leaving the backlight on for an extended period of time raises the inside
+            temperature reading and lowers the inside humidity reading.
+
+        To adjust the screen’s contrast, press and release 2ND then press the + and
+        - keys multiple times while the 2nd icon appears on the screen. The + key
+        darkens the segments currently displaying on the console screen. The - key
+                                                                                           2ND
+        lightens the segments currently displaying on the console screen. Adjust
+        the contrast as desired.
+
+Note:       The step changes are subtle. You may need to press the keys several times.
+
+
+Selecting Units of Measure
+        Most weather variables may be displayed in at least two different measurement units,
+        including US and metric systems, although some variables feature more possibilities.
+        Barometric pressure, for example, may be displayed in millibars, millimeters, inches, or
+        hectoPascals. You can change each variable’s units independently and at any time.
+        To change units:
+        1. Select the weather variable.
+        2. Press and release 2ND then press UNITS.
+           The selected variable’s units change. Repeat steps 1 and 2 until the        2ND     TIME
+
+           desired units appear.                                                               UNITS
+
+
+
+           For example, to change the barometric pressure units, first select barometric pressure by
+           pressing BAR. Next, press and release 2ND, then press UNITS. Repeating these steps
+           cycles through the units available for barometric pressure: inches, millimeters, hectoPas-
+           cals, and millibars.
+
+                                                                         hPa
+                                               in
+
+
+
+                                               mm
+
+                                                                          mb
+
+
+
+
+                                       Displaying barometric pressure units:
+                      inches (in), millimeters (mm), hectoPascals (hPa) and millibars (mb)
+
+
+
+
+26
+                                                                Calibrating, Setting, and Clearing Variables
+
+
+Calibrating, Setting, and Clearing Variables
+        Your Vantage Vue weather station is factory-calibrated and tested to be highly accurate. You
+        should not need to calibrate it. However, to fine-tune your station, you can calibrate most of
+        the weather variables. For example, if your outside temperature seems consistently too high or
+        too low, you can enter an offset to correct the deviation.
+        Calibrating Temperature and Humidity
+        You can calibrate inside and outside temperature, and inside and outside humidity on your
+        Vantage Vue.
+        1. Select the temperature or humidity variable to be calibrated.
+        2. Press and release 2ND, then press and hold SET.
+           After a moment, the variable you’ve selected will begin to blink.
+           Keep holding SET until the Calibration Offset message displays in
+           the Weather Center.
+        3. Press the + or - keys to add or subtract from the temperature offset value.
+           Inside and outside temperature are calibrated in 0.1° F or 0.1° C increments, up to a
+           maximum offset of +/ - 12.7 (°F or °C). The variable’s value will change and the Weather
+           Center shows the offset you have entered.
+        4. Press DONE to exit calibration.
+        Calibrating Wind Direction Reading
+        The wind vane on your ISS is calibrated at the factory to be accurate when the solar panel
+        above it is pointing south. If your solar panel does not point south, you must use this procedure
+        to correct the wind direction. In any case, you can also use this procedure to fine-tune your
+        station for greatest accuracy.
+Note:       Wind direction calibration should be done when the ISS is mounted in its final position and
+            the vane is still.
+
+        1. With the wind vane stationary, ascertain its actual direction. Compare it to the direction
+           reading on the console.
+        2. Press WIND until the wind direction in degrees is displayed.
+        3. Press and release 2ND, then press and hold SET. The wind direction variable will begin to
+           blink.
+        4. Continue holding SET until “CAL” displays in the Weather Center. The Weather Center
+           displays the previously set wind direction calibration value, if one has been set.
+        5. Change the value of the wind direction in the compass rose                       360˚ N
+                                                                                 315˚ NW      ˚      45˚ NE
+           based on the direction the anemometer is currently pointing.                  ˚         ˚
+           Due north is 360°, east is 90°, south is 180° and west is
+           270°.                                                                270˚ W
+                                                                                       ˚               ˚ 90˚ E
+        6. Press the < and > keys to select digits in the anemometer’s
+           current reading.                                                       225˚ SW ˚         ˚ 135˚ SE
+                                                                                              ˚ S
+                                                                                            180˚
+        7. Press the + and - keys to set the correct reading.
+        8. Press DONE to exit calibration.
+Note:       Wind direction can not be corrected by repositioning the wind vane.
+
+
+
+
+                                                                                                           27
+Calibrating, Setting, and Clearing Variables
+
+
+        Calibrating Barometric Pressure
+        Before calibrating the barometric pressure, be sure the station is set to the correct elevation.
+        See “Screen 10: Elevation” on page 11 for more information. Find the nearest source of
+        barometric pressure, such as a local airport, to get a current barometric pressure.
+        1. Press BAR to select barometric pressure.
+        2. Press and release 2ND, then press and hold SET. The barometric pressure variable blinks.
+        3. Continue holding SET until the Weather Center reads “SET BAR.”
+        4. Press the < and > keys to select digits in the variable.
+        5. Press + and - keys to add to or subtract from the digit’s value.
+        6. Press DONE to exit calibration.
+        Calibrating Rain
+        The Rain Error in Percent refers to the measuring error of your rain collector. To set the rain
+        error percentage, first determine the percentage of error, then:
+        1. Enter Setup Mode by pressing 2ND and then SETUP.
+        2. Press DONE multiple times until Screen 13: Rain Collector displays. (See “Screen 13: Rain
+           Collector” on page 12 for more information.)
+        3. Press and release 2ND and then
+           press and release SET to display
+           the RAIN ERROR IN PERCENT
+           screen.
+
+                                                                        Rain Error in Percent
+        4. Enter the error. Enter a negative number if your station is under-reporting; enter a positive
+           number if it is over-reporting. For example, if your station is low by 2%, enter -2. If your
+           station is high by 4%, enter 4. Press the + and - keys to add or subtract from the percent
+           amount. The Rain Error Percentage range is -25 to 25 percent. (Not all corrections are
+           available, so you may have to choose the closest one.)
+        5. Press and hold DONE to save the setting and exit Setup Mode.
+Note:       This calibration will not retroactively affect past rain totals. It will only affect future rain data.
+
+        Setting Weather Variables
+        Setting a weather variable allows you to manually enter a total for that weather variable that
+        accrued prior to installation of your weather station.
+        You can set values for the following weather variables:
+        • Daily Rain — Sets the daily rain total. Monthly and yearly rain totals are updated.
+        • Monthly Rain — Sets the total rain for the current month. Does not affect the yearly rain
+            total.
+        • Yearly Rain — Sets the current year’s rain total.
+        • Daily ET (Evapotranspiration) — Sets the daily ET total. Monthly and yearly ET totals
+            are updated.
+        • Monthly ET— Sets the current month’s ET. Does not affect yearly total.
+        • Yearly ET — Sets the current year’s total ET.
+
+
+
+
+28
+                                                             Calibrating, Setting, and Clearing Variables
+
+        To set a weather variable’s value:
+        1. Select the variable you wish to change (either RAIN or ET).
+        2. Press and release 2ND, then press and hold SET. The variable blinks.
+        3. Keep holding SET until all digits are lit and stop flashing. Release SET; only one digit is
+           now blinking.
+        4. Press the < or > keys to select digits in the value.
+        5. Press the + and - keys to add to or subtract from the selected digit.
+        6. When you are finished, press DONE to exit.
+        Clearing Weather Variables Accumulations & Calibrations
+        The following weather variables can be cleared:
+        • Wind Direction—Clears the wind direction calibration.
+        • Barometer — Clears any pressure offset used to calibrate the station.
+Note:       Clearing the barometric pressure offset value also clears the elevation setting in Setup
+            Mode. See “Screen 10: Elevation” on page 11.
+
+        •   Daily rain—Clearing the daily rain value is reflected in the daily rain total, the last 15
+            minutes of rain, the last three hours of rain sent to the forecast algorithm, the umbrella
+            icon, and the monthly and yearly rain totals. Clear the daily rain total if the station
+            accidentally recorded rain when the ISS was installed or after routine cleaning and
+            maintenance.
+        • Monthly rain — Clears the monthly rain total. Does not affect the yearly rain total.
+        • Yearly rain — Clears the yearly rain total.
+        • Daily ET — Clears daily ET and subtracts the old daily ET total from the monthly and
+            yearly ET totals.
+        • Monthly ET — Clears the current monthly ET total. Does not affect the yearly ET total.
+        • Yearly ET — Clears the current yearly ET total.
+        • Heating and Cooling Degree Days— Clears the accumulated degree day total.
+        To clear a single weather variable:
+        1. Select the weather variable. (For degree days, select outside temperature, press WxCtr until
+           degree days is displayed.)
+        2. Press and release 2ND, then press and hold CLEAR.
+           The variable you’ve chosen blinks. Keep holding CLEAR until
+           the value changes to zero or, in the case of the barometer, the raw
+           barometer value.
+        Clear All Command
+        This command clears all stored high and low weather data, including monthly and yearly
+        highs and lows, and clears alarm settings all at once.
+        1. Press WIND, making sure wind speed is displayed.
+        2. Press 2ND then press and hold CLEAR for at least six seconds.
+        3. Release CLEAR when “CLEARING NOW” displays at the bottom of the screen.
+
+
+
+
+                                                                                                       29
+Highs and Lows Mode
+
+
+Highs and Lows Mode
+     The Vantage Vue records highs and lows for many weather conditions over three different
+     periods: days, months, and years. Except for yearly rainfall, all high and low registers are
+     cleared automatically at the end of each period.
+
+     For example, daily highs are cleared at midnight, monthly highs are cleared at month–end
+     midnight, yearly highs are cleared at year–end midnight. You may enter the month that you
+     would like the yearly rainfall accumulation to clear. The yearly rainfall clears on the first day
+     of the month you have chosen. The yearly high rain rate clears using the same setting.
+
+     The following table lists the high and low modes for all the weather variables:
+
+                                                       Day,
+       Weather Variable        High          Low      Time &   Month             Year                   Additional Information
+                                                       Date
+     Wind Speed                Yes                   Yes       Yes               Yes           Includes direction of highs
+     Outside Temperature       Yes           Yes     Yes       Yes               Yes
+     Inside Temperature        Yes           Yes     Yes       Yes               Yes
+     Outside Humidity          Yes           Yes     Yes       Yes               Yes
+     Inside Humidity           Yes           Yes     Yes       Yes               Yes
+     Barometer                 Yes           Yes     Yes       Yes               Yes
+     Heat Index                Yes                   Yes       Yes               Yes
+     Wind Chill                              Yes     Yes       Yes               Yes
+     Dew Point                 Yes           Yes     Yes       Yes               Yes
+     Rainfall Rate             Yes                   Yes       Yes               Yes*
+     Daily Rain                                      Total     Total             Total*
+                                                                                               Requires a Vantage Pro2 ISS
+     Evapotranspiration                              Total     Total             Total         with solar radiation sensor
+     * Stores yearly data for current and past years.
+
+                                              Weather data highs and lows
+
+     Viewing Highs and Lows
+                                                                           C                        C
+
+                                               N                INSIDE             OUTSIDE
+                                      NW             NE
+
+
+
+
+                                  W                       E
+                                                                                          mb
+                                              MPH              HEAT       RAIN            MO
+                                      SW             SE          C
+
+                                               S                                               in
+                                      WIND
+                                                                         HIGHS
+
+
+
+
+                                                    View of monthly highs
+     1. Press HI/LOW to enter the Highs and Lows Mode.
+
+
+
+30
+                                                                                            Alarm Mode
+
+           The day of the week and “DAILY HIGHS” display in the Weather Center section of the
+           console and the console displays the highs for all visible fields.
+        2. Press the + and - keys to scroll through Day Highs, Day Lows, Month Highs, Month Lows,
+           Year Highs and Year Lows.
+           The information provided in the Weather Center displays the day of the week, month or
+           year being viewed as well as indicates if the screen currently being viewed is displaying
+           highs or lows. The reading’s time and date, where applicable, appear in the time and date
+           fields.
+        3. Press the < and > keys to scroll back and forth through the 26 values in the graph section of
+           the console screen.
+           Pressing the < key displays the previous day’s highs. Each time you press the < key, the
+           date moves back another day. The 26 dots in the graph field represent each of the current
+           and last 25 days, months, or years. The right-most dot is the present. As you move back-
+           ward and forward the flashing dot changes to show what value is being displayed.
+        4. Use the console navigation keys to select a different weather variable.
+           The console’s time displays the time of the selected variable’s high or low.
+        5. Press DONE to exit the Highs and Lows Mode. The console screen displays the Current
+           Weather Mode.
+Note:       The low reading for wind chill and the high reading for heat index are displayed in the same
+            place. When scrolling through the high and low screens with either of these variables
+            selected, the wind chill and heat index readings toggle on and off depending on the screen
+            displaying. If dew point is selected, neither wind chill nor heat index will be displayed.
+
+
+Alarm Mode
+        The Vantage Vue features 22 alarms that can be programmed to sound whenever a reading
+        exceeds or drops below a set value. With the exception of barometric pressure and time, all
+        alarms sound when a reading reaches the alarm threshold. For example, if the high outside
+        temperature alarm is set at 65° F/18°C, the alarm sounds when the temperature rises to or
+        above 65.0° F/18.0°C. A barometric pressure alarm is triggered based on trend. A time alarm
+        is based on a preset time.
+        Low alarms work the same way. For example, if the wind chill threshold is set for 30°F/-1°C,
+        the alarm condition begins when the wind chill drops to 30°F/-1°C and will continue until the
+        wind chill rises above 30°F/-1°C.
+        When an alarm condition exists, the audible alarm sounds, the alarm icon blinks
+        repeatedly, and an alarm description appears in the Weather Center at the bottom of
+        the screen. The alarm sounds for a maximum of two minutes (time alarm sounds for
+        one minute) if the console is battery-powered, but the icon continues to blink and the message
+        stays in the Weather Center until you clear the alarm or the condition clears. If you’re using
+        the AC adapter, the alarm will continue sounding as long as the condition exists.
+        The alarm will sound again for each new alarm. If more than one alarm is active, the
+        description for each active alarm along with a “+” symbol cycles onto the Weather Center
+        section of the screen every four seconds.
+
+
+
+
+                                                                                                      31
+Alarm Mode
+
+                                                 Vantage Vue Alarms
+
+                             Variable                                      Alarms
+                                                   Storm Warning - uses trend value falling rate
+                 Barometric Pressure Trend         Storm Clearing - uses trend value rising rate
+                 Evapotranspiration*               ET Alarm - uses total ET for the day
+                 Humidity, Inside                  High and Low
+                 Humidity, Outside                 High and Low
+                 Dew Point                         High and Low
+                                                   Flash Flood Alarm - uses current 15 minute rainfall
+                 Rain                              total
+                                                   24 Hour Rain Alarm - uses current 24 hour rainfall total
+                 Storm                             Storm Alarm - uses current storm rainfall total
+                 Rain Rate                         High
+                 Inside Temperature                High and Low
+                 Outside Temperature               High and Low
+                 Heat Index Temperature            High
+                 Wind Chill Temperature            Low
+                 Wind Speed                        High and 10-Minute Average
+                 Time & Date                       The alarm sounds for 1 minute.
+                 *Evapotranspiration measurements are only available when receiving data from Vantage
+                 Pro2 Plus stations or other Vantage Pro2 ISS stations in which a solar radiation sensor
+                 has been installed.
+
+        Special Alarms
+        ET (Evapotranspiration) (Optional)
+Note:       The ET Alarm is only available when the console is receiving data from a Vantage Pro2 Plus
+            or Vantage Pro2 with solar radiation sensor. If your Vantage Vue console is not “listening to”
+            a Vantage Pro2 Plus ISS, you cannot set an ET alarm.
+
+        ET is updated once an hour, on the hour. If during a given hour the ET value exceeds the alarm
+        threshold, the ET alarm sounds at the end of that hour. This is true for daily, monthly, and
+        yearly ET alarms. See “Evapotranspiration (ET)” on page 46 for a description of this variable.
+        Barometric Pressure
+        The Vantage Vue allows you to set two barometric pressure alarms: a “rise” alarm and a “fall”
+        alarm. You may select any rate of change per three hours between 0.00 and 0.25 inches (6.35
+        mm) Hg, (8.5 mb, hPa). The alarm will sound if the rate of change (in either direction) exceeds
+        the threshold you set. This alarm is updated every minute.
+        Setting Alarms
+        1. Press and release 2ND then press ALARM to enter the Alarm Mode
+           to view or set the high alarm thresholds. The screen displays the
+           current high alarm thresholds. The        icon displays and “HIGH ALARMS” displays in
+           the Weather Center.
+
+
+
+
+32
+                                                                                           Graph Mode
+
+        2. Press the < and > keys to select one of the variables displayed on the screen or use the
+           console keys to select any weather variable. Also, press HI/LOW to display then toggle
+           between the high and low alarm threshold settings.
+        3. Press 2ND then press SET to activate the currently selected
+           weather variable.
+        4. Press the < and > keys to select digits in the threshold value.
+        5. Press the + and - keys to change the digit’s value up and down.
+        6. Press DONE to finish changing the alarm setting.
+        7. Repeat steps 2 through 6 to change additional alarm settings.
+        8. Press DONE to exit Alarm Mode.
+        Setting the Time Alarm
+        1. Press and release 2ND then press ALARM to enter the Alarm Mode
+           The        icon displays and “HIGH ALARMS” displays in the Weather Center.
+        2. Press TIME, then press and release 2ND and press SET.
+           The hour digit in the time field begins blinking, displaying the current time.
+        3. Press the < and > keys to select between the hour digit and the minutes digits.
+        4. Press the + and - keys to change the digit’s value up and down. To change between AM and
+           PM, keep pressing + and - when the hour value is blinking.
+        5. Press DONE to exit Alarm Mode.
+        Clearing Alarm Settings
+        1. Press 2ND and ALARM to enter the Alarm Mode.
+        2. Select the alarm setting you wish to clear.
+        3. Press and release 2ND, then press and hold CLEAR until the setting changes to all dashes.
+           You have cleared the alarm setting.
+        4. Press DONE to exit Alarm Mode.
+        Silencing Alarms
+        1. Press DONE to silence (but not clear) an alarm when it sounds.
+        Changing Alarm Sound
+        1. Press and release 2ND then press ALARM to enter the Alarm Mode.
+        2. Press and release 2ND then press the + and - keys to change the sound of the alarm tone.
+Note:       This also changes the error sound.
+
+        3. Press DONE to exit Alarm Mode.
+
+Graph Mode
+        The Vantage Vue console includes a powerful Graph Mode that allows you to view over 50
+        graphs of different weather data right on the screen, all without connecting to a personal
+        computer.
+
+        The horizontal axis is time, showing the current and last 25 intervals (hours, days, months, or
+        years). The vertical axis scale changes automatically to fit the information of the period
+        graphed.
+
+
+
+
+                                                                                                      33
+Graph Mode
+
+
+     Viewing Graphs                                                   am
+
+
+     Although the graphs available may vary for                        N
+                                                              NW            NE
+     each weather variable, all are displayed in the
+     same way.                                            W                      E
+                                                                      MPH
+
+                                                              SW            SE
+
+
+                                                              WIND     S
+                                                                                     GRAPH
+
+
+
+
+                                                                     Graph Mode for the wind variable
+
+     1. Select a variable to graph.
+     2. Press GRAPH to enter Graph Mode. Only the time, date, graph, graph
+        icon, selected variable and information pertaining to the selected                   GRAPH
+        variable are visible. The rest of the screen is blank.
+
+        Values for the present time and each of the preceding 25 hours are displayed in the graph,
+        each hour represented by a dot. The dot at the right end of the graph is the value for the cur-
+        rent hour. You’ll notice that the dot is blinking. The dot at the left end of the graph is the
+        value at least 24 hours ago.
+     3. Press the < key and the second dot from the right starts to blink.
+        The screen displays the new dot’s value. The time display shows what hour is being
+        viewed.
+     4. Press the < and > keys to view the variable’s high values for each of the last 25 hours.
+     5. Press the + and - keys to shift the graph’s time span.
+        If you press the - key, the graph shifts from the current and last 25 hours to the current and
+        last 25 days. Each dot represents the high recorded on the day shown in the date field. To
+        see the lows recorded in the current and last 25 days, press HI/LOW. Press the < and > keys
+        to move between days.
+        By pressing the - key again, the graph shifts to show the highs of the current and last 25
+        months. As before, use the < and > keys to move between months. Press HI/LOW to shift
+        between the highs and lows.
+        By pressing the - key again, the graph shifts one more time to show the highs of the current
+        and last 25 years, but only for Rain Rate, Rain, and ET.
+        Since the console only graphs data collected by the station, graphs can only show data col-
+        lected since the station was installed.
+
+
+
+
+34
+                                                                                  Graph Mode
+
+View graphs of all other variables the same way.
+1. Select the variable you want to view.
+2. Press GRAPH.
+3. Use the < and > keys to select different values.
+4. Press the + key to shorten the time range.
+5. Press the - key to lengthen the time range.
+6. Press HI/LOW to shift between highs and lows.
+7. Press DONE to exit.
+
+                                Vantage Vue Console Graphs
+
+                Weather Variable                           Available Graphs
+
+
+
+
+                                                                      Monthly
+                                                  Hourly
+
+
+
+
+                                                                                Yearly
+                                                             Daily
+       Barometric Pressure                            C     H, L     H, L
+       Humidity, Inside                               C     H, L     H, L
+       Humidity, Outside                              C     H, L     H, L
+       Dew Point                                      C     H, L     H, L
+       Rain                                           T      T         T         T
+       Rain Rate                                      H      H        H         H
+       ET (optional)                                  T      T         T         T
+       Inside Temperature                             C     H, L     H, L
+       Outside Temperature                            C     H, L     H, L
+       Heat Index Temperature                         C      H        H
+       Wind Chill Temperature                         L       L        L
+       Wind Speed*                               A, H        H        H
+       Direction of High Wind Speed                          Y         Y
+
+       Legend:
+       A = Average
+       H = Highs
+       L = Lows
+       T =Totals
+       Y = Yes
+       C = Current reading at the end of each period
+
+       * Also available: 10-Minute High Wind Speeds For Last 4 Hours; Current
+       and last 25 Packets of Wind Speed.
+
+
+
+
+                                                                                         35
+Chapter 4
+Troubleshooting and Maintenance
+
+Vantage Vue Troubleshooting Guide
+                While your Vantage Vue weather station is designed to provide years of trouble-free operation,
+                occasional problems may arise. If you are having a problem with your station, please consult
+                this troubleshooting guide before calling Davis technical support. You may be able to quickly
+                solve the problem yourself. Please see “Contacting Davis Technical Support” on page 52.
+Note:               Refer to the ISS Installation Manual for additional troubleshooting information.
+
+                                           TABLE 4-1: TROUBLESHOOTING GUIDE
+
+                           Problem                                         Solution
+                                              Unit is not receiving power. Check the power adapter connections
+                  Display is blank
+                                              and/or replace batteries.
+                                              •   ISS is not transmitting. See ISS manual.
+                                              •   Console not receiving - See “Troubleshooting Reception
+                                                  Problems” on page 37.
+                  Display shows dashes        •   A reading has exceeded the limits indicated in the
+                  in place of weather data        specifications table.Calibration numbers may be causing
+     Display
+
+
+
+
+                                                  readings to exceed display limits. Check calibration number
+                                                  and adjust if necessary.
+
+                  Console is sluggish or      The console and display may not work below 32° F (0° C). Use an
+                  does not work at low        external temperature sensor in low-temperature locations or install
+                  temperatures                the console indoors.
+                                              Reset the console by removing AC and battery power then
+                                              restoring power. If this occurs frequently in an AC-powered
+                  Display “locks up”
+                                              console, plug the AC power adapter into a surge suppressor, or
+                                              use batteries. (They will last up to a year.)
+     Humidity
+
+
+
+
+                                              Make sure the console is not near a humidifier or dehumidifier.
+                  Inside humidity seems       Check calibration number and adjust if necessary. If inside
+                  too high or too low         humidity is low, and inside temperature is too high, see
+                                              temperature, below. Turn off the console backlight.
+
+                                              Remove wind cups and check for friction sources. Check the ISS
+                  Wind speed reading
+                                              location. Is it sheltered from the wind? See ISS manual for
+                  seems too low.
+                                              additional wind speed troubleshooting information.
+                                              The problem may be with the wind cups. Test by spinning. Check
+     Wind
+
+
+
+
+                  Wind speed reads 0
+                                              the corresponding wind fields in the diagnostic screens and call
+                  either all the time or
+                                              technical support. (See “Screen 1: Statistical Diagnostic Screen”
+                  intermittently
+                                              on page 39.)
+                  Wind reading is dashed
+                                              Check reception. See Reception Problems below.
+                  out
+                  Dew Point reading           Check calibration numbers for temperature. Dew point depends on
+     Dew
+
+
+
+
+                  seems too high or too       outside temperature and humidity. Make sure both sensors are
+                  low                         working.
+
+
+
+
+36
+                                                                           Vantage Vue Troubleshooting Guide
+
+                                         TABLE 4-1: TROUBLESHOOTING GUIDE
+
+                         Problem                                          Solution
+                                            Check calibration number and adjust if necessary. The ISS may
+                 Outside temperature
+                                            need to be relocated away from radiant heat sources. See the ISS
+                 reading seems too high
+                                            Installation Manual.
+                                            Turn off console backlight. Move the console out of direct sunlight.
+                                            Make sure the console or sensor is not in contact with an exterior
+                 Inside temperature
+Temperature
+
+
+
+
+                                            wall that heats up in sunlight or when outside temperature rises.
+                 sensor reading seems
+                                            Make sure the console or sensor is not near a heater or other
+                 too high
+                                            internal heat source (lamps, appliances, etc.). Check calibration
+                                            number and adjust if necessary.
+                 Outside temperature        Check calibration number and adjust if necessary. Sprinklers may
+                 seems too low              be hitting the ISS radiation shield. Relocate. See ISS manual.
+                                            Make sure the console is not in contact with an exterior wall that
+                 Inside temperature
+                                            cools down when outside temperature drops. Make sure the
+                 sensor reading seems
+                                            console is not near an air conditioning vent. Check calibration
+                 too low
+                                            number and adjust if necessary.
+                 Wind chill reading
+Chill
+
+
+
+
+                                            Check calibration numbers for temperature. Wind chill depends on
+                 seems too high or too
+                                            temperature and wind speed. Make sure they’re working.
+                 low
+                 Heat Index reading         Check calibration numbers for temperature. The heat index
+Heat
+
+
+
+
+                 seems too high or too      depends on temperature and outside humidity. Make sure the
+                 low                        sensors are working.
+Rain
+
+
+
+
+                                            Make sure the rain funnel is not clogged with debris. See the ISS
+                 No rain readings
+                                            manual.
+
+                                            Check your latitude, longitude, time zone, and daylight saving time
+Time
+
+
+
+
+                 Incorrect times for
+                                            settings. Sunrise and sunset times are calculated from the console
+                 sunrise and sunset
+                                            using all of these settings.
+
+              Troubleshooting Reception Problems
+              While we have tested the Vantage Vue radio extensively, each site and each installation
+              presents its own issues and challenges. Obstructions, particularly metallic ones, can cut down
+              your station’s reception distance. Be sure to test reception between the console and ISS in the
+              locations you intend to install them before permanently mounting your ISS.
+              The console’s reception status displays as an antenna icon above the graph portion of the
+              console screen.
+              • The antenna icon displays with waves flashing around it when the console is
+                  receiving data from the ISS.
+              • The antenna icon displays alone when the console is trying to re-establish a
+                  lost connection. When no data packets have been received for 10 minutes, the
+                  console dashes-out any missing sensor readings.
+              • The antenna icon disappears when the connection between the ISS and console is lost. The
+                  console tries for 10 minutes to re-establish a connection, then stops trying to connect with
+                  the ISS for 15 minutes, and then redisplays the antenna alone while it tries to re-establish a
+                  connection with the ISS. Enter and exit Setup Mode to re-display the antenna icon and
+                  manually force the console to re-establish a connection with the ISS.
+
+
+
+                                                                                                                 37
+Console Diagnostic Mode
+
+
+        Check Console Reception
+        Enter Setup Mode by pressing and releasing 2ND and pressing SETUP. Keep pressing DONE
+        until the “Receiving From...”screen displays. (See “Screen 5: Active Transmitters” on page 8
+        for more information.) Wait a few minutes while the console lists all the stations transmitting
+        within range. If the console does not detect your transmitter, check the following:
+        • Adjust the console antenna so that it is vertical and in line-of-sight the Vantage Vue ISS
+            antenna.
+Note:       The Vantage Vue ISS antenna cannot be adjusted. Ensure that the console antenna is
+            vertical.
+
+        •   Check the ISS and transmitter ID numbers. See“Screen 6: Configuring Transmitter IDs”
+            on page 9.
+        • Try reducing or increasing the distance between the ISS and the console. They should be
+            at least 10 feet (3 meters) apart. Maximum range is 1000’ (300 m) line-of-sight.
+        Refer to the ISS Installation Manual for instructions on how to check the station for potential
+        transmission problems.
+
+Console Diagnostic Mode
+        In addition to logging weather data, the console continuously monitors the station’s radio
+        reception. You may find this information very helpful, especially when you are choosing
+        locations for your console and ISS.
+        The Console Diagnostics Mode consists of two screens: the Statistical Diagnostic Screen and
+        the Reception Diagnostic Screen.
+Note:       Radio transmission data used by the diagnostic screens clears each day at midnight, except
+            for % Good Packet graph data. Diagnostic screens are also cleared if you change your ID or
+            go into the Setup Mode.
+
+        Diagnostic Screen Commands
+        •   Press and hold TEMP, then press HUM to display the Statistical Diagnostic screen.
+        •   Press 2ND and then press CHILL to toggle between the Statistical and Reception
+            Diagnostic screens.
+        •   Press DONE to exit the diagnostic screens.
+        •   A degree (°) sign displays to the right of the last digit in Value 3 (in the area of the
+            compass rose, see illustration on next page) of the Reception Diagnostic screen (screen 2)
+            to differentiate which screen is currently displayed.
+
+
+
+
+38
+                                                                                 Console Diagnostic Mode
+
+        Screen 1: Statistical Diagnostic Screen
+        The Statistical Diagnostic Screen displays information about how well data is being received
+        from the weather station to the console. The information that is displayed in this screen
+        includes:
+                                                           4                 5
+
+
+                           1             am
+
+                                                                                      6
+                           2
+                                                                                      7
+
+                            3                                                         8
+                                                                                      9
+                                                                                     10
+                                                                                     11
+                                                                                      12
+
+                           7                                                          13
+
+
+
+
+                                                               15       14
+
+
+
+Note:      Several of these values, with a *, are used by Davis engineers.
+
+         1. Time of day or number of times the anemometer reed switch was seen closed*.
+            The reed switch closes once each revolution of the anemometer wind cups. Press WIND
+            to toggle between these two values.
+         2. Date or the number of times the anemometer reed switch was seen open*. Press WIND to
+            toggle between these two values.
+Note:      The time and date displays can be toggled in both statistical and reception diagnostic
+           screens.
+
+         3. Number of packets containing “Cyclical Redundancy Check” (CRC) errors received. The
+             system runs a CRC check on data packets. Any data packets that don’t pass this check are
+             considered to contain errors and are discarded. These are considered bad packets. This
+             also includes the CRC errors received during radio acquisition.
+         4. The firmware version currently installed on the console.
+         5. Maximum number of bad packets in a row without resynchronization.
+         6. Number of times the console resynchronized with the transmitter. The console will
+             attempt to resynchronize with the station after 20 consecutive bad packets.
+         7. Percentage of good packets received. Graph shows the current and last 25 days of good
+             packet percentage data. The vertical scale is fixed at 10% per dot.
+         8. The total number of bad data packets including missed packets and CRC errors. Missed
+             packets are described as when a data packet is expected, but is not recognized as a data
+             packet by the console. This does not include bad packets received during acquisition.
+         9. Current streak of consecutive bad packets. The counter increments when the console is
+             synchronized but the packet is bad. This value is reset to zero when a good packet is
+             received.
+         10. Current streak of consecutive good packets received.
+         11. Station Number
+         12. Transmitter Domain
+
+
+
+                                                                                                     39
+Console Diagnostic Mode
+
+      13. Repeater ID currently communicating with the console. If a repeater or group of repeaters
+          is used to relay station information to the console, the repeater ID displayed is the
+          repeater that the console is set to receive. If the console is not “listening” to repeaters, this
+          section remains blank.
+      14. Total number of good packets received.
+      15. Longest streak of consecutive good packets.
+     Screen 2: Reception Diagnostic Screen
+     The Reception Diagnostic screen displays information pertinent to the console’s wireless
+     reception. To view this screen from the Statistical Diagnostic screen, press 2ND and then press
+     CHILL. The degree sign displaying to the right of the last digit in Value 1 (see illustration
+     below) verifies that the Reception Diagnostic screen is currently displayed.
+     The information that is displayed in this screen includes:
+                                                               3          4
+
+
+                                         am
+
+                                                                                      5
+
+                                                                                      6
+
+                        1                                                             7
+
+                        2
+                                                                                      8
+
+
+
+
+                        6
+
+                                                                                      9
+
+
+
+
+      1. 8-bit timer value of next reception.*
+      2. Radio frequency error of the last packet received successfully. The ideal number should
+         be zero after frequency correction is added. This value affects the value of #3.
+      3. Current frequency correction factor. Shows the frequency adjustment to the console.
+      4. Signal strength of the last packet received. The values displayed in this field show the
+         received signal strength in dBm power. A more negative number means the signal
+         strength is weaker while a less negative number means the signal strength is stronger.
+         (Range: -100 to -20.) If a packet is not received successfully, the signal strength field is
+         dashed out (--).
+      5. The number of times that the Phase Lock Loop did not lock.*
+      6. Percentage of good data packets. Graph shows the current and last 25 days of good
+         packet percentage data. The vertical scale is fixed at 10% per dot.
+      7. Frequency index of the next packet to be received.*
+      8. Background noise level. This refers to the signal level that the console “hears” while it is
+         not “listening” to a transmitter. Background noise is displayed as power level in dBm.
+         The more negative the number is, the lower the background noise is. (Typically, this
+         number should be about 15 lower than signal strength.)
+      9. Current console battery voltage. Ignore this value if using only an AC adapter to power
+         the console.
+
+
+
+
+40
+                                                                                Console Maintenance
+
+
+Console Maintenance
+        Changing Batteries
+        If the message, LOW CONSOLE BATTERIES appears in the Weather Center, replace the
+        batteries.
+         1. In order to avoid losing any stored weather data, plug in the AC adapter before removing
+            the batteries.
+Note:       If you cannot plug in the AC adapter, enter Setup Mode by pressing and releasing 2ND and
+            pressing SETUP. Entering Setup Mode makes sure the station isn’t writing any data to
+            memory when power is removed.
+
+         2. Remove the battery cover located on the back of the console by pressing down on the two
+            latches at the top of the cover.
+         3. In the top battery compartment, insert a fingertip between the battery and the notched end
+            of the compartment and remove the battery.
+         4. Repeat the process for the batteries in the bottom battery compartment.
+         5. Install the new batteries. (See “Installing Batteries” on page 3.)
+         6. Replace the battery cover and remove the AC power adapter, if desired.
+        Console Firmware Versions
+        From time to time Davis engineers update the Vantage Vue console
+        firmware. View the firmware version in Value 4 in the Statistical
+        Diagnostic screen, or by pressing and holding DONE and + from
+        the Current Weather Mode screen.
+        You can check the firmware version currently available and download, at no charge, the
+        newest firmware to your console on the Weather Software Support section of our website
+        (http://www.davisnet.com/support). A WeatherLink data logger is required to update the
+        firmware into the console.
+
+One Year Limited Warranty
+        For details on our warranty policy, please refer to the Maintenance, Service, and Repair
+        Information brochure included with your station.
+        Contacting Davis Technical Support
+        If you have any questions, or encounter problems installing or operating your
+        Vantage Vue weather station, please contact Davis Technical Support. We’re glad to help.
+        (510) 732-7814 — Monday - Friday, 7:00 a.m. - 5:30 p.m. Pacific Time. We are unable to
+        accept collect calls.
+        (510) 670-0589 — Technical Support Fax.
+        support@davisnet.com — E-mail to Technical Support.
+        info@davisnet.com — General e-mail.
+        www.davisnet.com — Davis Instruments website.
+        See the Weather Support section for copies of user manuals, product specifications, applica-
+        tion notes, and information on software updates. Watch for FAQs and other updates.
+
+
+
+
+                                                                                                    41
+Appendix A
+Weather Data
+
+
+     Refer to this appendix to learn more about the weather variables that are measured, displayed,
+     and logged by your Vantage Vue station. The following variables are arranged below in the
+     order they are viewed on the console screen: left to right, top to bottom, starting with time.
+     Time
+     A built-in clock and calendar track the time and date. The console automatically adjusts for
+     daylight saving time and leap year in most of North America, and Europe (and allows manual
+     adjustment elsewhere). The console also displays the sunrise and sunset times based on the
+     latitude and longitude, time and date, and your time zone/UTC offset.
+     Moon Phases
+     The moon phase icons and moon phase description in the Weather Center section of console
+     screen are calculated based on latitude and longitude, time and date and your time zone/UTC
+     Offset. The following table displays the moon phase icons and description for the Northern
+     and Southern Hemispheres.
+                          Icon:                                        Icon:
+                                         Moon Phase Description
+                         Northern                                     Southern
+                                          in the Weather Center
+                        Hemisphere                                   Hemisphere
+
+                                             NEW MOON
+
+                                      WAXING CRESCENT MOON
+
+                                       FIRST QUARTER MOON
+
+                                      WAXING GIBBOUS MOON
+
+                                             FULL MOON
+
+                                      WANING GIBBOUS MOON
+
+                                        LAST QUARTER MOON
+
+                                      WANING CRESCENT MOON
+
+
+
+
+42
+                                                                                      Forecast
+
+
+Forecast
+The forecast icons show what weather conditions may occur within the next 12 hours. The
+console generates a weather forecast based on the barometric reading and trend; wind speed
+and direction; rainfall; temperature; humidity; latitude and longitude; and time of year. The
+forecast is updated once an hour, on the hour and requires three hours of data. Predictions are
+made for cloud cover and the likelihood of precipitation.
+                       Forecast Icon    Description of Forecasted Weather
+
+                                                   Mostly clear
+
+
+                                                   Partly cloudy
+
+
+                                                  Mostly cloudy
+
+
+                                                    Rain likely
+
+
+                                                   Snow likely
+
+
+                                            Rain possible but not likely
+
+
+                                           Snow possible but not likely
+
+                                       Rain, freezing rain, sleet and/or snow
+                                                       likely
+
+                                       Rain, freezing rain, sleet and/or snow
+                                               possible but not likely
+
+Wind
+The anemometer measures wind speed and direction, and is part of the Integrated Sensor Suite
+(ISS). The console calculates a 2-minute average wind speed, a 10-minute average wind speed
+and 10-minute dominant wind direction. The 2- and10-minute average wind speed are
+displayed in the Weather Center whenever wind has been selected on the console. The last six
+10-minute dominant wind directions are included in the compass rose wind display.
+
+
+
+
+                                                                                             43
+Temperature
+
+
+     Beaufort Scale
+     The Beaufort Scale is an empirical measure for describing wind speed which ranks wind
+     speeds in classes. The Beaufort Scale classification for the current wind condition is listed in
+     the Weather Center when WIND is pressed and WxCEN is pressed several times. See “Wind
+     Speed and Direction” on page 17 for more information.
+                                                           Beaufort
+                               Wind Speed                                   Description
+                                                           Number
+                          0 -1 mph; (0 -1.6 kph)               0        Calm
+                         1-3 mph; (1.6 - 4.8 kph)              1        Light Air
+                        3 - 7 mph; (4.8 - 11.3 kph)            2        Light Breeze
+                       7 -12 mph; (11.3 - 19.3 kph)            3        Gentle Breeze
+                      12 - 18 mph; (19.3 - 29.0 kph)           4        Moderate Breeze
+                      18 - 24 mph; (29.0 - 38.6 kph)           5        Fresh Breeze
+                      24 - 31 mph; (38.6 - 49.9 kph)           6        Strong Breeze
+                      31 - 38 mph; (49.9 - 61.2 kph)           7        Near Gale
+                      38 - 46 mph; (61.2 -74.1 kph)            8        Gale
+                      46 - 54 mph; (74.1 - 86.9 kph)           9        Strong Gale
+                      55 - 63 mph; (88.5 - 101.4 kph)         10        Storm
+                     64 - 73 mph; (103.0 - 117.5 kph)         11        Violent Storm
+                      74 mph or above; (119.1 kph)            12        Hurricane
+
+
+     Temperature
+     The ISS houses the outside temperature sensor in a vented and shielded enclosure that
+     minimizes solar radiation-induced temperature error. The console houses the inside
+     temperature sensor.
+     Humidity
+     Humidity itself simply refers to the amount of water vapor in the air. However, the total
+     amount of water vapor that the air can contain varies with air temperature and pressure.
+     Relative humidity takes into account these factors and offers a humidity reading which reflects
+     the amount of water vapor in the air as a percentage of the amount the air is capable of
+     holding. Relative humidity, therefore, is not actually a measure of the amount of water vapor
+     in the air, but a ratio of the air’s water vapor content to its capacity. When we use the term
+     humidity in the manual and on the screen, we mean relative humidity.
+     It is important to realize that relative humidity changes with temperature, pressure, and water
+     vapor content. If a parcel of air with a capacity for 10 g of water vapor contains 4 g of water
+     vapor, the relative humidity would be 40%. Adding 2 g more water vapor (for a total of 6 g)
+     would change the humidity to 60%. If that same parcel of air is then warmed so that it has a
+     capacity for 20 g of water vapor, the relative humidity drops to 30% even though water vapor
+     content does not change.
+     Relative humidity is an important factor in determining the amount of evaporation from plants
+     and wet surfaces since warm air with low humidity has a large capacity to absorb extra water
+     vapor.
+
+
+
+44
+                                                                                                 Wind Chill
+
+
+        Wind Chill
+        Wind chill takes into account how the speed of the wind affects our perception of the air
+        temperature. Our bodies warm the surrounding air molecules by transferring heat from the
+        skin. If there is no air movement, this insulating layer of warm air molecules stays next to the
+        body and offers some protection from cooler air molecules. However, wind sweeps away that
+        warm air surrounding the body. The faster the wind blows, the faster heat is carried away and
+        the colder you feel. Wind has a warming effect at higher temperatures.
+Note:       There is no windchill when the air temperature is at or above 93° F (-34° C).
+
+        Heat Index
+        Heat index uses temperature and the relative humidity to determine how hot the air actually
+        “feels.” When humidity is low, the apparent temperature will be lower than the air
+        temperature, since perspiration evaporates rapidly to cool the body. However, when humidity
+        is high (i.e., the air is more saturated with water vapor) the apparent temperature “feels” higher
+        than the actual air temperature, because perspiration evaporates more slowly.
+Note:       Heat index and air temperature are equal at or below 0° F (-18° C).
+
+        Dew Point
+        Dew point is the temperature to which air must be cooled for saturation (100% relative
+        humidity) to occur, providing there is no change in water vapor content. The dew point is an
+        important measurement used to predict the formation of dew, frost, and fog. If dew point and
+        temperature are close together in the late afternoon when the air begins to turn colder, fog is
+        likely during the night. Dew point is also a good indicator of the air’s actual water vapor
+        content, unlike relative humidity, which takes the air’s temperature into account. High dew
+        point indicates high water vapor content; low dew point indicates low water vapor content. In
+        addition a high dew point indicates a better chance of rain, severe thunderstorms, and
+        tornados.
+        You can also use dew point to predict the minimum overnight temperature. Provided no new
+        fronts are expected overnight and the afternoon relative humidity is greater than 50%, the
+        afternoon’s dew point gives you an idea of what minimum temperature to expect overnight.
+        The higher the humidity is, the more accurate the dew point prediction.
+Note:       Dew point is equal to the air temperature when the humidity is 100%.
+
+        Rain
+        Vantage Vue incorporates a tipping spoon rain collector in the ISS that measures 0.01'' or 0.2
+        mm for each tip of the spoon. Your station logs rain data in the same units it is measured in and
+        converts the logged totals into the selected display units (inches or millimeters) at the time it is
+        displayed. Converting at display time reduces possible compounded rounding errors over
+        time.
+        Four separate variables track rain totals: “rain rate,” “daily rain,” “monthly rain,” and “yearly
+        rain.” Rain rate calculations are based on the interval of time between each spoon tip, which is
+        each 0.01'' or 0.2 mm rainfall increment.
+
+
+
+
+                                                                                                         45
+Barometric Pressure
+
+
+     Barometric Pressure
+     The weight of the air that makes up our atmosphere exerts a pressure on the surface of the
+     earth known as atmospheric pressure. Generally, the more air above an area, the higher the
+     atmospheric pressure. This means that atmospheric pressure changes with altitude. For
+     example, atmospheric pressure is greater at sea level than on a mountaintop. To compensate
+     for this difference and facilitate comparison between locations with different altitudes,
+     atmospheric pressure is adjusted to the equivalent sea level pressure. This adjusted pressure is
+     known as barometric pressure. In reality, Vantage Vue measures atmospheric pressure. When
+     you enter your location’s altitude in Setup Mode, Vantage Vue stores the necessary offset
+     value to consistently translate atmospheric pressure into barometric pressure.
+     Barometric pressure also changes with local weather conditions, making barometric pressure
+     an extremely important and useful weather forecasting tool. High pressure zones are generally
+     associated with fair weather while low pressure zones are generally associated with stormy
+     weather. For forecasting purposes, however, the value of the absolute barometric pressure is
+     generally less important than the change in barometric pressure. In general, rising pressure
+     indicates improving weather conditions while falling pressure indicates deteriorating weather
+     conditions.
+     Evapotranspiration (ET)
+     Evapotranspiration (ET) is a measurement of the amount of water vapor returned to the air in a
+     given area. It combines the amount of water vapor returned through evaporation (from wet
+     surfaces) with the amount of water vapor returned through transpiration (exhaling of moisture
+     through plant stomata) to arrive at a total. Effectively, ET is the opposite of rainfall, and it is
+     expressed in the same units of measure (inches, millimeters).
+     Vantage Vue uses air temperature, relative humidity, barometric pressure, average wind speed,
+     and solar radiation data to estimate ET, which is calculated once an hour on the hour.
+     Measuring ET requires that the Vantage Vue console “listen” to a an optional Vantage Pro2
+     Plus station with a solar radiation sensor installed.
+     Solar Radiation
+     What we call “current solar radiation” is technically known as Global Solar Radiation, a
+     measure of the intensity of the sun’s radiation reaching a horizontal surface. This irradiance
+     includes both the direct component from the sun and the reflected component from the rest of
+     the sky. The solar radiation reading gives a measure of the amount of solar radiation hitting the
+     solar radiation sensor at any given time, expressed in Watts/sq. meter (W/m2). Measuring solar
+     radiation requires that the Vantage Vue console “listen” to an optional Vantage Pro2 Plus
+     station with a solar radiation sensor installed. Solar Radiation is displayed in the Weather
+     Center when ET is pressed and WxCEN is pressed multiple times.
+     UV (Ultra Violet) Radiation
+     Energy from the sun reaches the earth as visible, infrared, and ultraviolet (UV) rays. Exposure
+     to UV rays can cause numerous health problems, such as sunburn, skin cancer, skin aging, cat-
+     aracts, and immune system suppression. Measuring UV radiation requires that the Vantage
+     Vue console “listen” to an optional Vantage Pro2 Plus station with a UV radiation sensor
+     installed. The UV Index is displayed in the Weather Center when ET is pressed and WxCEN is
+     pressed multiple times.
+
+
+
+46
+Appendix B
+Specifications
+
+
+   See complete specifications for your Vantage Vue Station at our website: www.davisnet.com.
+
+Console Specifications
+   Console Operating Temperature . . . . . . . . . . . +32° to +140°F (0° to +60°C)
+   Non-Operating (Storage) Temperature . . . . . . . +14° to +158°F (-10° to +70°C)
+   Console Current Draw . . . . . . . . . . . . . . . . . . . 0.9 mA average, 30 mA peak,
+                                                                      (add 120 mA for display lamps, add 0.125
+                                                                      mA for each transmitter station received by
+                                                                      console) at 4.4 VDC
+   Power Adapter . . . . . . . . . . . . . . . . . . . . . . . . . 5 VDC, 200 mA
+   Battery Backup . . . . . . . . . . . . . . . . . . . . . . . . 3 C-cells
+   Battery Life (no AC power) . . . . . . . . . . . . . . . Up to 9 months (approximately)
+   Housing Material . . . . . . . . . . . . . . . . . . . . . . . UV-resistant ABS plastic
+   Console Display Type . . . . . . . . . . . . . . . . . . . LCD Transflective
+   Display Backlight . . . . . . . . . . . . . . . . . . . . . . . LEDs
+   Dimensions:
+        Console (with antenna) on table . . . . . . . . 7.5" x 5.75" x 4.5"
+                                                                      (190 mm x 146 mm x 114 mm)
+        Console (with antenna) mounted on wall. . 7.5" x 7.0" x 3.0"
+                                                                      (190 mm x 178 mm x 76 mm)
+        Display . . . . . . . . . . . . . . . . . . . . . . . . . . . 4.13" x 3.0" (105 mm x 76 mm)
+        Weight (with batteries) . . . . . . . . . . . . . . . 1.48 lbs. (.67 kg)
+
+Wireless Communication Specifications
+   Transmit/Receive Frequency . . . . . . . . . . . . . . US Models: 902 - 928 MHz
+                                                                    Overseas Models: 868.0 -
+                                                                    868.6 MHz
+   ID Codes Available. . . . . . . . . . . . . . . . . . . . . . 8
+   Output Power . . . . . . . . . . . . . . . . . . . . . . . . . . 902 - 928 MHz FHSS: FCC-certified low
+                                                                    power, less than 8 mW, no license required
+                                                                    868.0 -868.6 MHz: CE-compliant, less than
+                                                                    8 mW, no license required
+   Range
+       Line of Sight . . . . . . . . . . . . . . . . . . . . . . . up to 1000 feet (305 m)
+       Through Walls . . . . . . . . . . . . . . . . . . . . . 200 to 400 feet (60 to 120 m)
+
+
+
+
+                                                                                                              47
+Console Data Display Specifications
+
+
+Console Data Display Specifications
+     Historical Data . . . . . . . . . . . . . . . . . . . . . . . . . Includes the past 25 values plus the
+                                                                        current value unless otherwise noted; all
+                                                                        can be cleared and all totals reset.
+     Daily Data . . . . . . . . . . . . . . . . . . . . . . . . . . . . Includes the earliest time of occurrence of
+                                                                        highs and lows; period begins/ends at
+                                                                        12:00 AM
+     Monthly Data . . . . . . . . . . . . . . . . . . . . . . . . . . Period begins/ends at 12:00 AM on the first
+                                                                        of every month.
+     Yearly Data . . . . . . . . . . . . . . . . . . . . . . . . . . . Period begins/ends at 12:00 AM on
+                                                                        January 1st unless otherwise noted.
+     Current Data . . . . . . . . . . . . . . . . . . . . . . . . . . Current data appears in the right-most
+                                                                        column in the console graph and
+                                                                        represents the latest value within the last
+                                                                        period of the graph; totals can be set or
+                                                                        reset.
+     Graph Time Interval . . . . . . . . . . . . . . . . . . . . . 10 min., 1 hour, 1 day, 1 month, 1 year
+                                                                        (user-selectable, availability depends upon
+                                                                        variable selected) (2.5 seconds for Last 24
+                                                                        Wind Speeds)
+     Graph Time Span . . . . . . . . . . . . . . . . . . . . . . . 26 Intervals (Current interval plus 25 past
+                                                                        values included; see Graph Intervals to
+                                                                        determine time span.)
+     Graph Variable Span (Vertical Scale) . . . . . . . . Automatic (varies depending upon data
+                                                                        range); maximum and minimum value in
+                                                                        range appear in Weather Center.
+     Alarm Indication . . . . . . . . . . . . . . . . . . . . . . . . Alarms sound for 2 minutes (except for
+                                                                        time) if operating on battery power. Alarm
+                                                                        message displays in Weather Center as
+                                                                        long as threshold is met or exceeded.
+                                                                        Alarms can be silenced, but not cleared, by
+                                                                        pressing DONE.
+     Transmission Interval . . . . . . . . . . . . . . . . . . . . Varies with transmitter ID code from 2.25
+                                                                        seconds (#1=shortest) to 3 seconds
+                                                                        (#8=longest)
+     Update Interval. . . . . . . . . . . . . . . . . . . . . . . . . Varies with sensors. See “Update Interval
+                                                                        by Sensor” on page 50.
+     Forecast:
+          Variables Used . . . . . . . . . . . . . . . . . . . . . Barometric reading & trend, wind speed &
+                                                                        direction, rainfall, temperature, humidity,
+                                                                        latitude & longitude, time of year.
+          Update Interval . . . . . . . . . . . . . . . . . . . . . 1 hour
+          Display Format . . . . . . . . . . . . . . . . . . . . . Icons on top center of display; displays
+                                                                        weather conditions that may occur for the
+                                                                        next 12 hours.
+          Variables Predicted. . . . . . . . . . . . . . . . . . Sky condition, precipitation
+
+
+
+
+48
+                                                                                            Weather Data Specifications
+
+
+Weather Data Specifications
+Note:        The following weather data specifications are listed as they are displayed on the
+             console.
+
+                                           Weather Data Specifications
+
+                                                                                                          Nominal
+        Variable                           Resolution                             Range                 Accuracy (+/-)
+ Wind Direction                                  1                              0 to 360                       3
+ Compass Rose                                  22.5                        16 compass pts.
+                                                                                                            Greater of
+                                             1 mph;                          2 to 180 mph;
+                                                                                                            2 mph/kts;
+                                               1 kt;                          2 to 156 kts
+ Wind Speed                                                                                                   1 m/s;
+                                             0.5 m/s;                        3 to 290 km/h,
+                                                                                                             3 km/h
+                                              1 km/h                           1 to 80 m/s
+                                                                                                              or 5%
+                                               0.1F;                       +32 to +140F;                     1F;
+ Inside Temperature
+                                               0.1C                          0 to +60C                       0.5C
+ Outside                                       0.1F;                        -40 to +150F;                    1F;
+ Temperature*                                  0.1C                          -40 to +65C                    0.5C
+                                                                                                           3% RH;
+ Inside Humidity                                1%                              1 to 100%
+                                                                                                        4% above 90%
+                                                                                                           3% RH;
+ Outside Humidity                                1%                             1 to 100%
+                                                                                                        4% above 90%
+                                            0.01'' Hg;                    16'' to 32.5'' Hg;                0.03'' Hg;
+ Barometric                                0.1 mm Hg;                     410 to 820 mm Hg;                0.8 mm Hg
+ Pressure**                                  0.1 hPa;                     540 to 1100 hPa;                  1.0 hPa;
+                                              0.1 mb                      540 to 1100 mb                     1.0 mb
+                                                                           5 Arrow Positions:
+                                      Change Rates
+                                                                             Rising Rapidly
+                                    Rapidly: .06'' Hg;
+ Barometric Trend                                                             Rising Slowly
+                                 1.5 mm Hg; 2 hPa; 2 mb
+ (3 hour)                                                                        Steady
+                                     Slowly: .02'' Hg;
+                                                                             Falling Slowly
+                               0.5 mm Hg; 0.7 hPa; 0.7 mb
+                                                                             Falling Rapidly
+                                                                            -105 to +130F;
+ Dew Point                                   1F; 1C                                                      3F; 1.5C
+                                                                              -76 to +54C
+                                                                             -40to +165F;
+ Heat Index                                  1F; 1C                                                      3F (1.5C)
+                                                                              -40 to +74 C
+                                                                            -110 to +135F
+ Wind Chill                                  1F; 1C                                                        2F;1C
+                                                                             -79 to +57C
+*Outside temperature accuracy is based on the temperature sensor itself and not on the sensor and the passive shielding
+together. The solar radiation induced error for the radiation shield: +4F (2C) at solar noon with the wind speed at less than
+or equal to 2 mph (1 m/s); The higher the wind speed, the less solar radiation induced error.
+**Barometric pressure readings are standardized to sea level. Elevation Range: -999’ to +15,000’; -600 to +4660 m. Note: The
+console screen limits entry of lower elevation to -999’ when using feet as elevation unit. For elevations below -999’, use
+meters.
+
+
+
+
+                                                                                                                                  49
+Weather Data Specifications
+
+                                                   Weather Data Specifications
+
+                                                                                                          Nominal
+            Variable                                 Resolution                    Range                Accuracy (+/-)
+                                       0.01''; 0.2 mm                            to 199.99'';          Greater of 4% or
+     Rainfall
+                                 (1mm at totals over 2000 mm)                     6553 mm                   1 tip
+                                                                                                             5%
+                                                                                  to 40''/hr.;            when rate is
+     Rain Rate                                      0.01''; 0.1 mm
+                                                                                 1016 mm/hr.              under 5”/hr.;
+                                                                                                          127 mm/hr.
+                                                                              Daily to 32.67'';
+                                                                                 999.9 mm
+     Evapotranspiration                                                                                greater of 5% or
+                                                    0.01''; 0.2 mm            Monthly & Yearly
+     (ET)*                                                                                             0.01''; 0.25 mm
+                                                                                to 199.99'';
+                                                                                1999.9mm
+     Solar Radiation*                                  1 W/m2                 0 to 1800 W/m2            5% of full scale
+     UV Index**                                       0.1 Index                    0 to 16              5% of full scale
+     Time                                               1 min                     24 hours                 8 sec/Mon.
+     Date                                               1 day                     month/day                8 sec/Mon.
+
+      * Console must be receiving from a Vantage Pro2 Plus or Vantage Pro2 with solar radiation sensor installed.
+      **Console must be receiving from a Vantage Pro2 Plus or Vantage Pro2 with UV radiation sensor installed.
+
+
+
+
+                                                         Update Interval by Sensor
+                                     BAR
+
+
+
+
+                                                    Barometric Pressure                 1 min.
+
+                                                    Inside Humidity                     1 min.
+                                     HUMIDITY
+
+
+
+
+                                                    Outside Humidity                   50 sec.
+                                                    Dew Point                          10 sec.
+                                                    Rainfall Amount                    20 sec.
+                                     RAIN
+
+
+
+
+                                                    Rain Storm Amount                  20 sec.
+                                                    Rain Rate                          20 sec.
+                                                    Inside Temperature                  1 min.
+                                     TEMPERATURE
+
+
+
+
+                                                    Outside Temperature                10 sec.
+                                                    Heat Index                         10 sec.
+                                                    Wind Chill                         10 sec.
+                                                    Wind Speed                         2.5 sec.
+                                     WIND
+
+
+
+
+                                                    Wind Direction                     2.5 sec.
+                                                    Direction of High Speed            2.5 sec.
+
+
+
+
+50
+Appendix C
+Wireless Repeater Configuration
+
+   Vantage Pro2 Wireless Repeaters (#7626, #7627) or Long-Range Wireless Repeaters (#7653,
+   #7654) can be added to increase transmission distances or improve transmission quality
+   between a station and a console. A repeater receives information transmitted from a Vantage
+   Vue or Vantage Pro2 station and retransmits it to a console. Depending on transmission
+   distance, one repeater or several repeaters can be used to collect and retransmit weather data.
+   All consoles communicating with repeaters must be set up with the correct Transmitter ID and
+   Repeater ID before the console can correctly receive station information.
+
+Setting Repeater ID
+   To set a repeater ID on the console:
+   1. Press 2ND and SETUP to enter Setup Mode.
+   2. Press DONE repeatedly to display Screen 6: Configuring Transmitter IDs.
+      See “Screen 6: Configuring Transmitter IDs” on page 9 for more information on configur-
+      ing Transmitter IDs.
+   3. Press 2ND and then WIND to turn the repeater function on and to select a repeater ID.
+      Pressing 2ND and WIND sets the console to receive the signal from a repeater instead of
+      directly from a station. The first Repeater ID displayed is repeater A.
+   4. Press WIND repeatedly to cycle through all eight repeater IDs or to clear the repeater ID in
+      the right-hand corner. When no repeater ID is shown, the console is configured to “listen”
+      directly to a station and not to a repeater.
+      In this example, the console is
+      set up to receive from an ISS
+      station on transmitter ID 1
+      from repeater A.
+   5. Continue pressing DONE to
+      move through the other
+      screens in the Setup Mode, or
+      press and hold DONE to return to the Current Weather Mode.
+   Clearing Repeater ID
+   If a repeater ID is being displayed in Screen 6 and you are not using a repeater, you must turn
+   off the repeater function to receive station information successfully.
+   In Setup Screen 6:
+   Press 2ND and then press WIND repeatedly so that the console cycles through the list of
+   repeater IDs (Repeaters A-H) until the section where the repeater ID was displayed is blank.
+   Press DONE to continue to the next screen or press and hold DONE to return to the Current
+   Weather Mode.
+
+
+
+
+                                                                                        51
+Vantage Vue Console Icons
+Console icons indicate weather conditions and special functions.
+Forecast
+
+
+
+
+                  Mostly Clear     Partly Cloudy       Mostly Cloudy        Rain              Snow
+        Forecast icons show what weather conditions may occur for the next 12 hours.
+Moon Phase
+
+
+                 New    Waxing      First    Waxing     Full   Waning     Last     Waning      New
+                 Moon   Crescent   Quarter   Gibbous   Moon    Gibbous   Quarter   Crescent    Moon
+
+Shows the current moon phase. Sequence shown for Northern Hemisphere. The sequence of
+                    the icons is reversed in the Southern Hemisphere.
+Alarm Bell
+Flashes when an alarm is triggered. Indicates when the console is in Alarm Mode.
+Graph
+Appears next to the currently selected weather variable. Indicates the graphed variable
+on most screens.
+Second Function
+                                                                                                      2nd
+Appears when you press 2ND. Indicates that console key secondary functions are
+enabled.
+Rain
+Appears when the ISS is currently detecting rain.
+Barometric Pressure Trend
+Arrows show direction of pressure change for last three hours.
+
+
+Contacting Davis Technical Support
+If you have any questions or encounter problems installing or operating your
+Vantage Vue weather station, contact Davis Technical Support. We’re glad to help.
+(510) 732-7814 — Monday - Friday, 7:00 a.m. - 5:30 p.m. Pacific Time. We are unable to
+accept collect calls.
+(510) 670-0589 — Technical Support Fax.
+support@davisnet.com — E-mail to Technical Support.
+info@davisnet.com — General e-mail.
+www.davisnet.com — Davis Instruments web site.
+See the Weather Support section of our website for copies of user manuals, product specifica-
+tions, application notes, and information on software updates. Watch for FAQs and other
+updates.
+
+52
+
