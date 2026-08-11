@@ -37,6 +37,8 @@ CMD_WRITE_VANTAGE_CAL = "write_vantage_cal"  # one field, via CALED/CALFIX
 CMD_CLEAR_VANTAGE_CAL = "clear_vantage_cal"  # CLRCAL — zeroes all
 CMD_READ_LOCATION = "read_location"          # console lat/lon from EEPROM
 CMD_SET_LOCATION = "set_location"            # write + NEWSETUP
+CMD_READ_RAIN_SEASON = "read_rain_season"    # yearly-rain-reset month
+CMD_SET_RAIN_SEASON = "set_rain_season"      # RAIN_YEAR_START via EEBWR
 
 # --- Wire helpers ---
 

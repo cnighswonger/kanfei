@@ -160,6 +160,20 @@ export interface StationStatus {
   type_name: string;
   connected: boolean;
   link_revision: string;
+  /**
+   * Firmware version string as reported by the station (e.g. "1.90" for
+   * a VP2/Vue that supports NVER).  `null` when the station cannot report
+   * it — VP1, LinkDriver, or any station that has not yet completed the
+   * detection handshake.
+   */
+  firmware_version: string | null;
+  /**
+   * Firmware build date as a free-form Davis string (e.g. "Aug 15 2013").
+   * `null` when unavailable, same rules as firmware_version.  Kept
+   * separately because a Vue reports both, and the date is diagnostic
+   * even on VP1 where NVER is absent.
+   */
+  firmware_date: string | null;
   poll_interval: number;
   last_poll: string | null;
   archive_records: number;
@@ -167,6 +181,19 @@ export interface StationStatus {
   crc_errors: number;
   timeouts: number;
   station_time: string | null;
+}
+
+// --- Console rain season ---
+
+export interface RainSeasonState {
+  /** Console's yearly-rain-reset month (1-12). */
+  month: number;
+}
+
+export interface RainSeasonResult {
+  success: boolean;
+  before: number | null;
+  after: number | null;
 }
 
 // --- Configuration ---
@@ -848,6 +875,8 @@ export interface WeatherLinkConfig {
     location?: boolean;
     /** RXCHECK reception diagnostics (Vantage). */
     signal_quality?: boolean;
+    /** RAIN_YEAR_START — yearly-rain-reset month (Vantage). */
+    rain_season?: boolean;
   };
 }
 

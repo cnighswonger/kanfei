@@ -32,6 +32,7 @@ from ..base import (
     CAP_HILOWS,
     CAP_BAROMETER_CAL,
     CAP_LOCATION_RW,
+    CAP_RAIN_SEASON_RW,
 )
 from ..serial_port import SerialPort
 from ..crc import crc_validate, crc_calculate
@@ -116,6 +117,7 @@ from .eeprom import (
     CAL_INSIDE_HUM,
     CAL_OUTSIDE_HUM,
     ARCHIVE_INTERVAL,
+    RAIN_YEAR_START,
     LATITUDE,
     LONGITUDE,
     ELEVATION,
@@ -212,6 +214,9 @@ class VantageDriver(StationDriver):
             # the NEWSETUP the manual requires for these two fields
             # specifically, without which the write may not take.
             CAP_LOCATION_RW,
+            # RAIN_YEAR_START at EEPROM 0x2C — one byte, month 1..12.
+            # Plain EEBRD/EEBWR; no NEWSETUP required (unlike lat/lon).
+            CAP_RAIN_SEASON_RW,
         }
         if self.hw_config.has_loop2:
             caps.add(CAP_HILOWS)
@@ -882,6 +887,66 @@ class VantageDriver(StationDriver):
 
     async def async_set_archive_period(self, minutes: int) -> bool:
         return await self._run_in_executor(self.set_archive_period, minutes)
+
+    # ---- Rain-season start month ----
+
+    def read_rain_year_start(self) -> Optional[int]:
+        """Read the yearly-rain-reset month from EEPROM.
+
+        Reads the register rather than trusting a cached value, so a change
+        made through the console's own Setup Mode is reported accurately.
+
+        Returns 1-12 on success (calendar month), or None on failure or a
+        garbage register value.  A stored 0 (never set) or ≥13 (impossible)
+        is rejected here rather than passed on as truth — the same guard
+        shape as read_archive_period (#174) applies: a nonsensical register
+        value must not look like a real setting.
+        """
+        with self._io_lock:
+            data = self._eeprom_read(RAIN_YEAR_START.address, RAIN_YEAR_START.n_bytes)
+            if not data:
+                logger.warning("read_rain_year_start: EEPROM read failed")
+                return None
+            month = data[0]
+            if not 1 <= month <= 12:
+                logger.warning(
+                    "read_rain_year_start: rejecting illegal month value %d "
+                    "(expected 1-12)",
+                    month,
+                )
+                return None
+            return month
+
+    async def async_read_rain_year_start(self) -> Optional[int]:
+        return await self._run_in_executor(self.read_rain_year_start)
+
+    def set_rain_year_start(self, month: int) -> bool:
+        """Write the yearly-rain-reset month via EEBWR.
+
+        The console uses this value to decide when the yearly rain
+        accumulator drops back to zero.  Default is January; west-coast US
+        practice is July, which lines up with the hydrological "water year"
+        and prevents a mid-winter storm season being split across two
+        yearly totals.
+
+        Storage is a single unsigned byte at EEPROM 0x2C, values 1..12.
+        Anything outside that range is rejected here rather than sent —
+        the console would happily accept a 13, so the guard has to live
+        client-side.
+        """
+        if not 1 <= month <= 12:
+            raise ValueError(f"Rain-year-start month must be 1-12 (got {month})")
+
+        with self._io_lock:
+            ok = self._eeprom_write(RAIN_YEAR_START.address, bytes([month]))
+            if ok:
+                logger.info("Rain-year-start month set to %d", month)
+            else:
+                logger.warning("EEBWR rain-year-start=%d: no ACK", month)
+            return ok
+
+    async def async_set_rain_year_start(self, month: int) -> bool:
+        return await self._run_in_executor(self.set_rain_year_start, month)
 
     def clear_variable(self, variable: int) -> bool:
         """CLRVAR — clear one rain or ET accumulator.  **IRREVERSIBLE.**

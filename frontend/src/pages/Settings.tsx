@@ -12,6 +12,7 @@ import ConsoleHighsLows from "../components/settings/ConsoleHighsLows.tsx";
 import SignalQuality from "../components/settings/SignalQuality.tsx";
 import VantageCalibration from "../components/settings/VantageCalibration.tsx";
 import ConsoleLocation from "../components/settings/ConsoleLocation.tsx";
+import RainSeason from "../components/settings/RainSeason.tsx";
 import { ALL_SCENES, SCENE_LABELS, SCENE_GRADIENTS } from "../components/WeatherBackground.tsx";
 import { API_BASE } from "../utils/constants.ts";
 import { getTimezone, setTimezone as storeTimezone, resolveTimezone, getTimezoneOptions } from "../utils/timezone.ts";
@@ -2854,6 +2855,14 @@ export default function Settings() {
           longitude={Number(val("longitude")) || 0}
         />
       </div>
+      {/* Yearly-rain-reset month.  Sits outside the Location card because
+          the two are logically independent — Location involves an active
+          reconcile against the config value, RainSeason is a plain console
+          setting mirror. */}
+      <RainSeason
+        supported={wlConfig?.supported?.rain_season ?? false}
+        isMobile={isMobile}
+      />
       </>)}
 
       {activeTab === "display" && (<>
