@@ -42,6 +42,37 @@ def test_mute_channels_canonical_order():
     )
 
 
+def test_every_mute_channel_has_a_config_default():
+    """Every MUTE_CHANNELS entry needs a corresponding channel_mute_<c> key
+    in _DEFAULTS.
+
+    The two contracts are joined at the hip.  ``load_muted_channels`` honors
+    any saved row keyed on ``channel_mute_<channel>`` for a channel in
+    MUTE_CHANNELS, but ``GET /api/config`` only emits keys present in
+    _DEFAULTS — so a channel that made it into MUTE_CHANNELS without a
+    matching _DEFAULTS row saves fine, mutes uploads fine, and then the
+    Settings checkbox reads unchecked on the next reload.  Invisible mute,
+    no reliable UI clear.  Codex caught this shape on the solar/UV PR when
+    the checkbox was added without the default; this test prevents the
+    next channel addition from repeating it.
+    """
+    from app.api.config import _DEFAULTS
+
+    for channel in MUTE_CHANNELS:
+        key = mute_key(channel)
+        assert key in _DEFAULTS, (
+            f"channel {channel!r} is in MUTE_CHANNELS but its config key "
+            f"{key!r} is missing from _DEFAULTS — GET /api/config will drop "
+            f"any saved mute row and the Settings UI will read unchecked."
+        )
+        # And the default must be a plain False (not None, not a truthy
+        # string).  Anything else means a saved-false-round-trip renders
+        # the checkbox as something other than unchecked.
+        assert _DEFAULTS[key] is False, (
+            f"_DEFAULTS[{key!r}] should be False, got {_DEFAULTS[key]!r}"
+        )
+
+
 class TestAprsPasscode:
 
     def test_cwop_callsign_returns_minus_one(self):
@@ -265,10 +296,11 @@ class TestBuildPacketMute:
             uploader.reload_config()
             clean_packet = uploader._build_packet(_SAMPLE_BROADCAST)
 
-        # Timestamps in the two packets can differ; strip them and compare
-        # the WX section.
+        # Timestamps in the two packets can differ; strip the 8-byte APRS
+        # timestamp group (``@DDHHMMz``) and compare everything from the
+        # latitude onward.
         assert muted_packet is not None and clean_packet is not None
-        assert muted_packet[9:] == clean_packet[9:], (
+        assert muted_packet[8:] == clean_packet[8:], (
             f"UV mute changed the APRS packet body:\n  muted:  {muted_packet}\n  clean:  {clean_packet}"
         )
         assert "L423" in muted_packet    # solar still there

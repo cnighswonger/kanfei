@@ -72,6 +72,8 @@ _DEFAULTS: dict[str, object] = {
     "channel_mute_rain_daily": False,
     "channel_mute_rain_hour": False,
     "channel_mute_rain_24h": False,
+    "channel_mute_solar_radiation": False,
+    "channel_mute_uv_index": False,
     "station_timezone": "",
     "nowcast_enabled": False,
     "nowcast_disclaimer_accepted": False,
