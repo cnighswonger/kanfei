@@ -86,6 +86,8 @@ _DROP_BY_CHANNEL: dict[str, tuple[str, ...]] = {
     "rain_daily":          ("dailyrainin", "yearrainin", "rainratein"),
     "rain_hour":           ("rainin",),
     "rain_24h":            (),
+    "solar_radiation":     ("solarradiation",),
+    "uv_index":            ("UV",),
 }
 
 

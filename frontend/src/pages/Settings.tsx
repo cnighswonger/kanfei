@@ -3335,6 +3335,8 @@ export default function Settings() {
             ["channel_mute_rain_daily", "Rain — Daily"],
             ["channel_mute_rain_hour", "Rain — Hourly"],
             ["channel_mute_rain_24h", "Rain — 24 Hour"],
+            ["channel_mute_solar_radiation", "Solar Radiation"],
+            ["channel_mute_uv_index", "UV Index"],
           ].map(([key, label]) => (
             <div key={key} style={fieldGroup}>
               <label style={checkboxLabel}>

@@ -300,6 +300,11 @@ class CwopUploader:
         if wind_gust is None:
             wind_gust = _extract(data, ("daily_extremes", "wind_speed_hi", "value"))
 
+        # Solar goes over APRS as the standard Lxxx / lxxx field (APRS101 §12).
+        # There is no APRS field for UV, so uv_index is WU-only; a mute on the
+        # UV channel drops it there and does nothing here — see wunderground.py.
+        solar_wm2 = _extract(data, ("solar_radiation", "value"))
+
         if temp_f is None and "outdoor_temperature" not in muted:
             return None
 
@@ -349,6 +354,11 @@ class CwopUploader:
         else:
             humidity_pct = int(humidity)
 
+        if "solar_radiation" in muted or solar_wm2 is None:
+            solar_wm2_int: Optional[int] = None
+        else:
+            solar_wm2_int = int(round(float(solar_wm2)))
+
         pkt = APRSWeatherPacket(
             callsign=self._callsign,
             latitude=self._latitude,
@@ -362,5 +372,6 @@ class CwopUploader:
             rain_midnight_tenths_mm=rain_mm_tenths,
             humidity_pct=humidity_pct,
             pressure_tenths_hpa=baro_hpa_tenths,
+            solar_wm2=solar_wm2_int,
         )
         return pkt.format_packet()
