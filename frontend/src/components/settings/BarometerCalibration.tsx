@@ -22,10 +22,12 @@ import {
   setBarometerCalibration,
 } from "../../api/client.ts";
 import type {
+  BarometerAggregate,
   BarometerCalibrationState,
   BarometerSnapshot,
   MetarReference,
 } from "../../api/types.ts";
+import BaroCalibrationAggregate from "./BaroCalibrationAggregate.tsx";
 
 // Mirrors VantageDriver.BAR_MIN_THOUSANDTHS / ELEVATION_MIN_FT.  Checked
 // here so an out-of-range value never costs a round trip to be told 400.
@@ -167,6 +169,7 @@ export default function BarometerCalibration({
 
   const [refStatus, setRefStatus] = useState<LoadStatus>("loading");
   const [refs, setRefs] = useState<MetarReference[]>([]);
+  const [aggregate, setAggregate] = useState<BarometerAggregate | null>(null);
   const [locationConfigured, setLocationConfigured] = useState(true);
   const [refError, setRefError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -215,6 +218,7 @@ export default function BarometerCalibration({
     try {
       const data = await fetchBarometerReference();
       setRefs(data.references);
+      setAggregate(data.aggregate);
       setLocationConfigured(data.location_configured);
       setSelectedId(data.references[0]?.station_id ?? null);
       setStaleOverride(false);
@@ -225,6 +229,7 @@ export default function BarometerCalibration({
       // could not be refreshed — a hardware write against a value we have
       // just admitted we cannot vouch for.
       setRefs([]);
+      setAggregate(null);
       setSelectedId(null);
       setStaleOverride(false);
       setRefError(err instanceof Error ? err.message : String(err));
@@ -436,6 +441,21 @@ export default function BarometerCalibration({
             </p>
           )}
         </div>
+      )}
+
+      {/* --- Multi-station aggregate (#298) --- */}
+      {/* Display-only for now.  The read-and-diagnose half of #298 is
+          what actually closes the "silently pin to a wrong number" hole:
+          the operator now sees whether the reference stations agree
+          before they click Apply on any single station below.  Wiring
+          the "Use recommended offset" button to the existing apply
+          pipeline is a natural follow-up — the aggregate view is
+          already load-bearing without it. */}
+      {locationConfigured && aggregate != null && (
+        <BaroCalibrationAggregate
+          aggregate={aggregate}
+          isMobile={isMobile}
+        />
       )}
 
       {/* --- Reference --- */}

@@ -640,6 +640,73 @@ export interface MetarReference {
   report_type: string;
 }
 
+// --- Multi-station aggregate for barometer calibration (#298) ---
+
+/** One METAR station's median altimeter over the 2h fetch window.
+ *  Distinct from MetarReference (single obs) — this is the aggregate
+ *  that the multi-station gate votes on. */
+export interface StationMedian {
+  station_id: string;
+  station_name: string;
+  distance_miles: number;
+  bearing_cardinal: string;
+  n_obs: number;
+  median_altimeter_thousandths_inhg: number;
+  median_altimeter_inhg: number;
+  obs_spread_thousandths_inhg: number;
+  newest_observed_at: string;
+}
+
+/** The console's own barometer aggregate over the last N minutes. */
+export interface BarometerConsoleSample {
+  median_hpa: number;
+  n_samples: number;
+  window_minutes: number;
+  stdev_hpa: number;
+  window_start: string;
+  window_end: string;
+}
+
+/** Skip-reason codes, stable string constants matching the backend
+ *  SKIP_* symbols in `barometer_aggregation.py`. */
+export type BarometerSkipReason =
+  | "no_console_samples"
+  | "insufficient_console_samples"
+  | "no_metar_available"
+  | "insufficient_stations"
+  | "cross_station_disagreement";
+
+/** The write decision + everything the UI needs to render it. */
+export interface BarometerRecommendation {
+  should_apply: boolean;
+  skip_reason: BarometerSkipReason | null;
+  median_of_medians_thousandths_inhg: number | null;
+  median_of_medians_inhg: number | null;
+  offset_thousandths_inhg: number | null;
+  offset_inhg: number | null;
+}
+
+/** Thresholds in effect for this aggregation.  Snapshotted so the UI
+ *  never hard-codes them and always shows what the daemon actually used. */
+export interface BarometerThresholds {
+  min_stations: number;
+  cross_station_spread_threshold_hpa: number;
+  console_window_minutes: number;
+  min_console_samples: number;
+  max_station_distance_miles: number;
+  station_window_hours: number;
+}
+
+export interface BarometerAggregate {
+  console: BarometerConsoleSample | null;
+  per_station_medians: StationMedian[];
+  n_stations_considered: number;
+  cross_station_spread_hpa: number | null;
+  recommendation: BarometerRecommendation;
+  thresholds: BarometerThresholds;
+  reference_radius_miles: number;
+}
+
 export interface MetarReferenceResponse {
   references: MetarReference[];
   location_configured: boolean;
@@ -647,6 +714,9 @@ export interface MetarReferenceResponse {
   home_lon: number;
   radius_miles: number;
   fetched_at: string;
+  /** Multi-station aggregate (#298).  `null` when location is not
+   *  configured — the same rule as `references: []` in that case. */
+  aggregate: BarometerAggregate | null;
 }
 
 // --- Destructive console operations ---
