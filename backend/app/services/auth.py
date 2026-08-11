@@ -7,6 +7,7 @@ from typing import Optional
 
 import bcrypt
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from ..models.auth import ApiKeyModel, SessionModel, UserModel
 
@@ -86,15 +87,28 @@ def validate_session(db: Session, token: str) -> Optional[UserModel]:
     if session is None:
         return None
     now = datetime.now(timezone.utc)
+    user_id = session.user_id
     if now > _ensure_utc(session.expires_at):
         db.delete(session)
         db.commit()
         return None
     # Slide expiry on activity.
+    #
+    # A page load fires several authenticated requests at once, each with
+    # its own db Session but all resolving to this one row.  If another
+    # request removes it between the query above and this commit, the
+    # UPDATE matches zero rows and SQLAlchemy raises StaleDataError —
+    # which used to escape as an unhandled exception and 500 an ordinary
+    # page load (#275).  The row being gone means the session is no longer
+    # valid, which is exactly what None says.
     session.last_active_at = now
     session.expires_at = now + timedelta(hours=SESSION_MAX_AGE_HOURS)
-    db.commit()
-    user = db.query(UserModel).filter_by(id=session.user_id).first()
+    try:
+        db.commit()
+    except StaleDataError:
+        db.rollback()
+        return None
+    user = db.query(UserModel).filter_by(id=user_id).first()
     return user
 
 

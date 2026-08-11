@@ -142,6 +142,7 @@ class TestMissingValueSentinels:
             "rain_midnight_tenths_mm": 30,
             "humidity_pct": 50,
             "pressure_tenths_hpa": 10132,
+            "solar_wm2": 423,
             "obs_time": self.OBS,
         }
 
@@ -197,7 +198,63 @@ class TestMissingValueSentinels:
             wind_gust_tenths_ms=None, temp_tenths_c=None,
             rain_hour_tenths_mm=None, rain_24h_tenths_mm=None,
             rain_midnight_tenths_mm=None, humidity_pct=None,
-            pressure_tenths_hpa=None, obs_time=self.OBS,
+            pressure_tenths_hpa=None, solar_wm2=None, obs_time=self.OBS,
         )
         result = pkt.format_packet()
-        assert "_.../...g...t...r...p...P...h..b....." in result
+        assert "_.../...g...t...r...p...P...h..b.....L..." in result
+
+    def test_solar_none_emits_L_dots(self):
+        kw = self._base_kwargs()
+        kw["solar_wm2"] = None
+        assert "L..." in APRSWeatherPacket(**kw).format_packet()
+
+
+class TestSolarField:
+    """APRS101 §12: Lxxx (0-999) and lxxx (1000-1999) W/m²."""
+
+    OBS = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+    def _pkt(self, solar_wm2):
+        return APRSWeatherPacket(
+            callsign="N0CALL", latitude=0.0, longitude=0.0,
+            solar_wm2=solar_wm2, obs_time=self.OBS,
+        )
+
+    def test_zero_emits_L000(self):
+        assert "L000" in self._pkt(0).format_packet()
+
+    def test_typical_daylight_emits_Lxxx(self):
+        assert "L423" in self._pkt(423).format_packet()
+
+    def test_upper_L_boundary(self):
+        # 999 W/m² is the last value that fits the L field.
+        assert "L999" in self._pkt(999).format_packet()
+
+    def test_1000_switches_to_lowercase_l_zero(self):
+        # 1000 W/m² → l000 (value minus 1000, padded to three digits).
+        assert "l000" in self._pkt(1000).format_packet()
+
+    def test_1500_emits_l500(self):
+        assert "l500" in self._pkt(1500).format_packet()
+
+    def test_upper_l_boundary_1999_emits_l999(self):
+        assert "l999" in self._pkt(1999).format_packet()
+
+    def test_2000_and_above_falls_back_to_sentinel(self):
+        # Physically impossible on Earth; treat as unreliable rather than
+        # truncate to something misleading.
+        assert "L..." in self._pkt(2000).format_packet()
+        assert "L..." in self._pkt(10000).format_packet()
+
+    def test_negative_falls_back_to_sentinel(self):
+        # No physical meaning for W/m² < 0; sentinel rather than 000.
+        assert "L..." in self._pkt(-5).format_packet()
+
+    def test_solar_appears_after_barometer(self):
+        # Position matters for parsers — the field goes at the tail.
+        pkt = APRSWeatherPacket(
+            callsign="N0CALL", latitude=0.0, longitude=0.0,
+            pressure_tenths_hpa=10132, solar_wm2=423, obs_time=self.OBS,
+        )
+        result = pkt.format_packet()
+        assert result.endswith("b10132L423")

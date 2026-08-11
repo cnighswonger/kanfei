@@ -26,16 +26,20 @@ class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
+  // Snapshot BEFORE fetch: a request issued while logged out must not eject
+  // the user, regardless of when its 401 arrives.  Reading the flag at
+  // response time races AuthContext.login() setting it to "1", and mount-time
+  // admin calls (/api/auth/me, /api/config via syncUIPrefs) whose 401 lands
+  // after a successful login otherwise bounce the freshly authenticated user
+  // straight back to /login.  See #272.
+  const wasAuthedAtSend = sessionStorage.getItem("knf_was_authed") === "1";
   const response = await fetch(url, {
     ...init,
     credentials: "same-origin",
   });
 
   if (response.status === 401) {
-    // Only redirect to login if the user was previously authenticated.
-    // Many providers call admin endpoints on mount — 401 is expected
-    // when not logged in and those providers handle failure gracefully.
-    if (document.cookie.includes("knf_session") || sessionStorage.getItem("knf_was_authed")) {
+    if (wasAuthedAtSend) {
       window.dispatchEvent(new CustomEvent("kanfei:auth-required"));
     }
     throw new ApiError(401, "Authentication required");
@@ -605,6 +609,14 @@ export function fetchConsoleHighsLows(): Promise<
   return request("/api/station/highs-lows");
 }
 
+// --- Console reception diagnostics (Vantage) ---
+
+export function fetchSignalQuality(): Promise<
+  import("./types.ts").SignalQuality
+> {
+  return request("/api/station/signal-quality");
+}
+
 // --- Vantage sensor calibration ---
 
 export function fetchVantageCalibration(): Promise<
@@ -659,6 +671,24 @@ export function setConsoleLocation(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ latitude, longitude }),
+  });
+}
+
+// --- Console rain season (Vantage) ---
+
+export function fetchRainSeason(): Promise<
+  import("./types.ts").RainSeasonState
+> {
+  return request("/api/station/rain-season");
+}
+
+export function setRainSeason(
+  month: number,
+): Promise<import("./types.ts").RainSeasonResult> {
+  return request("/api/station/rain-season", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ month }),
   });
 }
 

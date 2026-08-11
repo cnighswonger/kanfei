@@ -50,11 +50,20 @@ export default function StationStatus() {
   const [showModal, setShowModal] = useState(false);
   const isMobile = useCompact();
 
+  // Firmware string — prefer the version number (e.g. "1.90") when the
+  // station reports it via NVER; fall back to the free-form build date
+  // (e.g. "Aug 15 2013") when it does not.  Both null on legacy stations,
+  // and on Vantage between connect and first VER response — hide the row
+  // in that case rather than showing an empty value.
+  const firmware =
+    stationStatus?.firmware_version ?? stationStatus?.firmware_date ?? null;
+
   const rows: StatusRow[] = [
     {
       label: "Station",
       value: stationStatus?.type_name ?? "--",
     },
+    ...(firmware ? [{ label: "Firmware", value: firmware } as StatusRow] : []),
     {
       label: "Connected",
       value: stationStatus?.connected ? "Yes" : "No",

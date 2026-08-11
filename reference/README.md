@@ -1,14 +1,23 @@
-# Davis protocol reference documents
+# Davis reference documents
 
-Vendor documentation for the Davis serial protocols this project speaks.
-**These are Davis Instruments documents, reproduced here unmodified for
-offline reference.** They are not project documentation and should not be
-edited — if something in them is wrong or unclear, note it in code comments
-or an issue rather than changing the source text.
+Vendor documentation this project depends on.  **These are Davis
+Instruments documents, reproduced here unmodified for offline
+reference.**  They are not project documentation and should not be
+edited — if something in them is wrong or unclear, note it in code
+comments or an issue rather than changing the source text.
 
-There are two distinct document sets, covering two distinct protocol
-families. Confusing them is a real hazard: see the "Address spaces" note
-below.
+Two flavours of vendor doc live here:
+
+- **Serial protocol references** cover the wire format the driver
+  speaks — commands, packet layouts, EEPROM addresses.  Sections 1 and
+  2 below.
+- **User and installation manuals** cover the console setup menus and
+  physical sensor mounting the operator sees.  Section 3 below.  These
+  are the authoritative source for "which settings does the console
+  actually expose" audits.
+
+The two protocol families in sections 1 and 2 are distinct.  Confusing
+them is a real hazard: see the "Address spaces" note below.
 
 ## 1. Legacy WeatherLink SDK (1999)
 
@@ -91,3 +100,37 @@ data packet for that sensor. The documented procedure is
 `EEBRD` → `CALED` → compute un-calibrated values → `EEBWR` → `CALFIX`.
 A bare `EEBWR` ACKs, reads back correctly, and silently does nothing —
 which is what issue #209 was originally (mis)diagnosed from.
+
+## 3. User and installation manuals
+
+Vendor-facing operator manuals, distinct in purpose from the protocol
+references above: these describe what the console shows on its LCD, the
+setup menus the user walks through, and how the outdoor hardware is
+physically installed.  They are the authoritative source when auditing
+whether Kanfei surfaces every user-visible console setting.
+
+| File | Contents |
+|---|---|
+| `vantage_vue_manual.pdf` | Vantage Vue Console Manual — setup wizard, console menus, alarms, calibration UI, graph modes |
+| `vantage_vue_manual.txt` | Text extraction (`pdftotext -layout`) |
+| `vantage_pro2_sensor_manual.pdf` | Vantage Pro2 & Pro2 Plus Integrated Sensor Suite (ISS) Installation Manual |
+| `vantage_pro2_sensor_manual.txt` | Text extraction (`pdftotext -layout`) |
+
+### Vantage Vue Console Manual
+
+- **Document:** part number 07395.261, Rev. F, August 22, 2013
+- **Covers:** Vue consoles #6351 and Vue weather stations #6250, #6357
+- **SHA-256 (PDF):** `a97e209bf651f3cb88c2d02f90c585485bfb72ea7a30ad5f900e51a5bec0fc8f`
+
+Use for: what settings the console UI exposes, what the LCD shows in
+each screen, how alarms are configured, the console's own
+calibration/offset UI (distinct from the CALED/CALFIX serial path).
+
+### Vantage Pro2 ISS Installation Manual
+
+- **Covers:** Vantage Pro2 & Pro2 Plus ISS (outdoor sensor suite)
+- **SHA-256 (PDF):** `62a2d82f624189261adecd6f8f023a800aa19e98d1aa23e2734c602e56000abb`
+
+Use for: physical sensor mounting, siting distances, cabling, and the
+troubleshooting appendix for the ISS itself.  Not a protocol document
+and largely orthogonal to the driver.

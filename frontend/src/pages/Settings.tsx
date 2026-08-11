@@ -9,8 +9,10 @@ import ThemeEditor from "../components/settings/ThemeEditor.tsx";
 import BarometerCalibration from "../components/settings/BarometerCalibration.tsx";
 import ConsoleDataOperations from "../components/settings/ConsoleDataOperations.tsx";
 import ConsoleHighsLows from "../components/settings/ConsoleHighsLows.tsx";
+import SignalQuality from "../components/settings/SignalQuality.tsx";
 import VantageCalibration from "../components/settings/VantageCalibration.tsx";
 import ConsoleLocation from "../components/settings/ConsoleLocation.tsx";
+import RainSeason from "../components/settings/RainSeason.tsx";
 import { ALL_SCENES, SCENE_LABELS, SCENE_GRADIENTS } from "../components/WeatherBackground.tsx";
 import { API_BASE } from "../utils/constants.ts";
 import { getTimezone, setTimezone as storeTimezone, resolveTimezone, getTimezoneOptions } from "../utils/timezone.ts";
@@ -2818,6 +2820,13 @@ export default function Settings() {
         isMobile={isMobile}
       />
 
+      {/* Reception diagnostics — names the transmitter dropout behind
+          #230 while it is happening, not hours later. */}
+      <SignalQuality
+        supported={wlConfig?.supported?.signal_quality ?? false}
+        isMobile={isMobile}
+      />
+
       {/* The other half of #249: a Vantage adjusts temperature and
           humidity per sensor, not with the legacy five-field block. */}
       <VantageCalibration
@@ -2846,6 +2855,14 @@ export default function Settings() {
           longitude={Number(val("longitude")) || 0}
         />
       </div>
+      {/* Yearly-rain-reset month.  Sits outside the Location card because
+          the two are logically independent — Location involves an active
+          reconcile against the config value, RainSeason is a plain console
+          setting mirror. */}
+      <RainSeason
+        supported={wlConfig?.supported?.rain_season ?? false}
+        isMobile={isMobile}
+      />
       </>)}
 
       {activeTab === "display" && (<>
@@ -3327,6 +3344,8 @@ export default function Settings() {
             ["channel_mute_rain_daily", "Rain — Daily"],
             ["channel_mute_rain_hour", "Rain — Hourly"],
             ["channel_mute_rain_24h", "Rain — 24 Hour"],
+            ["channel_mute_solar_radiation", "Solar Radiation"],
+            ["channel_mute_uv_index", "UV Index"],
           ].map(([key, label]) => (
             <div key={key} style={fieldGroup}>
               <label style={checkboxLabel}>

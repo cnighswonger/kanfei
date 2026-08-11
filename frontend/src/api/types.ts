@@ -160,6 +160,20 @@ export interface StationStatus {
   type_name: string;
   connected: boolean;
   link_revision: string;
+  /**
+   * Firmware version string as reported by the station (e.g. "1.90" for
+   * a VP2/Vue that supports NVER).  `null` when the station cannot report
+   * it — VP1, LinkDriver, or any station that has not yet completed the
+   * detection handshake.
+   */
+  firmware_version: string | null;
+  /**
+   * Firmware build date as a free-form Davis string (e.g. "Aug 15 2013").
+   * `null` when unavailable, same rules as firmware_version.  Kept
+   * separately because a Vue reports both, and the date is diagnostic
+   * even on VP1 where NVER is absent.
+   */
+  firmware_date: string | null;
   poll_interval: number;
   last_poll: string | null;
   archive_records: number;
@@ -167,6 +181,19 @@ export interface StationStatus {
   crc_errors: number;
   timeouts: number;
   station_time: string | null;
+}
+
+// --- Console rain season ---
+
+export interface RainSeasonState {
+  /** Console's yearly-rain-reset month (1-12). */
+  month: number;
+}
+
+export interface RainSeasonResult {
+  success: boolean;
+  before: number | null;
+  after: number | null;
 }
 
 // --- Configuration ---
@@ -613,6 +640,73 @@ export interface MetarReference {
   report_type: string;
 }
 
+// --- Multi-station aggregate for barometer calibration (#298) ---
+
+/** One METAR station's median altimeter over the 2h fetch window.
+ *  Distinct from MetarReference (single obs) — this is the aggregate
+ *  that the multi-station gate votes on. */
+export interface StationMedian {
+  station_id: string;
+  station_name: string;
+  distance_miles: number;
+  bearing_cardinal: string;
+  n_obs: number;
+  median_altimeter_thousandths_inhg: number;
+  median_altimeter_inhg: number;
+  obs_spread_thousandths_inhg: number;
+  newest_observed_at: string;
+}
+
+/** The console's own barometer aggregate over the last N minutes. */
+export interface BarometerConsoleSample {
+  median_hpa: number;
+  n_samples: number;
+  window_minutes: number;
+  stdev_hpa: number;
+  window_start: string;
+  window_end: string;
+}
+
+/** Skip-reason codes, stable string constants matching the backend
+ *  SKIP_* symbols in `barometer_aggregation.py`. */
+export type BarometerSkipReason =
+  | "no_console_samples"
+  | "insufficient_console_samples"
+  | "no_metar_available"
+  | "insufficient_stations"
+  | "cross_station_disagreement";
+
+/** The write decision + everything the UI needs to render it. */
+export interface BarometerRecommendation {
+  should_apply: boolean;
+  skip_reason: BarometerSkipReason | null;
+  median_of_medians_thousandths_inhg: number | null;
+  median_of_medians_inhg: number | null;
+  offset_thousandths_inhg: number | null;
+  offset_inhg: number | null;
+}
+
+/** Thresholds in effect for this aggregation.  Snapshotted so the UI
+ *  never hard-codes them and always shows what the daemon actually used. */
+export interface BarometerThresholds {
+  min_stations: number;
+  cross_station_spread_threshold_hpa: number;
+  console_window_minutes: number;
+  min_console_samples: number;
+  max_station_distance_miles: number;
+  station_window_hours: number;
+}
+
+export interface BarometerAggregate {
+  console: BarometerConsoleSample | null;
+  per_station_medians: StationMedian[];
+  n_stations_considered: number;
+  cross_station_spread_hpa: number | null;
+  recommendation: BarometerRecommendation;
+  thresholds: BarometerThresholds;
+  reference_radius_miles: number;
+}
+
 export interface MetarReferenceResponse {
   references: MetarReference[];
   location_configured: boolean;
@@ -620,6 +714,9 @@ export interface MetarReferenceResponse {
   home_lon: number;
   radius_miles: number;
   fetched_at: string;
+  /** Multi-station aggregate (#298).  `null` when location is not
+   *  configured — the same rule as `references: []` in that case. */
+  aggregate: BarometerAggregate | null;
 }
 
 // --- Destructive console operations ---
@@ -706,6 +803,33 @@ export interface ConsoleHighsLows {
 
 export interface ConsoleHighsLowsResponse {
   highs_lows: ConsoleHighsLows;
+}
+
+// --- Console reception diagnostics (Vantage) ---
+
+/**
+ * RXCHECK counters, plus the transmitter IDs the console reports hearing.
+ *
+ * Every counter is a total since station midnight, not a rate. One reading
+ * says how the day has gone; two readings apart say how it is going now.
+ *
+ * `max_consecutive_received` counts a run of SUCCESSES — the manual's
+ * "largest number of packets received in a row" — so a large value is
+ * healthy. Read as consecutive misses it inverts completely, which is a
+ * mistake that has already been made once in a diagnostic script.
+ */
+export interface SignalQuality {
+  packets_received: number;
+  missed: number;
+  resync: number;
+  max_consecutive_received: number;
+  crc_errors: number;
+  /**
+   * Null when RECEIVERS failed, empty when the console answered with no
+   * IDs — a Vue legitimately does the latter. Neither means "hearing
+   * nothing"; the RXCHECK counters are what say that.
+   */
+  receivers: number[] | null;
 }
 
 // --- Vantage sensor calibration ---
@@ -819,6 +943,10 @@ export interface WeatherLinkConfig {
     sensor_calibration?: boolean;
     /** Whether the console holds its own lat/lon (Vantage). */
     location?: boolean;
+    /** RXCHECK reception diagnostics (Vantage). */
+    signal_quality?: boolean;
+    /** RAIN_YEAR_START — yearly-rain-reset month (Vantage). */
+    rain_season?: boolean;
   };
 }
 

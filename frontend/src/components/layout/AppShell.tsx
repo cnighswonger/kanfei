@@ -20,6 +20,8 @@ const CHANNEL_LABELS: Record<string, string> = {
   rain_daily: 'Rain (Daily)',
   rain_hour: 'Rain (Hourly)',
   rain_24h: 'Rain (24 Hour)',
+  solar_radiation: 'Solar Radiation',
+  uv_index: 'UV Index',
 };
 
 interface AppShellProps {

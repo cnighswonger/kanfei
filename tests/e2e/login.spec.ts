@@ -2,6 +2,13 @@ import { test, expect } from '@playwright/test';
 import { TEST_ADMIN } from './helpers/values';
 
 test.describe('Login page', () => {
+  // The fixture DB pre-inserts a valid session so other specs can inject
+  // the cookie via injectAuthCookie().  Auth-flow tests need the opposite —
+  // an unauthenticated context — so they explicitly clear cookies first.
+  test.beforeEach(async ({ page }) => {
+    await page.context().clearCookies();
+  });
+
   test('settings redirects to login when not authenticated', async ({ page }) => {
     await page.goto('/settings');
     await expect(page.getByText('Sign in to continue')).toBeVisible();
@@ -20,43 +27,16 @@ test.describe('Login page', () => {
   });
 
   test('successful login redirects to settings', async ({ page }) => {
-    // "Sign in to continue" only renders once Login's own /api/auth/me
-    // probe has resolved (setupRequired === null returns null), so its
-    // visibility is the synchronisation point — no explicit response wait
-    // is needed or sufficient.  Even so the form can still be re-mounted
-    // out from under a fill(), leaving empty fields and Sign In disabled,
-    // so the values are asserted and re-filled below rather than typed
-    // once and trusted (#272).
     await page.goto('/settings');
     await expect(page.getByText('Sign in to continue')).toBeVisible();
 
-    const user = page.locator('input[autocomplete="username"]');
-    const pass = page.locator('input[autocomplete="current-password"]');
-    const signIn = page.getByRole('button', { name: 'Sign In' });
+    await page.locator('input[autocomplete="username"]').fill(TEST_ADMIN.username);
+    await page.locator('input[autocomplete="current-password"]').fill(TEST_ADMIN.password);
+    await page.getByRole('button', { name: 'Sign In' }).click();
 
-    // Re-fill until it sticks.  A single fill() plus assertions is not
-    // enough: the assertions can pass and a later re-mount still clears
-    // the fields.
-    //
-    // This does not make the test deterministic — roughly a quarter of
-    // runs still fail, landing back on an empty form after a valid
-    // submit.  That residue is #275, a race in validate_session() that
-    // 500s one of the concurrent auth requests, and it is a backend bug
-    // rather than anything this spec can synchronise around.
-    await expect(async () => {
-      await user.fill(TEST_ADMIN.username);
-      await pass.fill(TEST_ADMIN.password);
-      await expect(user).toHaveValue(TEST_ADMIN.username, { timeout: 1000 });
-      await expect(pass).toHaveValue(TEST_ADMIN.password, { timeout: 1000 });
-      await expect(signIn).toBeEnabled({ timeout: 1000 });
-    }).toPass({ timeout: 15000 });
-
-    await signIn.click();
-
-    // exact: true, or this matches a second heading whose text merely
-    // contains "settings" — the WeatherLink card renders
-    // "WeatherLink settings could not be read" when no station is
-    // attached, which is the normal state for the fixture (#272).
+    // exact: true — the WeatherLink card renders "WeatherLink settings
+    // could not be read" when no station is attached (the fixture's
+    // normal state), which otherwise collides with the page heading.
     await expect(
       page.getByRole('heading', { name: 'Settings', exact: true }),
     ).toBeVisible();
@@ -69,5 +49,48 @@ test.describe('Login page', () => {
     await page.getByRole('button', { name: 'Sign In' }).click();
 
     await expect(page.getByText(/invalid username|login failed/i)).toBeVisible();
+  });
+
+  test('a 401 issued before login does not eject the user after it', async ({ page }) => {
+    // Regression for the class of "pre-login request whose 401 arrives after
+    // login" — the frontend guard in `client.ts` snapshots auth state at
+    // send time.  Hold `/api/mute/status` (a request AppShell fires on mount)
+    // and release its 401 AFTER the user is on /settings.  Without the
+    // request-time snapshot, the guard would read the post-login flag,
+    // dispatch `kanfei:auth-required`, and bounce the user back to /login.
+    //
+    // times:1 is load-bearing.  useMuteStatus polls every 30 s; a handler
+    // without the limit would also intercept a request issued AFTER login,
+    // whose 401 is a legitimate ejection signal, not this bug.
+    //
+    // The paired backend/harness fix that makes this test's setup reliable
+    // (fresh uvicorn per invocation, so the SQLAlchemy pool doesn't hold
+    // stale file handles across DB rebuilds) is in this same PR — see #286.
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route(
+      '**/api/mute/status',
+      async (route) => {
+        await held;
+        await route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({ detail: 'Authentication required' }),
+        });
+      },
+      { times: 1 },
+    );
+
+    await page.goto('/settings');
+    await expect(page.getByText('Sign in to continue')).toBeVisible();
+    await page.locator('input[autocomplete="username"]').fill(TEST_ADMIN.username);
+    await page.locator('input[autocomplete="current-password"]').fill(TEST_ADMIN.password);
+    await page.getByRole('button', { name: 'Sign In' }).click();
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+
+    release!();
+
+    await expect(page.getByText('Sign in to continue')).toHaveCount(0);
+    expect(new URL(page.url()).pathname).toBe('/settings');
   });
 });

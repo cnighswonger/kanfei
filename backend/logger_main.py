@@ -37,6 +37,7 @@ from app.protocol.base import (
     CAP_RAIN_RESET,
     CAP_HILOWS,
     CAP_LOCATION_RW,
+    CAP_RAIN_SEASON_RW,
 )
 from app.protocol.link_driver import LinkDriver, CalibrationOffsets, _rain_register_to_mm
 from app.protocol.serial_port import list_serial_ports
@@ -84,10 +85,15 @@ def _supports_hilows(driver: StationDriver | None) -> bool:
     `supported` map that says yes while the handler says 501 renders the
     panel and then makes it vanish.
 
-    LinkDriver has declared CAP_HILOWS since the initial commit and
-    implements no hilows() at all, so the capability alone would reach an
-    AttributeError.  The method alone would miss a VP1 whose CAP_HILOWS is
-    correctly absent because it has no LOOP2.
+    The capability alone is not enough: a driver can declare CAP_HILOWS
+    without implementing the method, which reaches an AttributeError
+    rather than a clean 501.  LinkDriver did exactly that from the initial
+    commit until #270 withdrew the flag — fixed at the source now, but the
+    check stays because nothing prevents it recurring.
+
+    The method alone is not enough either, and that case is still live: a
+    VP1 has no LOOP2, so VantageDriver omits CAP_HILOWS while the method
+    remains present on the class.
     """
     if driver is None or not driver.connected:
         return False
@@ -96,6 +102,24 @@ def _supports_hilows(driver: StationDriver | None) -> bool:
     except Exception:          # pragma: no cover — defensive
         return False
     return CAP_HILOWS in declared and hasattr(driver, "async_hilows")
+
+
+def _supports_signal_quality(driver: StationDriver | None) -> bool:
+    """Whether this driver can answer an RXCHECK request.
+
+    There is no capability flag for reception diagnostics, so unlike
+    _supports_hilows this is a method check alone.  It still exists as a
+    named predicate rather than an inline hasattr because the capability
+    report and the command gate must not drift — #268 was exactly that
+    divergence, and a shared predicate is what prevents it recurring here.
+
+    RECEIVERS is deliberately not part of the test: a Vue answers it with
+    an empty list and the handler treats that as non-fatal, so requiring
+    it would withdraw the panel from stations that can serve most of it.
+    """
+    if driver is None or not driver.connected:
+        return False
+    return hasattr(driver, "async_rxcheck")
 
 
 def _create_driver(driver_type: str, config: dict) -> StationDriver:
@@ -236,7 +260,9 @@ class LoggerDaemon:
         await self.driver.connect()
         logger.info("Station: %s", self.driver.station_name)
 
-        # LinkDriver-specific post-connect: cache hardware config, clock sync, archive sync
+        # LinkDriver-specific post-connect: cache hardware config, archive sync.
+        # Clock sync used to live here too — it now runs below, gated on the
+        # capability rather than on driver type (#296, same class as #215/#220).
         link = self._link
         # Default to the driver's own model code where it has one.  This used
         # to be a bare `= 0`, only overwritten inside the `link is not None`
@@ -252,8 +278,8 @@ class LoggerDaemon:
                          self._archive_period, self._sample_period)
 
             # Reconcile the link's actual registers against the canonical row
-            # in station_config (issue #147).  Must run before clock sync /
-            # archive sync so they operate on the canonical archive_period.
+            # in station_config (issue #147).  Must run before archive sync so
+            # it operates on the canonical archive_period.
             try:
                 await self._reconcile_wl_settings(link)
             except Exception as exc:
@@ -263,17 +289,29 @@ class LoggerDaemon:
                     exc,
                 )
 
-            # Sync station clock to system time
-            now = datetime.now()
-            if await link.async_write_station_time(now):
-                logger.info("Station clock synced to %s", now.strftime("%H:%M:%S"))
-            else:
-                logger.warning("Failed to sync station clock")
-
             # Archive sync in background (shares _io_lock with poller)
             asyncio.create_task(self._bg_archive_sync())
 
             station_type_code = link.station_model.value if link.station_model else 0
+
+        # Sync station clock to system time — gated on capability, not on
+        # driver type.  Before #296 this was inside the `link is not None`
+        # block above, so Vantage never got an on-connect sync and had to
+        # wait for the frontend to poll `GET /api/station` (~5 min) to
+        # catch clock drift.  The auto-sync path in `api/station.py` still
+        # runs for both; this just closes the on-connect gap so the first
+        # sync fires immediately, matching the LinkDriver behaviour.
+        #
+        # This block MUST NOT dereference `link` — Vantage's `link is None`
+        # and would crash.  #300 R1 caught exactly that.  The regression
+        # test in `test_onconnect_clock_sync.py` greps this branch for
+        # `link.` and fails if it reappears.
+        if hasattr(self.driver, "async_write_station_time"):
+            now = datetime.now()
+            if await self.driver.async_write_station_time(now):
+                logger.info("Station clock synced to %s", now.strftime("%H:%M:%S"))
+            else:
+                logger.warning("Failed to sync station clock")
 
         poll_interval = int(config.get("poll_interval", settings.poll_interval_sec))
         self.poller = Poller(
@@ -970,6 +1008,8 @@ class LoggerDaemon:
         h(ipc.CMD_CLEAR_VANTAGE_CAL, self._h_clear_vantage_cal)
         h(ipc.CMD_READ_LOCATION, self._h_read_location)
         h(ipc.CMD_SET_LOCATION, self._h_set_location)
+        h(ipc.CMD_READ_RAIN_SEASON, self._h_read_rain_season)
+        h(ipc.CMD_SET_RAIN_SEASON, self._h_set_rain_season)
 
     # ---- IPC handlers ----
 
@@ -977,11 +1017,29 @@ class LoggerDaemon:
         connected = self.driver.connected if self.driver else False
         stats = self.poller.stats if self.poller else {}
         link = self._link
+
+        # Firmware info comes from whatever the driver cached at connect —
+        # every driver that has a firmware version has a `hw_config` object
+        # with the attributes.  Legacy stations have neither, so both fields
+        # are None on those and the UI hides the row.  Reading from cache
+        # rather than issuing a VER/NVER per status query keeps this cheap.
+        hw = getattr(self.driver, "hw_config", None)
+        firmware_version = getattr(hw, "firmware_version", None) if hw else None
+        firmware_date = getattr(hw, "firmware_date", None) if hw else None
+        # firmware_date starts as "" (dataclass default) on Vantage before
+        # detection completes.  Report an empty string as None so the UI
+        # treats it the same as an unsupported driver rather than showing
+        # a blank row.
+        if firmware_date == "":
+            firmware_date = None
+
         return {
             "connected": connected,
             "type_code": link.station_model.value if link and link.station_model else -1,
             "type_name": self.driver.station_name if self.driver else "Not connected",
             "link_revision": ("E" if link.is_rev_e else "D") if link else "unknown",
+            "firmware_version": firmware_version,
+            "firmware_date": firmware_date,
             "poll_interval": self.poller.poll_interval if self.poller else 0,
             **stats,
         }
@@ -1094,15 +1152,30 @@ class LoggerDaemon:
         distinction is load-bearing here in a way it is not for most
         capabilities: legacy stations DO calibrate their barometer, but
         by a direct BAR_CAL register write with subtract semantics.  A
-        type check that let one through would not merely fail — it would
+        capability that let one through would not merely fail — it would
         write an offset with the wrong sign and double the error.
+
+        Belt-and-braces isinstance check per #298: capability declarations
+        can drift.  If some future driver mistakenly declares
+        CAP_BAROMETER_CAL without actually implementing the Vantage BAR=
+        semantics, this second gate refuses.  Redundant against the
+        capability check as long as declarations are correct — cheap
+        insurance in the exact place where being wrong is expensive.
         """
+        from app.protocol.vantage.driver import VantageDriver
+
         drv = self.driver
         if drv is None or not drv.connected:
             raise RuntimeError("Not connected")
         if CAP_BAROMETER_CAL not in drv.capabilities:
             raise RuntimeError(
                 f"{drv.station_name} does not support barometer calibration"
+            )
+        if not isinstance(drv, VantageDriver):
+            raise RuntimeError(
+                f"{drv.station_name} declares barometer calibration but is "
+                "not a VantageDriver; refusing BAR= — a non-Vantage BAR_CAL "
+                "write has the opposite sign convention (see #298)."
             )
         return drv
 
@@ -1580,6 +1653,79 @@ class LoggerDaemon:
 
         return {"success": ok, "before": _pair(before), "after": _pair(after)}
 
+    def _require_rain_season_rw(self) -> StationDriver:
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if CAP_RAIN_SEASON_RW not in drv.capabilities:
+            raise RuntimeError(
+                f"{drv.station_name} does not support setting the "
+                "yearly-rain-reset month"
+            )
+        return drv
+
+    async def _h_read_rain_season(self, _msg: dict) -> dict[str, Any]:
+        """Read the console's yearly-rain-reset month (RAIN_YEAR_START)."""
+        drv = self._require_rain_season_rw()
+        month = await drv.async_read_rain_year_start()
+        if month is None:
+            raise RuntimeError(
+                "Station did not return a legal rain-year-start month"
+            )
+        return {"month": month}
+
+    async def _h_set_rain_season(self, msg: dict) -> dict[str, Any]:
+        """Set the console's yearly-rain-reset month, then read it back.
+
+        Success requires BOTH an ACK from the EEBWR AND a matching value
+        on the read-back.  A bare ACK is not enough — #252 established
+        (on the barometer BAR= path) that the console can NAK, ACK-then-
+        drop, or ACK-then-write-a-different-value, and the operator has
+        to be told which of those actually happened.  So the contract
+        here mirrors the barometer write: return normally only when the
+        register reads exactly the requested month; otherwise raise.
+        """
+        drv = self._require_rain_season_rw()
+
+        month = msg.get("month")
+        if month is None:
+            raise RuntimeError("month is required")
+
+        try:
+            month_int = int(month)
+        except (TypeError, ValueError):
+            raise RuntimeError(
+                f"month must be an integer 1-12 (got {month!r})"
+            )
+
+        before = await drv.async_read_rain_year_start()
+        try:
+            ok = await drv.async_set_rain_year_start(month_int)
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+        after = await drv.async_read_rain_year_start()
+
+        if not ok:
+            raise RuntimeError(
+                "Station did not accept the rain-year-start month; "
+                f"register now reads: {after}"
+            )
+
+        # ACK is not enough — verify the register actually holds what we
+        # asked for.  Three shapes fail here: read-back returned None
+        # (garbage register value or EEBRD failure), read-back matches the
+        # BEFORE value (write silently dropped), or read-back is some
+        # OTHER month (write went to the wrong address, or a concurrent
+        # write on the console clobbered ours).  All three are the same
+        # class of "silent no-op" bug and get the same shape of error.
+        if after != month_int:
+            raise RuntimeError(
+                "Station acknowledged the write but the register does "
+                f"not reflect it — requested {month_int}, reads {after}"
+            )
+
+        return {"success": ok, "before": before, "after": after}
+
     async def _h_signal_quality(self, _msg: dict) -> dict[str, Any]:
         """Console reception diagnostics — RXCHECK plus the heard-Tx list.
 
@@ -1597,7 +1743,7 @@ class LoggerDaemon:
         drv = self.driver
         if drv is None or not drv.connected:
             raise RuntimeError("Not connected")
-        if not hasattr(drv, "async_rxcheck"):
+        if not _supports_signal_quality(drv):
             raise RuntimeError(
                 f"{drv.station_name} does not support reception diagnostics"
             )
@@ -1734,6 +1880,7 @@ class LoggerDaemon:
                     and hasattr(self.driver, "async_clear_log")
                 ),
                 "highs_lows": _supports_hilows(self.driver),
+                "signal_quality": _supports_signal_quality(self.driver),
                 # Per-sensor offsets via CALED/CALFIX.  Distinct from
                 # "calibration" above, which is the legacy five-field
                 # block and is false on a Vantage, and from
@@ -1744,6 +1891,7 @@ class LoggerDaemon:
                     and hasattr(self.driver, "CALIBRATION_FIELDS")
                 ),
                 "location": CAP_LOCATION_RW in caps,
+                "rain_season": CAP_RAIN_SEASON_RW in caps,
             },
         }
 

@@ -14,6 +14,12 @@ from sqlalchemy.orm import Session
 
 from ..ipc.dependencies import get_ipc_client
 from ..models.database import get_db
+from ..services.barometer_aggregation import (
+    MAX_STATION_DISTANCE_MILES,
+    compute_aggregate_recommendation,
+    fetch_station_medians,
+    read_console_barometer_median,
+)
 from ..services.metar_reference import DEFAULT_RADIUS_MILES, fetch_metar_references
 from .config import get_effective_config
 from .dependencies import require_admin
@@ -46,6 +52,8 @@ _DEGRADED_RESPONSE = {
     "type_name": "Not connected",
     "connected": False,
     "link_revision": "unknown",
+    "firmware_version": None,
+    "firmware_date": None,
     "poll_interval": 0,
     "station_time": None,
 }
@@ -102,6 +110,8 @@ async def get_station():
         "type_name": data.get("type_name", "Unknown"),
         "connected": data.get("connected", False),
         "link_revision": data.get("link_revision", "unknown"),
+        "firmware_version": data.get("firmware_version"),
+        "firmware_date": data.get("firmware_date"),
         "poll_interval": data.get("poll_interval", 0),
         "last_poll": data.get("last_poll"),
         "uptime_seconds": data.get("uptime_seconds", 0),
@@ -354,39 +364,78 @@ async def get_barometer_reference(
     db: Session = Depends(get_db),
     _admin=Depends(require_admin),
 ):
-    """Nearby METAR observations to calibrate the barometer against.
+    """Multi-station aggregate for barometer calibration (#298).
 
     A Vantage reports reduction method 1 (Altimeter Setting), so a METAR's
     ``Axxxx`` group compares like-for-like with what the console displays.
 
-    Returns 200 with ``location_configured: false`` and no references when
-    the station has no coordinates, rather than an error: that is a normal
-    first-run state, and the caller renders a "set your location" prompt
-    pointing at the Location card on the same settings tab.  Treating it as
-    a fault would make an unconfigured install look broken.
+    Previously returned a list of the ``limit`` nearest single METAR
+    observations for the operator to pick from.  That let a single
+    anomalous METAR silently pin the console's persistent barometer offset
+    to a wrong value.  Now returns a full aggregation with two gates
+    (min-stations, cross-station spread) and a signed
+    ``recommendation.offset_thousandths_inhg`` derived from
+    median-of-per-station-medians vs. the median of the console's own last
+    ``CONSOLE_WINDOW_MINUTES`` of readings.  See
+    ``backend/app/services/barometer_aggregation.py`` for the algorithm
+    and the phone-sensor citation.
+
+    Returns 200 with ``location_configured: false`` when the station has
+    no coordinates, rather than an error: that is a normal first-run
+    state, and the caller renders a "set your location" prompt pointing
+    at the Location card on the same settings tab.  Treating it as a
+    fault would make an unconfigured install look broken.
+
+    ``references`` (the pre-#298 single-obs-per-station list) is also
+    included, unchanged, so the diagnostic table on gate-fail can show
+    "here are the individual stations we consulted" without a second
+    request.
     """
     cfg = get_effective_config(db)
     lat = float(cfg.get("latitude", 0.0) or 0.0)
     lon = float(cfg.get("longitude", 0.0) or 0.0)
+    now = datetime.now(timezone.utc).isoformat()
 
     if lat == 0.0 and lon == 0.0:
         return {
-            "references": [],
             "location_configured": False,
             "home_lat": lat,
             "home_lon": lon,
             "radius_miles": DEFAULT_RADIUS_MILES,
-            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "fetched_at": now,
+            "references": [],
+            "aggregate": None,
         }
 
+    # Two independent reads; either can be empty without breaking the
+    # other.  fetch_metar_references keeps the single-obs shape the UI
+    # already renders; fetch_station_medians is the aggregation source.
     references = await fetch_metar_references(lat, lon)
+    per_station = await fetch_station_medians(lat, lon)
+    console = read_console_barometer_median(db)
+    aggregate = compute_aggregate_recommendation(console, per_station)
+
     return {
-        "references": [asdict(r) for r in references],
         "location_configured": True,
         "home_lat": lat,
         "home_lon": lon,
         "radius_miles": DEFAULT_RADIUS_MILES,
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": now,
+        "references": [asdict(r) for r in references],
+        "aggregate": {
+            "console": asdict(aggregate.console) if aggregate.console else None,
+            "per_station_medians": [
+                asdict(s) for s in aggregate.per_station_medians
+            ],
+            "n_stations_considered": aggregate.n_stations_considered,
+            "cross_station_spread_hpa": aggregate.cross_station_spread_hpa,
+            "recommendation": asdict(aggregate.recommendation),
+            "thresholds": aggregate.thresholds,
+            # Effective radius used by the aggregation is narrower than
+            # the display radius that seeds `references` above — expose
+            # it here so the UI does not have to know the constant.
+            "reference_radius_miles": MAX_STATION_DISTANCE_MILES,
+        },
     }
 
 # --------------- Destructive console operations ---------------
@@ -696,6 +745,76 @@ async def set_station_location(payload: dict, _admin=Depends(require_admin)):
         raise HTTPException(
             status_code=400, detail="latitude and longitude must be numbers",
         )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.get("/station/rain-season")
+async def get_rain_season(_admin=Depends(require_admin)):
+    """Read the console's yearly-rain-reset month (1-12).
+
+    Vantage only.  The console uses this to decide when the yearly rain
+    total drops back to zero — factory default is January, hydrological
+    "water year" installs typically want July so a mid-winter storm
+    season is not split across two yearly totals.
+    """
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "read_rain_season"}, timeout=20.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/rain-season")
+async def set_rain_season(payload: dict, _admin=Depends(require_admin)):
+    """Set the console's yearly-rain-reset month.
+
+    Body: ``{"month": int}`` where month is 1-12.  The response returns
+    the register's before/after values, not what was sent — a written
+    value that does not read back is treated as failure per the barometer
+    write precedent (#252).
+    """
+    month = payload.get("month")
+    if month is None:
+        raise HTTPException(
+            status_code=400,
+            detail="month is required",
+        )
+    try:
+        month_int = int(month)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail=f"month must be an integer 1-12 (got {month!r})",
+        )
+    if not 1 <= month_int <= 12:
+        raise HTTPException(
+            status_code=400,
+            detail=f"month must be 1-12 (got {month_int})",
+        )
+
+    try:
+        client = get_ipc_client()
+        result = await client.send_command(
+            {"cmd": "set_rain_season", "month": month_int},
+            timeout=20.0,
+        )
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
     except asyncio.TimeoutError:
         raise HTTPException(
             status_code=504,

@@ -9,7 +9,7 @@ test.describe('Discord Bot settings', () => {
     );
     await page.goto('/settings');
     await configReady;
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
     // Navigate to Bots tab where Discord settings live
     await page.getByRole('button', { name: 'Bots' }).click();
     await expect(page.getByRole('heading', { name: 'Discord Bot' })).toBeVisible();
