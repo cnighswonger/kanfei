@@ -34,6 +34,8 @@ MUTE_CHANNELS: tuple[str, ...] = (
     "rain_daily",
     "rain_hour",
     "rain_24h",
+    "solar_radiation",
+    "uv_index",
 )
 
 

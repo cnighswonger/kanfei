@@ -173,7 +173,11 @@ class TestAprsRegression:
         Old constructor used: wind_speed_mph=10, temp_tenths_f=720,
         barometer_thousandths_inhg=29920
         → '@151753z4903.50N/07201.75W_270/010g015t072r000p000P000h50b10132'
-        New: same result with SI inputs."""
+        The trailing ``L...`` was appended once solar-radiation support was
+        added — sentinel when the caller passes no solar reading, matching
+        every other unspecified WX field.  Body up through baro is
+        unchanged; still a valid pin against the SI migration.
+        """
         obs = datetime(2026, 3, 15, 17, 53, 0, tzinfo=timezone.utc)
         pkt = APRSWeatherPacket(
             callsign="N0CALL",
@@ -188,5 +192,4 @@ class TestAprsRegression:
             obs_time=obs,
         )
         result = pkt.format_packet()
-        # The old code produced exactly this string
-        assert result == "@151753z4903.50N/07201.75W_270/010g015t072r000p000P000h50b10132"
+        assert result == "@151753z4903.50N/07201.75W_270/010g015t072r000p000P000h50b10132L..."

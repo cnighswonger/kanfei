@@ -89,6 +89,8 @@ _DIRECT_FIELD_BY_CHANNEL = {
     "barometer": "baromin",
     "rain_daily": "dailyrainin",
     "rain_hour": "rainin",
+    "solar_radiation": "solarradiation",
+    "uv_index": "UV",
 }
 
 

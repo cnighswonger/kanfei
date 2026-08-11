@@ -4,10 +4,10 @@ Defines the APRSInterface protocol and a concrete implementation that
 can format Davis weather data into APRS weather report packets.
 
 APRS weather format (from the APRS spec):
-    @DDHHMMz lat/lon_wind-dir/wind-speed gust temp rain-hr rain-24 rain-midnight humidity baro
+    @DDHHMMz lat/lon_wind-dir/wind-speed gust temp rain-hr rain-24 rain-midnight humidity baro [solar]
 
 Example APRS weather string:
-    @151753z4903.50N/07201.75W_270/010g015t072r000p000P000h50b10132
+    @151753z4903.50N/07201.75W_270/010g015t072r000p000P000h50b10132L423
 
 Reference: http://www.aprs.org/doc/APRS101.PDF Chapter 12
 """
@@ -57,6 +57,7 @@ class APRSWeatherPacket:
         - Rain since midnight: hundredths of inch (3 digits)
         - Humidity: percent (2 digits, 00 = 100%)
         - Barometric pressure: tenths of hPa (5 digits)
+        - Solar radiation: W/m² (Lxxx 0-999, lxxx 1000-1999 per APRS101 §12)
     """
 
     def __init__(
@@ -73,6 +74,7 @@ class APRSWeatherPacket:
         rain_midnight_tenths_mm: Optional[int] = 0,
         humidity_pct: Optional[int] = 0,
         pressure_tenths_hpa: Optional[int] = 10132,
+        solar_wm2: Optional[int] = None,
         obs_time: Optional[datetime] = None,
     ) -> None:
         """Initialize an APRS weather packet.
@@ -92,6 +94,7 @@ class APRSWeatherPacket:
         self.rain_midnight_tenths_mm = rain_midnight_tenths_mm
         self.humidity_pct = humidity_pct
         self.pressure_tenths_hpa = pressure_tenths_hpa
+        self.solar_wm2 = solar_wm2
         self.obs_time = obs_time or datetime.now(timezone.utc)
 
     def _format_latitude(self) -> str:
@@ -205,6 +208,20 @@ class APRSWeatherPacket:
         else:
             baro_str = f"{self.pressure_tenths_hpa:05d}"
 
+        # Solar radiation — APRS101 §12: Lxxx for 0-999 W/m², lxxx for
+        # 1000-1999 (value minus 1000).  The solar constant at TOA is
+        # ~1361 W/m² and ground-level maxima rarely clear 1200, so the
+        # 1999 ceiling only matters for reflected-load edge cases; anything
+        # at or above 2000 falls back to the missing-value sentinel rather
+        # than truncating to a value that no longer describes what the
+        # sensor measured.  None also emits the sentinel.
+        if self.solar_wm2 is None or self.solar_wm2 < 0 or self.solar_wm2 >= 2000:
+            solar_str = "L..."
+        elif self.solar_wm2 < 1000:
+            solar_str = f"L{self.solar_wm2:03d}"
+        else:
+            solar_str = f"l{self.solar_wm2 - 1000:03d}"
+
         # Assemble the packet
         packet = (
             f"@{time_str}"
@@ -217,6 +234,7 @@ class APRSWeatherPacket:
             f"P{rain_mid}"
             f"h{hum_str}"
             f"b{baro_str}"
+            f"{solar_str}"
         )
 
         return packet
