@@ -1152,15 +1152,30 @@ class LoggerDaemon:
         distinction is load-bearing here in a way it is not for most
         capabilities: legacy stations DO calibrate their barometer, but
         by a direct BAR_CAL register write with subtract semantics.  A
-        type check that let one through would not merely fail — it would
+        capability that let one through would not merely fail — it would
         write an offset with the wrong sign and double the error.
+
+        Belt-and-braces isinstance check per #298: capability declarations
+        can drift.  If some future driver mistakenly declares
+        CAP_BAROMETER_CAL without actually implementing the Vantage BAR=
+        semantics, this second gate refuses.  Redundant against the
+        capability check as long as declarations are correct — cheap
+        insurance in the exact place where being wrong is expensive.
         """
+        from app.protocol.vantage.driver import VantageDriver
+
         drv = self.driver
         if drv is None or not drv.connected:
             raise RuntimeError("Not connected")
         if CAP_BAROMETER_CAL not in drv.capabilities:
             raise RuntimeError(
                 f"{drv.station_name} does not support barometer calibration"
+            )
+        if not isinstance(drv, VantageDriver):
+            raise RuntimeError(
+                f"{drv.station_name} declares barometer calibration but is "
+                "not a VantageDriver; refusing BAR= — a non-Vantage BAR_CAL "
+                "write has the opposite sign convention (see #298)."
             )
         return drv
 
