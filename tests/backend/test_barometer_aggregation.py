@@ -407,8 +407,8 @@ class TestConsoleMedianUnitConversion:
     (per `poller.py`'s `round(snapshot.barometer * 10)`), not hPa.
     `read_console_barometer_median` must divide by 10 to return hPa.
 
-    Caught on beta27 vsits-02 smoke: the API's `console.median_hpa` came
-    back as 10142 for a station reading 1014.2 hPa.  The algorithm's
+    Caught in a beta smoke: the API's `console.median_hpa` came back
+    as 10142 for a station reading 1014.2 hPa.  The algorithm's
     cross-station-spread gate rejected the write before the wrong offset
     reached the console, so no hardware damage — but this is exactly the
     class of bug the whole module exists to prevent.
