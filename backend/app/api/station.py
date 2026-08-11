@@ -46,6 +46,8 @@ _DEGRADED_RESPONSE = {
     "type_name": "Not connected",
     "connected": False,
     "link_revision": "unknown",
+    "firmware_version": None,
+    "firmware_date": None,
     "poll_interval": 0,
     "station_time": None,
 }
@@ -102,6 +104,8 @@ async def get_station():
         "type_name": data.get("type_name", "Unknown"),
         "connected": data.get("connected", False),
         "link_revision": data.get("link_revision", "unknown"),
+        "firmware_version": data.get("firmware_version"),
+        "firmware_date": data.get("firmware_date"),
         "poll_interval": data.get("poll_interval", 0),
         "last_poll": data.get("last_poll"),
         "uptime_seconds": data.get("uptime_seconds", 0),
@@ -696,6 +700,76 @@ async def set_station_location(payload: dict, _admin=Depends(require_admin)):
         raise HTTPException(
             status_code=400, detail="latitude and longitude must be numbers",
         )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.get("/station/rain-season")
+async def get_rain_season(_admin=Depends(require_admin)):
+    """Read the console's yearly-rain-reset month (1-12).
+
+    Vantage only.  The console uses this to decide when the yearly rain
+    total drops back to zero — factory default is January, hydrological
+    "water year" installs typically want July so a mid-winter storm
+    season is not split across two yearly totals.
+    """
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "read_rain_season"}, timeout=20.0)
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
+@router.post("/station/rain-season")
+async def set_rain_season(payload: dict, _admin=Depends(require_admin)):
+    """Set the console's yearly-rain-reset month.
+
+    Body: ``{"month": int}`` where month is 1-12.  The response returns
+    the register's before/after values, not what was sent — a written
+    value that does not read back is treated as failure per the barometer
+    write precedent (#252).
+    """
+    month = payload.get("month")
+    if month is None:
+        raise HTTPException(
+            status_code=400,
+            detail="month is required",
+        )
+    try:
+        month_int = int(month)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail=f"month must be an integer 1-12 (got {month!r})",
+        )
+    if not 1 <= month_int <= 12:
+        raise HTTPException(
+            status_code=400,
+            detail=f"month must be 1-12 (got {month_int})",
+        )
+
+    try:
+        client = get_ipc_client()
+        result = await client.send_command(
+            {"cmd": "set_rain_season", "month": month_int},
+            timeout=20.0,
+        )
+        if result.get("ok"):
+            return result["data"]
+        raise _cal_error(result.get("error", "Failed"))
     except asyncio.TimeoutError:
         raise HTTPException(
             status_code=504,

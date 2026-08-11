@@ -129,6 +129,13 @@ CAP_BAROMETER_CAL = "barometer_cal"           # Can calibrate barometer via BAR=
 # can never be compared for exact equality.
 CAP_LOCATION_RW = "location_rw"               # Can read/write console lat/lon
 
+# Yearly-rain-reset month.  Vantage only.  The console uses this to decide
+# when the yearly rain accumulator drops back to zero — a west-coast US
+# operator typically wants July (start of the hydrological "water year")
+# so a mid-winter storm season is not split across two yearly totals.
+# Legacy stations reset every January without exposing a knob.
+CAP_RAIN_SEASON_RW = "rain_season_rw"          # Can read/write yearly-rain-reset month
+
 
 # --------------- Abstract base class ---------------
 

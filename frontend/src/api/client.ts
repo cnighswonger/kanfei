@@ -674,4 +674,22 @@ export function setConsoleLocation(
   });
 }
 
+// --- Console rain season (Vantage) ---
+
+export function fetchRainSeason(): Promise<
+  import("./types.ts").RainSeasonState
+> {
+  return request("/api/station/rain-season");
+}
+
+export function setRainSeason(
+  month: number,
+): Promise<import("./types.ts").RainSeasonResult> {
+  return request("/api/station/rain-season", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ month }),
+  });
+}
+
 export { ApiError };

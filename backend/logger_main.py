@@ -37,6 +37,7 @@ from app.protocol.base import (
     CAP_RAIN_RESET,
     CAP_HILOWS,
     CAP_LOCATION_RW,
+    CAP_RAIN_SEASON_RW,
 )
 from app.protocol.link_driver import LinkDriver, CalibrationOffsets, _rain_register_to_mm
 from app.protocol.serial_port import list_serial_ports
@@ -993,6 +994,8 @@ class LoggerDaemon:
         h(ipc.CMD_CLEAR_VANTAGE_CAL, self._h_clear_vantage_cal)
         h(ipc.CMD_READ_LOCATION, self._h_read_location)
         h(ipc.CMD_SET_LOCATION, self._h_set_location)
+        h(ipc.CMD_READ_RAIN_SEASON, self._h_read_rain_season)
+        h(ipc.CMD_SET_RAIN_SEASON, self._h_set_rain_season)
 
     # ---- IPC handlers ----
 
@@ -1000,11 +1003,29 @@ class LoggerDaemon:
         connected = self.driver.connected if self.driver else False
         stats = self.poller.stats if self.poller else {}
         link = self._link
+
+        # Firmware info comes from whatever the driver cached at connect —
+        # every driver that has a firmware version has a `hw_config` object
+        # with the attributes.  Legacy stations have neither, so both fields
+        # are None on those and the UI hides the row.  Reading from cache
+        # rather than issuing a VER/NVER per status query keeps this cheap.
+        hw = getattr(self.driver, "hw_config", None)
+        firmware_version = getattr(hw, "firmware_version", None) if hw else None
+        firmware_date = getattr(hw, "firmware_date", None) if hw else None
+        # firmware_date starts as "" (dataclass default) on Vantage before
+        # detection completes.  Report an empty string as None so the UI
+        # treats it the same as an unsupported driver rather than showing
+        # a blank row.
+        if firmware_date == "":
+            firmware_date = None
+
         return {
             "connected": connected,
             "type_code": link.station_model.value if link and link.station_model else -1,
             "type_name": self.driver.station_name if self.driver else "Not connected",
             "link_revision": ("E" if link.is_rev_e else "D") if link else "unknown",
+            "firmware_version": firmware_version,
+            "firmware_date": firmware_date,
             "poll_interval": self.poller.poll_interval if self.poller else 0,
             **stats,
         }
@@ -1603,6 +1624,79 @@ class LoggerDaemon:
 
         return {"success": ok, "before": _pair(before), "after": _pair(after)}
 
+    def _require_rain_season_rw(self) -> StationDriver:
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if CAP_RAIN_SEASON_RW not in drv.capabilities:
+            raise RuntimeError(
+                f"{drv.station_name} does not support setting the "
+                "yearly-rain-reset month"
+            )
+        return drv
+
+    async def _h_read_rain_season(self, _msg: dict) -> dict[str, Any]:
+        """Read the console's yearly-rain-reset month (RAIN_YEAR_START)."""
+        drv = self._require_rain_season_rw()
+        month = await drv.async_read_rain_year_start()
+        if month is None:
+            raise RuntimeError(
+                "Station did not return a legal rain-year-start month"
+            )
+        return {"month": month}
+
+    async def _h_set_rain_season(self, msg: dict) -> dict[str, Any]:
+        """Set the console's yearly-rain-reset month, then read it back.
+
+        Success requires BOTH an ACK from the EEBWR AND a matching value
+        on the read-back.  A bare ACK is not enough — #252 established
+        (on the barometer BAR= path) that the console can NAK, ACK-then-
+        drop, or ACK-then-write-a-different-value, and the operator has
+        to be told which of those actually happened.  So the contract
+        here mirrors the barometer write: return normally only when the
+        register reads exactly the requested month; otherwise raise.
+        """
+        drv = self._require_rain_season_rw()
+
+        month = msg.get("month")
+        if month is None:
+            raise RuntimeError("month is required")
+
+        try:
+            month_int = int(month)
+        except (TypeError, ValueError):
+            raise RuntimeError(
+                f"month must be an integer 1-12 (got {month!r})"
+            )
+
+        before = await drv.async_read_rain_year_start()
+        try:
+            ok = await drv.async_set_rain_year_start(month_int)
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+        after = await drv.async_read_rain_year_start()
+
+        if not ok:
+            raise RuntimeError(
+                "Station did not accept the rain-year-start month; "
+                f"register now reads: {after}"
+            )
+
+        # ACK is not enough — verify the register actually holds what we
+        # asked for.  Three shapes fail here: read-back returned None
+        # (garbage register value or EEBRD failure), read-back matches the
+        # BEFORE value (write silently dropped), or read-back is some
+        # OTHER month (write went to the wrong address, or a concurrent
+        # write on the console clobbered ours).  All three are the same
+        # class of "silent no-op" bug and get the same shape of error.
+        if after != month_int:
+            raise RuntimeError(
+                "Station acknowledged the write but the register does "
+                f"not reflect it — requested {month_int}, reads {after}"
+            )
+
+        return {"success": ok, "before": before, "after": after}
+
     async def _h_signal_quality(self, _msg: dict) -> dict[str, Any]:
         """Console reception diagnostics — RXCHECK plus the heard-Tx list.
 
@@ -1768,6 +1862,7 @@ class LoggerDaemon:
                     and hasattr(self.driver, "CALIBRATION_FIELDS")
                 ),
                 "location": CAP_LOCATION_RW in caps,
+                "rain_season": CAP_RAIN_SEASON_RW in caps,
             },
         }
 
