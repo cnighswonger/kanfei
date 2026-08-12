@@ -193,9 +193,15 @@ export default function BaroCalibrationAggregate({
         anomalous METAR alone cannot pin the console to a wrong offset.
       </p>
 
-      {/* Gate summary */}
+      {/* Gate summary.  Explicit marginTop opens up the space between
+          the narrative paragraph above and this pill row — the
+          browser-default `<p>` margin was tight enough that the row
+          read as an extension of the paragraph rather than its own
+          band.  16 px lands at roughly 1× line-height at this font
+          size and gives the eye a place to land before scanning the
+          three status badges. */}
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap",
-                    marginBottom: "12px" }}>
+                    marginTop: "16px", marginBottom: "16px" }}>
         <span style={badge(consolePass ? "pass" : "hold")}>
           Console: {c?.n_samples ?? 0} samples
           {c != null && ` · ${fmtPressureFromHpa(c.median_hpa, pressureUnit)}`}
