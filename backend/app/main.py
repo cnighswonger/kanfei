@@ -317,15 +317,24 @@ def create_app() -> FastAPI:
         if assets_dir.exists():
             app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
-        # SPA catch-all: serve the file if it exists, otherwise index.html
+        # SPA catch-all: serve the file if it exists, otherwise index.html.
+        # `index.html` MUST NOT be heuristically cacheable — it is the only
+        # non-hashed URL in the SPA and its body carries the current bundle's
+        # hashed asset paths.  Without an explicit `Cache-Control`, browsers
+        # apply RFC 9111 heuristic freshness (~10% of file age) and stop
+        # revalidating; after a deploy the user's cached `index.html` still
+        # references the previous deploy's `/assets/index-<hash>.js` and no
+        # hard refresh of the SPA route fixes it.  The hashed asset paths
+        # under `/assets/` are content-addressed and safe to cache long-term.
         index_html = frontend_dist / "index.html"
+        _NO_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
 
         @app.get("/{full_path:path}")
         async def serve_spa(full_path: str):
             file_path = frontend_dist / full_path
             if file_path.is_file():
-                return FileResponse(str(file_path))
-            return FileResponse(str(index_html))
+                return FileResponse(str(file_path), headers=_NO_CACHE)
+            return FileResponse(str(index_html), headers=_NO_CACHE)
 
     return app
 
