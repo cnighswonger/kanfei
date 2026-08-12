@@ -104,11 +104,13 @@ const SKIP_LABEL: Record<BarometerSkipReason, string> = {
 interface Props {
   aggregate: BarometerAggregate | null;
   isMobile: boolean;
-  /** Called with the recommended offset in thousandths inHg when the
-   *  operator clicks Apply.  Parent decides how to route it — usually
-   *  it pre-fills the manual calibration input so the operator sees
-   *  what will be sent. */
-  onApplyRecommendation?: (offsetThousandthsInhg: number) => void;
+  /** Called with the ABSOLUTE median-of-medians target in thousandths
+   *  inHg (i.e. what the console should be told to display), NOT the
+   *  signed offset delta.  BAR= on the wire takes an absolute pressure;
+   *  passing the delta would require the parent to know the current
+   *  console reading, which it does but the aggregate has already done
+   *  that math when it produced the recommendation. */
+  onApplyRecommendation?: (targetThousandthsInhg: number) => void;
 }
 
 export default function BaroCalibrationAggregate({
@@ -241,13 +243,13 @@ export default function BaroCalibrationAggregate({
             {" thousandths)"}
           </p>
           {onApplyRecommendation &&
-            recommendation.offset_thousandths_inhg != null && (
+            recommendation.median_of_medians_thousandths_inhg != null && (
               <button
                 type="button"
                 style={button}
                 onClick={() =>
                   onApplyRecommendation(
-                    recommendation.offset_thousandths_inhg as number,
+                    recommendation.median_of_medians_thousandths_inhg as number,
                   )
                 }
               >
