@@ -655,6 +655,10 @@ export interface StationMedian {
   median_altimeter_inhg: number;
   obs_spread_thousandths_inhg: number;
   newest_observed_at: string;
+  /** True when the iterated MAD filter rejected this station.  It
+   *  still rides in the array so the panel can render it (struck-out
+   *  or greyed) instead of silently disappearing. */
+  is_outlier: boolean;
 }
 
 /** The console's own barometer aggregate over the last N minutes. */
@@ -695,12 +699,18 @@ export interface BarometerThresholds {
   min_console_samples: number;
   max_station_distance_miles: number;
   station_window_hours: number;
+  mad_rejection_multiplier: number;
+  mad_min_scale_hpa: number;
+  mad_max_iterations: number;
 }
 
 export interface BarometerAggregate {
   console: BarometerConsoleSample | null;
   per_station_medians: StationMedian[];
   n_stations_considered: number;
+  /** After iterated MAD outlier rejection.  n_stations_considered
+   *  minus n_stations_used = the count of stations flagged is_outlier. */
+  n_stations_used: number;
   cross_station_spread_hpa: number | null;
   recommendation: BarometerRecommendation;
   thresholds: BarometerThresholds;

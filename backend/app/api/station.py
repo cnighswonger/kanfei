@@ -428,6 +428,7 @@ async def get_barometer_reference(
                 asdict(s) for s in aggregate.per_station_medians
             ],
             "n_stations_considered": aggregate.n_stations_considered,
+            "n_stations_used": aggregate.n_stations_used,
             "cross_station_spread_hpa": aggregate.cross_station_spread_hpa,
             "recommendation": asdict(aggregate.recommendation),
             "thresholds": aggregate.thresholds,

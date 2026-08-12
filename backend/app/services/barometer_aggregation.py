@@ -79,10 +79,50 @@ logger = logging.getLogger(__name__)
 MIN_STATIONS = 2
 
 # HOLD gate on cross-station disagreement.  Defined as literal
-# max(medians) - min(medians).  0.4 hPa is a tight tolerance — one
-# station drifted or one sensor gust is enough to trip it, which is the
-# point.  Same value as phone-sensor production.
+# max(survivors) - min(survivors) — computed AFTER the MAD outlier
+# rejection below.  0.4 hPa is a tight tolerance; the gate exists to
+# refuse a write when the reference set genuinely disagrees.  Same
+# value as phone-sensor production.
 CROSS_STATION_SPREAD_THRESHOLD_HPA = 0.4
+
+# Per-station outlier rejection before the spread gate.  Phone-sensor
+# ran on a dense CWOP mesh where max−min was a fair statistic; Kanfei
+# is METAR-only with a 47-mile reach into rural areas where a single
+# miscalibrated AWOS at a small airfield poisons the whole spread.
+#
+# We reject any station whose median lies more than
+# ``MAD_REJECTION_MULTIPLIER`` * (1.4826 * MAD) away from the group
+# median — the 1.4826 factor is the classical normal-consistent scale
+# estimator (so k=3 approximates 3σ under a Gaussian assumption while
+# staying robust to the outliers themselves).  Only survivors count
+# for the spread gate and the median-of-medians write recommendation;
+# excluded stations still ride along in the response so the UI can
+# show WHY the count dropped.
+# k=2.5 is the "moderate" default in the applied stats literature (Leys
+# et al., 2013).  The classical k=3 is calibrated on Gaussian data;
+# METAR-across-a-county has heavier tails, and k=3 leaves obvious
+# multi-hPa outliers inside the acceptance band because they themselves
+# inflate the MAD.  On the beta27 smoke wire data (14 stations, KGSB
+# and KSOP both clearly drifted) k=3 rejected nothing; k=2.5 with
+# iteration removes both.
+MAD_REJECTION_MULTIPLIER = 2.5
+
+# Iterated rather than single-pass.  Removing one outlier tightens the
+# group MAD and can bring the *next* outlier into rejection range.  On
+# the smoke data KGSB goes out on pass 1 (MAD=0.42 hPa) and KSOP on
+# pass 2 (MAD tightens to 0.34 hPa).  Bounded so a pathological input
+# cannot loop forever; in practice convergence is 1–3 passes.
+MAD_MAX_ITERATIONS = 10
+
+# Floor on the effective scale used by MAD rejection.  With a very
+# calm reference set (say 12 stations all within 0.05 hPa of each
+# other), 1.4826 * MAD collapses to near zero and a station 0.15 hPa
+# away — still consistent with real barometric noise — would look
+# like an outlier.  The floor caps that: no station is rejected when
+# it is within this many hPa of the group median, even if the MAD
+# says otherwise.  0.15 hPa is roughly one thousandth of inHg — the
+# granularity of the wire values themselves.
+MAD_MIN_SCALE_HPA = 0.15
 
 # Console-side window.  Median over the last N minutes of the console's
 # own barometer readings.  15 min aligns with the METAR feed's 5-min
@@ -148,6 +188,13 @@ class StationMedian:
     # Newest observation timestamp, ISO 8601 UTC.  For "how stale is
     # this?" display alongside the running total.
     newest_observed_at: str
+    # Set by ``compute_aggregate_recommendation`` on stations rejected
+    # by the MAD outlier filter.  The aggregation still returns them
+    # so the UI can show the excluded stations struck out or in a
+    # separate section — hiding them would surprise an operator whose
+    # station count "dropped for no visible reason".  ``fetch_station_medians``
+    # always leaves this False; only the aggregator can set it True.
+    is_outlier: bool = False
 
 
 @dataclass
@@ -197,6 +244,11 @@ class AggregationResult:
     console: Optional[ConsoleSample]
     per_station_medians: list[StationMedian] = field(default_factory=list)
     n_stations_considered: int = 0
+    # After MAD outlier rejection.  n_stations_considered - n_stations_used
+    # is the count of stations flagged with ``is_outlier=True``.  Both are
+    # returned so the UI can show "12 of 14 stations agree" instead of a
+    # bare survivor count that hides the discard.
+    n_stations_used: int = 0
     cross_station_spread_hpa: Optional[float] = None
     recommendation: Recommendation = field(
         default_factory=lambda: Recommendation(
@@ -224,7 +276,76 @@ def _thresholds_snapshot() -> dict:
         "min_console_samples": MIN_CONSOLE_SAMPLES,
         "max_station_distance_miles": MAX_STATION_DISTANCE_MILES,
         "station_window_hours": STATION_WINDOW_HOURS,
+        "mad_rejection_multiplier": MAD_REJECTION_MULTIPLIER,
+        "mad_min_scale_hpa": MAD_MIN_SCALE_HPA,
+        "mad_max_iterations": MAD_MAX_ITERATIONS,
     }
+
+
+def _mark_mad_outliers(
+    stations: list[StationMedian],
+) -> list[StationMedian]:
+    """Return the input list with ``is_outlier`` set on rejected stations.
+
+    Iterated MAD rejection: on each pass the group MAD is recomputed
+    from the currently-accepted survivors, and any station outside
+    ``MAD_REJECTION_MULTIPLIER * max(1.4826 * MAD, MAD_MIN_SCALE_HPA)``
+    from the group median is marked as an outlier and dropped from
+    the next pass.  The loop terminates when a pass rejects nothing
+    or ``MAD_MAX_ITERATIONS`` is reached.
+
+    Why iterate: single-pass MAD leaves obvious outliers inside the
+    band because they inflate the MAD themselves — the beta27 smoke
+    wire data has two ~52-thousandths-inHg outliers that both fit
+    inside a first-pass 55-thousandth band, but removing one tightens
+    the band enough to catch the other.
+
+    Non-mutating: returns fresh ``StationMedian`` instances via
+    ``dataclasses.replace`` so the caller's list is preserved.  With
+    fewer than two stations the input passes through untouched — MAD
+    of a singleton is zero and rejecting-against-oneself is nonsense.
+    """
+    from dataclasses import replace
+
+    if len(stations) < 2:
+        return list(stations)
+
+    values_hpa = [
+        _thousandths_inhg_to_hpa(s.median_altimeter_thousandths_inhg)
+        for s in stations
+    ]
+    # `active[i]` = True means station i is still in the reference
+    # group.  We flip to False as we reject; the returned copy carries
+    # ``is_outlier = not active[i]``.
+    active = [True] * len(stations)
+
+    for _ in range(MAD_MAX_ITERATIONS):
+        live_values = [
+            v for v, keep in zip(values_hpa, active) if keep
+        ]
+        if len(live_values) < 2:
+            break
+        group_median_hpa = statistics.median(live_values)
+        mad_hpa = statistics.median(
+            [abs(v - group_median_hpa) for v in live_values]
+        )
+        effective_scale_hpa = max(1.4826 * mad_hpa, MAD_MIN_SCALE_HPA)
+        threshold_hpa = MAD_REJECTION_MULTIPLIER * effective_scale_hpa
+
+        rejected_this_pass = False
+        for i, (v, keep) in enumerate(zip(values_hpa, active)):
+            if not keep:
+                continue
+            if abs(v - group_median_hpa) > threshold_hpa:
+                active[i] = False
+                rejected_this_pass = True
+        if not rejected_this_pass:
+            break
+
+    return [
+        replace(s, is_outlier=not keep)
+        for s, keep in zip(stations, active)
+    ]
 
 
 def read_console_barometer_median(
@@ -422,30 +543,18 @@ def compute_aggregate_recommendation(
     """
     thresholds = _thresholds_snapshot()
 
-    n_stations = len(per_station_medians)
-    med_values_thousandths = [
-        s.median_altimeter_thousandths_inhg for s in per_station_medians
-    ]
-
-    cross_station_spread_thousandths: Optional[int] = None
-    cross_station_spread_hpa: Optional[float] = None
-    if n_stations > 0:
-        cross_station_spread_thousandths = (
-            max(med_values_thousandths) - min(med_values_thousandths)
-        )
-        cross_station_spread_hpa = round(
-            _thousandths_inhg_to_hpa(cross_station_spread_thousandths), 3
-        )
-
-    # ---- Gates, in order ----
+    n_considered = len(per_station_medians)
 
     # G0: no console data at all → cannot compute an offset regardless.
+    # Reported before touching the reference side so a "console silent"
+    # story is not conflated with a reference-side skip.
     if console is None:
         return AggregationResult(
             console=None,
             per_station_medians=per_station_medians,
-            n_stations_considered=n_stations,
-            cross_station_spread_hpa=cross_station_spread_hpa,
+            n_stations_considered=n_considered,
+            n_stations_used=0,
+            cross_station_spread_hpa=None,
             recommendation=Recommendation(
                 should_apply=False, skip_reason=SKIP_NO_CONSOLE_SAMPLES,
             ),
@@ -456,8 +565,9 @@ def compute_aggregate_recommendation(
         return AggregationResult(
             console=console,
             per_station_medians=per_station_medians,
-            n_stations_considered=n_stations,
-            cross_station_spread_hpa=cross_station_spread_hpa,
+            n_stations_considered=n_considered,
+            n_stations_used=0,
+            cross_station_spread_hpa=None,
             recommendation=Recommendation(
                 should_apply=False, skip_reason=SKIP_NO_CONSOLE_SAMPLES,
             ),
@@ -468,8 +578,9 @@ def compute_aggregate_recommendation(
         return AggregationResult(
             console=console,
             per_station_medians=per_station_medians,
-            n_stations_considered=n_stations,
-            cross_station_spread_hpa=cross_station_spread_hpa,
+            n_stations_considered=n_considered,
+            n_stations_used=0,
+            cross_station_spread_hpa=None,
             recommendation=Recommendation(
                 should_apply=False,
                 skip_reason=SKIP_INSUFFICIENT_CONSOLE_SAMPLES,
@@ -478,11 +589,12 @@ def compute_aggregate_recommendation(
         )
 
     # G1: no reference data at all.
-    if n_stations == 0:
+    if n_considered == 0:
         return AggregationResult(
             console=console,
             per_station_medians=per_station_medians,
             n_stations_considered=0,
+            n_stations_used=0,
             cross_station_spread_hpa=None,
             recommendation=Recommendation(
                 should_apply=False, skip_reason=SKIP_NO_METAR_AVAILABLE,
@@ -490,14 +602,42 @@ def compute_aggregate_recommendation(
             thresholds=thresholds,
         )
 
-    # G2: fewer than MIN_STATIONS voted.  P0-1 in phone-sensor: refuse
-    # to write when only one reference is present — a single reference
-    # cannot cross-check itself.
-    if n_stations < MIN_STATIONS:
+    # Outlier rejection.  Run BEFORE any station-count / spread gate so
+    # a single drifted AWOS cannot poison the whole recommendation.
+    # ``per_station_medians`` (all N with is_outlier set) is what we
+    # return; ``survivors`` is what the gates run against.
+    per_station_medians = _mark_mad_outliers(per_station_medians)
+    survivors = [s for s in per_station_medians if not s.is_outlier]
+    n_used = len(survivors)
+
+    # Spread is defined on survivors — the whole point of the outlier
+    # filter is that the excluded stations do not get to vote on the
+    # HOLD gate.  None when zero survivors so the UI does not display
+    # a bogus "0.00 hPa spread" when there is nothing to spread over.
+    med_values_thousandths_used = [
+        s.median_altimeter_thousandths_inhg for s in survivors
+    ]
+    cross_station_spread_hpa: Optional[float] = None
+    if n_used > 0:
+        cross_station_spread_hpa = round(
+            _thousandths_inhg_to_hpa(
+                max(med_values_thousandths_used)
+                - min(med_values_thousandths_used)
+            ),
+            3,
+        )
+
+    # G2: fewer than MIN_STATIONS voted AFTER outlier rejection.  P0-1
+    # in phone-sensor terms: refuse to write when only one reference is
+    # present — a single reference cannot cross-check itself.  Counted
+    # on survivors rather than raw candidates so a hostile drifted
+    # station cannot inflate the count past the gate.
+    if n_used < MIN_STATIONS:
         return AggregationResult(
             console=console,
             per_station_medians=per_station_medians,
-            n_stations_considered=n_stations,
+            n_stations_considered=n_considered,
+            n_stations_used=n_used,
             cross_station_spread_hpa=cross_station_spread_hpa,
             recommendation=Recommendation(
                 should_apply=False, skip_reason=SKIP_INSUFFICIENT_STATIONS,
@@ -505,8 +645,9 @@ def compute_aggregate_recommendation(
             thresholds=thresholds,
         )
 
-    # G3: stations disagree beyond tolerance.  We cannot tell which is
-    # drifted, so HOLD the existing offset rather than commit to one.
+    # G3: surviving stations still disagree beyond tolerance.  We
+    # cannot tell which of the (already-filtered) survivors is drifted,
+    # so HOLD the existing offset rather than commit to one.
     if (
         cross_station_spread_hpa is not None
         and cross_station_spread_hpa
@@ -515,7 +656,8 @@ def compute_aggregate_recommendation(
         return AggregationResult(
             console=console,
             per_station_medians=per_station_medians,
-            n_stations_considered=n_stations,
+            n_stations_considered=n_considered,
+            n_stations_used=n_used,
             cross_station_spread_hpa=cross_station_spread_hpa,
             recommendation=Recommendation(
                 should_apply=False,
@@ -524,13 +666,10 @@ def compute_aggregate_recommendation(
             thresholds=thresholds,
         )
 
-    # ---- All gates passed: compute the recommendation ----
+    # ---- All gates passed: compute the recommendation on SURVIVORS ----
 
     median_of_medians_thousandths = int(
-        round(statistics.median(med_values_thousandths))
-    )
-    median_of_medians_hpa = _thousandths_inhg_to_hpa(
-        median_of_medians_thousandths
+        round(statistics.median(med_values_thousandths_used))
     )
 
     # Offset the console needs: reference minus the console's own reading.
@@ -541,7 +680,8 @@ def compute_aggregate_recommendation(
     return AggregationResult(
         console=console,
         per_station_medians=per_station_medians,
-        n_stations_considered=n_stations,
+        n_stations_considered=n_considered,
+        n_stations_used=n_used,
         cross_station_spread_hpa=cross_station_spread_hpa,
         recommendation=Recommendation(
             should_apply=True,
