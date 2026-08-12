@@ -35,6 +35,7 @@ from app.services.barometer_aggregation import (
     StationMedian,
     _aggregate_per_station,
     compute_aggregate_recommendation,
+    read_console_barometer_median,
 )
 
 
@@ -394,3 +395,59 @@ class TestBarometerCalWriteBeltAndBraces:
         daemon = self._daemon(drv)
         # Passes the isinstance check.  Returns the driver itself.
         assert daemon._require_barometer_cal() is drv
+
+
+# ---------------------------------------------------------------------------
+# Unit conversion — SensorReadingModel.barometer is TENTHS of hPa
+# ---------------------------------------------------------------------------
+
+
+class TestConsoleMedianUnitConversion:
+    """`SensorReadingModel.barometer` is stored as integer TENTHS of hPa
+    (per `poller.py`'s `round(snapshot.barometer * 10)`), not hPa.
+    `read_console_barometer_median` must divide by 10 to return hPa.
+
+    Caught in a beta smoke: the API's `console.median_hpa` came back
+    as 10142 for a station reading 1014.2 hPa.  The algorithm's
+    cross-station-spread gate rejected the write before the wrong offset
+    reached the console, so no hardware damage — but this is exactly the
+    class of bug the whole module exists to prevent.
+    """
+
+    def test_reads_tenths_of_hpa_and_returns_hpa(self):
+        # An in-memory session with a couple of readings at 10142 tenths
+        # (= 1014.2 hPa).  If the function is off by a factor of 10, the
+        # returned median will be 10142.0 instead of 1014.2.
+        from datetime import datetime, timedelta, timezone
+
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        from app.models.database import Base
+        from app.models.sensor_reading import SensorReadingModel
+
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        Session = sessionmaker(bind=engine)
+        db = Session()
+        now = datetime.now(timezone.utc)
+        for i in range(30):
+            db.add(
+                SensorReadingModel(
+                    timestamp=now - timedelta(seconds=i * 10),
+                    station_type=1,   # NOT NULL — value doesn't matter
+                    barometer=10142,  # 1014.2 hPa in tenths
+                )
+            )
+        db.commit()
+
+        result = read_console_barometer_median(db)
+        assert result is not None
+        # If the unit conversion is missing, this comes back at ~10142.
+        # If it is right, ~1014.2.
+        assert 1013.0 <= result.median_hpa <= 1015.0, (
+            f"expected ~1014.2 hPa, got {result.median_hpa} — "
+            "SensorReadingModel.barometer is stored in tenths and the "
+            "aggregation must divide by 10"
+        )
+        assert result.n_samples == 30

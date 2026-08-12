@@ -253,7 +253,10 @@ def read_console_barometer_median(
         logger.warning("read_console_barometer_median: DB query failed: %s", exc)
         return None
 
-    values = [r[0] for r in rows if r[0] is not None]
+    # SensorReadingModel.barometer is stored as TENTHS of hPa (integer),
+    # per `poller.py`'s `round(snapshot.barometer * 10)` — not hPa.
+    # Divide here so the rest of the module works in hPa.
+    values = [r[0] / 10.0 for r in rows if r[0] is not None]
     if not values:
         return ConsoleSample(
             median_hpa=0.0,
