@@ -424,7 +424,10 @@ test.describe('Barometer calibration panel', () => {
         ],
         n_stations_considered: 3,
         n_stations_used: 2,
-        cross_station_spread_hpa: 0.34,
+        // Weighted 2σ spread above the 0.7 hPa threshold so the
+        // rendered gate badges and diagnostic agree with the
+        // `cross_station_disagreement` skip below.
+        cross_station_spread_hpa: 1.2,
         recommendation: {
           should_apply: false,
           skip_reason: 'cross_station_disagreement',

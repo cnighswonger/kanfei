@@ -274,11 +274,11 @@ class TestRecommendationMath:
     """When both gates pass, median-of-medians and signed offset."""
 
     def test_median_of_medians_three_stations(self):
-        # 100 thousandths of inHg ≈ 3.4 hPa, so a spread of even 40
-        # thousandths is 1.35 hPa — well over the 0.4 hPa gate.  Keep
-        # the station values within 10 thousandths of each other so the
-        # spread gate passes.
-        # 29915, 29920, 29925 → median 29920.  Spread ≈ 0.34 hPa < 0.4.
+        # 100 thousandths of inHg ≈ 3.4 hPa; the weighted 2σ spread on
+        # tightly-clustered stations at equal distance collapses to
+        # ordinary 2σ.  Keep the values within 10 thousandths so the
+        # weighted 0.7 hPa gate (#307) passes cleanly.
+        # 29915, 29920, 29925 → weighted-median 29920.
         stations = [
             StationMedian(
                 station_id=f"K{i}", station_name=f"S{i}", distance_miles=10.0,
@@ -492,13 +492,15 @@ class TestMadOutlierRejection:
 
     def test_smoke_case_from_beta27_rejects_both_extremes(self):
         """The exact wire data from the beta27 smoke: 14 NC-central
-        METAR stations, KGSB and KSOP dragging the max−min spread to
+        METAR stations, KGSB and KSOP dragging the raw max−min to
         3.22 hPa.  MAD (iterated at k=2.5) rejects both — KGSB on pass
-        1, KSOP on pass 2 once the MAD tightens.  The middle 12 still
-        span ~1.7 hPa which fails the 0.4 hPa spread gate, so HOLD is
-        still the outcome — but the diagnostic is now truthful: '12 of
-        14 stations agree within 1.7 hPa, 2 excluded' rather than the
-        misleading '14 stations disagree by 3.2 hPa'.
+        1, KSOP on pass 2 once the MAD tightens.  Under the #307
+        weighted spread the surviving 12 stations register ~0.93 hPa
+        (weighted 2σ, equal-distance fixture collapses to ordinary
+        2σ), which still fails the 0.7 hPa gate, so HOLD is still the
+        outcome — but the diagnostic is now truthful ('12 of 14
+        stations agree, 2 excluded') AND the override path is
+        available.
         """
         # Values in thousandths of inHg, as returned from the wire.
         wire = {
@@ -571,8 +573,10 @@ class TestMadOutlierRejection:
             )
 
     def test_spread_gate_uses_survivors_not_raw(self):
-        """The whole point of MAD-before-spread ordering: raw max−min
-        would be 3.4 hPa (HOLD); survivor max−min is 0.2 hPa (PASS).
+        """The whole point of MAD-before-spread ordering: including
+        the drifted station would give a large weighted spread and
+        HOLD; excluding it yields a tight survivor cluster that
+        passes the 0.7 hPa weighted gate.
         """
         stations = [_sm(f"KMID{i}", 30000 + i * 2) for i in range(5)]
         stations.append(_sm("KDRIFT", 29900))  # ~3.4 hPa away

@@ -1,18 +1,22 @@
-"""Multi-station median-of-medians barometer calibration aggregation.
+"""Distance-weighted multi-station barometer calibration aggregation.
 
 Rewrites the reference side of the barometer-calibration workflow from
-"pick the nearest METAR at face value" to "aggregate several METARs
-and refuse to write when they disagree".  A single anomalous METAR
-(sensor gust, transient reporting error, station drift) would otherwise
-silently pin the console's persistent barometer offset to a wrong value.
+"pick the nearest METAR at face value" to "weight several METARs by
+proximity, refuse to write when they disagree, and offer an operator
+override on HOLD".  A single anomalous METAR (sensor gust, transient
+reporting error, station drift) would otherwise silently pin the
+console's persistent barometer offset to a wrong value.
 
-Ported from ``kanfei-phone-sensor``'s ``calibration_recompute_job.py``
-(Phase 4.7 PR-B), which uses the same aggregation shape in production
-for phone-sensor devices.  Thresholds match the phone-sensor config:
-``MIN_STATIONS=2``, ``CROSS_STATION_SPREAD_THRESHOLD_HPA=0.4``.  See
-issue #298 for the background.
+Originally ported from ``kanfei-phone-sensor``'s
+``calibration_recompute_job.py`` (Phase 4.7 PR-B) for issue #298.
+Reworked for issue #307 after the beta27 vsits-02 smoke showed that
+phone-sensor's plain median-of-medians with a 0.4 hPa max−min gate
+does not survive contact with METAR-across-a-county: phone-sensor is
+calibrated on a top-3 CWOP mesh where max−min is a fair statistic;
+Kanfei is METAR-only with a 47-mile reach where a real synoptic
+gradient can easily push max−min above 0.4 hPa on quiet days.
 
-Algorithm (per issue #298):
+Current algorithm:
 
 1. **Sample side** — pull the last ``CONSOLE_WINDOW_MINUTES`` of the
    console's barometer readings from the DB, take the median.  Refuse
@@ -22,17 +26,44 @@ Algorithm (per issue #298):
    ``MAX_STATION_DISTANCE_MILES`` and returned by the aviationweather
    feed's 2 h window, take the median of that station's altimeter
    observations.  Guards against a station-specific transient.
-3. **Cross-station aggregation** — ``offset = median(per_station_medians)``.
-   Robust to a single outlier when ≥3 stations vote; the min-stations
-   gate makes sure we always have at least one cross-check.
-4. **Two gates**:
-   - **Min-stations**: refuse when fewer than ``MIN_STATIONS`` voted.
-     A single reference cannot cross-check itself.
-   - **Cross-station spread**: literal ``max − min`` across per-station
-     medians (not stddev, not IQR).  If greater than
-     ``CROSS_STATION_SPREAD_THRESHOLD_HPA``, **HOLD** — do not
-     recommend a write; show the per-station values so the operator
-     can see why.
+3. **Optional station-count cap** — ``STATION_LIMIT_FOR_CALIBRATION``
+   (default None → all in bbox).  Set to 3 to reproduce phone-sensor's
+   top-3-nearest algorithm exactly.  Applied first, on the distance-
+   sorted list, so subsequent processing operates on that slice.
+4. **Iterated MAD outlier rejection** — mark stations whose median
+   sits more than ``MAD_REJECTION_MULTIPLIER × (1.4826 × MAD)`` from
+   the group median, floored by ``MAD_MIN_SCALE_HPA``.  Rerun on
+   survivors each pass until nothing new is rejected or
+   ``MAD_MAX_ITERATIONS`` is reached.  Excluded stations still ride
+   along in the returned list with ``is_outlier=True`` so the panel
+   can show why the count dropped.
+5. **Cross-station aggregation — inverse-distance-squared weighting**.
+   The operator's console is at *their* location, not the county
+   average, so nearer stations carry more evidence about the pressure
+   at that location.  ``w_i = 1 / (d_i² + ε²)`` with a 1.0 mi floor
+   (``DISTANCE_WEIGHT_EPSILON_MILES``) so a co-located station cannot
+   divide by zero or dominate unboundedly.  The write value is the
+   weighted median over survivors.
+6. **Two gates**:
+   - **Min-stations**: refuse when fewer than ``MIN_STATIONS``
+     survived MAD.  A single reference cannot cross-check itself, and
+     counting on survivors (not raw candidates) means a hostile
+     drifted station cannot inflate the count past the gate.
+   - **Weighted spread**: ``2 × sqrt(weighted variance around the
+     weighted median)``.  The 2× factor makes the number read on the
+     same scale as an ordinary max−min for well-behaved data, so
+     operators do not need units retraining.  If greater than
+     ``CROSS_STATION_SPREAD_THRESHOLD_HPA`` (0.7 hPa post-#307),
+     **HOLD** — but see (7).
+7. **Override on HOLD** — when the spread gate fires,
+   ``Recommendation.hold_override_allowed=True`` and the weighted
+   median IS still returned to the caller.  The UI may render an
+   explicit "Accept anyway" button that commits to the SAME
+   weighted-median value the algorithm computed.  The multi-station
+   cross-check still governs the WRITE VALUE; only the write DECISION
+   is delegated to the operator.  This is a fundamentally different
+   affordance from the pre-#298 picker (removed in #306), which let
+   the operator commit to any nearby METAR at face value.
 
 Reduction-method note.  A Vantage console reports barometric reduction
 method 1 (Altimeter Setting), which is what METAR's ``Axxxx`` group
@@ -40,11 +71,11 @@ carries.  So a like-for-like comparison against the console's own
 sea-level pressure is the whole basis for using METARs here at all.
 See ``metar_reference.py``'s module docstring for the full argument.
 
-Not ported yet: CWOP as a second source (issue #298 non-blocker).  The
-aggregation is source-agnostic — a ``StationMedian`` from any origin
-would slot in — but adding CWOP means porting the per-station quality
-gates from ``kanfei-nowcast`` (drift, noise, station-pressure-vs-SLP
-detection), which is a separate PR-B.
+Not ported yet: CWOP as a second source (issue #303).  The aggregation
+is source-agnostic — a ``StationMedian`` from any origin would slot in
+— but adding CWOP means porting the per-station quality gates from
+``kanfei-nowcast`` (drift, noise, station-pressure-vs-SLP detection),
+which is a separate PR.
 """
 
 import logging
