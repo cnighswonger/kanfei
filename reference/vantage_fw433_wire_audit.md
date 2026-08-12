@@ -18,14 +18,20 @@ this report is the snapshot of a single audit pass.
   driver doesn't use it), one anomaly worth flagging
   (`TEMP_OUT_COMP` invariant broken), one cosmetic (ACK byte
   semantics on `RECEIVERS`).
-- **5 undocumented commands discovered** — `IDENT` (returns product
-  SKU); `HELP` (returns a 526-byte engineering/radio-tuning
-  command menu); `OPMODE` (safe, read-only view of radio state and
-  per-unit crystal calibration); `GETREG (x)` (radio-register read,
-  requires test mode); `RESET` (soft-reset console over wire, not
-  tested).  Plus a documented factory command set (`TST`, `TX`,
-  `RX`, `HOP`, `CHAN`, `DOM`, `BAND`, `XTLCAL`, `SVTST`, `SETREG`,
-  `SETPOW`) that the HELP output reveals.
+- **5 undocumented commands enumerated**.  Cross-check on the
+  production Vue (fw 2.12) verified `OPMODE` and `IDENT` work
+  identically on the older firmware, so those are NOT fw 4.33
+  additions — Davis has had this factory-mode command set since
+  at least 2009; it's simply undocumented in the Serial
+  Communication Reference.  `OPMODE` is a safe read-only view of
+  radio state + per-unit crystal cal; `IDENT` returns the product
+  SKU.  `RESET` works but is more consequential than it looks
+  on the wire — it puts the console into the initial-setup wizard
+  on the LCD and clears the RTC, so it is NOT a "clean soft-reset"
+  and should not be wired into the driver.  `GETREG` is gated
+  behind test-mode entry that `TST 1` alone is not sufficient to
+  activate — real access sequence unknown.  `HELP` is
+  interactive-menu output; useful only for discovering the rest.
 - **EEPROM address map matches documentation** for every field
   tested.  No evidence of a wholesale remap.
 
@@ -144,7 +150,8 @@ future spec work — the `RECEIVERS` doc entry could use a "returns
 
 ### N1. `IDENT` returns product number
 
-**Undocumented in Davis reference.**  Observed:
+**Undocumented in Davis reference.  Works on fw 2.12 and fw 4.33
+identically** — verified by cross-check on the production Vue.
 
 ```
 send:  IDENT\n
@@ -152,9 +159,8 @@ recv:  \n\r6351\n\r
 ```
 
 Returns the Davis product number as a 4-character ASCII string,
-prefixed and suffixed by `\n\r`.  On the bench Vue this is `6351`
-(Vantage Vue Wireless with WeatherLink IP).  Would be `6250` for a
-Vue Console alone; other Vantage bundles return their own SKUs.
+prefixed and suffixed by `\n\r`.  Both our consoles report `6351`
+(Vantage Vue Wireless with WeatherLink IP bundle).
 
 **Potential driver use**: identify the specific product bundle at
 connect time — useful for capabilities that vary by bundle (e.g.,
@@ -199,47 +205,104 @@ every command here is destructive or reception-disrupting; only
 
 ### N3. `OPMODE` returns runtime radio state (READ-ONLY, safe)
 
-**Undocumented in Davis reference.**  Reveals radio configuration
-and per-unit calibration parameters without needing to enter test
-mode.  Observed on our bench Vue in normal-ops:
+**Undocumented in Davis reference.  Works on fw 2.12 and fw 4.33
+identically** — verified by cross-check on the production Vue.
+Reveals radio configuration and per-unit calibration parameters
+without needing to enter test mode.
 
-```
-TST:    0        (test mode off)
-TX:     0        (not transmitting)
-RX:     0        (RX in default mode)
-HOP:    0
-BAND:   0        (default US 902-928 MHz)
-CHAN:   0
-DOM:    1        (radio domain 1 = US region per apparent convention)
-XTLCAL: 14       (frequency crystal calibration — per-unit baked-in at factory)
-TEMP:   746      (probable crystal / oven temperature raw reading)
-TEMP CAL: -1     (temperature calibration offset)
-```
+Comparison of both consoles:
 
-Potentially useful for advanced diagnostics — the `XTLCAL` in
-particular is per-unit crystal cal that could correlate with
-reception performance if we ever chase an RF issue.  Read-only:
-does NOT enter test mode.  Return format is one ASCII field per
-line, colon-separated, terminated by an empty `\n\r` line.
+| Field | Prod (fw 2.12) | Bench (fw 4.33) | Interpretation |
+|---|---|---|---|
+| TST | 0 | 0 | test mode off |
+| TX | 0 | 0 | not transmitting |
+| RX | 0 | 0 | RX in default mode |
+| HOP | 0 | 0 | |
+| BAND | 0 | 0 | default US 902-928 MHz |
+| CHAN | 0 | 0 | |
+| DOM | 1 | 1 | radio domain 1 = US region (convention) |
+| XTLCAL | 4 | 14 | per-unit factory crystal cal; NOT a drift value |
+| TEMP | 741 | 746 | ambient (both consoles in same room) |
+| TEMP CAL | -1 | -1 | same |
 
-### N4. `GETREG` requires test mode
+Return format is one ASCII field per line, colon-separated,
+terminated by an empty `\n\r` line.
+
+**Note on XTLCAL**: Initial theory was that XTLCAL might drift over
+the 8-year age gap between the two consoles.  The cross-check
+disproves that — it's the factory-baked per-unit crystal
+calibration, unique to each console's radio silicon.  Not useful
+for age or drift diagnostics.
+
+### N4. `GETREG` requires test mode — entry sequence unknown
 
 **Undocumented.**  `GETREG 0`, `GETREG (0)`, and bare `GETREG` all
-return `\n\rNOT IN TEST STATE\n\r`.  Entering test mode requires
-`TST x`, which almost certainly disrupts reception — not attempted
-in this audit.  If we ever need to inspect radio-chip registers
-directly (e.g., to diagnose an RF fault), the sequence would be
-`TST 1` → `GETREG (x)` → `SVTST` or hard-reset to leave test mode.
-File as a follow-up if the need arises.
+return `\n\rNOT IN TEST STATE\n\r`.
 
-### N5. `RESET` — soft-reset over the wire
+**Follow-up attempt to enter test mode via `TST 1` was incomplete**:
+sending `TST 1\n` returned `\n\rOK\n\r` (looks like an ACK), but a
+subsequent `OPMODE` still reported `TST: 0` — so the test-mode
+flag did NOT actually flip.  Subsequent `GETREG` calls continued to
+return "NOT IN TEST STATE".
 
-**Undocumented, NOT tested in this audit.**  Would eliminate the
-battery-pull required for previous Vue console reinit workflows if
-it works cleanly (side-effect: reception drops for a few seconds
-while the console re-establishes).  Skipped here because it's a
-destructive-ish operation that should have a specific reason and
-Chris's approval before firing.  File for future consideration.
+Also noted: `GETREG 1` (register index 1 specifically) returned
+just `\n\r` instead of the "NOT IN TEST STATE" string that
+`GETREG 0` and `GETREG 2..15` returned.  Register 1 may be
+special-cased for something (broadcast frequency? crystal? unknown).
+
+Real entry sequence unknown — probably requires an additional
+command (e.g., write a "test enable" register first, or a specific
+`TST x` argument other than `1`).  Would need Davis factory
+documentation or reverse-engineering; not attempted further.
+
+### N5. `RESET` — full reboot to setup-wizard state.  DO NOT USE FROM DRIVER.
+
+**Undocumented; verified on fw 4.33.**  Sending `RESET\n` returns
+`\n\rOK` plus 3 bytes of what appears to be reset-init binary; the
+console then reboots.
+
+Initial read of the wire suggested this was a clean soft-reset with
+runtime state cleared and EEPROM preserved.  A follow-up check with
+Chris looking at the front panel revealed it is **harsher than
+that**.  Observed post-reset behaviour:
+
+- Response on wire: `\n\rOK` + `2e 66 2e` (3 bytes, purpose unknown)
+- Wire-visible reset window: ~5 sec until the response completes;
+  another 3-8 sec until the console accepts a new wakeup ping
+- **EEPROM settings preserved**: location, archive_period,
+  RAIN_SEASON_START, SETUP_BITS, USE_TX, STATION_LIST all readable
+  and correct post-reset
+- **Runtime state cleared, including the RTC**: post-reset
+  `async_read_station_time` returned an earlier time than we had
+  set; had to re-run `async_write_station_time` to bring the clock
+  back
+- **OPMODE `TEMP` field cleared**: `746` pre-reset → `0` post-reset;
+  the sensor read takes a moment to re-populate
+- **Console enters the initial-setup wizard on the front panel LCD**
+  after reset — the same wizard a factory-fresh or battery-swapped
+  console would show
+- **ISS pairing survives** — `USE_TX` and `STATION_LIST` are
+  preserved in EEPROM, and once the operator dismisses the front-
+  panel setup wizard the console re-locks onto the ISS within
+  ~5-15 seconds (RXCHECK went 0 → 4 → 15 consecutive packets over
+  ~30 sec)
+
+**Driver-use verdict: DO NOT use this command from the driver.**
+
+- Any RESET from the daemon would put an unattended production
+  console into setup-wizard mode.  Even if the wizard is dismissible
+  from the wire (unknown — not tested), the operator would see an
+  unexpected "welcome to your Vantage" screen on their dashboard.
+- Clock loss requires a re-write; if the daemon does not follow up
+  in time the archive timestamps drift.
+- Momentary ISS lock loss produces a spurious "outside sensors
+  offline" gap in the data — the exact class of glitch Kanfei goes
+  out of its way to avoid.
+
+There is no legitimate driver-side use of RESET.  If a stuck state
+ever wants recovery, the answer is a targeted `WRD` (wakeup) burst
+or, in extremis, a service restart — not RESET.  Document its
+existence for completeness; do not wire it into automation.
 
 ### Original N2 note (pre-follow-up capture)
 
