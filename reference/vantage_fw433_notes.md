@@ -156,6 +156,9 @@ searches for "Vantage Console firmware" tend to conflate the two.
   manual disagreements
 - `vantage_serial_ref_v261.txt` — the on-disk Davis reference the
   driver is written against
+- `vantage_fw433_wire_audit.md` — full snapshot audit of every
+  documented command against fw 4.33; enumerates verified matches
+  vs. departures vs. undocumented commands
 - Davis KB firmware page —
   https://www.manula.com/manuals/pws/davis-kb/1/en/topic/updating-console-firmware
 - `vendor/davis/` — archival vendor materials, including the last
