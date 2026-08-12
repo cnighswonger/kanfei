@@ -258,11 +258,56 @@ export default function BaroCalibrationAggregate({
             )}
         </div>
       ) : (
-        <p style={{ ...body, marginTop: 0, color: "var(--color-warning)" }}>
-          {recommendation.skip_reason
-            ? SKIP_LABEL[recommendation.skip_reason]
-            : "Aggregate not ready."}
-        </p>
+        <div>
+          <p style={{ ...body, marginTop: 0, color: "var(--color-warning)" }}>
+            {recommendation.skip_reason
+              ? SKIP_LABEL[recommendation.skip_reason]
+              : "Aggregate not ready."}
+          </p>
+          {/* Operator override on HOLD.  Rendered ONLY when the
+              backend says hold_override_allowed — which is only the
+              cross-station-disagreement skip.  Writes the SAME
+              weighted-median value the algorithm computed; the
+              multi-station cross-check still governs the write VALUE,
+              only the write DECISION is delegated to the operator.
+              Distinct visual treatment (secondary style + explicit
+              warning copy) so it does not read as the primary action.
+              See #307 for the design discussion.  */}
+          {onApplyRecommendation &&
+            recommendation.hold_override_allowed &&
+            recommendation.median_of_medians_thousandths_inhg != null && (
+              <div style={{ marginTop: "8px" }}>
+                <p style={{ ...body, marginTop: 0, marginBottom: "8px" }}>
+                  The algorithm cannot autonomously commit to a write
+                  here, but the weighted-median recommendation is{" "}
+                  <strong>
+                    {(recommendation.offset_inhg ?? 0) >= 0 ? "+" : ""}
+                    {recommendation.offset_inhg?.toFixed(3)} inHg
+                  </strong>
+                  {" ("}
+                  {(recommendation.offset_thousandths_inhg ?? 0) >= 0 ? "+" : ""}
+                  {recommendation.offset_thousandths_inhg}
+                  {" thousandths). If you have out-of-band knowledge that this is right for your location, you can commit to it anyway."}
+                </p>
+                <button
+                  type="button"
+                  style={{
+                    ...button,
+                    background: "var(--color-bg-secondary)",
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text)",
+                  }}
+                  onClick={() =>
+                    onApplyRecommendation(
+                      recommendation.median_of_medians_thousandths_inhg as number,
+                    )
+                  }
+                >
+                  Accept anyway (override HOLD)
+                </button>
+              </div>
+            )}
+        </div>
       )}
     </div>
   );

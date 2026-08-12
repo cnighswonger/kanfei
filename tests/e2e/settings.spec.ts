@@ -315,7 +315,7 @@ test.describe('Barometer calibration panel', () => {
 
   const THRESHOLDS = {
     min_stations: 2,
-    cross_station_spread_threshold_hpa: 0.4,
+    cross_station_spread_threshold_hpa: 0.7,
     console_window_minutes: 15,
     min_console_samples: 20,
     max_station_distance_miles: 47,
@@ -323,6 +323,8 @@ test.describe('Barometer calibration panel', () => {
     mad_rejection_multiplier: 2.5,
     mad_min_scale_hpa: 0.15,
     mad_max_iterations: 10,
+    distance_weight_epsilon_miles: 1.0,
+    station_limit_for_calibration: null,
   };
 
   function station(
@@ -382,6 +384,7 @@ test.describe('Barometer calibration panel', () => {
           median_of_medians_inhg: 30.020,
           offset_thousandths_inhg: -30,
           offset_inhg: -0.030,
+          hold_override_allowed: false,
         },
         thresholds: THRESHOLDS,
         reference_radius_miles: 47,
@@ -392,8 +395,11 @@ test.describe('Barometer calibration panel', () => {
 
   /** A reference response whose aggregate is HOLDING on cross-station
    *  disagreement.  Same shape as the smoke case: two stations that
-   *  disagree by more than 0.4 hPa, one flagged as outlier.  Apply
-   *  button must NOT render. */
+   *  disagree by more than the (weighted) 0.7 hPa threshold, one
+   *  flagged as outlier.  The autonomous Apply button must NOT
+   *  render — but the "Accept anyway" override button SHOULD, since
+   *  `hold_override_allowed=true` and a valid recommended value
+   *  exists. */
   function freshReferenceHolding(overrides: Record<string, unknown> = {}) {
     return {
       references: [],
@@ -422,10 +428,14 @@ test.describe('Barometer calibration panel', () => {
         recommendation: {
           should_apply: false,
           skip_reason: 'cross_station_disagreement',
-          median_of_medians_thousandths_inhg: null,
-          median_of_medians_inhg: null,
-          offset_thousandths_inhg: null,
-          offset_inhg: null,
+          // Populated even on HOLD now (#307) — this is the value
+          // the override button commits to when the operator clicks
+          // "Accept anyway".
+          median_of_medians_thousandths_inhg: 30020,
+          median_of_medians_inhg: 30.020,
+          offset_thousandths_inhg: -30,
+          offset_inhg: -0.030,
+          hold_override_allowed: true,
         },
         thresholds: THRESHOLDS,
         reference_radius_miles: 47,
@@ -489,12 +499,16 @@ test.describe('Barometer calibration panel', () => {
     ).toHaveCount(0);
   });
 
-  test('hides Apply when the aggregate is HOLDING on cross-station disagreement', async ({ page }) => {
-    // The failure mode the aggregate exists to prevent: when the reference
-    // stations disagree beyond tolerance, the write button must not
-    // render at all — no override, no "use it anyway" escape hatch.
-    // The old single-station picker offered exactly that escape and was
-    // removed in this PR.
+  test('on HOLD shows the diagnostic and an explicit override button (#307)', async ({ page }) => {
+    // When the reference stations disagree beyond tolerance, the
+    // autonomous Apply button must NOT render — the algorithm is not
+    // confident enough to commit on its own.  But the override button
+    // ("Accept anyway") IS offered so an operator with out-of-band
+    // knowledge that the recommendation is right for their location
+    // can commit to the SAME algorithm-computed weighted-median
+    // value.  Different failure mode from the old picker: the write
+    // VALUE is still algorithm-determined, only the write DECISION
+    // is delegated to the operator.
     await stubCapability(page, true);
     await stubCalibration(page);
     await stubReference(page, freshReferenceHolding());
@@ -506,10 +520,15 @@ test.describe('Barometer calibration panel', () => {
     await expect(
       page.getByText('Stations disagree beyond tolerance', { exact: false }),
     ).toBeVisible();
-    // Apply button must be absent — HOLD means HOLD.
+    // Autonomous Apply button must be absent — HOLD means the
+    // algorithm will not fire on its own.
     await expect(
       page.getByRole('button', { name: 'Use recommended offset' }),
     ).toHaveCount(0);
+    // Override button IS present.
+    await expect(
+      page.getByRole('button', { name: 'Accept anyway (override HOLD)' }),
+    ).toBeVisible();
     // Excluded stations still ride along in the table so the operator
     // can see WHY the count dropped.
     await expect(page.getByText('KGSB', { exact: false })).toBeVisible();

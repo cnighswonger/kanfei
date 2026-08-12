@@ -78,12 +78,41 @@ logger = logging.getLogger(__name__)
 # spread gate to have any meaning at all.  Reviewer P0-1 in phone-sensor.
 MIN_STATIONS = 2
 
-# HOLD gate on cross-station disagreement.  Defined as literal
-# max(survivors) - min(survivors) — computed AFTER the MAD outlier
-# rejection below.  0.4 hPa is a tight tolerance; the gate exists to
-# refuse a write when the reference set genuinely disagrees.  Same
-# value as phone-sensor production.
-CROSS_STATION_SPREAD_THRESHOLD_HPA = 0.4
+# HOLD gate on cross-station disagreement.  Computed AFTER the MAD
+# outlier rejection below and using INVERSE-DISTANCE-SQUARED WEIGHTING
+# — the operator's console is at *their* location, not the county
+# average, so nearer stations carry more evidence about the pressure
+# at that location than distant ones.  See #307 for the derivation.
+#
+# The value on the wire is a "weighted spread" — 2× the weighted
+# standard deviation around the weighted median — which reads on the
+# same scale as max−min for reasonably-populated station sets but
+# does not blow up in the presence of a natural synoptic gradient
+# across the reference radius.
+#
+# Threshold value: 0.7 hPa.  Android-agent's #307 read: phone-sensor's
+# 0.4 hPa on a top-3 CWOP mesh is not the same statistic; Kanfei's
+# weighting compresses the natural gradient so the effective range
+# should behave closer to phone-sensor's after the compression.
+# Landed at 0.7 hPa as the middle of the 0.6-0.8 hPa suggested range.
+CROSS_STATION_SPREAD_THRESHOLD_HPA = 0.7
+
+# Inverse-distance-squared weighting.  Standard spatial-interpolation
+# form (essentially kriging without the fanciness): weight ∝ 1/(d²+ε)
+# where d is the great-circle distance from the operator's location
+# to the station.  ε (a small "distance floor") keeps a station right
+# next door from dividing by zero and dominating everything else; it
+# also caps how much a co-located CWOP station could weigh under
+# #303's future integration.
+DISTANCE_WEIGHT_EPSILON_MILES = 1.0
+
+# Optional cap on the reference set size.  Phone-sensor uses top-3
+# nearest and its 0.4 hPa max−min gate is calibrated for that shape.
+# Kanfei defaults to "everything in bbox" because METAR density is
+# lower and cutting the set that small would leave sparse regions
+# with 0-2 stations.  Operators can set this to 3 (or any positive
+# integer) to reproduce phone-sensor behaviour exactly.
+STATION_LIMIT_FOR_CALIBRATION: Optional[int] = None
 
 # Per-station outlier rejection before the spread gate.  Phone-sensor
 # ran on a dense CWOP mesh where max−min was a fair statistic; Kanfei
@@ -213,23 +242,48 @@ class ConsoleSample:
 
 @dataclass
 class Recommendation:
-    """The write decision + everything the UI needs to render it."""
+    """The write decision + everything the UI needs to render it.
+
+    Semantics shift in the weighted-algorithm rework (#307): the
+    ``median_of_medians_*`` and ``offset_*`` fields are now populated
+    WHENEVER we have enough survivors + console data to compute them,
+    regardless of whether the gates passed.  ``should_apply`` still
+    tells the caller whether the algorithm-only path would fire the
+    write; ``hold_override_allowed`` says whether the operator UI may
+    offer an "Accept anyway" button that writes the same recommended
+    value with an audit-trail marker.  The two are mutually exclusive
+    for the UI's purposes — if the algorithm says apply, no override
+    is needed; if it says HOLD but the operator overrides, the write
+    goes to the algorithm-recommended value, not to some arbitrary
+    station.  This preserves the multi-station cross-check even under
+    override.
+    """
 
     should_apply: bool
     # None when should_apply=True; one of the SKIP_* constants above
     # otherwise.  Chosen so a frontend switch/case reads cleanly.
     skip_reason: Optional[str]
-    # Populated only when should_apply=True; the median of per-station
-    # medians, in the units the console consumes (thousandths inHg).
+    # WEIGHTED median-of-medians using inverse-distance-squared.  The
+    # value the console should be told to display, in the units the
+    # BAR= command consumes (thousandths inHg).  None only when the
+    # reference side is unusable (no METAR, insufficient stations, or
+    # console has no readings to solve against).
     median_of_medians_thousandths_inhg: Optional[int] = None
-    # Convenience view of the same number.  Kept alongside because the
-    # UI shows inches with three decimals.
+    # Convenience view.  Kept alongside because the UI shows inches
+    # with three decimals.
     median_of_medians_inhg: Optional[float] = None
     # Signed thousandths delta the console would need to apply to bring
     # its current reading into agreement with the recommendation.
-    # None when should_apply=False.
     offset_thousandths_inhg: Optional[int] = None
     offset_inhg: Optional[float] = None
+    # True when should_apply=False AND we have a valid recommended
+    # value the operator can commit to as an override.  Only the
+    # cross-station-disagreement skip qualifies — the "no console
+    # data" and "no METAR data" skips have no recommendation to
+    # override to.  UI reads this to decide whether to render the
+    # "Accept anyway" button; backend accepts the write regardless
+    # (the audit trail is what records auto vs override).
+    hold_override_allowed: bool = False
 
 
 @dataclass
@@ -279,7 +333,78 @@ def _thresholds_snapshot() -> dict:
         "mad_rejection_multiplier": MAD_REJECTION_MULTIPLIER,
         "mad_min_scale_hpa": MAD_MIN_SCALE_HPA,
         "mad_max_iterations": MAD_MAX_ITERATIONS,
+        "distance_weight_epsilon_miles": DISTANCE_WEIGHT_EPSILON_MILES,
+        "station_limit_for_calibration": STATION_LIMIT_FOR_CALIBRATION,
     }
+
+
+# ---------------------------------------------------------------------------
+# Weighted statistics (inverse-distance-squared)
+# ---------------------------------------------------------------------------
+
+
+def _distance_weight(distance_miles: float) -> float:
+    """Inverse-distance-squared with a floor to keep co-located
+    stations from dominating.
+
+    ``w = 1 / (d² + ε)`` where ε = ``DISTANCE_WEIGHT_EPSILON_MILES``².
+    The +ε term is what stops a station right next door from getting
+    an unbounded weight; it also caps how much a hypothetical
+    co-located CWOP station (#303 future) could weigh.
+    """
+    eps_sq = DISTANCE_WEIGHT_EPSILON_MILES * DISTANCE_WEIGHT_EPSILON_MILES
+    return 1.0 / (distance_miles * distance_miles + eps_sq)
+
+
+def _weighted_median(values: list[float], weights: list[float]) -> float:
+    """Weighted median: the value at which the cumulative weight
+    crosses half the total.  With equal weights this reduces to the
+    ordinary median (interpolated at the midpoint for even N).
+    """
+    if not values:
+        raise ValueError("_weighted_median: empty input")
+    if len(values) != len(weights):
+        raise ValueError("_weighted_median: length mismatch")
+
+    pairs = sorted(zip(values, weights))
+    total = sum(w for _, w in pairs)
+    half = total / 2.0
+    running = 0.0
+    for i, (v, w) in enumerate(pairs):
+        running += w
+        if running > half:
+            return v
+        if running == half:
+            # Boundary case: cumulative weight lands exactly at half —
+            # the classic even-N ordinary-median situation.  Return
+            # the midpoint of this value and the next, if a next
+            # exists; otherwise this value is the only survivor of
+            # its half and stands.
+            if i + 1 < len(pairs):
+                return (v + pairs[i + 1][0]) / 2.0
+            return v
+    return pairs[-1][0]  # pragma: no cover — reachable only on empty
+
+
+def _weighted_spread_hpa(values: list[float], weights: list[float]) -> float:
+    """"Weighted spread": 2× the weighted standard deviation around
+    the weighted median.  The 2× factor makes the number read on the
+    same scale as an ordinary max−min for well-behaved data (roughly
+    the 68% central range on Gaussian input), so the operator can
+    interpret it without a units retraining.
+
+    Returns 0.0 for the single-station and identical-values cases.
+    """
+    if not values or len(values) < 2:
+        return 0.0
+    wmed = _weighted_median(values, weights)
+    total_w = sum(weights)
+    if total_w == 0.0:
+        return 0.0
+    weighted_var = sum(
+        w * (v - wmed) * (v - wmed) for v, w in zip(values, weights)
+    ) / total_w
+    return 2.0 * (weighted_var ** 0.5)
 
 
 def _mark_mad_outliers(
@@ -543,6 +668,17 @@ def compute_aggregate_recommendation(
     """
     thresholds = _thresholds_snapshot()
 
+    # If a station-count cap is configured, apply it BEFORE any other
+    # processing — the whole point of the cap is to reproduce a
+    # top-N-nearest algorithm.  ``fetch_station_medians`` already
+    # returns rows sorted by distance ascending, so we can slice.
+    if (
+        STATION_LIMIT_FOR_CALIBRATION is not None
+        and STATION_LIMIT_FOR_CALIBRATION > 0
+        and len(per_station_medians) > STATION_LIMIT_FOR_CALIBRATION
+    ):
+        per_station_medians = per_station_medians[:STATION_LIMIT_FOR_CALIBRATION]
+
     n_considered = len(per_station_medians)
 
     # G0: no console data at all → cannot compute an offset regardless.
@@ -605,25 +741,39 @@ def compute_aggregate_recommendation(
     # Outlier rejection.  Run BEFORE any station-count / spread gate so
     # a single drifted AWOS cannot poison the whole recommendation.
     # ``per_station_medians`` (all N with is_outlier set) is what we
-    # return; ``survivors`` is what the gates run against.
+    # return; ``survivors`` is what the gates and the weighted
+    # calculation run against.
     per_station_medians = _mark_mad_outliers(per_station_medians)
     survivors = [s for s in per_station_medians if not s.is_outlier]
     n_used = len(survivors)
 
-    # Spread is defined on survivors — the whole point of the outlier
-    # filter is that the excluded stations do not get to vote on the
-    # HOLD gate.  None when zero survivors so the UI does not display
-    # a bogus "0.00 hPa spread" when there is nothing to spread over.
-    med_values_thousandths_used = [
-        s.median_altimeter_thousandths_inhg for s in survivors
-    ]
+    # Compute the weighted median and weighted spread on survivors.
+    # Both go into the response regardless of gate outcomes — the
+    # median is what an override commits to; the spread is what the
+    # panel displays as the diagnostic.
+    weighted_median_thousandths: Optional[int] = None
+    weighted_median_inhg: Optional[float] = None
+    weighted_median_hpa: Optional[float] = None
     cross_station_spread_hpa: Optional[float] = None
     if n_used > 0:
+        survivor_values_hpa = [
+            _thousandths_inhg_to_hpa(s.median_altimeter_thousandths_inhg)
+            for s in survivors
+        ]
+        survivor_weights = [
+            _distance_weight(s.distance_miles) for s in survivors
+        ]
+        weighted_median_hpa = _weighted_median(
+            survivor_values_hpa, survivor_weights,
+        )
+        weighted_median_thousandths = _hpa_to_thousandths_inhg(
+            weighted_median_hpa,
+        )
+        weighted_median_inhg = round(
+            weighted_median_thousandths / 1000, 3,
+        )
         cross_station_spread_hpa = round(
-            _thousandths_inhg_to_hpa(
-                max(med_values_thousandths_used)
-                - min(med_values_thousandths_used)
-            ),
+            _weighted_spread_hpa(survivor_values_hpa, survivor_weights),
             3,
         )
 
@@ -631,7 +781,9 @@ def compute_aggregate_recommendation(
     # in phone-sensor terms: refuse to write when only one reference is
     # present — a single reference cannot cross-check itself.  Counted
     # on survivors rather than raw candidates so a hostile drifted
-    # station cannot inflate the count past the gate.
+    # station cannot inflate the count past the gate.  No override
+    # allowed on this skip — with fewer than two references there is
+    # no cross-check to speak of.
     if n_used < MIN_STATIONS:
         return AggregationResult(
             console=console,
@@ -645,9 +797,23 @@ def compute_aggregate_recommendation(
             thresholds=thresholds,
         )
 
-    # G3: surviving stations still disagree beyond tolerance.  We
-    # cannot tell which of the (already-filtered) survivors is drifted,
-    # so HOLD the existing offset rather than commit to one.
+    # We have a valid recommended value from here down.  Compute the
+    # offset once so both the auto and the override branches use it.
+    console_thousandths = _hpa_to_thousandths_inhg(console.median_hpa)
+    offset_thousandths = (
+        (weighted_median_thousandths or 0) - console_thousandths
+    )
+
+    # G3: surviving stations still disagree beyond tolerance (measured
+    # on the WEIGHTED spread — inverse-distance-squared, so a distant
+    # drifted station has little pull).  HOLD, but the panel is
+    # allowed to offer an operator override this time — the algorithm
+    # HAS produced a valid recommended value (the weighted median),
+    # it is just below the confidence bar for autonomous write.
+    # An override commits to that same weighted-median value, not to
+    # any arbitrary operator-picked station: the multi-station
+    # cross-check still governs the WRITE VALUE, only the write
+    # DECISION is delegated to the operator.
     if (
         cross_station_spread_hpa is not None
         and cross_station_spread_hpa
@@ -662,20 +828,16 @@ def compute_aggregate_recommendation(
             recommendation=Recommendation(
                 should_apply=False,
                 skip_reason=SKIP_CROSS_STATION_DISAGREEMENT,
+                median_of_medians_thousandths_inhg=weighted_median_thousandths,
+                median_of_medians_inhg=weighted_median_inhg,
+                offset_thousandths_inhg=offset_thousandths,
+                offset_inhg=round(offset_thousandths / 1000, 3),
+                hold_override_allowed=True,
             ),
             thresholds=thresholds,
         )
 
-    # ---- All gates passed: compute the recommendation on SURVIVORS ----
-
-    median_of_medians_thousandths = int(
-        round(statistics.median(med_values_thousandths_used))
-    )
-
-    # Offset the console needs: reference minus the console's own reading.
-    # Reported both ways for the same reason StationMedian holds both.
-    console_thousandths = _hpa_to_thousandths_inhg(console.median_hpa)
-    offset_thousandths = median_of_medians_thousandths - console_thousandths
+    # ---- All gates passed: recommend the weighted median for auto-write ----
 
     return AggregationResult(
         console=console,
@@ -686,10 +848,8 @@ def compute_aggregate_recommendation(
         recommendation=Recommendation(
             should_apply=True,
             skip_reason=None,
-            median_of_medians_thousandths_inhg=median_of_medians_thousandths,
-            median_of_medians_inhg=round(
-                median_of_medians_thousandths / 1000, 3
-            ),
+            median_of_medians_thousandths_inhg=weighted_median_thousandths,
+            median_of_medians_inhg=weighted_median_inhg,
             offset_thousandths_inhg=offset_thousandths,
             offset_inhg=round(offset_thousandths / 1000, 3),
         ),

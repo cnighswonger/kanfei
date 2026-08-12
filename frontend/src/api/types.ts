@@ -680,7 +680,15 @@ export type BarometerSkipReason =
   | "insufficient_stations"
   | "cross_station_disagreement";
 
-/** The write decision + everything the UI needs to render it. */
+/** The write decision + everything the UI needs to render it.
+ *  Semantics after #307: `median_of_medians_*` is populated whenever
+ *  we have enough survivors + console data, regardless of gate
+ *  outcomes.  `should_apply` is the algorithm's autonomous decision;
+ *  `hold_override_allowed` is true only when the algorithm HOLDs
+ *  specifically on cross-station-spread AND a valid recommended
+ *  value exists — the UI may then offer an "Accept anyway" button
+ *  that commits to the SAME weighted-median value the algorithm
+ *  computed. */
 export interface BarometerRecommendation {
   should_apply: boolean;
   skip_reason: BarometerSkipReason | null;
@@ -688,6 +696,7 @@ export interface BarometerRecommendation {
   median_of_medians_inhg: number | null;
   offset_thousandths_inhg: number | null;
   offset_inhg: number | null;
+  hold_override_allowed: boolean;
 }
 
 /** Thresholds in effect for this aggregation.  Snapshotted so the UI
@@ -702,6 +711,9 @@ export interface BarometerThresholds {
   mad_rejection_multiplier: number;
   mad_min_scale_hpa: number;
   mad_max_iterations: number;
+  distance_weight_epsilon_miles: number;
+  /** null → all stations in bbox count; N → only the N nearest. */
+  station_limit_for_calibration: number | null;
 }
 
 export interface BarometerAggregate {

@@ -237,15 +237,25 @@ class TestGates:
         assert r.recommendation.skip_reason == SKIP_CROSS_STATION_DISAGREEMENT
 
     def test_cross_station_spread_reported_as_hpa(self):
-        # Even when the gate fails, the spread number is on the result
-        # so the UI can render it.
-        # 200 thousandths of inHg = 0.2 * 33.86389 ≈ 6.77 hPa.  This is
-        # a big spread, well over the 0.4 hPa threshold.
+        # Even when the gate fails, the weighted spread number is on
+        # the result so the UI can render it.  For two stations at
+        # different distances (fixture: 10 mi vs 11 mi) with a
+        # 200-thousandths-inHg gap, the closer station's larger weight
+        # pulls the weighted median to it; the weighted spread is
+        # then dominated by the further station's ~6.77 hPa deviation
+        # from that median, giving ~9 hPa on 2× stdev.  This is
+        # correct behaviour — the operator's local pressure is what
+        # the closer station reports, and the further station's
+        # disagreement with that IS a large spread from the operator's
+        # perspective.
         r = compute_aggregate_recommendation(
             _console(), self._stations([29900, 30100]),
         )
         assert r.cross_station_spread_hpa is not None
-        assert 6.5 <= r.cross_station_spread_hpa <= 7.0
+        assert r.cross_station_spread_hpa > CROSS_STATION_SPREAD_THRESHOLD_HPA
+        # HOLD path fires with an override-allowed recommendation.
+        assert r.recommendation.should_apply is False
+        assert r.recommendation.hold_override_allowed is True
 
     def test_gate_order_console_before_station(self):
         # Console-side gate fires BEFORE the station-side gate.  So an
@@ -509,13 +519,22 @@ class TestMadOutlierRejection:
             f"— got excluded={excluded}, n_used={result.n_stations_used}"
         )
         assert result.n_stations_used == 12
-        # Survivors span 30010 - 29960 = 50 thousandths = ~1.69 hPa.
-        assert result.cross_station_spread_hpa == pytest.approx(1.69,
-                                                                abs=0.02)
-        # Still above the 0.4 hPa threshold, so HOLD.
+        # Survivor range max−min is 50 thousandths (≈1.69 hPa), but the
+        # spread on the wire is the WEIGHTED-2σ measure now (#307).
+        # With the fixture's default equal distances this collapses to
+        # ordinary 2× stdev; for these 12 values that is ~0.93 hPa —
+        # well below max−min because the middle values pull tightly.
+        # Still above the 0.7 hPa threshold, so HOLD.
+        assert result.cross_station_spread_hpa == pytest.approx(0.93,
+                                                                abs=0.05)
         assert result.recommendation.should_apply is False
         assert result.recommendation.skip_reason \
             == SKIP_CROSS_STATION_DISAGREEMENT
+        # The weighted median IS reported on HOLD now (override path).
+        assert result.recommendation.hold_override_allowed is True
+        assert result.recommendation.median_of_medians_thousandths_inhg \
+            is not None
+        assert result.recommendation.offset_thousandths_inhg is not None
 
     def test_symmetric_outlier_pair_is_rejected(self):
         """Two symmetric outliers do not cancel to a good median — MAD
@@ -659,3 +678,180 @@ class TestMadThresholdsSurfaceInSnapshot:
         assert result.thresholds["mad_rejection_multiplier"] == 2.5
         assert result.thresholds["mad_min_scale_hpa"] == 0.15
         assert result.thresholds["mad_max_iterations"] == 10
+
+
+# ---------------------------------------------------------------------------
+# Distance-weighted median + weighted spread + override on HOLD (#307)
+# ---------------------------------------------------------------------------
+
+
+class TestDistanceWeightedMedian:
+    """The weighted median is what the operator's console commits to
+    under both auto-apply and override.  Verify it behaves as physics
+    demands: nearest stations dominate, distant outliers get vetoed
+    by MAD but do not otherwise sway the value.
+    """
+
+    def test_nearest_station_dominates_the_median(self):
+        """A cluster of far stations should not out-vote one very
+        close station on the write value — physically the closer
+        station is more representative of the operator's own pressure.
+
+        Kept the offset modest (30 thousandths, ≈1.0 hPa) so that
+        iterated MAD does NOT reject the near-station as an outlier
+        before weighting sees it.  A larger gap (say 100 thousandths)
+        would trip MAD first because the "pack" of 3 forms the group
+        median and the lone station beats the acceptance band; that is
+        correct MAD behaviour but conflates two effects for this test.
+        """
+        # 10 thousandths (~0.34 hPa) gap keeps KNEAR inside the MAD
+        # acceptance band (the floor is 0.15 hPa, giving a threshold
+        # around 0.38 hPa).  Any wider and iterated MAD would reject
+        # KNEAR before weighting sees it — a related but distinct
+        # effect, out of scope for this test.
+        stations = [
+            _sm("KNEAR", 30000, distance_miles=2.0),
+            _sm("KFAR1", 30010, distance_miles=40.0),
+            _sm("KFAR2", 30010, distance_miles=42.0),
+        ]
+        r = compute_aggregate_recommendation(_console(), stations)
+        # Confirm no outlier rejection happened (all 3 kept).
+        assert r.n_stations_used == 3
+        # Inverse-distance-squared weighting: KNEAR at 2 mi weighs
+        # 1/(4+1) = 0.2 vs each far station at ~1/1601 ≈ 0.00062.
+        # KNEAR alone carries >99% of the weight, so the weighted
+        # median lands at 30000.  The RAW median of [30000, 30010,
+        # 30010] would be 30010 — the difference is the whole point
+        # of the weighting.
+        assert r.recommendation.median_of_medians_thousandths_inhg == 30000
+
+    def test_equal_distances_reduce_to_ordinary_median(self):
+        """When every station is at the same distance the weighting is
+        uniform and the weighted median must equal the unweighted one.
+        """
+        stations = [
+            _sm(f"K{i}", 30000 + (i - 2) * 10, distance_miles=15.0)
+            for i in range(5)
+        ]
+        r = compute_aggregate_recommendation(_console(), stations)
+        # Values: 29980, 29990, 30000, 30010, 30020 → median 30000
+        assert r.recommendation.median_of_medians_thousandths_inhg == 30000
+
+
+class TestWeightedSpreadGate:
+    """The spread gate now runs on weighted 2σ (#307) rather than raw
+    max−min.  Verify it fires on real disagreement and passes on
+    tightly-clustered survivors."""
+
+    def test_tightly_clustered_stations_pass(self):
+        """5 stations within 10 thousandths of each other, all at
+        similar distances.  Weighted spread should be well under the
+        0.7 hPa threshold and the recommendation should fire."""
+        stations = [
+            _sm(f"K{i}", 30000 + (i - 2) * 2, distance_miles=15.0)
+            for i in range(5)
+        ]
+        r = compute_aggregate_recommendation(_console(), stations)
+        assert r.recommendation.should_apply is True
+        assert r.cross_station_spread_hpa < CROSS_STATION_SPREAD_THRESHOLD_HPA
+
+
+class TestOverrideOnHoldContract:
+    """On cross-station disagreement the recommendation now carries a
+    valid weighted-median value AND ``hold_override_allowed=True`` so
+    the UI can offer an explicit "Accept anyway" button.  Verify the
+    contract."""
+
+    def test_disagreement_gets_override_allowed(self):
+        """Two stations disagreeing wildly (post-MAD) — spread fails,
+        but the weighted median is a valid write target the operator
+        can override to."""
+        stations = [
+            _sm("KA", 30000, distance_miles=10.0),
+            _sm("KB", 30050, distance_miles=11.0),  # ~1.7 hPa apart
+        ]
+        r = compute_aggregate_recommendation(_console(), stations)
+        assert r.recommendation.should_apply is False
+        assert r.recommendation.skip_reason == SKIP_CROSS_STATION_DISAGREEMENT
+        assert r.recommendation.hold_override_allowed is True
+        # The override target is populated.
+        assert r.recommendation.median_of_medians_thousandths_inhg is not None
+        assert r.recommendation.offset_thousandths_inhg is not None
+
+    def test_insufficient_stations_does_not_allow_override(self):
+        """With only one raw station, there is nothing to cross-check
+        against — override must NOT be offered, since the whole point
+        of the algorithm is to refuse writes without a cross-check.
+        """
+        stations = [_sm("KONLY", 30000)]
+        r = compute_aggregate_recommendation(_console(), stations)
+        assert r.recommendation.should_apply is False
+        assert r.recommendation.skip_reason == SKIP_INSUFFICIENT_STATIONS
+        assert r.recommendation.hold_override_allowed is False
+
+    def test_no_console_data_does_not_allow_override(self):
+        """Cannot compute an offset without console readings — no
+        override to offer."""
+        console_empty = ConsoleSample(
+            median_hpa=0.0,
+            n_samples=0,
+            window_minutes=15,
+            stdev_hpa=0.0,
+            window_start="2026-08-11T20:00:00+00:00",
+            window_end="2026-08-11T20:15:00+00:00",
+        )
+        stations = [_sm("KA", 30000), _sm("KB", 30001), _sm("KC", 30002)]
+        r = compute_aggregate_recommendation(console_empty, stations)
+        assert r.recommendation.should_apply is False
+        assert r.recommendation.skip_reason == SKIP_NO_CONSOLE_SAMPLES
+        assert r.recommendation.hold_override_allowed is False
+
+    def test_no_metar_available_does_not_allow_override(self):
+        r = compute_aggregate_recommendation(_console(), [])
+        assert r.recommendation.should_apply is False
+        assert r.recommendation.skip_reason == SKIP_NO_METAR_AVAILABLE
+        assert r.recommendation.hold_override_allowed is False
+
+    def test_auto_apply_does_not_flag_override_allowed(self):
+        """When the algorithm auto-fires, there is nothing for the
+        override button to override — it must stay False so the UI
+        never renders both an "Apply" and an "Accept anyway" together.
+        """
+        stations = [
+            _sm(f"K{i}", 30000 + (i - 2) * 2, distance_miles=15.0)
+            for i in range(5)
+        ]
+        r = compute_aggregate_recommendation(_console(), stations)
+        assert r.recommendation.should_apply is True
+        assert r.recommendation.hold_override_allowed is False
+
+
+class TestStationLimitForCalibration:
+    """The configurable top-N filter matches phone-sensor's top-3
+    behaviour when set.  Default is None (all in bbox) — Kanfei's
+    METAR density is lower than phone-sensor's CWOP mesh and cutting
+    aggressively would starve sparse regions."""
+
+    def test_limit_none_uses_all_stations(self, monkeypatch):
+        from app.services import barometer_aggregation as agg
+        monkeypatch.setattr(agg, "STATION_LIMIT_FOR_CALIBRATION", None)
+        stations = [
+            _sm(f"K{i}", 30000 + i, distance_miles=10.0 + i)
+            for i in range(10)
+        ]
+        r = agg.compute_aggregate_recommendation(_console(), stations)
+        assert r.n_stations_considered == 10
+
+    def test_limit_3_keeps_only_nearest_three(self, monkeypatch):
+        from app.services import barometer_aggregation as agg
+        monkeypatch.setattr(agg, "STATION_LIMIT_FOR_CALIBRATION", 3)
+        stations = [
+            _sm(f"K{i}", 30000 + i, distance_miles=10.0 + i)
+            for i in range(10)
+        ]
+        # fetch_station_medians returns rows sorted by distance
+        # ascending; the limit takes from the head.
+        r = agg.compute_aggregate_recommendation(_console(), stations)
+        assert r.n_stations_considered == 3
+        ids_kept = {s.station_id for s in r.per_station_medians}
+        assert ids_kept == {"K0", "K1", "K2"}
