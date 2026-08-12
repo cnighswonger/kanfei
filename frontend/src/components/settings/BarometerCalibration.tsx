@@ -25,24 +25,18 @@ import type {
   BarometerAggregate,
   BarometerCalibrationState,
   BarometerSnapshot,
-  MetarReference,
 } from "../../api/types.ts";
 import BaroCalibrationAggregate from "./BaroCalibrationAggregate.tsx";
 
-// Mirrors VantageDriver.BAR_MIN_THOUSANDTHS / ELEVATION_MIN_FT.  Checked
-// here so an out-of-range value never costs a round trip to be told 400.
-const BAR_MIN_THOUSANDTHS = 20_000;
-const BAR_MAX_THOUSANDTHS = 32_500;
+// Mirrors VantageDriver.ELEVATION_MIN_FT / MAX_FT.  Checked here so an
+// out-of-range elevation never costs a round trip to be told 400.  The
+// BAR pressure bounds used to be validated here too; the aggregate
+// panel now owns the pressure value (median-of-medians, gated) so
+// front-side range-checking on that side is unnecessary — a
+// median-of-medians outside 20-32.5 inHg would signal upstream sensor
+// failure long before it reached this panel.
 const ELEVATION_MIN_FT = -2_000;
 const ELEVATION_MAX_FT = 15_000;
-
-// Routine METARs are issued hourly at about :53, so a 45-minute-old report
-// is normal rather than broken — a tight block would refuse to calibrate
-// for most of every hour.  Past the block threshold the hourly cycle has
-// demonstrably skipped, which means the feed is stale rather than the
-// report merely being mid-cycle.
-const REFERENCE_WARN_MINUTES = 30;
-const REFERENCE_BLOCK_MINUTES = 60;
 
 // The console's raw pressure drifts while the panel sits open, and BAR=
 // back-solves against whatever it reads at write time.
@@ -168,18 +162,14 @@ export default function BarometerCalibration({
   const [calFetchedAt, setCalFetchedAt] = useState<string | null>(null);
 
   const [refStatus, setRefStatus] = useState<LoadStatus>("loading");
-  const [refs, setRefs] = useState<MetarReference[]>([]);
   const [aggregate, setAggregate] = useState<BarometerAggregate | null>(null);
   const [locationConfigured, setLocationConfigured] = useState(true);
   const [refError, setRefError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [elevationFt, setElevationFt] = useState<string>("");
   const [applying, setApplying] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [staleOverride, setStaleOverride] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showRaw, setShowRaw] = useState<string | null>(null);
 
   // Drives the age readouts; ages must move while the panel sits open, so
   // they cannot come from the server.
@@ -217,21 +207,15 @@ export default function BarometerCalibration({
     setRefError(null);
     try {
       const data = await fetchBarometerReference();
-      setRefs(data.references);
       setAggregate(data.aggregate);
       setLocationConfigured(data.location_configured);
-      setSelectedId(data.references[0]?.station_id ?? null);
-      setStaleOverride(false);
       setRefStatus("loaded");
     } catch (err) {
-      // Drop whatever was selected.  Leaving it would let the user apply
-      // the previous METAR immediately after being told the reference
-      // could not be refreshed — a hardware write against a value we have
-      // just admitted we cannot vouch for.
-      setRefs([]);
+      // Drop the aggregate on failure so the panel does not show a stale
+      // recommendation with a fresh-looking layout — a hardware write
+      // against a value we cannot vouch for is the exact bug the multi-
+      // station gate was built to prevent.
       setAggregate(null);
-      setSelectedId(null);
-      setStaleOverride(false);
       setRefError(err instanceof Error ? err.message : String(err));
       setRefStatus("error");
     }
@@ -259,12 +243,7 @@ export default function BarometerCalibration({
     );
   }
 
-  const selected = refs.find((r) => r.station_id === selectedId) ?? null;
-  const refAgeMin = selected ? minutesSince(selected.observed_at, now) : null;
   const snapshotAgeMin = calFetchedAt ? minutesSince(calFetchedAt, now) : null;
-
-  const refTooOld = refAgeMin != null && refAgeMin > REFERENCE_BLOCK_MINUTES;
-  const refAging = refAgeMin != null && refAgeMin > REFERENCE_WARN_MINUTES && !refTooOld;
   const snapshotTooOld =
     snapshotAgeMin != null && snapshotAgeMin > SNAPSHOT_MAX_AGE_MINUTES;
 
@@ -275,31 +254,19 @@ export default function BarometerCalibration({
     elevationNum >= ELEVATION_MIN_FT &&
     elevationNum <= ELEVATION_MAX_FT;
 
-  const targetThousandths = selected?.altimeter_thousandths_inhg ?? null;
-  const targetValid =
-    targetThousandths != null &&
-    targetThousandths >= BAR_MIN_THOUSANDTHS &&
-    targetThousandths <= BAR_MAX_THOUSANDTHS;
-
-  // Both load statuses are required, not just the presence of a selected
-  // reference: clearing state on failure and gating on status are the same
-  // invariant expressed twice, and the failure that motivated this was one
-  // where a leftover selection outlived the fetch that produced it.
-  const canApply =
+  // Aggregate is the only write path.  The button rides on
+  // `recommendation.should_apply` inside `BaroCalibrationAggregate`;
+  // the parent only gates on the environment (elevation valid, console
+  // snapshot fresh, not currently applying).  When any of those fails
+  // the callback is withheld so the button is not rendered — the panel
+  // above (elevation input, snapshot age warning) shows why.
+  const environmentReady =
     !applying &&
     calStatus === "loaded" &&
     refStatus === "loaded" &&
     locationConfigured &&
-    selected != null &&
-    targetValid &&
     elevationValid &&
-    !snapshotTooOld &&
-    (!refTooOld || staleOverride);
-
-  const difference =
-    selected && cal?.barometer_inhg != null
-      ? selected.altimeter_inhg - cal.barometer_inhg
-      : null;
+    !snapshotTooOld;
 
   async function write(barThousandths: number, describeAs: string) {
     setApplying(true);
@@ -375,11 +342,6 @@ export default function BarometerCalibration({
     }
   }
 
-  function handleApply() {
-    if (!canApply || targetThousandths == null) return;
-    void write(targetThousandths, `Calibration to ${selected?.station_id}`);
-  }
-
   function handleClear() {
     if (!elevationValid || applying) return;
     const ok = window.confirm(
@@ -444,144 +406,46 @@ export default function BarometerCalibration({
       )}
 
       {/* --- Multi-station aggregate (#298) --- */}
-      {/* Display-only for now.  The read-and-diagnose half of #298 is
-          what actually closes the "silently pin to a wrong number" hole:
-          the operator now sees whether the reference stations agree
-          before they click Apply on any single station below.  Wiring
-          the "Use recommended offset" button to the existing apply
-          pipeline is a natural follow-up — the aggregate view is
-          already load-bearing without it. */}
+      {/* This IS the calibration flow now.  The old single-station
+          picker below was removed with #305's follow-up: it let an
+          operator commit to one nearby METAR at face value, which is
+          the exact "silently pin to a wrong number" mode the aggregate
+          exists to prevent.  Apply is only reachable when both gates
+          (min stations, cross-station-spread) pass. */}
       {locationConfigured && aggregate != null && (
         <BaroCalibrationAggregate
           aggregate={aggregate}
           isMobile={isMobile}
+          onApplyRecommendation={
+            environmentReady
+              ? (target) =>
+                  void write(target, "Recommended offset")
+              : undefined
+          }
         />
       )}
 
-      {/* --- Reference --- */}
-      <h4 style={{ ...title, fontSize: "calc(15px * var(--font-scale))", margin: "0 0 8px 0" }}>
-        Reference
-      </h4>
-
-      {!locationConfigured ? (
+      {/* Loading / error / no-location surfaces for the aggregate fetch. */}
+      {!locationConfigured && (
         <p style={body}>
           Set your station's location below before calibrating — nearby
           airport reports are found from your coordinates.
         </p>
-      ) : refStatus === "loading" ? (
+      )}
+      {locationConfigured && refStatus === "loading" && (
         <p style={body}>Looking up nearby airport reports…</p>
-      ) : refStatus === "error" ? (
+      )}
+      {locationConfigured && refStatus === "error" && (
         <p style={{ ...body, color: "var(--color-danger)" }}>
           Could not fetch reference observations: {refError}
         </p>
-      ) : refs.length === 0 ? (
+      )}
+      {locationConfigured && refStatus === "loaded" && aggregate == null && (
         <p style={body}>
           No airport reports with a barometric reading were found nearby.
         </p>
-      ) : (
-        <div style={{ marginBottom: "16px" }}>
-          {refs.map((r) => {
-            const ageMin = minutesSince(r.observed_at, now);
-            const isSelected = r.station_id === selectedId;
-            return (
-              <label
-                key={r.station_id}
-                style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: "10px",
-                  padding: "8px",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  background: isSelected ? "var(--color-bg-secondary)" : "transparent",
-                }}
-              >
-                <input
-                  type="radio"
-                  name="metar-reference"
-                  checked={isSelected}
-                  onChange={() => {
-                    setSelectedId(r.station_id);
-                    setStaleOverride(false);
-                  }}
-                />
-                <span style={{ ...mono, color: "var(--color-text)", minWidth: "4.5em" }}>
-                  {r.station_id}
-                </span>
-                <span style={{ ...mono, color: "var(--color-text)", minWidth: "7em" }}>
-                  {r.altimeter_inhg.toFixed(3)} inHg
-                </span>
-                <span style={body}>
-                  {r.distance_miles} mi {r.bearing_cardinal}
-                </span>
-                <span
-                  style={{
-                    ...mono,
-                    color:
-                      ageMin > REFERENCE_BLOCK_MINUTES
-                        ? "var(--color-danger)"
-                        : ageMin > REFERENCE_WARN_MINUTES
-                          ? "var(--color-warning)"
-                          : "var(--color-text-muted)",
-                  }}
-                >
-                  {formatAge(ageMin)}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setShowRaw(showRaw === r.station_id ? null : r.station_id);
-                  }}
-                  style={{ ...body, background: "none", border: "none", cursor: "pointer", color: "var(--color-accent)" }}
-                >
-                  raw
-                </button>
-              </label>
-            );
-          })}
-          {showRaw && (
-            <pre style={{ ...mono, whiteSpace: "pre-wrap", color: "var(--color-text-secondary)", background: "var(--color-bg-secondary)", padding: "8px", borderRadius: "6px", overflowX: "auto" }}>
-              {refs.find((r) => r.station_id === showRaw)?.raw_metar}
-            </pre>
-          )}
-        </div>
       )}
 
-      {/* --- Difference --- */}
-      {difference != null && selected && (
-        <p style={{ ...body, marginBottom: "16px" }}>
-          {selected.station_id} reads{" "}
-          <strong style={{ color: "var(--color-text)" }}>
-            {difference >= 0 ? "+" : ""}
-            {difference.toFixed(3)} inHg
-          </strong>{" "}
-          ({difference >= 0 ? "+" : ""}
-          {(difference / INHG_PER_HPA).toFixed(2)} hPa) relative to your console.
-        </p>
-      )}
-
-      {refAging && (
-        <p style={{ ...body, color: "var(--color-warning)", marginBottom: "12px" }}>
-          This report is {formatAge(refAgeMin!)} — pressure may have moved
-          since. Refresh for a newer observation if one is available.
-        </p>
-      )}
-      {refTooOld && (
-        <p style={{ ...body, color: "var(--color-danger)", marginBottom: "12px" }}>
-          This report is {formatAge(refAgeMin!)}, too old to calibrate
-          against — the console back-solves from its live reading, so a
-          stale reference bakes in the drift since it was taken.{" "}
-          <label style={{ cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={staleOverride}
-              onChange={(e) => setStaleOverride(e.target.checked)}
-            />{" "}
-            Use it anyway
-          </label>
-        </p>
-      )}
       {snapshotTooOld && (
         <p style={{ ...body, color: "var(--color-warning)", marginBottom: "12px" }}>
           The console reading above is {formatAge(snapshotAgeMin!)}. Refresh
@@ -633,11 +497,12 @@ export default function BarometerCalibration({
           )}
       </div>
 
-      {/* --- Actions --- */}
+      {/* --- Actions ---
+          Apply lives on the aggregate panel now (it appears only when
+          both gates pass).  This row keeps the operator escape hatches:
+          Clear Offset (return to uncalibrated) and Refresh (re-fetch
+          both the console reading and the METAR aggregate). */}
       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-        <button type="button" onClick={handleApply} disabled={!canApply} style={button("primary", !canApply)}>
-          {applying ? "Applying…" : "Apply Calibration"}
-        </button>
         <button
           type="button"
           onClick={handleClear}
@@ -660,15 +525,10 @@ export default function BarometerCalibration({
         >
           Refresh
         </button>
+        {applying && (
+          <span style={body}>Applying…</span>
+        )}
       </div>
-
-      {canApply && selected && (
-        <p style={{ ...body, marginTop: "10px" }}>
-          Will set the console to{" "}
-          <span style={mono}>{selected.altimeter_inhg.toFixed(3)} inHg</span> at{" "}
-          <span style={mono}>{elevationNum} ft</span>.
-        </p>
-      )}
 
       {/* --- Outcome --- */}
       {outcome && (
