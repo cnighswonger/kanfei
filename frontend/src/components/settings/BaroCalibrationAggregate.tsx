@@ -168,8 +168,14 @@ export default function BaroCalibrationAggregate({
   const spreadPass =
     cross_station_spread_hpa != null &&
     cross_station_spread_hpa <= thresholds.cross_station_spread_threshold_hpa;
+  // Both the sample-count gate AND the quiescence σ-gate must pass
+  // for the console badge to read green — otherwise the badge would
+  // stay green under `unsettled_console` and contradict the
+  // diagnostic below it (Codex R1 nit on #310).
   const consolePass =
-    c != null && c.n_samples >= thresholds.min_console_samples;
+    c != null &&
+    c.n_samples >= thresholds.min_console_samples &&
+    c.stdev_hpa <= thresholds.console_stdev_threshold_hpa;
 
   return (
     <div style={{ ...card, padding: isMobile ? "12px" : "20px" }}>

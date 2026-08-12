@@ -996,3 +996,94 @@ class TestWeatherQuiescenceThresholdsInSnapshot:
         r = compute_aggregate_recommendation(_console(), stations)
         assert r.thresholds["console_stdev_threshold_hpa"] == 0.2
         assert r.thresholds["rapid_trend_station_fraction"] == 0.30
+
+
+class TestWeatherQuiescenceEdgeCases:
+    """Regressions Codex R1 flagged on #310."""
+
+    def test_single_survivor_with_rapid_trend_falls_through_to_insufficient(self):
+        """A lone surviving station reporting rapid trend used to
+        return `unsettled_regional` (1/1 = 100% ≥ 30% threshold).
+        That defeated the point of the fraction gate ("a single
+        station is noise") and the min-stations floor already exists
+        to reject single-reference decisions.  Post-fix the Wq2 gate
+        requires n_used >= MIN_STATIONS before running, so this
+        scenario falls through to SKIP_INSUFFICIENT_STATIONS — the
+        more informative diagnostic.
+        """
+        from app.services.barometer_aggregation import (
+            SKIP_INSUFFICIENT_STATIONS, SKIP_UNSETTLED_REGIONAL,
+        )
+        stations = [
+            _sm("KLONE", 30000, distance_miles=10.0,
+                overrides={"has_rapid_trend": True}),
+        ]
+        r = compute_aggregate_recommendation(_console(), stations)
+        assert r.recommendation.skip_reason != SKIP_UNSETTLED_REGIONAL
+        assert r.recommendation.skip_reason == SKIP_INSUFFICIENT_STATIONS
+
+    def test_rapid_trend_flag_uses_newest_observation_only(self):
+        """A PRESRR remark on an obs from 90 min ago whose newest
+        report has since cleared must NOT keep the station flagged
+        as rapidly trending — the regional gate answers "IS pressure
+        moving now", not "did it ever move".  Codex R1 flagged the
+        original set-once semantics as stale-hold-inducing.
+        """
+        # Build the raw aviationweather-shape input the parser
+        # normally sees: two obs for one station, the older with
+        # PRESRR, the newer clean.
+        old_obs = {
+            "icaoId": "KRDU",
+            "name": "Raleigh-Durham",
+            "lat": 35.87, "lon": -78.78,
+            "obsTime": 1700000000,  # older
+            "rawOb": "METAR KRDU 010000Z 27010KT 10SM CLR 22/15 A2992 "
+                     "RMK AO2 PRESRR SLP015",
+            "metarType": "METAR",
+        }
+        new_obs = {
+            "icaoId": "KRDU",
+            "name": "Raleigh-Durham",
+            "lat": 35.87, "lon": -78.78,
+            "obsTime": 1700007200,  # newer, no PRESRR
+            "rawOb": "METAR KRDU 020000Z 27010KT 10SM CLR 22/15 A2994 "
+                     "RMK AO2 SLP020",
+            "metarType": "METAR",
+        }
+        result = _aggregate_per_station(
+            [old_obs, new_obs], HOME_LAT, HOME_LON, MAX_STATION_DISTANCE_MILES,
+        )
+        assert len(result) == 1
+        assert result[0].has_rapid_trend is False, (
+            "newest obs cleared the PRESRR; the flag must follow"
+        )
+
+    def test_rapid_trend_flag_from_newest_obs(self):
+        """The complement of the above: PRESRR ONLY in the newest
+        obs must set the flag, even though the older obs is clean.
+        Together with the previous test this pins the "newest only"
+        semantics.
+        """
+        old_obs = {
+            "icaoId": "KRDU",
+            "name": "Raleigh-Durham",
+            "lat": 35.87, "lon": -78.78,
+            "obsTime": 1700000000,
+            "rawOb": "METAR KRDU 010000Z 27010KT 10SM CLR 22/15 A2992 "
+                     "RMK AO2 SLP015",
+            "metarType": "METAR",
+        }
+        new_obs = {
+            "icaoId": "KRDU",
+            "name": "Raleigh-Durham",
+            "lat": 35.87, "lon": -78.78,
+            "obsTime": 1700007200,
+            "rawOb": "METAR KRDU 020000Z 27010KT 10SM CLR 22/15 A2994 "
+                     "RMK AO2 PRESFR SLP020",
+            "metarType": "METAR",
+        }
+        result = _aggregate_per_station(
+            [old_obs, new_obs], HOME_LAT, HOME_LON, MAX_STATION_DISTANCE_MILES,
+        )
+        assert len(result) == 1
+        assert result[0].has_rapid_trend is True

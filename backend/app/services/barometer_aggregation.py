@@ -30,21 +30,35 @@ Current algorithm:
    (default None → all in bbox).  Set to 3 to reproduce phone-sensor's
    top-3-nearest algorithm exactly.  Applied first, on the distance-
    sorted list, so subsequent processing operates on that slice.
-4. **Iterated MAD outlier rejection** — mark stations whose median
+4. **Weather-quiescence gate 1 (console-side)** — if
+   ``ConsoleSample.stdev_hpa`` over the reading window exceeds
+   ``CONSOLE_STDEV_THRESHOLD_HPA``, the local pressure is moving
+   faster than any calibration would remain valid for.  Returns
+   ``SKIP_UNSETTLED_CONSOLE`` and never gets to the station side.
+   No operator override — the operator cannot see through the
+   transient from the UI.
+5. **Iterated MAD outlier rejection** — mark stations whose median
    sits more than ``MAD_REJECTION_MULTIPLIER × (1.4826 × MAD)`` from
    the group median, floored by ``MAD_MIN_SCALE_HPA``.  Rerun on
    survivors each pass until nothing new is rejected or
    ``MAD_MAX_ITERATIONS`` is reached.  Excluded stations still ride
    along in the returned list with ``is_outlier=True`` so the panel
    can show why the count dropped.
-5. **Cross-station aggregation — inverse-distance-squared weighting**.
+6. **Weather-quiescence gate 2 (regional)** — if ≥
+   ``RAPID_TREND_STATION_FRACTION`` of MAD survivors carry a
+   ``PRESRR`` / ``PRESFR`` remark on their *newest* observation
+   (FMH-1 trend groups meaning ≥0.06 inHg/hr rising/falling), the
+   whole area is moving.  Requires ``n_used ≥ MIN_STATIONS`` before
+   the fraction check runs, so a lone survivor cannot trip the
+   gate at 100%.  Returns ``SKIP_UNSETTLED_REGIONAL``; no override.
+7. **Cross-station aggregation — inverse-distance-squared weighting**.
    The operator's console is at *their* location, not the county
    average, so nearer stations carry more evidence about the pressure
    at that location.  ``w_i = 1 / (d_i² + ε²)`` with a 1.0 mi floor
    (``DISTANCE_WEIGHT_EPSILON_MILES``) so a co-located station cannot
    divide by zero or dominate unboundedly.  The write value is the
    weighted median over survivors.
-6. **Two gates**:
+8. **Two gates**:
    - **Min-stations**: refuse when fewer than ``MIN_STATIONS``
      survived MAD.  A single reference cannot cross-check itself, and
      counting on survivors (not raw candidates) means a hostile
@@ -54,8 +68,8 @@ Current algorithm:
      same scale as an ordinary max−min for well-behaved data, so
      operators do not need units retraining.  If greater than
      ``CROSS_STATION_SPREAD_THRESHOLD_HPA`` (0.7 hPa post-#307),
-     **HOLD** — but see (7).
-7. **Override on HOLD** — when the spread gate fires,
+     **HOLD** — but see (9).
+9. **Override on HOLD** — when the spread gate fires,
    ``Recommendation.hold_override_allowed=True`` and the weighted
    median IS still returned to the caller.  The UI may render an
    explicit "Accept anyway" button that commits to the SAME
@@ -648,23 +662,28 @@ def _aggregate_per_station(
         thousandths_series: list[int] = []
         newest_time = 0
         newest_ref = None
-        has_rapid_trend = False
+        newest_raw = ""
         for obs_time, obs in obs_list:
             raw = obs.get("rawOb") or ""
             t = parse_altimeter_thousandths(raw)
             if t is None:
                 continue
             thousandths_series.append(t)
-            # PRESRR / PRESFR are METAR trend-group remarks (FMH-1):
-            # "pressure rising rapidly" / "pressure falling rapidly",
-            # ≥0.06 inHg per hour.  Word-boundaries pin the match so
-            # substrings like "PRESRRWX" (hypothetical, but generally
-            # safe practice) do not false-positive.
-            if _RAPID_TREND_RE.search(raw):
-                has_rapid_trend = True
             if obs_time > newest_time:
                 newest_time = obs_time
                 newest_ref = _to_reference(obs, lat, lon)
+                # PRESRR / PRESFR is derived from the *newest* obs
+                # only, not any obs in the window (Codex R1 blocker
+                # on #310): the gate answers "is regional pressure
+                # moving RIGHT NOW", so a 90-minute-old remark from
+                # a station whose latest report has cleared should
+                # not keep it flagged.  METAR trend groups (FMH-1)
+                # are "≥0.06 inHg per hour rising/falling"; word
+                # boundaries on the regex pin the match so a
+                # substring like `PRESIDENTIAL` does not
+                # false-positive.
+                newest_raw = raw
+        has_rapid_trend = bool(_RAPID_TREND_RE.search(newest_raw))
 
         if not thousandths_series or newest_ref is None:
             continue
@@ -889,7 +908,7 @@ def compute_aggregate_recommendation(
         )
 
     # Wq2: regional-quiescence gate.  Fraction of surviving stations
-    # (post-MAD) whose latest report carries PRESRR / PRESFR — a
+    # (post-MAD) whose newest report carries PRESRR / PRESFR — a
     # standard METAR remark meaning ≥0.06 inHg/hr rising or falling.
     # A single station firing is noise; a third of the regional set
     # firing IS the whole area moving, and pinning the console to any
@@ -898,7 +917,14 @@ def compute_aggregate_recommendation(
     # reporting spurious trend groups (rare but real) cannot itself
     # trip the gate.  No override — same reasoning as Wq1: the
     # operator cannot see through the transient from the UI.
-    if n_used >= 1:
+    #
+    # Requires ``n_used >= MIN_STATIONS`` so a single lone survivor
+    # cannot trip the gate at 100% (Codex R1 blocker on #310):
+    # "single station is noise" is the whole point of the fraction
+    # threshold, and one station == 1/1 == 100% would defeat it.
+    # When n_used < MIN_STATIONS the min-stations gate below fires
+    # instead — a more informative diagnostic than "unsettled".
+    if n_used >= MIN_STATIONS:
         rapid_count = sum(1 for s in survivors if s.has_rapid_trend)
         if rapid_count / n_used >= RAPID_TREND_STATION_FRACTION:
             return AggregationResult(
