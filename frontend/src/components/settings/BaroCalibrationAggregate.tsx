@@ -18,6 +18,28 @@ import type {
   BarometerAggregate,
   BarometerSkipReason,
 } from "../../api/types.ts";
+import { hpaToInHg, inHgToHpa } from "../../utils/units.ts";
+
+/** The operator's chosen pressure unit — station config's
+ *  ``pressure_unit`` field, threaded down from `Settings.tsx`.  All
+ *  pressure values in this panel format to this unit so the operator
+ *  never has to read `1016.7 hPa` next to `30.020 inHg` in the same
+ *  card.  Defaults to `inHg` upstream to match the code default in
+ *  `utils/units.ts`. */
+type PressureUnit = "inHg" | "hPa";
+
+function fmtPressureFromHpa(hpa: number, unit: PressureUnit): string {
+  return unit === "hPa"
+    ? `${hpa.toFixed(2)} hPa`
+    : `${hpaToInHg(hpa).toFixed(3)} inHg`;
+}
+
+function fmtOffsetFromInHg(inHg: number, unit: PressureUnit): string {
+  const v = unit === "hPa" ? inHgToHpa(inHg) : inHg;
+  const decimals = unit === "hPa" ? 2 : 3;
+  const sign = v >= 0 ? "+" : "";
+  return `${sign}${v.toFixed(decimals)} ${unit}`;
+}
 
 const card: React.CSSProperties = {
   background: "var(--color-bg-card)",
@@ -104,6 +126,10 @@ const SKIP_LABEL: Record<BarometerSkipReason, string> = {
 interface Props {
   aggregate: BarometerAggregate | null;
   isMobile: boolean;
+  /** Operator's chosen pressure unit — every pressure in the panel
+   *  formats to this.  Threaded from Settings.tsx via
+   *  `BarometerCalibration`. */
+  pressureUnit: PressureUnit;
   /** Called with the ABSOLUTE median-of-medians target in thousandths
    *  inHg (i.e. what the console should be told to display), NOT the
    *  signed offset delta.  BAR= on the wire takes an absolute pressure;
@@ -116,6 +142,7 @@ interface Props {
 export default function BaroCalibrationAggregate({
   aggregate,
   isMobile,
+  pressureUnit,
   onApplyRecommendation,
 }: Props) {
   if (aggregate == null) return null;
@@ -154,7 +181,7 @@ export default function BaroCalibrationAggregate({
                     marginBottom: "12px" }}>
         <span style={badge(consolePass ? "pass" : "hold")}>
           Console: {c?.n_samples ?? 0} samples
-          {c != null && ` · ${c.median_hpa.toFixed(2)} hPa`}
+          {c != null && ` · ${fmtPressureFromHpa(c.median_hpa, pressureUnit)}`}
         </span>
         <span style={badge(stationsPass ? "pass" : "hold")}>
           Stations: {aggregate.n_stations_used}
@@ -167,9 +194,12 @@ export default function BaroCalibrationAggregate({
           Spread:{" "}
           {cross_station_spread_hpa == null
             ? "—"
-            : `${cross_station_spread_hpa.toFixed(2)} hPa`}
+            : fmtPressureFromHpa(cross_station_spread_hpa, pressureUnit)}
           {" / "}
-          {thresholds.cross_station_spread_threshold_hpa.toFixed(1)} hPa max
+          {fmtPressureFromHpa(
+            thresholds.cross_station_spread_threshold_hpa,
+            pressureUnit,
+          )} max
         </span>
       </div>
 
@@ -181,7 +211,7 @@ export default function BaroCalibrationAggregate({
               <tr>
                 <th style={th}>Station</th>
                 <th style={th}>Distance</th>
-                <th style={th}>Median inHg</th>
+                <th style={th}>Median {pressureUnit}</th>
                 <th style={th}>Obs</th>
                 <th style={th}>Obs spread</th>
               </tr>
@@ -214,10 +244,16 @@ export default function BaroCalibrationAggregate({
                       )}
                     </td>
                     <td style={td}>{s.distance_miles.toFixed(1)} mi {s.bearing_cardinal}</td>
-                    <td style={td}>{s.median_altimeter_inhg.toFixed(3)}</td>
+                    <td style={td}>
+                      {pressureUnit === "hPa"
+                        ? inHgToHpa(s.median_altimeter_inhg).toFixed(2)
+                        : s.median_altimeter_inhg.toFixed(3)}
+                    </td>
                     <td style={td}>{s.n_obs}</td>
                     <td style={td}>
-                      {(s.obs_spread_thousandths_inhg / 1000).toFixed(3)}
+                      {pressureUnit === "hPa"
+                        ? inHgToHpa(s.obs_spread_thousandths_inhg / 1000).toFixed(2)
+                        : (s.obs_spread_thousandths_inhg / 1000).toFixed(3)}
                     </td>
                   </tr>
                 );
@@ -232,15 +268,13 @@ export default function BaroCalibrationAggregate({
         <div>
           <p style={{ ...body, marginTop: 0, color: "var(--color-success)" }}>
             {aggregate.n_stations_used} stations agree within{" "}
-            {cross_station_spread_hpa?.toFixed(2)} hPa. Recommended offset:{" "}
+            {cross_station_spread_hpa == null
+              ? "—"
+              : fmtPressureFromHpa(cross_station_spread_hpa, pressureUnit)}
+            . Recommended offset:{" "}
             <strong>
-              {(recommendation.offset_inhg ?? 0) >= 0 ? "+" : ""}
-              {recommendation.offset_inhg?.toFixed(3)} inHg
+              {fmtOffsetFromInHg(recommendation.offset_inhg ?? 0, pressureUnit)}
             </strong>
-            {" ("}
-            {(recommendation.offset_thousandths_inhg ?? 0) >= 0 ? "+" : ""}
-            {recommendation.offset_thousandths_inhg}
-            {" thousandths)"}
           </p>
           {onApplyRecommendation &&
             recommendation.median_of_medians_thousandths_inhg != null && (
@@ -281,13 +315,12 @@ export default function BaroCalibrationAggregate({
                   The algorithm cannot autonomously commit to a write
                   here, but the weighted-median recommendation is{" "}
                   <strong>
-                    {(recommendation.offset_inhg ?? 0) >= 0 ? "+" : ""}
-                    {recommendation.offset_inhg?.toFixed(3)} inHg
+                    {fmtOffsetFromInHg(
+                      recommendation.offset_inhg ?? 0,
+                      pressureUnit,
+                    )}
                   </strong>
-                  {" ("}
-                  {(recommendation.offset_thousandths_inhg ?? 0) >= 0 ? "+" : ""}
-                  {recommendation.offset_thousandths_inhg}
-                  {" thousandths). If you have out-of-band knowledge that this is right for your location, you can commit to it anyway."}
+                  {". If you have out-of-band knowledge that this is right for your location, you can commit to it anyway."}
                 </p>
                 <button
                   type="button"

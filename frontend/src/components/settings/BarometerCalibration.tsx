@@ -149,12 +149,18 @@ interface Props {
   isMobile: boolean;
   /** Kanfei's configured elevation, for the reconcile row. 0 = unset. */
   configElevationFt: number;
+  /** Operator's chosen pressure unit — station config
+   *  `pressure_unit`.  Passed through to the aggregate panel so its
+   *  numbers agree with whatever the rest of the dashboard is
+   *  displaying.  Defaults to "inHg" upstream to match utils/units.ts. */
+  pressureUnit: "inHg" | "hPa";
 }
 
 export default function BarometerCalibration({
   supported,
   isMobile,
   configElevationFt,
+  pressureUnit,
 }: Props) {
   const [calStatus, setCalStatus] = useState<LoadStatus>("loading");
   const [cal, setCal] = useState<BarometerCalibrationState | null>(null);
@@ -416,6 +422,7 @@ export default function BarometerCalibration({
         <BaroCalibrationAggregate
           aggregate={aggregate}
           isMobile={isMobile}
+          pressureUnit={pressureUnit}
           onApplyRecommendation={
             environmentReady
               ? (target) =>
