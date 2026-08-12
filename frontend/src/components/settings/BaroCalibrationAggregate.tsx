@@ -121,8 +121,15 @@ export default function BaroCalibrationAggregate({
   const { console: c, per_station_medians, cross_station_spread_hpa,
           recommendation, thresholds } = aggregate;
 
+  // Both gates count SURVIVORS after MAD outlier rejection.  A drifted
+  // AWOS at a rural airfield cannot inflate the raw count past the
+  // min-stations gate, and its 3 hPa reading cannot poison the spread
+  // gate — but it still rides in `per_station_medians` (with
+  // `is_outlier: true`) so the panel can show WHY the count dropped.
+  const n_excluded =
+    aggregate.n_stations_considered - aggregate.n_stations_used;
   const stationsPass =
-    aggregate.n_stations_considered >= thresholds.min_stations;
+    aggregate.n_stations_used >= thresholds.min_stations;
   const spreadPass =
     cross_station_spread_hpa != null &&
     cross_station_spread_hpa <= thresholds.cross_station_spread_threshold_hpa;
@@ -148,7 +155,11 @@ export default function BaroCalibrationAggregate({
           {c != null && ` · ${c.median_hpa.toFixed(2)} hPa`}
         </span>
         <span style={badge(stationsPass ? "pass" : "hold")}>
-          Stations: {aggregate.n_stations_considered} / {thresholds.min_stations} min
+          Stations: {aggregate.n_stations_used}
+          {n_excluded > 0 &&
+            ` of ${aggregate.n_stations_considered} (${n_excluded} excluded)`}
+          {" / "}
+          {thresholds.min_stations} min
         </span>
         <span style={badge(spreadPass ? "pass" : "hold")}>
           Spread:{" "}
@@ -174,22 +185,41 @@ export default function BaroCalibrationAggregate({
               </tr>
             </thead>
             <tbody>
-              {per_station_medians.map((s) => (
-                <tr key={s.station_id}>
-                  <td style={td}>
-                    {s.station_id}
-                    <span style={{ ...body, opacity: 0.7, marginLeft: "6px" }}>
-                      {s.station_name}
-                    </span>
-                  </td>
-                  <td style={td}>{s.distance_miles.toFixed(1)} mi {s.bearing_cardinal}</td>
-                  <td style={td}>{s.median_altimeter_inhg.toFixed(3)}</td>
-                  <td style={td}>{s.n_obs}</td>
-                  <td style={td}>
-                    {(s.obs_spread_thousandths_inhg / 1000).toFixed(3)}
-                  </td>
-                </tr>
-              ))}
+              {per_station_medians.map((s) => {
+                // Excluded stations still ride in the response so the
+                // operator can see WHY a station dropped out — hiding
+                // them would surprise a user whose count "silently" fell
+                // from N to M.  Strike them out and grey them.
+                const rowStyle = s.is_outlier
+                  ? { textDecoration: "line-through" as const, opacity: 0.55 }
+                  : undefined;
+                return (
+                  <tr key={s.station_id} style={rowStyle}>
+                    <td style={td}>
+                      {s.station_id}
+                      <span style={{ ...body, opacity: 0.7, marginLeft: "6px" }}>
+                        {s.station_name}
+                      </span>
+                      {s.is_outlier && (
+                        <span style={{
+                          ...body,
+                          marginLeft: "6px",
+                          fontStyle: "italic",
+                          color: "var(--color-warning)",
+                        }}>
+                          outlier
+                        </span>
+                      )}
+                    </td>
+                    <td style={td}>{s.distance_miles.toFixed(1)} mi {s.bearing_cardinal}</td>
+                    <td style={td}>{s.median_altimeter_inhg.toFixed(3)}</td>
+                    <td style={td}>{s.n_obs}</td>
+                    <td style={td}>
+                      {(s.obs_spread_thousandths_inhg / 1000).toFixed(3)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -199,7 +229,7 @@ export default function BaroCalibrationAggregate({
       {recommendation.should_apply ? (
         <div>
           <p style={{ ...body, marginTop: 0, color: "var(--color-success)" }}>
-            {aggregate.n_stations_considered} stations agree within{" "}
+            {aggregate.n_stations_used} stations agree within{" "}
             {cross_station_spread_hpa?.toFixed(2)} hPa. Recommended offset:{" "}
             <strong>
               {(recommendation.offset_inhg ?? 0) >= 0 ? "+" : ""}
