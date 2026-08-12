@@ -1,0 +1,51 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        # Create kanfei system user if it doesn't exist
+        if ! id -u kanfei >/dev/null 2>&1; then
+            adduser --system --group --home /var/lib/kanfei \
+                    --no-create-home --shell /usr/sbin/nologin kanfei
+        fi
+
+        # Add to dialout for serial port access
+        usermod -aG dialout kanfei 2>/dev/null || true
+
+        # Create Python venv and install dependencies
+        VENV=/opt/kanfei/backend/.venv
+        echo "Creating Python virtual environment..."
+        python3 -m venv "$VENV"
+        echo "Installing Python dependencies (this may take a minute)..."
+        "$VENV/bin/pip" install --upgrade pip --quiet 2>/dev/null
+        "$VENV/bin/pip" install /opt/kanfei/backend/ --quiet
+
+        # Ensure data directory exists with correct ownership
+        install -d -o kanfei -g kanfei /var/lib/kanfei
+        install -d -o kanfei -g kanfei /var/lib/kanfei/backgrounds
+
+        # Fix ownership
+        chown -R kanfei:kanfei /opt/kanfei
+
+        # Enable and start/restart services
+        systemctl daemon-reload
+        systemctl enable kanfei-logger.service kanfei-web.service
+        if [ -n "$2" ]; then
+            # Upgrade: restart to pick up new code
+            systemctl restart kanfei-logger.service kanfei-web.service || true
+        else
+            # Fresh install
+            systemctl start kanfei-logger.service kanfei-web.service || true
+        fi
+
+        echo ""
+        echo "============================================"
+        echo "  Kanfei Weather Station installed!"
+        echo "  Open http://localhost:8000 in your browser"
+        echo "============================================"
+        echo ""
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

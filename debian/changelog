@@ -1,0 +1,746 @@
+kanfei (0.1.0~beta27) unstable; urgency=medium
+
+  * Adds a multi-station cross-check to the barometer calibration reference.
+    Kanfei used to ask nearby airport reports for their altimeter setting and
+    show you the nearest one; a single bad METAR could pin your console's
+    persistent offset to a wrong number without any second opinion.  The
+    panel now aggregates the reports it fetched: it takes the median of each
+    station's observations from the last two hours, then takes the median of
+    those medians against the median of your console's last fifteen minutes
+    of readings.  Two safeguards decide whether to recommend a write.  It
+    refuses when only one station voted, because one reference cannot
+    cross-check itself.  It also refuses when the stations disagree by more
+    than 0.4 hPa, because it cannot then tell which of them has drifted; it
+    shows the per-station values so you can see why it held.  When both
+    safeguards pass, it displays how closely the stations agree, the median
+    they arrived at, and the recommended offset for your console.
+
+  * Adds a panel for the console's yearly-rain-reset month.  Every Davis
+    Vantage console keeps a setting that says which month the yearly rain
+    total drops back to zero.  The factory default is January, which is fine
+    almost everywhere.  West-coast US installs and anyone tracking a
+    hydrological "water year" typically want July, so a winter storm season
+    is not split across two yearly totals.  Reading and changing this used
+    to require walking to the console.  Kanfei now shows it and can change
+    it, and re-reads the register after the write so a change that did not
+    take is reported as such rather than as success.
+
+  * Shows the console's firmware version and build date in the Station
+    Status panel.  Both come from what your console reported when Kanfei
+    first connected, so there is no additional serial traffic.  The row is
+    hidden when the station does not report a firmware version, so nothing
+    empty appears on legacy stations.
+
+  * Solar radiation is now included in Kanfei's CWOP uploads.  The APRS
+    weather format has a standard field for it (Lxxx for 0-999 W/m², lxxx
+    for 1000-1999), and Kanfei was silent on it before; readings will now
+    show alongside the temperature and pressure on findU and MADIS for any
+    station with a solar sensor.  UV is not sent because the APRS format has
+    no field for it, and remains Weather Underground only.
+
+  * Adds solar radiation and UV to the per-channel mute list.  Every other
+    sensor already had a Settings toggle that drops it from every outbound
+    upload when the sensor is misbehaving; solar and UV now do too.  Muting
+    one does not affect the other, because they are on physically separate
+    channels on the Vantage ISS.
+
+  * Fix: on a Vantage console the on-connect clock sync used to be skipped,
+    so the first sync had to wait for the frontend to poll station status
+    (about five minutes after reconnect).  Vantage now gets its clock synced
+    at connect, immediately.  The five-second-drift check on every panel
+    load continues to run for both drivers.
+
+  * Fix: a stale 401 that arrived after a successful login could bounce the
+    freshly authenticated user back to the login page.  The frontend
+    now takes note of whether a request was made while logged in when it
+    was sent, so a response that answers a request made while logged out
+    can no longer eject a user who has since logged in.
+
+  * Adds the Vantage Vue Console Manual and the Vantage Pro2 sensor
+    installation manual to the reference documents shipped with the source
+    tree, alongside the serial protocol reference that was already there.
+    These are the authoritative sources for what settings the console
+    exposes to the user and how the outdoor hardware is meant to be
+    installed.  Not visible in the product itself.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Tue, 11 Aug 2026 21:33:54 +0000
+
+kanfei (0.1.0~beta26) unstable; urgency=medium
+
+  * Adds a per-sensor calibration panel for Vantage consoles, covering the
+    inside and outside temperature and humidity offsets your console keeps
+    in its own memory.  These are separate from barometer calibration and
+    work differently: each is a small correction applied to one sensor.
+    Temperature offsets are held in tenths of a degree, so the panel shows
+    and accepts whole degrees to the tenth rather than the raw number —
+    entering 2.5 means two and a half degrees, not twenty-five.
+
+  * Adds a panel showing the console's own record highs and lows for the
+    day, month and year, beside the ones Kanfei has calculated.  The console
+    samples continuously while Kanfei reads it every ten seconds, so the
+    console may have caught a gust or a spike that fell between readings.
+    Where the two disagree, the difference is a measure of what our sampling
+    missed.  Sensors your station does not have are shown as blank rather
+    than as a reading of zero.
+
+  * Adds the ability to send Kanfei's configured location to a Vantage
+    console, which uses it for its own sunrise and sunset times and for
+    part of its pressure correction.  The console stores latitude and
+    longitude only to a tenth of a degree — roughly seven miles — so the
+    panel compares the two at that resolution rather than exactly, and
+    reports what the console actually holds after rounding rather than what
+    was sent.  The push is one-directional: Kanfei's location is the more
+    precise of the two, so it is never overwritten by the console's copy.
+
+  * Adds two console maintenance operations for Vantage stations, each
+    behind a confirmation that first states what it will cost.  Setting the
+    year's rain total overwrites what the console has counted; before doing
+    so, Kanfei shows the console's current total beside the last one it
+    recorded and how long ago that was, so rain that fell since the last
+    reading is visible before it is discarded.  Clearing the archive erases
+    records the console has not yet handed over; Kanfei shows how many it
+    already holds first.  Both refuse to run without explicit confirmation.
+
+  * Fix: the elevation shown in the barometer calibration panel and the one
+    in the Location card below it could disagree by a foot or two and say
+    nothing about it.  Any difference is now shown, stated both in feet and
+    as the pressure error it causes, so a discrepancy too small to matter is
+    visible as such rather than hidden.
+
+  * Fix: your configured elevation was being rounded to whole feet when it
+    was first looked up, which lost precision that the sunrise and sunset
+    calculations and the published weather data both use.  The stored value
+    now keeps its accuracy, and is rounded only when sent to a console,
+    which accepts whole feet.
+
+  * Adds a barometer calibration tool for Davis Vantage stations, reachable
+    from Settings.  It shows what your console currently reads, lists nearby
+    airport weather reports with how far away and how recent each one is,
+    and shows the difference between them.  Applying a calibration tells the
+    console what the pressure should be right now, and it works out its own
+    correction.  A separate button clears the correction and returns the
+    console to its uncalibrated reading.  Airport reports are used because
+    they measure pressure the same way a Vantage displays it, so the two
+    figures are directly comparable.  Reports more than half an hour old are
+    flagged, and more than an hour old will not be applied without
+    confirmation — the console calibrates against the pressure at the moment
+    you press the button, so an old reading would bake in whatever the
+    weather has done since.  This tool is offered only on Vantage consoles;
+    the older Weather Monitor and Wizard adjust their barometer by a
+    different mechanism that works in the opposite direction.
+
+  * Fix: a calibration that the console rejected reported "calibration
+    unchanged", which was not true.  Testing against a console found that a
+    rejected command still applies the elevation you sent, even though the
+    pressure is refused.  Failed calibrations now report what the station
+    actually reads afterwards instead of claiming nothing happened.
+
+  * Fix: applying a barometer calibration could report a failure after
+    thirty seconds while having actually succeeded.  Reading the console's
+    calibration took fifteen seconds, because the console signals the end of
+    its reply by falling silent and Kanfei waited the full serial timeout
+    three times over to be sure.  A calibration now completes in under seven
+    seconds and reports its result correctly.
+
+  * Adds console reception diagnostics for Vantage stations: how many sensor
+    transmissions the console has received, missed, or had to correct since
+    midnight.  These are the numbers that show a transmitter going weak
+    before the data starts looking strange.
+
+  * The version number now appears in the page footer and on the About page,
+    and is recorded correctly in backups and in the public weather data.
+    Previously every release reported itself as 0.1.0 regardless of which
+    one it was, so a backup could not say which version produced it.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 05 Aug 2026 15:40:00 +0000
+
+kanfei (0.1.0~beta25) unstable; urgency=medium
+
+  * Fix: the Settings page was completely inaccessible on Davis Vantage
+    stations — it rendered as a blank screen with no error shown.  The
+    calibration panel is built around the five adjustment fields the older
+    Weather Monitor and Wizard consoles use; a Vantage stores its
+    calibration differently, so the server correctly reported that those
+    fields do not apply, and the page then failed trying to display them
+    anyway.  This affected every Vantage installation and became visible in
+    beta23, when the reference station here moved to a Vantage Vue.  The
+    calibration panel is now hidden on stations that do not accept those
+    fields, rather than shown and silently ignoring anything you type into
+    it.  A calibration panel suited to each station type is planned.
+
+  * Adds barometer calibration for Vantage stations, matching the procedure
+    used to calibrate the reference station.  Given a trusted sea-level
+    pressure reading and your true elevation, the console works out its own
+    correction; passing a pressure of zero clears any previous correction
+    while keeping the elevation.  This is offered only on stations that
+    support it — the older consoles calibrate their barometer by a different
+    mechanism whose adjustment runs in the opposite direction, and applying
+    this procedure to one would double the error rather than remove it, so
+    they are excluded rather than approximated.  The interface for this is
+    not built yet; this release adds the underlying support.
+
+  * Fix: several barometer readings a Vantage reports for diagnostic
+    purposes were read from the wrong position in the console's data and
+    were meaningless — one showed 54 inches of mercury where the true value
+    was 29.6.  None of them were displayed anywhere, so no recorded weather
+    data was affected, but they are the values a barometer calibration tool
+    needs, so they are corrected now.
+
+  * Fix: the heat index no longer disappears in hot, humid weather.  Above
+    roughly 94 °F with high humidity — precisely when the figure matters
+    most — the reading was being discarded as invalid, leaving the tile
+    blank.  It also went blank below 68 °F, where the correct answer is
+    simply the air temperature.  Both now show a value.
+
+  * Adds the THSW index — a "feels like" figure combining temperature,
+    humidity, sunshine and wind — for stations that report it.  It requires
+    a solar sensor, so stations without one continue to show nothing rather
+    than a fabricated value.
+
+  * Documentation: the WeatherLink IP driver was described as using the
+    Vantage protocol; it in fact uses the older WeatherLink protocol.
+    Corrected, with the discrepancy recorded for confirmation against
+    physical hardware.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Mon, 03 Aug 2026 22:10:00 +0000
+
+kanfei (0.1.0~beta24) unstable; urgency=medium
+
+  * Fix: corrects three station-computed values read from Davis Vantage
+    stations.  Heat index, wind chill and the THSW index were each read one
+    byte early from the console's data packet, so the values were assembled
+    from adjacent fields and were not readings at all.  The "no sensor
+    fitted" marker for these fields was also being tested against the wrong
+    value, so it was never recognised — a Vantage Vue, which has no solar
+    sensor and therefore cannot compute a THSW index, reported an
+    implausible -256 rather than no value.  This was only reachable from
+    beta23 onward, since the packet carrying these fields had never
+    previously arrived, and the affected values are not yet shown anywhere
+    in the interface; the dew point, heat index and wind chill on the
+    dashboard are calculated independently and were never affected.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sun, 02 Aug 2026 01:20:00 +0000
+
+kanfei (0.1.0~beta23) unstable; urgency=medium
+
+  * Fix: wind gust is now the station's real gust.  On Davis Vantage
+    stations the LOOP2 packet — which carries the console's own 10-minute
+    gust, the 2- and 10-minute average wind, THSW index, and 15-minute and
+    hourly rain — was requested incorrectly and never once arrived.  The
+    console sent the first packet and stopped; the second read timed out
+    and was discarded without a word, so the failure was invisible for the
+    life of the install.  On the development station that was 714,779
+    readings without a single LOOP2 value.  Because the published gust
+    falls back to the largest wind reading since midnight when no real
+    gust is available, dashboards, Weather Underground and CWOP/APRS have
+    been receiving the daily maximum in place of a gust.  Expect your
+    reported gust to change after upgrading — the console samples the
+    anemometer far faster than the polling interval, so the old value
+    systematically under-reported.  A missing LOOP2 packet is now logged
+    rather than silently dropped.
+
+  * Fix: an absent wind sensor no longer publishes a 255 mph gust.  When a
+    Vantage transmitter drops out, the console reports the maximum byte
+    value in the wind-speed field to mean "no reading".  That sentinel was
+    stored as a real 255 mph measurement, and because the daily maximum
+    outlives the outage that produced it, every subsequent upload carried
+    the bad gust for the rest of the day — including to CWOP/APRS, where it
+    was publicly visible long after the sensor recovered.  Sentinel values
+    are now rejected on arrival, and the daily high/low figures are checked
+    against each sensor's valid range before publication, a check that
+    charts and CSV exports already applied but the published path did not.
+
+  * Fix: sunrise and sunset times on Vantage stations.  Both were read from
+    the wrong offsets in the LOOP packet, landing in the console's alarm
+    block rather than the sun times, so the displayed values were unrelated
+    to actual sunrise and sunset.  Transmitter battery status and console
+    battery voltage are now read correctly as well, and a console reporting
+    no clock is treated as unknown instead of midnight.
+
+  * Adds full Davis Vantage command support, completing the driver: daily,
+    monthly and yearly high/low retrieval; barometer calibration readout;
+    EEPROM dump; receiver/transmitter status; clearing of stored highs and
+    lows; setting yearly rain and evapotranspiration totals; full archive
+    download; and setting station latitude and longitude over the wire.
+    Several of these correct errors in Davis's own published documentation,
+    each verified against real hardware; the discrepancies are catalogued in
+    the repository for future reference.
+
+  * Fix: station settings and clock controls are now offered based on what
+    the connected station can actually do, rather than on its driver type.
+    Vantage stations were shown controls that did nothing, and hidden from
+    controls they supported.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sun, 02 Aug 2026 01:00:00 +0000
+
+kanfei (0.1.0~beta22) unstable; urgency=medium
+
+  * Security: upload credentials no longer reach the systemd journal.  The
+    logger daemon wrote your Weather Underground password to the journal in
+    plaintext on every upload — roughly every 21 seconds, for as long as
+    journal retention held.  The HTTP client logs full request URLs, and the
+    PWS upload protocol carries credentials as query-string parameters; the
+    web service suppressed that logging but the logger daemon, a separate
+    entrypoint, never did.  Logging setup now lives in one shared place that
+    every entrypoint uses, and a redaction filter strips credential values
+    from any log line that reaches a handler, so a future component cannot
+    reopen the hole.  CWOP/APRS and the nowcast client were audited and are
+    unaffected.  ACTION REQUIRED: treat any Weather Underground password
+    used with an earlier release as disclosed and rotate it AFTER upgrading
+    — rotating first simply leaks the new value the same way — and consider
+    purging existing journal entries.  Closes #206.
+
+  * Fix: Davis Vantage archive download now works.  Downloading historical
+    records from a Vantage Pro, Pro2 or Vue silently returned nothing on
+    every attempt, so archive backfill has never functioned for those
+    stations; because the failure looked like "no new records" rather than
+    an error, nothing ever reported it.  Three separate defects were
+    involved: the response header was read as 4 bytes instead of 6, the
+    console was never sent the acknowledgement it waits for before
+    transmitting each page, and the page parser ignored the leading
+    sequence byte — which shifted every field by one and decoded
+    timestamps in the year 2126 and temperatures of -487°F.  A corrupt
+    page now retries in place rather than desynchronising the stream, and
+    a total protocol failure raises instead of being indistinguishable
+    from an empty archive.  Verified against real hardware: 0 records
+    before, 41 after.  Closes #207.
+
+  * Fix: Vantage temperature and humidity calibration offsets now take
+    effect.  Writing an offset appeared to succeed — the value stored and
+    read back correctly — but the reading never changed, because the
+    console only applies a new calibration after being sent the documented
+    CALED/CALFIX sequence.  The outside-humidity offset was also written to
+    the wrong address, one byte off, where it adjusted a nonexistent extra
+    sensor instead.  Closes #209.
+
+  * Fix: a Vantage Vue no longer reports itself as a Vantage Pro2, and no
+    longer appears as "Weather Wizard III" on the dashboard and public API.
+    The model code was read from the wrong memory area, and separately,
+    readings from any non-legacy station were stored with a station-type
+    value that happened to be a valid code for a different, much older
+    Davis model.  Closes #208, #215.
+
+  * New: the UI font size is adjustable from the custom theme editor.  A
+    slider between 0.85x and 1.75x scales text throughout the interface,
+    including gauge labels, and is saved with your custom theme.  Existing
+    themes are unaffected and continue to render exactly as before.
+
+  * New: Vantage stations can set the archive interval and clear archive
+    memory from the driver, matching capability the legacy Davis driver has
+    always had.  Note that, contrary to Davis's own documentation, setting
+    the interval does NOT clear existing records — the archive will hold a
+    mix of old and new intervals until explicitly cleared.
+
+  * Adds the Davis Vantage Serial Communication Reference to the repository.
+    Its absence was the direct cause of the address-map errors behind
+    several of the fixes above.
+
+  * Dependency and CI updates: React 19.2.8, react-router 7.18, Vite 8.1,
+    three.js 0.185.1, typescript-eslint 8.62, and current GitHub Actions.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 29 Jul 2026 19:00:30 +0000
+
+kanfei (0.1.0~beta21) unstable; urgency=medium
+
+  * Fix: the backup-restore endpoint now writes the restored database
+    to the path your live install actually reads from, regardless of
+    what the source backup's manifest called its database file.
+    Previously, restoring a backup taken on an install whose database
+    was named anything other than "kanfei.db" (notably the legacy
+    "weather.db" naming used by Windows dev-checkout installs) would
+    silently write to that source-named path instead of the live
+    "kanfei.db", leaving the live install untouched and the user's
+    data orphaned on disk — with a success message and no warning.
+    This release derives the destination from KANFEI_DB_PATH directly
+    and emits an INFO log line whenever the source and target
+    filenames differ so the rename is visible.  The CLI restore
+    command (python station.py restore) also picks up the same fix,
+    including correct behaviour when restoring against a not-yet-
+    existent destination on a fresh install.  Closes #179.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 27 May 2026 20:32:46 +0000
+
+kanfei (0.1.0~beta20) unstable; urgency=medium
+
+  * Fix: the 3D pressure-field view now renders with the intended smooth
+    cubic-interpolated surface on every .deb install.  Since the 3D view
+    first shipped, the backend's smooth-surface code path required scipy,
+    but scipy was declared only in an optional "nexrad" dependency group
+    that the .deb's postinst doesn't install — so every .deb-installed
+    kanfei silently fell back to plain inverse-distance-weighting and the
+    rendered surface was visibly bumpier than designed.  This release
+    moves scipy into the main runtime dependencies; the postinst's
+    existing pip-install step picks it up on first install or upgrade.
+    Adds ~30MB to the venv install size.  Closes #177.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 27 May 2026 00:34:58 +0000
+
+kanfei (0.1.0~beta19) unstable; urgency=medium
+
+  * Fix: archive-period readings on legacy Davis stations (Weather Monitor /
+    Wizard / Perception / GroWeather / Energy / Health) are correct for the
+    first time.  A memory-map register declaration shipped at the wrong link
+    bank since v0.1.0, so every read of the station's archive-period register
+    returned a different garbage byte from an unrelated sensor field.  Effects
+    observed by users: the history chart's time-bin resolution looked off
+    because each archive row was tagged with a bogus interval; the
+    station-config "archive period" value in Settings could show an impossible
+    value like 68 or 102 minutes; and the daemon could push that bogus value
+    back to the station's hardware register on every restart.  This release
+    fixes the register address, validates every read and write against the
+    Davis-legal set {1, 5, 10, 15, 30, 60, 120}, and ships a one-shot
+    self-heal that runs on the first connect after upgrade: the daemon
+    rewrites the canonical archive-period to the correct freshly-read value
+    AND fixes every historical archive_records row that was tagged with a
+    bogus interval — both in a single connect, no manual steps.  Vantage Pro
+    and Vantage Pro 2 users are unaffected by this bug; they use a separate
+    driver path that was never wrong.  Closes #174.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Tue, 26 May 2026 23:03:50 +0000
+
+kanfei (0.1.0~beta18) unstable; urgency=medium
+
+  * Fix: "Yesterday" rain tile is no longer permanently stuck at 0.  The
+    midnight rollover task that captures the prior day's rain total has
+    been silently dead on every kanfei install since v0.1.0 due to a
+    dangling-attribute bug in the daemon loop — the task raised
+    AttributeError on first iteration and asyncio swallowed it.  This
+    release re-enables the rollover.  Davis stations with non-default
+    rain_cal (e.g. the rain_cal=254 workaround from beta14) will also
+    record the correct yesterday value now: the conversion goes through
+    the same calibration-aware helper added in beta14.  The hardware
+    clear runs before the persist commits, so a failed hardware clear
+    leaves yesterday untouched and the daemon retries at the next
+    midnight rather than double-counting.  Non-Davis drivers (Tempest,
+    Ambient, etc.) still don't get yesterday rollover — tracked
+    separately — but no longer emit a misleading "station not
+    connected" warning every midnight.  Closes #170.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Tue, 26 May 2026 13:39:36 +0000
+
+kanfei (0.1.0~beta17) unstable; urgency=medium
+
+  * New: per-channel sensor mute now gates every outbound upload, not
+    just CWOP/APRS.  Operators who take a faulty sensor out of service
+    will see it dropped from Weather Underground uploads in addition to
+    the CWOP feed; the muted field is omitted from the WU URL, and any
+    derived value computed from the same sensor (wind-chill, heat-index,
+    dew-point) is also dropped so a known-bad reading doesn't leak in
+    through the back door.  The mute keys in the database have been
+    renamed cwop_mute_* → channel_mute_* with an idempotent startup
+    migration, the Settings section is now "Channel Mute", and the
+    on-screen banner reads "Muted channels — … in Settings → Channel
+    Mute."  Closes #162.
+  * New: each daily extreme on the dashboard now shows when today's
+    high or low was first reached.  The wind tile gains "at HH:MM" under
+    Peak, and Temperature, Humidity, and Barometer tiles show
+    "H 2:45 PM · L 6:42 AM"-style timestamps below the H/L values.
+    Mobile compact-card layout unchanged.  Solar/UV has no daily
+    extreme today and is unaffected.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Mon, 25 May 2026 15:56:49 +0000
+
+kanfei (0.1.0~beta16) unstable; urgency=medium
+
+  * New: per-channel CWOP/APRS mute.  Operators can now take an individual
+    sensor out of CWOP service (e.g. while it's under repair or known to
+    be miscalibrated) without dropping the rest of the station from the
+    public feed and without polluting CWOP with bad readings.  Nine
+    channels are individually toggleable in Settings → CWOP — Sensor
+    Reporting (outdoor temperature, outdoor humidity, wind speed,
+    direction, gust, barometer, and the three rain accumulators); muted
+    fields go out in the APRS-101 WX packet as the spec's "missing value"
+    sentinel (e.g. t..., b.....) so other stations and aggregators ignore
+    them.  A non-dismissable banner surfaces the active mute set on every
+    page of the dashboard for the logged-in operator so the suppression
+    is never forgotten.  The mute-status feed (/api/cwop/mute-status) is
+    auth-gated and returns an empty list to anonymous callers, so the
+    banner only appears for the operator and the public dashboard never
+    leaks maintenance state.  Closes #161.  Extension to other upload
+    destinations (Weather Underground, MQTT, push exports) is tracked
+    separately in #162.
+  * Routine dependency updates across the frontend: typescript-eslint
+    8.59.3 → 8.59.4 and @types/node 25.8.0 → 25.9.0.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sat, 23 May 2026 15:00:00 +0000
+
+kanfei (0.1.0~beta15) unstable; urgency=medium
+
+  * Fix: Davis barometer calibration field is no longer sign-inverted.
+    The legacy BAR_CAL register stores its value with subtract-from-raw
+    semantics (per reference/techref.txt:1070), but pre-fix kanfei
+    exposed that raw register sign 1:1 through the UI, so a user who
+    entered the intuitive "+456 thousandths inHg → add 0.456 inHg"
+    actually got "−0.456 inHg" applied to their reading.  Negating at
+    the kanfei-to-Davis I/O boundary makes the UI, the canonical
+    station_config row, and apply_calibration all use the user-facing
+    "add to reading" sign throughout; only the on-device register
+    sees the negated form Davis expects.  A one-time
+    bar_cal_sign_migration_v1 marker flips any existing pre-fix
+    canonical row's barometer entry on first connect so working
+    calibrations carry through the upgrade.  Scope: legacy LinkDriver
+    only (Monitor II / Wizard III / Perception / GroWeather / Energy /
+    Health) — Vantage and other drivers use different cal semantics
+    and aren't affected.
+  * Test infrastructure: tests/backend/conftest.py unconditionally
+    overrides KANFEI_DB_PATH to a per-process temp file before any
+    `app.*` import, so the suite can never touch the operator's real
+    kanfei.db.  Closes a hazard that, post-#145/#148, would have wiped
+    rows in sensor_readings, archive_records, users, and sessions for
+    anyone who ran pytest in a shell with KANFEI_DB_PATH pointing at
+    a populated database.
+  * Routine dependency updates across the frontend: eslint v9 → v10
+    (with @eslint/js and eslint-plugin-react-hooks bumped to match),
+    react-router-dom 7.15.0 → 7.15.1, react-colorful 5.6.1 → 5.7.0,
+    @react-three/fiber 9.6.0 → 9.6.1, @types/node 25.6.0 → 25.8.0,
+    plus globals, react, and build-tools group bumps.  The eslint
+    major bump introduced react-hooks 7.1.1 with a new
+    react-hooks/set-state-in-effect rule that flags pre-existing
+    patterns; CI does not run lint so the bumps land safely, with
+    cleanup tracked separately.
+  * Fix (UI re-roll): the Settings → WeatherLink section now gates
+    every input/select and the Save button on a discrete load-status
+    state until the live values land from the daemon.  Without the
+    gate, the placeholder defaults (archive_period=30, sample_period=60,
+    all-zero calibration) were displayed indistinguishably from real
+    saved values during the serial-I/O latency window, and a user who
+    typed corrections against those placeholders and hit Save could
+    overwrite their actual settings.  The new load state distinguishes
+    "still loading" from "load failed" (the latter happens when the
+    logger daemon is down or the link isn't connected — the endpoint
+    returns a 200 with an `{error: ...}` body) and surfaces the error
+    with a retry link rather than silently locking the section forever.
+    Also updates the Barometer Offset tooltip to reflect the post-cal-
+    sign-fix semantics ("add to raw reading", with a pointer back to
+    the sign-flip change).
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Mon, 18 May 2026 16:30:00 +0000
+
+kanfei (0.1.0~beta14) unstable; urgency=medium
+
+  * Fix: archive backfill on reconnect now reaches the history chart.
+    async_sync_archive was writing recovered records only to
+    archive_records, which the chart, extremes, and uploaders don't read.
+    A new bridge projects each archive record into sensor_readings at
+    the same timestamp, converting Davis-native units (1/10 °F, 1/1000
+    inHg, mph, compass code 0-15) to SI tenths and recomputing dew
+    point, wind chill, heat index, feels-like, and theta-e the same way
+    the live poller does.  Invalid Davis sentinels (-32768/32767 temps,
+    0/0xFFFF baro, 0xFF wind, 0x80/0xFF humidity, >= 0xFFF solar) are
+    stripped before conversion so backfilled rows never carry garbage.
+    Dedupe is archive-interval-aligned, so a live sample inside the
+    covered period correctly suppresses the bridge insert without
+    bleeding across the next interval boundary.
+  * Fix: the Force Archive button now syncs the new record into the
+    database instead of leaving it stranded in the link's SRAM; the
+    confirmation message reports the synced-record count.
+  * Fix: WeatherLink settings drift detection and self-healing.
+    archive_period, sample_period, and calibration are anchored in a
+    canonical station_config.weatherlink_canonical row.  The daemon
+    reconciles the link's actual registers against that row on every
+    connect (force-writing via SAP/SSP/WWR-cal on drift, logging the
+    correction).  The Settings page's Save handler also stops sending
+    diff-only payloads, so a Save click can now repair a drift even
+    when the form values appear unchanged.  Every successful write
+    reads back the register to confirm persistence; an ACK without a
+    matching readback is reported as failed rather than silently
+    trusted.
+  * Fix: rain accumulator unit conversion now uses rain_cal instead of
+    a hardcoded /10.  The previous code happened to produce correct mm
+    only when rain_cal was set to 254; every other setting, including
+    the Davis default of 100, under-reported daily and yearly rainfall
+    by a factor of 254/rain_cal (~2.54× at default).  rain_rate is on
+    a separate code path and is tracked as a follow-up pending
+    hardware verification.
+  * Tooling: tools/migrate_rain_unit_fix.py corrects historical
+    sensor_readings.rain_total / rain_yearly rows for users running
+    on rain_cal=100.  Idempotent, dry-run aware, creates a
+    .pre-rain-fix-migration backup, skips automatically when
+    rain_cal=254 (already-correct data), and refuses unusual rain_cal
+    values without --force-rain-cal N to confirm.  Not auto-run during
+    upgrade — operator opts in manually.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sat, 16 May 2026 15:45:00 +0000
+
+kanfei (0.1.0~beta13) unstable; urgency=low
+
+  * Wind history chart: dual-panel direction scatter + speed/gust columns
+  * Wind gust sensor now persisted to database (all station protocols)
+  * Wind tile flip-back shows 4h wind history instead of 1h sparkline
+  * History page: "Wind History" combined view in sensor dropdown
+  * FlipTile/TrendModal support custom back content
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 23 Apr 2026 05:00:00 +0000
+
+kanfei (0.1.0~beta12) unstable; urgency=low
+
+  * Dashboard edit pencil button: improved contrast (opaque bg, theme-aware color)
+  * Accessibility: aria-labels on setup wizard, Settings selects, theme editor
+  * Input validation: Telegram/Discord chat IDs validated as numeric at schema level
+  * Type hints: astronomy.py helpers, db_admin.py row converter
+  * Theme-aware colors: gauges, charts, header forecast icons, nowcast alerts now
+    use CSS custom properties with fallbacks instead of hardcoded hex
+  * Wind rose chart colors update on theme switch
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Thu, 17 Apr 2026 22:00:00 +0000
+
+kanfei (0.1.0~beta11) unstable; urgency=low
+
+  * Custom theme editor with color/font/gauge controls (Settings > Display > Theme > Custom)
+  * Wind tile display mode toggle: Compass or Rose (3h polar histogram)
+  * Wind rose filters calm readings, auto-refreshes every 60s
+  * Timezone setting moved from Display into Units
+  * Flip tile backs always opaque (no transparency bleed-through)
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sun, 13 Apr 2026 23:30:00 +0000
+
+kanfei (0.1.0~beta10) unstable; urgency=low
+
+  * Wind rose chart on dashboard wind tile flip (12h direction × speed)
+  * Default face toggle for all flip tiles (edit mode)
+  * Fix: barometer calibration offset wrong units (~3× over-correction)
+  * Fix: temperature calibration offset wrong units (F vs C delta)
+  * Fix: ESLint peer dependency conflict in CI
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sun, 13 Apr 2026 20:00:00 +0000
+
+kanfei (0.1.0~beta9) unstable; urgency=medium
+
+  * Fix: Settings lockout on upgrade from pre-auth betas
+  * Login page now detects zero-users state and shows account creation form
+  * 3D pressure field: vorticity overlay (wind field curl)
+  * 3D pressure field: convergence/divergence overlay
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sat, 12 Apr 2026 14:00:00 +0000
+
+kanfei (0.1.0~beta8) unstable; urgency=low
+
+  * Interactive weather map view (enable via map_enabled setting)
+  * Nearby stations from IEM ASOS+COOP + native APRS/CWOP collector
+  * Windy-style colored pill badges with Temp/Wind/Precip display modes
+  * Server-side spatial thinning for even station distribution at all zoom levels
+  * Zoom-based dynamic loading (30-450mi radius depending on zoom level)
+  * Pressure isobar contours (IDW interpolation + marching squares)
+  * Isobar labels honor user pressure unit preference (inHg/hPa)
+  * NWS alert polygon overlays color-coded by severity
+  * Layer selector: Roads, Map (theme-aware), Satellite, Terrain
+  * APRS-IS background listener with 2-hour TTL and disk persistence
+  * Fix: httpx INFO logging suppressed to prevent bot token leakage
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 02 Apr 2026 14:00:00 +0000
+
+kanfei (0.1.0~beta7) unstable; urgency=low
+
+  * Humidity gauge: arc geometry rewritten, proper semicircular sweep
+  * Humidity gauge: auto-range caps at 60% span for readability
+  * Humidity gauge: full arc (100%) renders correctly
+  * Humidity sensor: values > 100% accepted (Davis ±4% tolerance above 90%)
+  * Humidity sensor: raw values stored, display clamped to 0-100%
+  * Inside humidity daily hi/lo added to extremes and gauge
+  * Deduplicated daily extremes query into shared module
+  * Gauge contrast improved across all gauges (tick marks, labels)
+  * E2E suite adapted for auth layer (61 tests, all passing)
+  * TypeScript 6.x and ESLint 10.x ignored in dependabot
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Mon, 31 Mar 2026 02:00:00 +0000
+
+kanfei (0.1.0~beta6) unstable; urgency=medium
+
+  * Authentication: session auth (bcrypt, 72h sliding), API keys (knf_ prefix)
+  * ~50 admin endpoints protected, public weather endpoints unchanged
+  * Setup wizard: 4th step creates admin account on first run
+  * Login page with return-to-origin, logout to dashboard
+  * Secret masking in config API, CORS tightened, OpenAPI docs disabled
+  * Secure cookie flag when behind HTTPS proxy, session revocation on logout
+  * Change password UI in Settings > System
+  * Scheduled conditions push to Telegram/Discord (configurable interval)
+  * Immediate push on re-enable, independent of bot enable/notifications
+  * Fix: History view raw SI values converted to display units
+  * Fix: Bot timestamps in station local time instead of UTC
+  * Fix: Test buttons work after page refresh (token from DB)
+  * Fix: Masked secrets not written back to DB on config save
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Fri, 28 Mar 2026 22:00:00 +0000
+
+kanfei (0.1.0~beta5) unstable; urgency=low
+
+  * Telegram bot: /current, /status, /help + outbound alert/nowcast notifications
+  * Discord bot: slash commands + outbound notifications (NAT-friendly)
+  * BotManager protocol: shared formatting, rate limiting, adapter pattern
+  * Dedicated Bots tab in Settings UI
+  * About view redesign: supercell storm background, tighter layout
+  * Mobile UX: tighter padding, pinned header across all views
+  * Service management UI with reconnect UX and IPC timeout fix
+  * WU uploader @staticmethod fix
+  * E2E tests moved to local workflow (56 tests)
+  * Integer precision fix for Discord/Telegram snowflake IDs
+  * NAMING_CONVENTIONS.md updated for SI-internal architecture
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Thu, 27 Mar 2026 19:00:00 +0000
+
+kanfei (0.1.0~beta4) unstable; urgency=low
+
+  * SI unit storage: all sensor data now stored in SI (°C, hPa, m/s, mm).
+    Includes DB migration script (tools/migrate_davis_to_si.py).
+  * Multi-driver support: all 6 hardware drivers recovered, refactored
+    for SI SensorSnapshot, and tested. Ecowitt, Tempest, Ambient Weather,
+    Vantage Pro/Pro2/Vue, WeatherLink IP, WeatherLink Live.
+  * Driver selection UI: Setup Wizard and Settings > Station tab now
+    support all driver types with connection-specific config.
+  * Driver test framework: parametrized JSON fixture tests for all drivers.
+  * SI regression tests: 17 tests verifying identical API output.
+  * Fix spray advisor reading SI values as Davis native.
+  * Fix Vantage archive parser: convert to SI units.
+  * CONTRIBUTING.md with AI-assisted contribution policy.
+  * Issue templates, PR template, AGENTS.md for non-Claude AI tools.
+  * Updated README with backup/restore, driver catalog.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Tue, 25 Mar 2026 00:00:00 +0000
+
+kanfei (0.1.0~beta3) unstable; urgency=low
+
+  * Backup and restore: service, REST API, CLI commands, automatic
+    scheduler with rotation. Settings UI with manual trigger, backup
+    list, download, delete, and restore with RESTORE confirmation.
+  * Backend test suite: 149 tests covering METAR, APRS, protocol
+    commands, IPC, CWOP, CRC, LOOP packets, calculations, and backup.
+  * Fix HighchartsReact import for Vite 8 CJS interop (tile flip crash).
+  * Fix pydantic ValidationInfo.default for Python 3.13 compatibility.
+  * Update About page: list all supported station platforms.
+  * Pin TypeScript to 5.9.x (typescript-eslint incompatible with TS 6).
+  * Dependency updates via Dependabot (CI actions, npm packages).
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Mon, 24 Mar 2026 00:00:00 +0000
+
+kanfei (0.1.0~beta2) unstable; urgency=low
+
+  * Remote nowcast support: built-in HTTP client for hosted nowcast service,
+    API key authentication, quality preset selector (Economy/Standard/Premium).
+  * Fix missing wind gust in CWOP and Weather Underground uploads.
+  * Add missing WU upload fields: wind chill, heat index, rain rate.
+  * Dynamic scale on humidity gauges.
+  * Nowcast UI: contextual error messages, mode-aware settings, auth error
+    display, radar image proxy from remote server.
+  * Fix nowcast_lite stale service reference.
+  * Complete davis-wx to kanfei rename across remaining references.
+  * CI workflow and Dependabot configuration.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sun, 23 Mar 2026 00:00:00 +0000
+
+kanfei (0.1.0~beta1) unstable; urgency=low
+
+  * First beta release under the Kanfei package name.
+  * Package renamed from davis-wx to kanfei — see migration guide for
+    users upgrading from alpha.
+  * Spray advisor rule engine included as open-source (no longer requires
+    external package for basic go/no-go evaluation).
+  * AI nowcast available as optional add-on via kanfei-nowcast package.
+  * NWS forecast and alert clients restored as built-in features.
+  * Station status polling with exponential backoff for faster recovery
+    when logger daemon starts after the web application.
+  * Fix empty .env values crashing Pydantic settings parser.
+  * Pluggable hardware drivers: Davis (serial, Vantage, WeatherLink IP,
+    WeatherLink Live), Ecowitt/Fine Offset, Ambient Weather, WeatherFlow
+    Tempest — all awaiting community hardware validation.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Fri, 14 Mar 2026 00:00:00 +0000

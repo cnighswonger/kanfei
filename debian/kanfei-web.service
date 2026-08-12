@@ -1,0 +1,17 @@
+[Unit]
+Description=Kanfei Weather Station Web UI
+After=network.target kanfei-logger.service
+Wants=kanfei-logger.service
+
+[Service]
+Type=simple
+User=kanfei
+Group=kanfei
+WorkingDirectory=/opt/kanfei/backend
+EnvironmentFile=/etc/kanfei/kanfei.conf
+ExecStart=/opt/kanfei/backend/.venv/bin/python -m uvicorn app.main:app --host ${KANFEI_HOST} --port ${KANFEI_PORT}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
