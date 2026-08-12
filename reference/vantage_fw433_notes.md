@@ -158,4 +158,9 @@ searches for "Vantage Console firmware" tend to conflate the two.
   driver is written against
 - Davis KB firmware page —
   https://www.manula.com/manuals/pws/davis-kb/1/en/topic/updating-console-firmware
+- `vendor/davis/` — archival vendor materials, including the last
+  publicly-released Davis firmware update utility for the Vue
+  Console (`DirectFromPC_Vue_3_00.exe`).  Windows-only; do NOT run
+  under WINE, and do NOT run on any MB-or-later Vue.  See that
+  directory's README for the full hazard list.
 - Issue #297 — bench Vue wire-analysis tracker
