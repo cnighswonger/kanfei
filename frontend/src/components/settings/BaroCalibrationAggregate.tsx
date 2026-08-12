@@ -95,7 +95,12 @@ const td: React.CSSProperties = {
 
 const badge = (kind: "pass" | "hold"): React.CSSProperties => ({
   display: "inline-block",
-  padding: "2px 8px",
+  // Vertical padding + explicit line-height so the pill has breathing
+  // room around the label — the previous `2px 8px` and default
+  // line-height produced visibly cramped text (nit against the beta27
+  // screenshot).  Horizontal padding kept at 10px for the same read.
+  padding: "4px 10px",
+  lineHeight: 1.4,
   borderRadius: "999px",
   fontSize: "calc(11px * var(--font-scale))",
   fontFamily: "var(--font-body)",
