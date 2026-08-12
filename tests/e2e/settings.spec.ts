@@ -327,6 +327,8 @@ test.describe('Barometer calibration panel', () => {
     station_limit_for_calibration: null,
     console_stdev_threshold_hpa: 0.2,
     rapid_trend_station_fraction: 0.30,
+    recent_window_hours: 24,
+    recent_unsettled_stdev_threshold_hpa: 0.5,
   };
 
   function station(
@@ -370,6 +372,9 @@ test.describe('Barometer calibration panel', () => {
           n_samples: 90,
           window_minutes: 15,
           stdev_hpa: 0.05,
+          stdev_hpa_recent: 0.1,
+          n_samples_recent: 500,
+          recent_window_hours: 24,
           window_start: new Date(Date.now() - 15 * 60_000).toISOString(),
           window_end: new Date().toISOString(),
         },
@@ -417,6 +422,9 @@ test.describe('Barometer calibration panel', () => {
           n_samples: 90,
           window_minutes: 15,
           stdev_hpa: 0.05,
+          stdev_hpa_recent: 0.1,
+          n_samples_recent: 500,
+          recent_window_hours: 24,
           window_start: new Date(Date.now() - 15 * 60_000).toISOString(),
           window_end: new Date().toISOString(),
         },

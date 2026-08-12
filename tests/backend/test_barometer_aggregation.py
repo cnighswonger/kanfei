@@ -1087,3 +1087,118 @@ class TestWeatherQuiescenceEdgeCases:
         )
         assert len(result) == 1
         assert result[0].has_rapid_trend is True
+
+
+# ---------------------------------------------------------------------------
+# Retrospective "recently unsettled" σ signal
+# ---------------------------------------------------------------------------
+
+
+class TestRetrospectiveUnsettledSigma:
+    """The 24 h σ addendum answers "has weather been unsettled RECENTLY"
+    even when the instantaneous snapshot looks calm.  The signal rides
+    in the response so the panel can add a sentence to any HOLD
+    diagnostic; it does not itself gate the write decision."""
+
+    def test_recent_stdev_populated_when_enough_samples(self):
+        from datetime import datetime, timedelta, timezone
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from app.models.database import Base
+        from app.models.sensor_reading import SensorReadingModel
+
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime.now(timezone.utc)
+        # 200 samples over the last 24 h, values swinging by ±5 hPa
+        # (extreme unsettled) → σ ≈ 3 hPa.
+        for i in range(200):
+            offset_hpa = 5.0 if i % 2 == 0 else -5.0
+            db.add(SensorReadingModel(
+                timestamp=now - timedelta(minutes=i * 5),
+                station_type=1,
+                barometer=int(round((1015.0 + offset_hpa) * 10)),
+            ))
+        db.commit()
+
+        result = read_console_barometer_median(db)
+        assert result is not None
+        assert result.stdev_hpa_recent is not None
+        assert result.stdev_hpa_recent > 4.0, (
+            f"expected large σ for ±5 hPa swings, got {result.stdev_hpa_recent}"
+        )
+        assert result.recent_window_hours == 24
+
+    def test_recent_stdev_none_when_too_few_samples(self):
+        """With only a handful of readings in the 24 h window (fresh
+        install, DB reset, silent poller), σ estimate would be wildly
+        unstable — return None so the UI addendum falls silent rather
+        than showing a made-up number."""
+        from datetime import datetime, timedelta, timezone
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from app.models.database import Base
+        from app.models.sensor_reading import SensorReadingModel
+
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime.now(timezone.utc)
+        for i in range(5):
+            db.add(SensorReadingModel(
+                timestamp=now - timedelta(minutes=i * 5),
+                station_type=1,
+                barometer=10150,
+            ))
+        db.commit()
+
+        result = read_console_barometer_median(db)
+        assert result is not None
+        assert result.stdev_hpa_recent is None, (
+            "5 samples is below MIN_RECENT_SAMPLES (60); should be None"
+        )
+        assert result.n_samples_recent == 5
+
+    def test_recent_stdev_low_on_quiet_data(self):
+        """A steady console (all readings within 0.1 hPa) must produce
+        a small σ so the addendum stays silent under real calm
+        conditions.  Baseline check for the false-positive rate."""
+        from datetime import datetime, timedelta, timezone
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from app.models.database import Base
+        from app.models.sensor_reading import SensorReadingModel
+        from app.services.barometer_aggregation import (
+            RECENT_UNSETTLED_STDEV_THRESHOLD_HPA,
+        )
+
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime.now(timezone.utc)
+        # 200 samples at 1015.0 hPa ± 0.05 hPa (typical quiet)
+        for i in range(200):
+            wiggle = 0.05 * (1 if i % 2 == 0 else -1)
+            db.add(SensorReadingModel(
+                timestamp=now - timedelta(minutes=i * 5),
+                station_type=1,
+                barometer=int(round((1015.0 + wiggle) * 10)),
+            ))
+        db.commit()
+
+        result = read_console_barometer_median(db)
+        assert result is not None
+        assert result.stdev_hpa_recent is not None
+        assert result.stdev_hpa_recent < \
+            RECENT_UNSETTLED_STDEV_THRESHOLD_HPA, (
+                f"quiet data should be under threshold; got "
+                f"σ={result.stdev_hpa_recent} vs threshold "
+                f"{RECENT_UNSETTLED_STDEV_THRESHOLD_HPA}"
+            )
+
+    def test_thresholds_snapshot_carries_recent_constants(self):
+        stations = [_sm(f"K{i}", 30000 + i) for i in range(3)]
+        r = compute_aggregate_recommendation(_console(), stations)
+        assert r.thresholds["recent_window_hours"] == 24
+        assert r.thresholds["recent_unsettled_stdev_threshold_hpa"] == 0.5

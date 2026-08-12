@@ -321,6 +321,27 @@ export default function BaroCalibrationAggregate({
               ? SKIP_LABEL[recommendation.skip_reason]
               : "Aggregate not ready."}
           </p>
+          {/* Retrospective "recently unsettled" note.  Fires whenever
+              the console's σ over the last recent_window_hours (24 h)
+              exceeds the threshold, regardless of which specific gate
+              caused the HOLD.  Uses REAL numbers so the operator can
+              judge for themselves.  Suppressed on the two dedicated
+              unsettled skip reasons — those already say weather is
+              dynamic, and repeating it in the retrospective voice
+              would be redundant.  */}
+          {c != null &&
+            c.stdev_hpa_recent != null &&
+            c.stdev_hpa_recent > thresholds.recent_unsettled_stdev_threshold_hpa &&
+            recommendation.skip_reason !== "unsettled_console" &&
+            recommendation.skip_reason !== "unsettled_regional" && (
+              <p style={{ ...body, marginTop: "8px" }}>
+                Local pressure has been unsettled recently — σ ={" "}
+                {fmtPressureFromHpa(c.stdev_hpa_recent, pressureUnit)}
+                {" "}over the last {c.recent_window_hours} h. Reference
+                stations may be reflecting that; the panel should
+                stabilise after a calm stretch.
+              </p>
+            )}
           {/* Operator override on HOLD.  Rendered ONLY when the
               backend says hold_override_allowed — which is only the
               cross-station-disagreement skip.  Writes the SAME

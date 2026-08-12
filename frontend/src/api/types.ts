@@ -674,6 +674,15 @@ export interface BarometerConsoleSample {
   stdev_hpa: number;
   window_start: string;
   window_end: string;
+  /** σ over the retrospective window (see recent_window_hours).
+   *  Null when fewer than the backend's MIN_RECENT_SAMPLES readings
+   *  are present in the window (freshly-installed station, DB reset,
+   *  poller silent).  The panel uses this to add a "recently
+   *  unsettled" note to any HOLD diagnostic when σ_recent exceeds
+   *  the threshold in `BarometerThresholds`. */
+  stdev_hpa_recent: number | null;
+  n_samples_recent: number;
+  recent_window_hours: number;
 }
 
 /** Skip-reason codes, stable string constants matching the backend
@@ -723,6 +732,8 @@ export interface BarometerThresholds {
   station_limit_for_calibration: number | null;
   console_stdev_threshold_hpa: number;
   rapid_trend_station_fraction: number;
+  recent_window_hours: number;
+  recent_unsettled_stdev_threshold_hpa: number;
 }
 
 export interface BarometerAggregate {
