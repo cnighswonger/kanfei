@@ -189,6 +189,30 @@ STATION_LIMIT_FOR_CALIBRATION: Optional[int] = None
 CONSOLE_STDEV_THRESHOLD_HPA = 0.2
 RAPID_TREND_STATION_FRACTION = 0.30
 
+# Retrospective "recent-unsettled" signal.  Wq1/Wq2 above answer the
+# instantaneous question ("is weather dynamic RIGHT NOW"); this
+# addendum answers "has weather been dynamic RECENTLY".  The gate
+# does not itself refuse a write — the operator has already been
+# refused by cross_station_disagreement or another gate — but its
+# result rides in the API response so the panel can add a sentence
+# to the HOLD diagnostic like "local pressure has been unsettled
+# over the last 24 h (σ = X hPa)".  The operator sees WHY reference
+# stations may be disagreeing beyond the algorithm's tolerance
+# instead of just "stations disagree".
+#
+# 24 h captures a full daily cycle; shorter (say 6 h) can miss "the
+# last few days" complaints, longer averages calm nights back into
+# the noisy afternoons.  Quiet-baseline σ over 24 h is typically
+# 0.3 hPa (diurnal + minor fluctuation); 0.5 hPa says the weather
+# is contributing measurably beyond that baseline.
+RECENT_WINDOW_HOURS = 24
+RECENT_UNSETTLED_STDEV_THRESHOLD_HPA = 0.5
+# Minimum samples in the retrospective window before we trust the σ.
+# 24 h at the default 10 s poll cadence is thousands of samples; a
+# very low floor covers the "poller has only run for an hour" case
+# without inviting a wild σ estimate from 3 readings.
+MIN_RECENT_SAMPLES = 60
+
 # Per-station outlier rejection before the spread gate.  Phone-sensor
 # ran on a dense CWOP mesh where max−min was a fair statistic; Kanfei
 # is METAR-only with a 47-mile reach into rural areas where a single
@@ -330,6 +354,16 @@ class ConsoleSample:
     # the "n_samples=0" case is possible and the two are equal.
     window_start: str
     window_end: str
+    # Standard deviation over the *retrospective* window
+    # (``RECENT_WINDOW_HOURS``, default 24 h) — distinct from
+    # ``stdev_hpa`` which measures the current 15 min.  Used to
+    # answer "has weather been unsettled RECENTLY" even when the
+    # instantaneous snapshot looks calm.  ``None`` when fewer than
+    # ``MIN_RECENT_SAMPLES`` readings are available in the window
+    # (freshly-set-up station, DB reset, poller silent).
+    stdev_hpa_recent: Optional[float] = None
+    n_samples_recent: int = 0
+    recent_window_hours: int = 24
 
 
 @dataclass
@@ -429,6 +463,9 @@ def _thresholds_snapshot() -> dict:
         "station_limit_for_calibration": STATION_LIMIT_FOR_CALIBRATION,
         "console_stdev_threshold_hpa": CONSOLE_STDEV_THRESHOLD_HPA,
         "rapid_trend_station_fraction": RAPID_TREND_STATION_FRACTION,
+        "recent_window_hours": RECENT_WINDOW_HOURS,
+        "recent_unsettled_stdev_threshold_hpa":
+            RECENT_UNSETTLED_STDEV_THRESHOLD_HPA,
     }
 
 
@@ -570,8 +607,15 @@ def _mark_mad_outliers(
 def read_console_barometer_median(
     db: Session,
     window_minutes: int = CONSOLE_WINDOW_MINUTES,
+    recent_window_hours: int = RECENT_WINDOW_HOURS,
 ) -> Optional[ConsoleSample]:
     """Median of the console's own barometer over the last ``window_minutes``.
+
+    Also computes σ over the longer retrospective window
+    (``recent_window_hours``) so the caller can surface "weather has
+    been unsettled recently" on top of any HOLD diagnostic.  The
+    retrospective σ is optional — populated only when at least
+    ``MIN_RECENT_SAMPLES`` readings are present in the window.
 
     Returns None only when the DB query itself fails.  A window with
     zero samples in it (station just came online, or poller silent)
@@ -580,6 +624,7 @@ def read_console_barometer_median(
     """
     end = datetime.now(timezone.utc)
     start = end - timedelta(minutes=window_minutes)
+    recent_start = end - timedelta(hours=recent_window_hours)
 
     try:
         rows = (
@@ -593,10 +638,32 @@ def read_console_barometer_median(
         logger.warning("read_console_barometer_median: DB query failed: %s", exc)
         return None
 
+    # Retrospective window is a separate query so it can span data
+    # older than ``window_minutes``.  Failure is non-fatal — a σ we
+    # cannot compute becomes ``None`` and the UI addendum falls silent.
+    try:
+        recent_rows = (
+            db.query(SensorReadingModel.barometer)
+            .filter(SensorReadingModel.timestamp >= recent_start)
+            .filter(SensorReadingModel.timestamp <= end)
+            .filter(SensorReadingModel.barometer.isnot(None))
+            .all()
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "read_console_barometer_median: recent-window DB query failed: %s", exc,
+        )
+        recent_rows = []
+
     # SensorReadingModel.barometer is stored as TENTHS of hPa (integer),
     # per `poller.py`'s `round(snapshot.barometer * 10)` — not hPa.
     # Divide here so the rest of the module works in hPa.
     values = [r[0] / 10.0 for r in rows if r[0] is not None]
+    recent_values = [r[0] / 10.0 for r in recent_rows if r[0] is not None]
+    stdev_hpa_recent: Optional[float] = None
+    if len(recent_values) >= MIN_RECENT_SAMPLES:
+        stdev_hpa_recent = round(statistics.pstdev(recent_values), 3)
+
     if not values:
         return ConsoleSample(
             median_hpa=0.0,
@@ -605,6 +672,9 @@ def read_console_barometer_median(
             stdev_hpa=0.0,
             window_start=start.isoformat(),
             window_end=end.isoformat(),
+            stdev_hpa_recent=stdev_hpa_recent,
+            n_samples_recent=len(recent_values),
+            recent_window_hours=recent_window_hours,
         )
 
     return ConsoleSample(
@@ -616,6 +686,9 @@ def read_console_barometer_median(
         ),
         window_start=start.isoformat(),
         window_end=end.isoformat(),
+        stdev_hpa_recent=stdev_hpa_recent,
+        n_samples_recent=len(recent_values),
+        recent_window_hours=recent_window_hours,
     )
 
 
