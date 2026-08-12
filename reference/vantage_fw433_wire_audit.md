@@ -18,8 +18,14 @@ this report is the snapshot of a single audit pass.
   driver doesn't use it), one anomaly worth flagging
   (`TEMP_OUT_COMP` invariant broken), one cosmetic (ACK byte
   semantics on `RECEIVERS`).
-- **2 undocumented commands discovered** — `IDENT` (returns product
-  number), `HELP` (returns horizontal-rule; likely interactive).
+- **5 undocumented commands discovered** — `IDENT` (returns product
+  SKU); `HELP` (returns a 526-byte engineering/radio-tuning
+  command menu); `OPMODE` (safe, read-only view of radio state and
+  per-unit crystal calibration); `GETREG (x)` (radio-register read,
+  requires test mode); `RESET` (soft-reset console over wire, not
+  tested).  Plus a documented factory command set (`TST`, `TX`,
+  `RX`, `HOP`, `CHAN`, `DOM`, `BAND`, `XTLCAL`, `SVTST`, `SETREG`,
+  `SETPOW`) that the HELP output reveals.
 - **EEPROM address map matches documentation** for every field
   tested.  No evidence of a wholesale remap.
 
@@ -156,19 +162,92 @@ whether a WeatherLink IP logger is present) without inferring from
 station_type_code alone.  Not adopting yet; noted for future
 consideration.
 
-### N2. `HELP` returns a horizontal-rule character block
+### N2. `HELP` returns an engineering / radio-tuning menu
 
-**Undocumented in Davis reference.**  Observed:
+**Undocumented in Davis reference.**  Initial audit captured only
+32 bytes because the probe used a fixed-size buffer; a follow-up
+capture with a bigger buffer and read-until-silence timeout got the
+full 526-byte response:
 
 ```
-send:  HELP\n
-recv:  \r================================
+==================================================
+ Radio Tuning Commands
+
+ TST x       - Enter test mode
+ OPMODE      - Show test settings
+ TX x        - Configure transmit operation
+ RX x        - Configure receive operation
+ HOP x       - Configure hop mode
+ CHAN x      - Set radio channel
+ DOM x       - Set radio domain
+ BAND x      - Set radio band
+ XTLCAL x    - Set freq crystal cal number
+ SVTST       - Save test operation mode
+ SETREG x y  - Set radio register x to value y
+ GETREG (x)  - Get radio register value
+ RESET       - Reset console
+ SETPOW x    - Set radio power
 ```
 
-32 `=` characters preceded by CR, no `OK`, no trailing `\n\r`.
-Suggests an interactive HELP menu that requires user-terminal
-follow-up, which the wire never receives.  **Not useful for
-programmatic driver use.**  Noted for completeness.
+`HELP 2`, `HELP ALL`, `HELP RADIO` all return the same page — no
+sub-menus.
+
+This is a **factory-mode / engineering command set** — access to
+the console's radio silicon for tuning and diagnostics.  Almost
+every command here is destructive or reception-disrupting; only
+`OPMODE` and (arguably) `RESET` are candidates for driver use.
+
+### N3. `OPMODE` returns runtime radio state (READ-ONLY, safe)
+
+**Undocumented in Davis reference.**  Reveals radio configuration
+and per-unit calibration parameters without needing to enter test
+mode.  Observed on our bench Vue in normal-ops:
+
+```
+TST:    0        (test mode off)
+TX:     0        (not transmitting)
+RX:     0        (RX in default mode)
+HOP:    0
+BAND:   0        (default US 902-928 MHz)
+CHAN:   0
+DOM:    1        (radio domain 1 = US region per apparent convention)
+XTLCAL: 14       (frequency crystal calibration — per-unit baked-in at factory)
+TEMP:   746      (probable crystal / oven temperature raw reading)
+TEMP CAL: -1     (temperature calibration offset)
+```
+
+Potentially useful for advanced diagnostics — the `XTLCAL` in
+particular is per-unit crystal cal that could correlate with
+reception performance if we ever chase an RF issue.  Read-only:
+does NOT enter test mode.  Return format is one ASCII field per
+line, colon-separated, terminated by an empty `\n\r` line.
+
+### N4. `GETREG` requires test mode
+
+**Undocumented.**  `GETREG 0`, `GETREG (0)`, and bare `GETREG` all
+return `\n\rNOT IN TEST STATE\n\r`.  Entering test mode requires
+`TST x`, which almost certainly disrupts reception — not attempted
+in this audit.  If we ever need to inspect radio-chip registers
+directly (e.g., to diagnose an RF fault), the sequence would be
+`TST 1` → `GETREG (x)` → `SVTST` or hard-reset to leave test mode.
+File as a follow-up if the need arises.
+
+### N5. `RESET` — soft-reset over the wire
+
+**Undocumented, NOT tested in this audit.**  Would eliminate the
+battery-pull required for previous Vue console reinit workflows if
+it works cleanly (side-effect: reception drops for a few seconds
+while the console re-establishes).  Skipped here because it's a
+destructive-ish operation that should have a specific reason and
+Chris's approval before firing.  File for future consideration.
+
+### Original N2 note (pre-follow-up capture)
+
+The initial audit script probe reported HELP as returning only 32
+bytes.  That was an artefact of the fixed-buffer receive.  Any
+future audit tooling should read-until-silence rather than
+fixed-length, or the same undersizing bug will recur on any command
+whose response is longer than the caller guessed.
 
 ### Undocumented probes that did NOT return meaningful data
 
@@ -222,6 +301,18 @@ specific need.
 5. **Live production-Vue capture** for the specific departures found
    in this report.  Requires stopping `kanfei-logger` briefly (~5 min
    of prod downtime) and is a separate, permissioned action.
+6. **`RESET` behavior** — verify it does what it says (soft
+   re-init) without state loss; if clean, it replaces the
+   battery-pull workflow for post-flash reinit.  Wants Chris's
+   approval before first invocation.
+7. **`GETREG`-behind-`TST`** — inspect radio chip registers to
+   understand what silicon fw 4.33 talks to.  Would require the
+   `TST 1` → `GETREG` → exit-test sequence and would disrupt
+   reception during the test.
+8. **`OPMODE` on production Vue** — capture the per-unit
+   `XTLCAL` value from fw 2.12 for comparison; may reveal factory
+   crystal-cal drift over time.  Read-only, no test-mode entry
+   required, so could be done via a brief kanfei-logger pause.
 
 ## Reproduction
 
