@@ -460,8 +460,14 @@ export default function BarometerCalibration({
         </p>
       )}
 
-      {/* --- Elevation --- */}
-      <div style={{ marginBottom: "16px", maxWidth: "260px" }}>
+      {/* --- Elevation ---
+          The 260px maxWidth used to sit on this outer div, which
+          also constrained the reconcile paragraph below the input
+          and caused an awkward mid-parenthesis line wrap on the
+          "Console: N ft · Kanfei: M ft (0.001 inHg) use Kanfei's"
+          row (nit against the beta27 screenshot).  Constrain only
+          the input; let the reconcile text flow to the panel width. */}
+      <div style={{ marginBottom: "16px" }}>
         <label style={label} htmlFor="baro-cal-elevation">
           Elevation (feet)
         </label>
@@ -473,7 +479,7 @@ export default function BarometerCalibration({
             elevationTouched.current = true;
             setElevationFt(e.target.value);
           }}
-          style={{ ...input, width: "100%" }}
+          style={{ ...input, width: "100%", maxWidth: "260px" }}
         />
         {!elevationValid && elevationFt.trim() !== "" && (
           <p style={{ ...body, color: "var(--color-danger)", marginTop: "6px" }}>
