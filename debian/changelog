@@ -1,3 +1,70 @@
+kanfei (0.1.0~beta27) unstable; urgency=medium
+
+  * Adds a multi-station cross-check to the barometer calibration reference.
+    Kanfei used to ask nearby airport reports for their altimeter setting and
+    show you the nearest one; a single bad METAR could pin your console's
+    persistent offset to a wrong number without any second opinion.  The
+    panel now aggregates the reports it fetched: it takes the median of each
+    station's observations from the last two hours, then takes the median of
+    those medians against the median of your console's last fifteen minutes
+    of readings.  Two safeguards decide whether to recommend a write.  It
+    refuses when only one station voted, because one reference cannot
+    cross-check itself.  It also refuses when the stations disagree by more
+    than 0.4 hPa, because it cannot then tell which of them has drifted; it
+    shows the per-station values so you can see why it held.  When both
+    safeguards pass, it displays how closely the stations agree, the median
+    they arrived at, and the recommended offset for your console.
+
+  * Adds a panel for the console's yearly-rain-reset month.  Every Davis
+    Vantage console keeps a setting that says which month the yearly rain
+    total drops back to zero.  The factory default is January, which is fine
+    almost everywhere.  West-coast US installs and anyone tracking a
+    hydrological "water year" typically want July, so a winter storm season
+    is not split across two yearly totals.  Reading and changing this used
+    to require walking to the console.  Kanfei now shows it and can change
+    it, and re-reads the register after the write so a change that did not
+    take is reported as such rather than as success.
+
+  * Shows the console's firmware version and build date in the Station
+    Status panel.  Both come from what your console reported when Kanfei
+    first connected, so there is no additional serial traffic.  The row is
+    hidden when the station does not report a firmware version, so nothing
+    empty appears on legacy stations.
+
+  * Solar radiation is now included in Kanfei's CWOP uploads.  The APRS
+    weather format has a standard field for it (Lxxx for 0-999 W/m², lxxx
+    for 1000-1999), and Kanfei was silent on it before; readings will now
+    show alongside the temperature and pressure on findU and MADIS for any
+    station with a solar sensor.  UV is not sent because the APRS format has
+    no field for it, and remains Weather Underground only.
+
+  * Adds solar radiation and UV to the per-channel mute list.  Every other
+    sensor already had a Settings toggle that drops it from every outbound
+    upload when the sensor is misbehaving; solar and UV now do too.  Muting
+    one does not affect the other, because they are on physically separate
+    channels on the Vantage ISS.
+
+  * Fix: on a Vantage console the on-connect clock sync used to be skipped,
+    so the first sync had to wait for the frontend to poll station status
+    (about five minutes after reconnect).  Vantage now gets its clock synced
+    at connect, immediately.  The five-second-drift check on every panel
+    load continues to run for both drivers.
+
+  * Fix: a stale 401 that arrived after a successful login could bounce the
+    freshly authenticated user back to the login page.  The frontend
+    now takes note of whether a request was made while logged in when it
+    was sent, so a response that answers a request made while logged out
+    can no longer eject a user who has since logged in.
+
+  * Adds the Vantage Vue Console Manual and the Vantage Pro2 sensor
+    installation manual to the reference documents shipped with the source
+    tree, alongside the serial protocol reference that was already there.
+    These are the authoritative sources for what settings the console
+    exposes to the user and how the outdoor hardware is meant to be
+    installed.  Not visible in the product itself.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Tue, 11 Aug 2026 21:33:54 +0000
+
 kanfei (0.1.0~beta26) unstable; urgency=medium
 
   * Adds a per-sensor calibration panel for Vantage consoles, covering the
