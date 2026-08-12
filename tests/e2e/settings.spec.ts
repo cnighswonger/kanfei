@@ -325,6 +325,8 @@ test.describe('Barometer calibration panel', () => {
     mad_max_iterations: 10,
     distance_weight_epsilon_miles: 1.0,
     station_limit_for_calibration: null,
+    console_stdev_threshold_hpa: 0.2,
+    rapid_trend_station_fraction: 0.30,
   };
 
   function station(
@@ -344,6 +346,7 @@ test.describe('Barometer calibration panel', () => {
       obs_spread_thousandths_inhg: 20,
       newest_observed_at: new Date().toISOString(),
       is_outlier: false,
+      has_rapid_trend: false,
       ...overrides,
     };
   }

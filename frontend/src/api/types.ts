@@ -659,6 +659,11 @@ export interface StationMedian {
    *  still rides in the array so the panel can render it (struck-out
    *  or greyed) instead of silently disappearing. */
   is_outlier: boolean;
+  /** True when at least one observation for this station in the
+   *  window carried a `PRESRR` / `PRESFR` remark (FMH-1: rising or
+   *  falling by ≥0.06 inHg/hr).  The regional-quiescence gate reads
+   *  this across survivors; UIs may want to badge the row too. */
+  has_rapid_trend: boolean;
 }
 
 /** The console's own barometer aggregate over the last N minutes. */
@@ -678,7 +683,9 @@ export type BarometerSkipReason =
   | "insufficient_console_samples"
   | "no_metar_available"
   | "insufficient_stations"
-  | "cross_station_disagreement";
+  | "cross_station_disagreement"
+  | "unsettled_console"
+  | "unsettled_regional";
 
 /** The write decision + everything the UI needs to render it.
  *  Semantics after #307: `median_of_medians_*` is populated whenever
@@ -714,6 +721,8 @@ export interface BarometerThresholds {
   distance_weight_epsilon_miles: number;
   /** null → all stations in bbox count; N → only the N nearest. */
   station_limit_for_calibration: number | null;
+  console_stdev_threshold_hpa: number;
+  rapid_trend_station_fraction: number;
 }
 
 export interface BarometerAggregate {
