@@ -74,6 +74,7 @@ from .commands import (
     cmd_lps,
     cmd_ver,
     cmd_nver,
+    cmd_ident,
     cmd_rxcheck,
     cmd_bar,
     cmd_bardata,
@@ -152,6 +153,12 @@ class VantageHardwareConfig:
     longitude: Optional[float] = None       # degrees
     elevation: Optional[int] = None         # feet
     has_loop2: bool = False                 # VP2/Vue with firmware >= 1.90
+    # Product SKU as ASCII 4-digit string (e.g. "6351" for Vantage
+    # Vue Wireless with WeatherLink IP).  Populated via IDENT during
+    # connect; None when IDENT is unsupported or returned an empty /
+    # malformed response.  Undocumented Davis command; verified working
+    # on Vue fw 2.12 and 4.33.
+    product_sku: Optional[str] = None
 
 
 class VantageDriver(StationDriver):
@@ -314,6 +321,33 @@ class VantageDriver(StationDriver):
                 self.hw_config.has_loop2 = False
                 logger.info("NVER not supported — VP1 (no LOOP2)")
                 # Drain any leftover bytes
+                self.serial.flush()
+
+            # 2b. Product SKU (IDENT — undocumented Davis command, verified
+            # on Vue fw 2.12 and 4.33; may not work on VP1 / older VP2).
+            # Failure is silent — an empty or malformed response leaves
+            # `product_sku` as None and the caller falls back to
+            # station_type_code for identification.  See
+            # `reference/vantage_fw433_wire_audit.md` §N1.
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_ident())
+            try:
+                response = self._read_ok_response()
+                sku = response.strip()
+                # SKUs are Davis product numbers — four ASCII digits.
+                # Reject anything else defensively so a partial or
+                # noise response does not populate a bogus "SKU".
+                if sku.isdigit() and len(sku) == 4:
+                    self.hw_config.product_sku = sku
+                    logger.info("Product SKU: %s (via IDENT)", sku)
+                else:
+                    logger.info(
+                        "IDENT response not a 4-digit SKU (%r) — leaving product_sku unset",
+                        sku,
+                    )
+            except (ConnectionError, ValueError):
+                logger.info("IDENT not supported — leaving product_sku unset")
                 self.serial.flush()
 
             # 3. Station type from processor memory via WRD.

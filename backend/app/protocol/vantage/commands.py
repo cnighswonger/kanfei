@@ -42,6 +42,21 @@ def cmd_nver() -> bytes:
     return b"NVER\n"
 
 
+def cmd_ident() -> bytes:
+    """IDENT — get product SKU.
+
+    Undocumented in Davis Serial Communication Reference v2.6.1, but
+    verified working identically on Vantage Vue Console fw 2.12 and
+    fw 4.33 during the wire audit (see
+    `reference/vantage_fw433_wire_audit.md`).  Returns the four-digit
+    product number as ASCII (`6351` for Vantage Vue Wireless with
+    WeatherLink IP, etc.).  Behaviour on older Vantage Pro / Pro2
+    firmware is not verified — callers must tolerate an empty or
+    malformed response.
+    """
+    return b"IDENT\n"
+
+
 def cmd_rxcheck() -> bytes:
     """RXCHECK — receiver diagnostics."""
     return b"RXCHECK\n"

@@ -1026,6 +1026,7 @@ class LoggerDaemon:
         hw = getattr(self.driver, "hw_config", None)
         firmware_version = getattr(hw, "firmware_version", None) if hw else None
         firmware_date = getattr(hw, "firmware_date", None) if hw else None
+        product_sku = getattr(hw, "product_sku", None) if hw else None
         # firmware_date starts as "" (dataclass default) on Vantage before
         # detection completes.  Report an empty string as None so the UI
         # treats it the same as an unsupported driver rather than showing
@@ -1040,6 +1041,7 @@ class LoggerDaemon:
             "link_revision": ("E" if link.is_rev_e else "D") if link else "unknown",
             "firmware_version": firmware_version,
             "firmware_date": firmware_date,
+            "product_sku": product_sku,
             "poll_interval": self.poller.poll_interval if self.poller else 0,
             **stats,
         }
