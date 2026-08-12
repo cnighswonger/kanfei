@@ -174,6 +174,14 @@ export interface StationStatus {
    * even on VP1 where NVER is absent.
    */
   firmware_date: string | null;
+  /**
+   * Davis product SKU (4-digit ASCII string, e.g. "6351" for Vantage
+   * Vue Wireless with WeatherLink IP).  Populated on Vue / VP2 via the
+   * undocumented `IDENT` command at connect; `null` on stations that
+   * don't support it or when the response was malformed.  See
+   * `reference/vantage_fw433_wire_audit.md` §N1.
+   */
+  product_sku: string | null;
   poll_interval: number;
   last_poll: string | null;
   archive_records: number;

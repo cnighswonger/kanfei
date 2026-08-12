@@ -54,6 +54,7 @@ _DEGRADED_RESPONSE = {
     "link_revision": "unknown",
     "firmware_version": None,
     "firmware_date": None,
+    "product_sku": None,
     "poll_interval": 0,
     "station_time": None,
 }
@@ -112,6 +113,7 @@ async def get_station():
         "link_revision": data.get("link_revision", "unknown"),
         "firmware_version": data.get("firmware_version"),
         "firmware_date": data.get("firmware_date"),
+        "product_sku": data.get("product_sku"),
         "poll_interval": data.get("poll_interval", 0),
         "last_poll": data.get("last_poll"),
         "uptime_seconds": data.get("uptime_seconds", 0),
