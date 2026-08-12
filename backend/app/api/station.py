@@ -234,6 +234,41 @@ async def get_signal_quality(_admin=Depends(require_admin)):
         raise HTTPException(status_code=503, detail="Logger daemon not running")
 
 
+@router.get("/station/radio-state")
+async def get_radio_state(_admin=Depends(require_admin)):
+    """Vantage radio state and per-unit crystal cal via OPMODE.
+
+    Undocumented Davis command, read-only, safe on Vue fw 2.12 and
+    fw 4.33.  See `reference/vantage_fw433_wire_audit.md` §N3 for
+    the wire behaviour and audit results.
+
+    Admin-gated like the other station endpoints — read-only but
+    holds the serial lock briefly, and on a single-master port that
+    is enough to stall a poll.  Returns the parsed dict of
+    ``KEY -> int``; on a station that does not implement OPMODE a
+    501 is raised, on a transient fault a 503, on serial-lock
+    timeout a 504.  Same 501/503/504 split as `/signal-quality`
+    because the failure classes are the same.
+    """
+    try:
+        client = get_ipc_client()
+        result = await client.send_command({"cmd": "radio_state"}, timeout=20.0)
+        if result.get("ok"):
+            return result["data"]
+        detail = result.get("error", "Failed")
+        raise HTTPException(
+            status_code=501 if "does not support" in detail else 503,
+            detail=detail,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Station did not respond in time (serial port busy?)",
+        )
+    except (ConnectionRefusedError, OSError):
+        raise HTTPException(status_code=503, detail="Logger daemon not running")
+
+
 # --------------- Barometer calibration ---------------
 #
 # Vantage only.  Legacy stations calibrate their barometer through a

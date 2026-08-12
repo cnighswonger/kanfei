@@ -75,6 +75,7 @@ from .commands import (
     cmd_ver,
     cmd_nver,
     cmd_ident,
+    cmd_opmode,
     cmd_rxcheck,
     cmd_bar,
     cmd_bardata,
@@ -1406,6 +1407,77 @@ class VantageDriver(StationDriver):
             logger.warning("RXCHECK: unexpected response: %r", response)
             return None
 
+    # ---- OPMODE: radio state and per-unit crystal cal ----
+    #
+    # Undocumented Davis command; verified on Vue fw 2.12 and fw 4.33
+    # to return an identical multi-line KEY: value block.  See
+    # `reference/vantage_fw433_wire_audit.md` §N3 for the full field
+    # list and the audit's cross-check.
+    #
+    # Read-only and safe.  Does NOT enter test mode (contrast with
+    # `TST x` which flips the console's radio into a state that
+    # disrupts reception).  A caller can hit OPMODE any time to
+    # confirm current radio configuration or read `XTLCAL` for
+    # crystal-cal comparisons across units.
+    #
+    # Numeric fields are returned as int; a malformed field is
+    # dropped from the dict rather than crashing the read.  The
+    # `TEMP CAL` line has an embedded space in the key, which the
+    # parser handles explicitly rather than splitting on the first
+    # colon and inheriting the space.
+
+    def read_radio_state(self) -> Optional[dict[str, int]]:
+        """Read OPMODE — Vantage radio state and per-unit crystal cal.
+
+        Returns a dict of ``KEY -> int``.  Keys observed on Vue: TST,
+        TX, RX, HOP, BAND, CHAN, DOM, XTLCAL, TEMP, TEMP_CAL (the
+        wire's ``TEMP CAL`` is normalised to ``TEMP_CAL`` for Python
+        dict-key friendliness).  Returns None if the wire read failed
+        entirely or the response was unparseable; individual
+        malformed fields are dropped from the returned dict without
+        failing the whole read.
+        """
+        with self._io_lock:
+            self._wakeup()
+            self.serial.flush()
+            self.serial.send(cmd_opmode())
+            response = self._read_text_block()
+
+        if not response:
+            logger.warning("OPMODE: no response")
+            return None
+
+        out: dict[str, int] = {}
+        for line in response.splitlines():
+            line = line.strip()
+            if not line or ":" not in line:
+                continue
+            # Split only on the FIRST colon so a key with an embedded
+            # space (`TEMP CAL`) still parses; the wire never uses
+            # a colon in the value.
+            key_raw, _, value_raw = line.partition(":")
+            key = key_raw.strip().replace(" ", "_")
+            value_str = value_raw.strip()
+            if not key or not value_str:
+                continue
+            try:
+                out[key] = int(value_str)
+            except ValueError:
+                logger.debug(
+                    "OPMODE: field %r not int (%r); dropped", key, value_str,
+                )
+
+        if not out:
+            logger.warning(
+                "OPMODE: no parseable fields in response: %r", response,
+            )
+            return None
+        logger.info(
+            "OPMODE: %d fields (TST=%s DOM=%s XTLCAL=%s)",
+            len(out), out.get("TST"), out.get("DOM"), out.get("XTLCAL"),
+        )
+        return out
+
     # ---- BARDATA: barometer calibration parameters ----
 
     def bardata(self) -> Optional[BarometerCalibration]:
@@ -2036,6 +2108,9 @@ class VantageDriver(StationDriver):
 
     async def async_rxcheck(self) -> Optional[dict]:
         return await self._run_in_executor(self.rxcheck)
+
+    async def async_read_radio_state(self) -> Optional[dict[str, int]]:
+        return await self._run_in_executor(self.read_radio_state)
 
     async def async_hilows(self) -> Optional[VantageHighsLows]:
         return await self._run_in_executor(self.hilows)

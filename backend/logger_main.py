@@ -998,6 +998,7 @@ class LoggerDaemon:
         h(ipc.CMD_BAROMETER_CAL, self._h_barometer_cal)
         h(ipc.CMD_SET_BAROMETER, self._h_set_barometer)
         h(ipc.CMD_SIGNAL_QUALITY, self._h_signal_quality)
+        h(ipc.CMD_RADIO_STATE, self._h_radio_state)
         h(ipc.CMD_RAIN_PREFLIGHT, self._h_rain_preflight)
         h(ipc.CMD_SET_YEARLY_RAIN, self._h_set_yearly_rain)
         h(ipc.CMD_ARCHIVE_PREFLIGHT, self._h_archive_preflight)
@@ -1765,6 +1766,27 @@ class LoggerDaemon:
                 logger.warning("RECEIVERS failed (reporting RXCHECK only): %s", exc)
 
         return {**stats, "receivers": receivers}
+
+    async def _h_radio_state(self, _msg: dict) -> dict[str, Any]:
+        """Vantage OPMODE — radio state and per-unit crystal cal.
+
+        Undocumented Davis command, read-only, safe on Vue fw 2.12 and
+        fw 4.33 (see `reference/vantage_fw433_wire_audit.md` §N3).
+        Gated on the driver having ``async_read_radio_state`` — legacy
+        stations do not, so this returns a 501-shaped error there via
+        the same shape as `_h_signal_quality`.
+        """
+        drv = self.driver
+        if drv is None or not drv.connected:
+            raise RuntimeError("Not connected")
+        if not hasattr(drv, "async_read_radio_state"):
+            raise RuntimeError(
+                f"{drv.station_name} does not support radio-state diagnostics"
+            )
+        state = await drv.async_read_radio_state()
+        if state is None:
+            raise RuntimeError("Station did not return a radio-state response")
+        return state
 
     async def _h_sync_station_time(self, _msg: dict) -> dict[str, Any]:
         drv = self.driver
