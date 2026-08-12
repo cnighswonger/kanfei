@@ -313,26 +313,123 @@ test.describe('Barometer calibration panel', () => {
     });
   }
 
-  function freshReference(overrides: Record<string, unknown> = {}) {
+  const THRESHOLDS = {
+    min_stations: 2,
+    cross_station_spread_threshold_hpa: 0.4,
+    console_window_minutes: 15,
+    min_console_samples: 20,
+    max_station_distance_miles: 47,
+    station_window_hours: 2,
+    mad_rejection_multiplier: 2.5,
+    mad_min_scale_hpa: 0.15,
+    mad_max_iterations: 10,
+  };
+
+  function station(
+    station_id: string,
+    altimeter_inhg: number,
+    overrides: Record<string, unknown> = {},
+  ) {
+    const t = Math.round(altimeter_inhg * 1000);
     return {
-      references: [
-        {
-          station_id: 'KHRJ',
-          station_name: 'Harnett Regional',
-          distance_miles: 7.7,
-          bearing_cardinal: 'W',
-          observed_at: new Date(Date.now() - 5 * 60_000).toISOString(),
-          altimeter_thousandths_inhg: 30030,
-          altimeter_inhg: 30.03,
-          raw_metar: 'METAR KHRJ 041935Z AUTO 20008KT 10SM CLR 28/22 A3003 RMK AO2',
-          report_type: 'METAR',
-        },
-      ],
+      station_id,
+      station_name: `${station_id} name`,
+      distance_miles: 10,
+      bearing_cardinal: 'N',
+      n_obs: 5,
+      median_altimeter_thousandths_inhg: t,
+      median_altimeter_inhg: altimeter_inhg,
+      obs_spread_thousandths_inhg: 20,
+      newest_observed_at: new Date().toISOString(),
+      is_outlier: false,
+      ...overrides,
+    };
+  }
+
+  /** A reference response whose aggregate has both gates PASSING —
+   *  render the "Use recommended offset" button.  Two tightly-agreeing
+   *  stations (spread 0.03 hPa), a healthy console sample, and a
+   *  median-of-medians of 30.020 inHg vs a 30.050 inHg console reading
+   *  yield offset -0.030 inHg. */
+  function freshReferenceApplyReady(overrides: Record<string, unknown> = {}) {
+    return {
+      references: [],
       location_configured: true,
       home_lat: 35.3809,
       home_lon: -78.5982,
       radius_miles: 60,
       fetched_at: new Date().toISOString(),
+      aggregate: {
+        console: {
+          median_hpa: 1017.5,
+          n_samples: 90,
+          window_minutes: 15,
+          stdev_hpa: 0.05,
+          window_start: new Date(Date.now() - 15 * 60_000).toISOString(),
+          window_end: new Date().toISOString(),
+        },
+        per_station_medians: [
+          station('KHRJ', 30.020),
+          station('KJNX', 30.021),
+        ],
+        n_stations_considered: 2,
+        n_stations_used: 2,
+        cross_station_spread_hpa: 0.03,
+        recommendation: {
+          should_apply: true,
+          skip_reason: null,
+          median_of_medians_thousandths_inhg: 30020,
+          median_of_medians_inhg: 30.020,
+          offset_thousandths_inhg: -30,
+          offset_inhg: -0.030,
+        },
+        thresholds: THRESHOLDS,
+        reference_radius_miles: 47,
+      },
+      ...overrides,
+    };
+  }
+
+  /** A reference response whose aggregate is HOLDING on cross-station
+   *  disagreement.  Same shape as the smoke case: two stations that
+   *  disagree by more than 0.4 hPa, one flagged as outlier.  Apply
+   *  button must NOT render. */
+  function freshReferenceHolding(overrides: Record<string, unknown> = {}) {
+    return {
+      references: [],
+      location_configured: true,
+      home_lat: 35.3809,
+      home_lon: -78.5982,
+      radius_miles: 60,
+      fetched_at: new Date().toISOString(),
+      aggregate: {
+        console: {
+          median_hpa: 1017.5,
+          n_samples: 90,
+          window_minutes: 15,
+          stdev_hpa: 0.05,
+          window_start: new Date(Date.now() - 15 * 60_000).toISOString(),
+          window_end: new Date().toISOString(),
+        },
+        per_station_medians: [
+          station('KHRJ', 30.020),
+          station('KGSB', 29.935, { is_outlier: true, station_name: 'Goldsboro AFB' }),
+          station('KSOP', 30.030),
+        ],
+        n_stations_considered: 3,
+        n_stations_used: 2,
+        cross_station_spread_hpa: 0.34,
+        recommendation: {
+          should_apply: false,
+          skip_reason: 'cross_station_disagreement',
+          median_of_medians_thousandths_inhg: null,
+          median_of_medians_inhg: null,
+          offset_thousandths_inhg: null,
+          offset_inhg: null,
+        },
+        thresholds: THRESHOLDS,
+        reference_radius_miles: 47,
+      },
       ...overrides,
     };
   }
@@ -347,23 +444,29 @@ test.describe('Barometer calibration panel', () => {
     ).toBeVisible();
   });
 
-  test('renders console state and reference when supported', async ({ page }) => {
+  test('renders console state and the aggregate panel when supported', async ({ page }) => {
     await stubCapability(page, true);
     await stubCalibration(page);
-    await stubReference(page, freshReference());
+    await stubReference(page, freshReferenceApplyReady());
     await page.goto('/settings');
 
     await expect(page.getByRole('heading', { name: 'Barometer Calibration' })).toBeVisible();
+    // Console reading.
     await expect(page.getByText('30.050', { exact: false })).toBeVisible();
-    // The station id appears twice (radio row + difference sentence), so
-    // anchor on the radio's own cell rather than a bare text match.
-    await expect(page.getByText('KHRJ', { exact: true })).toBeVisible();
-    await expect(page.getByRole('radio')).toBeChecked();
-    // console 30.050 vs reference 30.030 -> -0.020
-    await expect(page.getByText('-0.020 inHg', { exact: false })).toBeVisible();
+    // Aggregate panel + its per-station table.
+    await expect(page.getByRole('heading', { name: 'Multi-Station Aggregate' }))
+      .toBeVisible();
+    await expect(page.getByText('KHRJ', { exact: false })).toBeVisible();
+    await expect(page.getByText('KJNX', { exact: false })).toBeVisible();
+    // Both gates pass → Apply button renders.
+    await expect(
+      page.getByRole('button', { name: 'Use recommended offset' }),
+    ).toBeVisible();
   });
 
   test('prompts for location when coordinates are unset', async ({ page }) => {
+    // No aggregate is returned when location is unset — panel shows the
+    // "set location" prompt and Apply is unreachable (button not rendered).
     await stubCapability(page, true);
     await stubCalibration(page);
     await stubReference(page, {
@@ -373,28 +476,44 @@ test.describe('Barometer calibration panel', () => {
       home_lon: 0,
       radius_miles: 60,
       fetched_at: new Date().toISOString(),
+      aggregate: null,
     });
     await page.goto('/settings');
 
     await expect(
       page.getByText("Set your station's location", { exact: false }),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Apply Calibration' })).toBeDisabled();
+    // Aggregate button must not exist — no aggregate to apply.
+    await expect(
+      page.getByRole('button', { name: 'Use recommended offset' }),
+    ).toHaveCount(0);
   });
 
-  test('blocks a stale reference until overridden', async ({ page }) => {
+  test('hides Apply when the aggregate is HOLDING on cross-station disagreement', async ({ page }) => {
+    // The failure mode the aggregate exists to prevent: when the reference
+    // stations disagree beyond tolerance, the write button must not
+    // render at all — no override, no "use it anyway" escape hatch.
+    // The old single-station picker offered exactly that escape and was
+    // removed in this PR.
     await stubCapability(page, true);
     await stubCalibration(page);
-    const stale = freshReference();
-    (stale.references as Record<string, unknown>[])[0].observed_at =
-      new Date(Date.now() - 90 * 60_000).toISOString();
-    await stubReference(page, stale);
+    await stubReference(page, freshReferenceHolding());
     await page.goto('/settings');
 
-    const apply = page.getByRole('button', { name: 'Apply Calibration' });
-    await expect(apply).toBeDisabled();
-    await page.getByText('Use it anyway', { exact: false }).click();
-    await expect(apply).toBeEnabled();
+    await expect(page.getByRole('heading', { name: 'Multi-Station Aggregate' }))
+      .toBeVisible();
+    // The skip reason renders as a targeted diagnostic.
+    await expect(
+      page.getByText('Stations disagree beyond tolerance', { exact: false }),
+    ).toBeVisible();
+    // Apply button must be absent — HOLD means HOLD.
+    await expect(
+      page.getByRole('button', { name: 'Use recommended offset' }),
+    ).toHaveCount(0);
+    // Excluded stations still ride along in the table so the operator
+    // can see WHY the count dropped.
+    await expect(page.getByText('KGSB', { exact: false })).toBeVisible();
+    await expect(page.getByText('outlier', { exact: false })).toBeVisible();
   });
 
   test('shows the elevation reconcile row for a sub-threshold difference', async ({ page }) => {
@@ -406,7 +525,7 @@ test.describe('Barometer calibration panel', () => {
     // the console value is stubbed to sit just inside it: this test fails
     // if the threshold returns.
     await stubCapability(page, true);
-    await stubReference(page, freshReference());
+    await stubReference(page, freshReferenceApplyReady());
     await page.route('**/api/station/barometer-calibration', async (route) => {
       if (route.request().method() === 'GET') {
         await route.fulfill({
@@ -440,7 +559,7 @@ test.describe('Barometer calibration panel', () => {
     // this shows a permanent disagreement no user can ever resolve: typing
     // 315.4 into a console that stores 315 leaves it reading 315 forever.
     await stubCapability(page, true);
-    await stubReference(page, freshReference());
+    await stubReference(page, freshReferenceApplyReady());
     await page.route('**/api/station/barometer-calibration', async (route) => {
       if (route.request().method() === 'GET') {
         await route.fulfill({
@@ -459,11 +578,13 @@ test.describe('Barometer calibration panel', () => {
     await expect(page.locator('p', { hasText: 'Console: 315 ft' })).toHaveCount(0);
   });
 
-  test('a failed reference refresh disables Apply rather than reusing the old one', async ({ page }) => {
+  test('a failed reference refresh hides the aggregate rather than reusing the old one', async ({ page }) => {
     // Found by Codex on #256 R1. The panel used to keep the previously
-    // selected METAR when a refresh failed, leaving Apply enabled against
-    // a value it had just told the user it could not vouch for — a
-    // hardware write against a stale reference.
+    // selected METAR when a refresh failed, leaving Apply enabled
+    // against a value it had just told the user it could not vouch for
+    // — a hardware write against a stale reference.  Same invariant
+    // applies to the aggregate: on refresh failure the aggregate is
+    // dropped and Apply becomes unreachable.
     await stubCapability(page, true);
     await stubCalibration(page);
 
@@ -473,35 +594,41 @@ test.describe('Barometer calibration panel', () => {
         await route.fulfill({ status: 503, json: { detail: 'upstream unavailable' } });
         return;
       }
-      await route.fulfill({ json: freshReference() });
+      await route.fulfill({ json: freshReferenceApplyReady() });
     });
 
     await page.goto('/settings');
-    const apply = page.getByRole('button', { name: 'Apply Calibration' });
-    await expect(apply).toBeEnabled();
+    const apply = page.getByRole('button', { name: 'Use recommended offset' });
+    await expect(apply).toBeVisible();
 
     failNext = true;
     await page.getByRole('button', { name: 'Refresh' }).click();
 
     await expect(page.getByText('Could not fetch reference observations', { exact: false }))
       .toBeVisible();
-    await expect(apply).toBeDisabled();
-    // The stale row must be gone, not merely unusable.
-    await expect(page.getByText('KHRJ', { exact: true })).toHaveCount(0);
+    // The stale aggregate must be gone, not merely visually stale.
+    await expect(apply).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Multi-Station Aggregate' }))
+      .toHaveCount(0);
   });
 
   test('a rejected write reports actual state, not the intended one', async ({ page }) => {
     // The #252 finding as UI: a refused BAR= still applies its elevation,
     // so the panel must re-read and say so rather than claim nothing moved.
     await stubCapability(page, true);
-    await stubReference(page, freshReference());
+    await stubReference(page, freshReferenceApplyReady());
 
     let posted = false;
     let getsAfterPost = 0;
+    let postedBar: number | null = null;
     await page.route('**/api/station/barometer-calibration', async (route) => {
       const method = route.request().method();
       if (method === 'POST') {
         posted = true;
+        const body = route.request().postDataJSON() as
+          | { bar_thousandths_inhg?: number }
+          | null;
+        postedBar = body?.bar_thousandths_inhg ?? null;
         await route.fulfill({
           status: 503,
           json: { detail: 'Station rejected the calibration (BAR= not acknowledged).' },
@@ -522,13 +649,17 @@ test.describe('Barometer calibration panel', () => {
     });
 
     await page.goto('/settings');
-    await page.getByRole('button', { name: 'Apply Calibration' }).click();
+    await page.getByRole('button', { name: 'Use recommended offset' }).click();
 
     await expect(page.getByText('Elevation changed from 265 ft to 400 ft', { exact: false }))
       .toBeVisible();
     // The re-read is the mechanism, not a nicety: without it the panel
     // would be reporting what it intended rather than what happened.
     expect(getsAfterPost).toBeGreaterThan(0);
+    // The button posted the ABSOLUTE median-of-medians target
+    // (30020 thousandths from freshReferenceApplyReady), NOT the signed
+    // offset delta (-30).  This is the contract shift #306 introduced.
+    expect(postedBar).toBe(30020);
   });
 });
 test.describe('Console data operations', () => {
