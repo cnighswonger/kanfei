@@ -2804,6 +2804,7 @@ export default function Settings() {
         supported={wlConfig?.supported?.barometer_cal ?? false}
         isMobile={isMobile}
         configElevationFt={Number(val("elevation")) || 0}
+        pressureUnit={val("pressure_unit") === "hPa" ? "hPa" : "inHg"}
       />
 
       {/* Destructive console operations, each behind a preflight that
