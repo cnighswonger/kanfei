@@ -121,6 +121,12 @@ const SKIP_LABEL: Record<BarometerSkipReason, string> = {
     "Only one METAR station voted — need at least two to cross-check.",
   cross_station_disagreement:
     "Stations disagree beyond tolerance — HOLDING existing offset.",
+  unsettled_console:
+    "Your console's pressure is moving faster than a calibration " +
+    "would remain valid for — try again in a calmer window.",
+  unsettled_regional:
+    "Nearby METAR stations report rapid pressure change across the " +
+    "region — the weather is dynamic right now; try again in 60–90 min.",
 };
 
 interface Props {

@@ -469,19 +469,29 @@ class TestConsoleMedianUnitConversion:
 
 
 def _sm(icao: str, thousandths_inhg: int, distance_miles: float = 20.0,
-        obs_spread: int = 20, n_obs: int = 5) -> StationMedian:
-    """Fixture station: only fields that affect the algorithm."""
-    return StationMedian(
-        station_id=icao,
-        station_name=f"{icao} name",
-        distance_miles=distance_miles,
-        bearing_cardinal="N",
-        n_obs=n_obs,
-        median_altimeter_thousandths_inhg=thousandths_inhg,
-        median_altimeter_inhg=thousandths_inhg / 1000,
-        obs_spread_thousandths_inhg=obs_spread,
-        newest_observed_at="2026-08-11T20:15:00+00:00",
-    )
+        obs_spread: int = 20, n_obs: int = 5,
+        overrides: dict[str, Any] | None = None) -> StationMedian:
+    """Fixture station: only fields that affect the algorithm.
+
+    ``overrides`` slots into any StationMedian field a specific test
+    needs to flip — currently used for the quiescence tests to set
+    ``has_rapid_trend=True`` on a subset of the stations without
+    threading a new arg through every callsite.
+    """
+    base: dict[str, Any] = {
+        "station_id": icao,
+        "station_name": f"{icao} name",
+        "distance_miles": distance_miles,
+        "bearing_cardinal": "N",
+        "n_obs": n_obs,
+        "median_altimeter_thousandths_inhg": thousandths_inhg,
+        "median_altimeter_inhg": thousandths_inhg / 1000,
+        "obs_spread_thousandths_inhg": obs_spread,
+        "newest_observed_at": "2026-08-11T20:15:00+00:00",
+    }
+    if overrides:
+        base.update(overrides)
+    return StationMedian(**base)
 
 
 class TestMadOutlierRejection:
@@ -859,3 +869,130 @@ class TestStationLimitForCalibration:
         assert r.n_stations_considered == 3
         ids_kept = {s.station_id for s in r.per_station_medians}
         assert ids_kept == {"K0", "K1", "K2"}
+
+
+# ---------------------------------------------------------------------------
+# Weather-quiescence pre-gates (#307 android-agent follow-up)
+# ---------------------------------------------------------------------------
+
+
+class TestWeatherQuiescenceGates:
+    """Two gates that answer 'is the local weather stable enough to
+    calibrate at all' before any of the reference-side logic runs.
+    A HOLD on a stormy afternoon shouldn't read as 'stations
+    disagree' — the honest answer is 'weather is dynamic, come back
+    later'."""
+
+    def test_unsettled_console_fires_when_stdev_high(self):
+        """Console σ over the reading window above 0.2 hPa → the
+        local pressure is moving too fast to represent a stable state.
+        Fires before any station-side gate."""
+        from app.services.barometer_aggregation import (
+            CONSOLE_STDEV_THRESHOLD_HPA, SKIP_UNSETTLED_CONSOLE,
+        )
+        # 0.35 hPa σ is well above threshold (0.2) — matches a passing
+        # squall's footprint.
+        c = ConsoleSample(
+            median_hpa=1013.2, n_samples=90, window_minutes=15,
+            stdev_hpa=0.35,
+            window_start="2026-08-11T20:00:00+00:00",
+            window_end="2026-08-11T20:15:00+00:00",
+        )
+        stations = [_sm(f"K{i}", 30000 + i, distance_miles=15.0)
+                    for i in range(5)]
+        r = compute_aggregate_recommendation(c, stations)
+        assert r.recommendation.should_apply is False
+        assert r.recommendation.skip_reason == SKIP_UNSETTLED_CONSOLE
+        # No override — operator cannot see through the transient
+        # from the UI, so we do not offer one.
+        assert r.recommendation.hold_override_allowed is False
+        assert CONSOLE_STDEV_THRESHOLD_HPA == 0.2
+
+    def test_calm_console_below_threshold_passes(self):
+        """Console σ under 0.2 hPa is the normal quiet-hour signature
+        — proceeds to the reference-side gates."""
+        c = ConsoleSample(
+            median_hpa=1013.2, n_samples=90, window_minutes=15,
+            stdev_hpa=0.05,  # typical quiet-hour σ
+            window_start="2026-08-11T20:00:00+00:00",
+            window_end="2026-08-11T20:15:00+00:00",
+        )
+        stations = [_sm(f"K{i}", 30000 + i, distance_miles=15.0)
+                    for i in range(5)]
+        r = compute_aggregate_recommendation(c, stations)
+        # Not the unsettled_console skip — got past Wq1.
+        from app.services.barometer_aggregation import SKIP_UNSETTLED_CONSOLE
+        assert r.recommendation.skip_reason != SKIP_UNSETTLED_CONSOLE
+
+    def test_unsettled_regional_fires_when_enough_stations_report_rapid_trend(self):
+        """When ≥30% of surviving stations carry PRESRR / PRESFR the
+        whole area is moving; refuse cleanly instead of "stations
+        disagree"."""
+        from app.services.barometer_aggregation import SKIP_UNSETTLED_REGIONAL
+        # 5 stations, 2 report rapid trend (40% > 30% threshold).
+        stations = [
+            _sm("KA", 30000, distance_miles=10.0),
+            _sm("KB", 30002, distance_miles=12.0),
+            _sm("KC", 30003, distance_miles=15.0,
+                overrides={"has_rapid_trend": True}),
+            _sm("KD", 30004, distance_miles=18.0,
+                overrides={"has_rapid_trend": True}),
+            _sm("KE", 30005, distance_miles=20.0),
+        ]
+        r = compute_aggregate_recommendation(_console(), stations)
+        assert r.recommendation.should_apply is False
+        assert r.recommendation.skip_reason == SKIP_UNSETTLED_REGIONAL
+        assert r.recommendation.hold_override_allowed is False
+
+    def test_single_rapid_trend_station_does_not_fire_regional(self):
+        """One station firing is noise, not a regional signal.  1 of 5
+        stations = 20% < 30% threshold."""
+        from app.services.barometer_aggregation import SKIP_UNSETTLED_REGIONAL
+        stations = [
+            _sm("KA", 30000, distance_miles=10.0),
+            _sm("KB", 30002, distance_miles=12.0),
+            _sm("KC", 30003, distance_miles=15.0,
+                overrides={"has_rapid_trend": True}),
+            _sm("KD", 30004, distance_miles=18.0),
+            _sm("KE", 30005, distance_miles=20.0),
+        ]
+        r = compute_aggregate_recommendation(_console(), stations)
+        assert r.recommendation.skip_reason != SKIP_UNSETTLED_REGIONAL
+
+    def test_regional_gate_runs_after_mad(self):
+        """A drifted station that reports rapid-trend remarks
+        spuriously should not trip the regional gate — MAD rejects
+        it first, then the gate counts only survivors."""
+        from app.services.barometer_aggregation import SKIP_UNSETTLED_REGIONAL
+        stations = [
+            _sm("KA", 30000, distance_miles=10.0),
+            _sm("KB", 30001, distance_miles=12.0),
+            _sm("KC", 30002, distance_miles=15.0),
+            _sm("KD", 30001, distance_miles=18.0),
+            # KDRIFT: far off (MAD rejects), reports rapid trend.
+            _sm("KDRIFT", 29500, distance_miles=20.0,
+                overrides={"has_rapid_trend": True}),
+        ]
+        r = compute_aggregate_recommendation(_console(), stations)
+        # KDRIFT rejected → 0 of 4 survivors flag → not unsettled.
+        assert r.recommendation.skip_reason != SKIP_UNSETTLED_REGIONAL
+
+    def test_rapid_trend_detection_from_raw_metar(self):
+        """The PRESRR/PRESFR regex must fire on the standard METAR
+        remark forms and NOT on random substrings."""
+        import re
+        from app.services.barometer_aggregation import _RAPID_TREND_RE
+        assert _RAPID_TREND_RE.search("METAR KRDU ... RMK AO2 PRESRR SLP015")
+        assert _RAPID_TREND_RE.search("METAR KJNX ... RMK AO2 PRESFR")
+        # Word-boundary anchoring: a longer word does NOT match.
+        assert not _RAPID_TREND_RE.search("METAR KX01 ... PRESIDENTIAL")
+        # Case-sensitive by design — METAR is all-caps.
+        assert not _RAPID_TREND_RE.search("METAR KX02 ... presrr lower")
+
+
+class TestWeatherQuiescenceThresholdsInSnapshot:
+    def test_snapshot_carries_wq_constants(self):
+        stations = [_sm(f"K{i}", 30000 + i) for i in range(3)]
+        r = compute_aggregate_recommendation(_console(), stations)
+        assert r.thresholds["console_stdev_threshold_hpa"] == 0.2
+        assert r.thresholds["rapid_trend_station_fraction"] == 0.30
