@@ -43,6 +43,9 @@ SENSOR_COLUMNS = {
     "thsw_index": SensorReadingModel.thsw_index,
     "solar_radiation": SensorReadingModel.solar_radiation,
     "uv_index": SensorReadingModel.uv_index,
+    "et_daily": SensorReadingModel.et_daily,
+    "et_monthly": SensorReadingModel.et_monthly,
+    "et_yearly": SensorReadingModel.et_yearly,
 }
 
 # ---------------------------------------------------------------------------
@@ -69,6 +72,9 @@ SENSOR_UNITS: dict[str, str] = {
     "thsw_index": "F",
     "solar_radiation": "W/m²",
     "uv_index": "",
+    "et_daily": "in",
+    "et_monthly": "in",
+    "et_yearly": "in",
 }
 
 # ---------------------------------------------------------------------------
@@ -92,6 +98,11 @@ SENSOR_CONVERTERS: dict[str, object] = {
     "rain_total": si_rain_to_display_in,
     "rain_yearly": si_rain_to_display_in,
     "rain_rate": si_rain_to_display_in,  # tenths mm/hr → in/hr
+    # ET stored in tenths mm, same shape as rain_total — reuse the
+    # SI-mm-tenths → inches converter.
+    "et_daily": si_rain_to_display_in,
+    "et_monthly": si_rain_to_display_in,
+    "et_yearly": si_rain_to_display_in,
 }
 
 # Fallback divisors for sensors that are already in display-ready units
@@ -125,6 +136,12 @@ SENSOR_BOUNDS: dict[str, tuple[int, int]] = {
     "rain_yearly": (0, 253746),
     "solar_radiation": (0, 1800),      # 0 to 1800 W/m²
     "uv_index": (0, 160),             # 0 to 16 (tenths)
+    # ET running totals: same shape as rain_total (tenths mm).  Day / Month
+    # / Year all bounded by the same physical maximum since Davis clamps
+    # them to two-byte encodings on the wire.
+    "et_daily": (0, 253746),
+    "et_monthly": (0, 253746),
+    "et_yearly": (0, 253746),
 }
 
 # ---------------------------------------------------------------------------

@@ -220,6 +220,9 @@ def create_db(db_path: str) -> None:
             theta_e INTEGER,
             wind_gust INTEGER,
             thsw_index INTEGER,
+            et_daily INTEGER,
+            et_monthly INTEGER,
+            et_yearly INTEGER,
             pressure_trend TEXT
         );
         CREATE INDEX idx_sensor_timestamp ON sensor_readings(timestamp);
