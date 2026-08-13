@@ -37,7 +37,7 @@ kanfei (0.1.0~beta28) unstable; urgency=medium
     records what NOT to touch (the bare `RESET` command puts a Vue into
     a setup-wizard-required state on the LCD).
 
- -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 13 Aug 2026 00:20:00 +0000
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Thu, 13 Aug 2026 00:20:00 +0000
 
 kanfei (0.1.0~beta27) unstable; urgency=medium
 
