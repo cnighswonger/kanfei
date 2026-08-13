@@ -15,7 +15,7 @@
  * and a polling tile would starve the logger on a single-master port.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, fetchRadioState, fetchSignalQuality } from "../../api/client.ts";
 import type { RadioState, SignalQuality } from "../../api/types.ts";
 
@@ -101,6 +101,18 @@ export default function RxDiagnostics({ isMobile }: Props) {
   const [readAt, setReadAt] = useState<Date | null>(null);
   const [hidden, setHidden] = useState(false);
 
+  // Reads hold the console serial lock and can wait up to 20s. If the
+  // user navigates away mid-fetch, we must not touch state after the
+  // component unmounts. Tracked as a ref rather than a boolean state so
+  // the check itself doesn't trigger a re-render.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const load = useCallback(async () => {
     setRxStatus("loading");
     setRadioStatus("loading");
@@ -115,6 +127,8 @@ export default function RxDiagnostics({ isMobile }: Props) {
       (err) => ({ ok: false, err }) as const,
     );
     const [rxRes, radioRes] = await Promise.all([rxPromise, radioPromise]);
+
+    if (!mountedRef.current) return;
 
     // Hide the whole tile when the driver doesn't do RXCHECK, when the
     // user is not authenticated as admin, or when the daemon isn't up.
