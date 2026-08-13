@@ -153,7 +153,15 @@ export interface TwilightTimes {
 
 export interface SunData {
   sunrise: string;
+  /**
+   * "console" when sunrise came from the Davis LOOP2 `sunrise` extra
+   * (the console's own value based on its configured lat/lon), else
+   * "astral" (server-computed from lat/lon config). Lets the UI badge
+   * or debug where a displayed time came from — see #237.
+   */
+  sunrise_source: "console" | "astral";
   sunset: string;
+  sunset_source: "console" | "astral";
   solar_noon: string;
   day_length: string;
   day_change: string;
