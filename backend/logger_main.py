@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from app.config import settings
 from app.logging_setup import configure_logging
 from app.models.database import init_database, SessionLocal, engine
+from app.models.sensor_reading import SensorReadingModel
 from app.models.station_config import StationConfigModel
 from app.protocol.base import (
     StationDriver,
@@ -39,7 +40,7 @@ from app.protocol.base import (
     CAP_LOCATION_RW,
     CAP_RAIN_SEASON_RW,
 )
-from app.protocol.link_driver import LinkDriver, CalibrationOffsets, _rain_register_to_mm
+from app.protocol.link_driver import LinkDriver, CalibrationOffsets
 from app.protocol.serial_port import list_serial_ports
 from app.protocol.constants import STATION_NAMES, DAVIS_LEGAL_ARCHIVE_PERIODS
 from app.services.poller import Poller
@@ -407,12 +408,22 @@ class LoggerDaemon:
             return
         try:
             state = json.loads(self.state_file.read_text())
-            # Support both old format (last_rain_total int) and new (last_rain_daily float)
             if "last_rain_daily" in state:
                 self.poller._last_rain_daily = state["last_rain_daily"]
             elif "last_rain_total" in state and state["last_rain_total"] is not None:
-                # Migrate from old click-based format to inches
-                self.poller._last_rain_daily = state["last_rain_total"] * 0.01
+                # Legacy click-based format from before the poller switched
+                # to inches (#149 predecessor). The migration path here used
+                # a hardcoded ``* 0.01`` which is only correct at rain_cal=100
+                # (#172). Drop the migration: the state file is rewritten on
+                # every clean shutdown, and the poller path re-seeds
+                # ``_last_rain_daily`` from the next hardware read regardless.
+                # Users who upgraded through PR #149 restarted at least once
+                # in the interim, so this branch is functionally dead.
+                logger.warning(
+                    "Legacy 'last_rain_total' in %s ignored; state will be "
+                    "rewritten in the new format on next clean shutdown",
+                    self.state_file,
+                )
             tip = state.get("last_rain_tip_time")
             if tip:
                 self.poller._last_rain_tip_time = datetime.fromisoformat(tip)
@@ -902,58 +913,107 @@ class LoggerDaemon:
 
             await self._do_midnight_rain_reset()
 
-    async def _do_midnight_rain_reset(self) -> None:
-        """Save today's daily rain as yesterday, then clear the station counter.
+    def _last_reading_before_local_midnight_mm(self) -> float:
+        """Return the last-known rain_total from before today's local midnight
+        as millimetres.  Driver-agnostic — reads ``sensor_readings`` which
+        every driver's poll path writes to.  Falls back to 0.0 when no
+        pre-midnight reading exists (fresh install, extended outage, first
+        day online) or when the last reading had a null ``rain_total``.
+        """
+        tz = self._get_station_timezone()
+        today_local_midnight = datetime.now(tz).replace(
+            hour=0, minute=0, second=0, microsecond=0,
+        )
+        # ``sensor_readings.timestamp`` is stored as naive UTC (SQLAlchemy
+        # strips tzinfo on the naive ``DateTime`` column); compare against a
+        # naive UTC datetime derived from the local wall clock.
+        today_local_midnight_utc_naive = (
+            today_local_midnight.astimezone(timezone.utc).replace(tzinfo=None)
+        )
+        db = SessionLocal()
+        try:
+            row = (
+                db.query(SensorReadingModel)
+                .filter(SensorReadingModel.timestamp < today_local_midnight_utc_naive)
+                .order_by(SensorReadingModel.timestamp.desc())
+                .first()
+            )
+        finally:
+            db.close()
+        if row is None or row.rain_total is None:
+            return 0.0
+        # sensor_readings.rain_total is stored in tenths of mm
+        # (see SENSOR_BOUNDS in app/models/sensor_meta.py).
+        return row.rain_total / 10.0
 
-        Order matters: clear hardware BEFORE persisting yesterday.  If the
-        clear fails, leave both the in-config ``rain_yesterday`` row and the
-        poller's cached value untouched — otherwise the next midnight reads
-        an un-cleared station counter (today's total + tomorrow's rainfall)
-        and rolls that pile into ``rain_yesterday``, double-counting today's
-        rain.  Driver-agnostic rollover (Tempest et al.) is tracked in #171;
-        for now this method is a no-op on any non-``LinkDriver`` driver.
+    async def _do_midnight_rain_reset(self) -> None:
+        """Save today's final rain total as yesterday, and (Davis only) clear
+        the hardware counter.
+
+        Driver-agnostic in two halves:
+
+          - **Snapshot**: today's terminal ``rain_total`` comes from the
+            latest pre-midnight ``sensor_readings`` row, so any driver whose
+            poll writes to that table gets a correct ``rain_yesterday``
+            value.  See ``_last_reading_before_local_midnight_mm``.
+
+          - **Hardware clear**: only Davis (LinkDriver) needs an explicit
+            counter reset — its daily register keeps accumulating until
+            told to zero.  Non-Davis drivers (Tempest ``_check_day_rollover``
+            et al.) self-zero their internal state on the first post-midnight
+            poll, so nothing to do here for them.
+
+        Order matters on Davis: clear hardware BEFORE persisting yesterday.
+        If the clear fails, leave both the in-config ``rain_yesterday`` row
+        and the poller's cached value untouched — otherwise the next
+        midnight reads an un-cleared station counter (today's total +
+        tomorrow's rainfall) and rolls that pile into ``rain_yesterday``,
+        double-counting today's rain.
         """
         driver = self.driver
-        link = self._link
-        if link is None:
-            # Non-Davis driver: midnight rollover for these drivers is tracked
-            # in #171.  Log at debug so we don't spam WARN every night on
-            # healthy Tempest / Ambient / etc. installs.
-            if driver is not None:
-                logger.debug(
-                    "Midnight rain reset: skipping for non-LinkDriver driver %s",
-                    type(driver).__name__,
+        if driver is None:
+            logger.warning("Midnight rain reset skipped — no driver")
+            return
+
+        link = self._link  # LinkDriver iff Davis, else None
+
+        # Snapshot yesterday's terminal total from the DB (driver-agnostic).
+        try:
+            daily_mm = self._last_reading_before_local_midnight_mm()
+        except Exception as exc:
+            logger.warning(
+                "Midnight rain reset: DB read failed (%s) — skipping", exc,
+            )
+            return
+        daily_inches = round(daily_mm / 25.4, 2)
+
+        # Davis: clear hardware first.  A failed clear must skip the persist
+        # so tomorrow's midnight doesn't double-count.  For non-Davis, skip
+        # this whole block — the driver has already or will shortly zero
+        # its own internal state.
+        if link is not None:
+            if not link.connected:
+                logger.warning(
+                    "Midnight rain reset skipped — Davis link not connected",
                 )
-            return
-        if not link.connected:
-            logger.warning("Midnight rain reset skipped — station not connected")
-            return
+                return
+            try:
+                ok = await link.async_clear_rain_daily()
+            except Exception as exc:
+                logger.warning(
+                    "Midnight rain reset: hardware clear raised (%s) — "
+                    "yesterday NOT updated",
+                    exc,
+                )
+                return
+            if not ok:
+                logger.warning(
+                    "Midnight rain reset: hardware clear failed — "
+                    "yesterday NOT updated",
+                )
+                return
 
-        # Read current daily rain (direct memory read for accuracy).
-        # Convert via the same helper used by the poller (#149) so non-default
-        # rain_cal stations record the correct yesterday value: inches =
-        # clicks / rain_cal, derived from the mm form returned by the helper.
-        try:
-            daily_clicks = await link.async_read_rain_daily()
-            mm = _rain_register_to_mm(daily_clicks, link.calibration.rain_cal)
-            daily_inches = round(mm / 25.4, 2) if mm else 0.0
-        except Exception as exc:
-            logger.warning("Midnight rain reset: read failed (%s) — skipping", exc)
-            return
-
-        # Clear station hardware FIRST.  Only persist yesterday after the
-        # hardware clear succeeds; otherwise tomorrow's midnight will read
-        # an un-cleared counter and double-count.
-        try:
-            ok = await link.async_clear_rain_daily()
-        except Exception as exc:
-            logger.warning("Midnight rain reset: hardware clear raised (%s) — yesterday NOT updated", exc)
-            return
-        if not ok:
-            logger.warning("Midnight rain reset: hardware clear failed — yesterday NOT updated")
-            return
-
-        # Hardware clear succeeded — safe to commit yesterday now.
+        # Persist yesterday.
         db = SessionLocal()
         try:
             row = db.query(StationConfigModel).filter_by(key="rain_yesterday").first()
@@ -974,9 +1034,17 @@ class LoggerDaemon:
         if self.poller:
             self.poller.rain_yesterday = daily_inches
 
-        await self._refresh_after_rain_clear()
+        # Only Davis needs the poller-cache refresh — it exists to reset
+        # ``_last_rain_daily`` after a hardware clear so the next poll's
+        # rain_rate calculation doesn't see a phantom drop.  Non-Davis
+        # drivers manage their own daily-rain state internally.
+        if link is not None:
+            await self._refresh_after_rain_clear()
+
         logger.info(
-            "Midnight rain reset: yesterday=%.2f in, daily cleared", daily_inches,
+            "Midnight rain reset: yesterday=%.2f in%s",
+            daily_inches,
+            ", daily cleared" if link is not None else " (non-Davis, driver self-zeros)",
         )
 
     # ---- IPC handler registration ----

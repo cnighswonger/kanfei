@@ -189,6 +189,25 @@ export interface StationStatus {
   crc_errors: number;
   timeouts: number;
   station_time: string | null;
+  /**
+   * Raw wall-clock fields the console reported at the last read. Paired
+   * with `server_epoch_ms_at_read` for the frontend's live-tick display
+   * (`StationStatus.tsx`): the client advances these components forward
+   * by `Date.now() - server_epoch_ms_at_read` and formats them as-is,
+   * without any timezone conversion. `year` is null on stations whose
+   * `GETTIME` response doesn't include it. Both fields null on
+   * disconnected/degraded responses and on stations that don't support
+   * GETTIME at all.
+   */
+  station_time_components: {
+    year: number | null;
+    month: number;
+    day: number;
+    hour: number;
+    minute: number;
+    second: number;
+  } | null;
+  server_epoch_ms_at_read: number | null;
 }
 
 // --- Console rain season ---
