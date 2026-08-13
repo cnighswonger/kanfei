@@ -10,6 +10,7 @@ import { getHighchartsTimeConfig, resolveTimezone } from "../utils/timezone.ts";
 import { computeYAxisScale } from "../utils/chartScaling.ts";
 import { useIsMobile } from "../hooks/useIsMobile.ts";
 import WindHistory from "../components/charts/WindHistory.tsx";
+import SolarEnergyDailyChart from "../components/charts/SolarEnergyDailyChart.tsx";
 
 // --- Sensor unit mapping (sensor key -> unit string) ---
 
@@ -158,8 +159,9 @@ export default function History() {
   }, [preset, customStart, customEnd]);
 
   const isWindCombined = sensor === "wind_combined";
+  const isSolarEnergyDaily = sensor === "solar_energy_daily";
   const { data, summary, loading, error } = useHistoricalData(
-    isWindCombined ? "" : sensor,
+    isWindCombined || isSolarEnergyDaily ? "" : sensor,
     start,
     end,
     resolution,
@@ -489,6 +491,21 @@ export default function History() {
               hours={preset === "custom"
                 ? Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 3_600_000))
                 : PRESET_HOURS[preset]}
+              height={isMobile ? 320 : 440}
+            />
+          </div>
+        ) : isSolarEnergyDaily ? (
+          <div style={{ height: isMobile ? 320 : 440 }}>
+            <SolarEnergyDailyChart
+              // Convert the selected preset/custom range to a whole-day count,
+              // clamped to the endpoint's [1, 366] window.  Sub-day presets
+              // still render as a single-day bar (today so far).
+              days={Math.max(1, Math.min(
+                366,
+                Math.ceil(
+                  (new Date(end).getTime() - new Date(start).getTime()) / 86_400_000,
+                ) || 1,
+              ))}
               height={isMobile ? 320 : 440}
             />
           </div>
