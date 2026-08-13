@@ -6,12 +6,19 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..models.database import get_db
 from ..models.sensor_reading import SensorReadingModel
 from ..models.station_config import StationConfigModel
 from ..models.sensor_meta import convert, SENSOR_BOUNDS, SENSOR_DIVISORS, SENSOR_UNITS
 from ..services.daily_extremes import get_daily_extremes
+from ..services.solar_energy import (
+    compute_daily_solar_energy_j_per_m2,
+    joules_to_display_unit,
+)
 from ..services.station_naming import resolve_station_name
+from ..services.uv_warning import classify_uv
+from .config import get_effective_config
 
 router = APIRouter()
 
@@ -83,6 +90,38 @@ def get_current(db: Session = Depends(get_db)):
 
     station_name = resolve_station_name(reading.station_type, db)
 
+    # ET fields graduated from `extra_json` to dedicated columns in the
+    # beta30 migration (see database.py and sensor_reading.py).  Read
+    # from the columns; convert tenths-mm to the operator's rain unit.
+    # None on stations that don't compute ET.
+    def _et_display(tenths_mm: int | None) -> dict | None:
+        if tenths_mm is None:
+            return None
+        mm = tenths_mm / 10.0
+        if settings.units_rain == "mm":
+            return {"value": round(mm, 2), "unit": "mm"}
+        return {"value": round(mm / 25.4, 3), "unit": "in"}
+
+    # Cumulative daily solar energy — trapezoid integration of today's
+    # samples in J/m², converted to the operator's preferred display unit.
+    solar_j_per_m2 = compute_daily_solar_energy_j_per_m2(db)
+    cfg = get_effective_config(db)
+    solar_energy_unit = str(cfg.get("solar_energy_unit") or settings.units_solar_energy)
+    solar_energy_daily_value = joules_to_display_unit(solar_j_per_m2, solar_energy_unit)
+    solar_energy_daily = (
+        {"value": solar_energy_daily_value, "unit": solar_energy_unit}
+        if solar_energy_daily_value is not None else None
+    )
+
+    # UV Index → WHO warning band.  Uses the same live UV value that
+    # ``uv_index`` above publishes, so consumers can render the label
+    # without re-classifying.  None when the reading is missing.
+    uv_value = None
+    if reading.uv_index is not None:
+        # sensor_readings.uv_index is tenths — see convert() call below.
+        uv_value = reading.uv_index / 10.0
+    uv_warning = classify_uv(uv_value)
+
     return {
         "timestamp": reading.timestamp.isoformat() if reading.timestamp else None,
         "station_type": station_name,
@@ -126,5 +165,10 @@ def get_current(db: Session = Depends(get_db)):
         },
         "solar_radiation": _val("solar_radiation", reading.solar_radiation),
         "uv_index": _val("uv_index", reading.uv_index),
+        "uv_warning": uv_warning,
+        "solar_energy_daily": solar_energy_daily,
+        "et_daily": _et_display(reading.et_daily),
+        "et_monthly": _et_display(reading.et_monthly),
+        "et_yearly": _et_display(reading.et_yearly),
         "daily_extremes": _get_daily_extremes(db),
     }

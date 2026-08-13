@@ -32,6 +32,20 @@ class SensorReadingModel(Base):
     solar_radiation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     uv_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Evapotranspiration — Day / Month / Year running totals in tenths of a
+    # millimetre, same shape as ``rain_total`` (see SENSOR_BOUNDS in
+    # sensor_meta.py). Populated on every Vantage poll from LOOP1 offsets
+    # 56/58/60. NULL on stations that don't compute ET.
+    #
+    # Migrated to dedicated columns in beta30 (#329 kept them in
+    # extra_json; #237-follow-on graduated them so /api/history can chart
+    # them directly). Rows written before the migration retain the values
+    # under ``extra_json.et_daily_mm`` etc. — the init-time migration
+    # backfills those into the new columns.
+    et_daily: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    et_monthly: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    et_yearly: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # Vendor-specific extra data (JSON)
     extra_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 

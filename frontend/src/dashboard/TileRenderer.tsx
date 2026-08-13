@@ -142,6 +142,11 @@ export default function TileRenderer({ tileId, windDisplay }: TileRendererProps)
         <SolarUVGauge
           solarRadiation={cc?.solar_radiation?.value ?? null}
           uvIndex={cc?.uv_index?.value ?? null}
+          uvWarning={cc?.uv_warning ?? null}
+          solarEnergyDaily={cc?.solar_energy_daily ?? null}
+          etDaily={cc?.et_daily ?? null}
+          etMonthly={cc?.et_monthly ?? null}
+          etYearly={cc?.et_yearly ?? null}
         />
       );
     }

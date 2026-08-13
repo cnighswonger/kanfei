@@ -88,6 +88,27 @@ export interface CurrentConditions {
   derived: DerivedData;
   solar_radiation: ValueWithUnit | null;
   uv_index: ValueWithUnit | null;
+  /**
+   * WHO UV Index warning band ("Low" | "Moderate" | "High" | "Very High" |
+   * "Extreme"). Derived server-side from `uv_index` so consumers don't
+   * re-implement the same boundary logic. Null when uv_index is null.
+   */
+  uv_warning: string | null;
+  /**
+   * Trapezoid-integrated solar radiation since local midnight, in the
+   * operator's preferred unit (see `solar_energy_unit` config). Null on
+   * stations without a solar sensor or before the second sample of the
+   * day lands.
+   */
+  solar_energy_daily: ValueWithUnit | null;
+  /**
+   * Evapotranspiration: running totals over day / calendar month /
+   * calendar year, in the operator's `rain_unit` (in or mm). Null on
+   * stations that don't compute ET (needs solar + temp/humidity/wind).
+   */
+  et_daily: ValueWithUnit | null;
+  et_monthly: ValueWithUnit | null;
+  et_yearly: ValueWithUnit | null;
   daily_extremes: DailyExtremes | null;
 }
 
@@ -132,7 +153,15 @@ export interface TwilightTimes {
 
 export interface SunData {
   sunrise: string;
+  /**
+   * "console" when sunrise came from the Davis LOOP2 `sunrise` extra
+   * (the console's own value based on its configured lat/lon), else
+   * "astral" (server-computed from lat/lon config). Lets the UI badge
+   * or debug where a displayed time came from — see #237.
+   */
+  sunrise_source: "console" | "astral";
   sunset: string;
+  sunset_source: "console" | "astral";
   solar_noon: string;
   day_length: string;
   day_change: string;
@@ -208,6 +237,19 @@ export interface StationStatus {
     second: number;
   } | null;
   server_epoch_ms_at_read: number | null;
+  /**
+   * Battery status derived from the latest sensor reading's `extra_json`
+   * (see #236). `null` on stations that don't report battery info, before
+   * the first poll returns, or when the extras couldn't be parsed. When
+   * present, `transmitters_low` is an empty list to mean "all OK", so
+   * consumers can distinguish "OK" (empty list) from "unknown" (whole
+   * field null).
+   */
+  battery: {
+    transmitters_low: number[];
+    console_voltage: number | null;
+    raw_transmitter_bitmask: number | null;
+  } | null;
 }
 
 // --- Console rain season ---

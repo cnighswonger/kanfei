@@ -1,3 +1,62 @@
+kanfei (0.1.0~beta30) unstable; urgency=medium
+
+  * Adds three new rows to the Solar & UV tile.  The first is the
+    console's own evapotranspiration totals — a per-day, per-month, and
+    per-year running measure of how much water the atmosphere is pulling
+    out of your ground and plants.  Davis stations compute it from
+    solar radiation, temperature, humidity, and wind, and the values
+    were already coming off the wire on every poll; this surfaces them
+    on the tile in your rain units (inches or millimetres).  The second
+    is a cumulative daily solar energy total — the running integral of
+    solar radiation since local midnight, in your choice of MJ per
+    square metre, kWh per square metre, or Wh per square metre (chosen
+    in Settings > Units > Solar Energy).  Useful if you are tracking
+    grid-tie solar, backyard panels, or clear-sky performance day to
+    day.  The third is a UV Index warning band under the current UV
+    reading — Low, Moderate, High, Very High, or Extreme, per the
+    World Health Organisation's Global Solar UV Index bands.
+
+  * Adds two new rows to the Station Status panel showing transmitter
+    and console battery health.  Vantage consoles already report these
+    on every poll — a bitmask of which sensor transmitters are running
+    low on their coin cell, and the raw voltage of the console's own
+    supercapacitor-plus-coin-cell backup — but nothing on the dashboard
+    was reading them, so a slowly-dying transmitter would silently drop
+    dashes into your daily records until you noticed at the console.
+    The panel now shows "OK" (in green) when all transmitters are
+    happy, "Low: TX1, TX3" (in red) when any are flagged, and the
+    console voltage in volts (in yellow below four volts, where the
+    coin cell backup is likely spent).  Rows hide entirely on stations
+    that don't report battery status.
+
+  * The Astronomy panel now prefers the console's own sunrise and
+    sunset times over the server's own astronomical computation when
+    the console reports them.  Davis stations compute sunrise and
+    sunset from the coordinates you configured on the console itself
+    and display them on the LCD; the response shape gains
+    sunrise_source and sunset_source markers so a consumer can tell
+    which displayed value came from where.  Solar
+    noon and twilight ranges continue to come from the astronomical
+    computation, since the console doesn't report those.
+
+  * Adds an ET Today, ET This Month, and ET This Year time-series to
+    the History page — each chartable across any of the standard
+    presets like the temperature and rain series already there.  The
+    ET values now live in dedicated database columns (a one-time
+    migration copies existing history from the vendor-extras blob into
+    the new columns on first startup), so charting them is direct and
+    fast rather than requiring a JSON extraction on every query.
+
+  * Adds a Daily Solar Energy series to the History page, rendered as
+    a column chart with one bar per calendar day.  The server
+    integrates each day's solar radiation samples into a single energy
+    total, in the operator's chosen solar-energy unit.  The bar for
+    today grows through the day; days with no data show as gaps.
+    Useful for comparing sunny days across weeks or verifying the
+    output curve of a panel array.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Thu, 13 Aug 2026 21:25:00 +0000
+
 kanfei (0.1.0~beta29) unstable; urgency=medium
 
   * The Station Clock row on the Station Status panel now ticks every

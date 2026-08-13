@@ -5,6 +5,7 @@ All hardware operations are proxied to the logger daemon via IPC.
 """
 
 import asyncio
+import json
 import logging
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -13,7 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..ipc.dependencies import get_ipc_client
-from ..models.database import get_db
+from ..models.database import SessionLocal, get_db
+from ..models.sensor_reading import SensorReadingModel
 from ..services.barometer_aggregation import (
     MAX_STATION_DISTANCE_MILES,
     compute_aggregate_recommendation,
@@ -59,7 +61,64 @@ _DEGRADED_RESPONSE = {
     "station_time": None,
     "station_time_components": None,
     "server_epoch_ms_at_read": None,
+    "battery": None,
 }
+
+
+def _read_battery_from_latest_reading() -> dict | None:
+    """Extract battery-status fields from the latest ``sensor_readings.extra_json``.
+
+    Battery data (Vantage transmitter bitmask, decoded low-battery TX
+    list, console-battery voltage) is populated by every driver poll
+    into the row's ``extra_json`` blob (see #236 / #329 pattern).
+    Nothing was reading it — this surfaces the state that was already
+    being written so the operator can see a low battery before it
+    turns into a sentinel outage.
+
+    Returns ``None`` on:
+      - No readings yet in the DB (fresh install).
+      - The latest row has no ``extra_json`` (driver doesn't populate).
+      - Neither battery key is present in the parsed extras (station
+        has no supported battery reporting).
+
+    Returned shape when data is present:
+
+        {
+          "transmitters_low": [1, 3],       # empty list means all OK
+          "console_voltage": 4.72,          # volts, or None
+          "raw_transmitter_bitmask": 0x05,  # kept for diagnostics
+        }
+    """
+    db = SessionLocal()
+    try:
+        row = (
+            db.query(SensorReadingModel.extra_json)
+            .order_by(SensorReadingModel.timestamp.desc())
+            .first()
+        )
+    finally:
+        db.close()
+    if row is None or row[0] is None:
+        return None
+    try:
+        extras = json.loads(row[0])
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(extras, dict):
+        return None
+
+    tx_low = extras.get("transmitters_low_battery")
+    tx_mask = extras.get("transmitter_battery_status")
+    console_v = extras.get("console_battery_voltage")
+
+    if tx_low is None and tx_mask is None and console_v is None:
+        return None
+
+    return {
+        "transmitters_low": tx_low if isinstance(tx_low, list) else [],
+        "console_voltage": console_v if isinstance(console_v, (int, float)) else None,
+        "raw_transmitter_bitmask": tx_mask if isinstance(tx_mask, int) else None,
+    }
 
 
 @router.get("/station")
@@ -165,6 +224,7 @@ async def get_station():
         "station_time": station_time,
         "station_time_components": station_time_components,
         "server_epoch_ms_at_read": server_epoch_ms_at_read,
+        "battery": _read_battery_from_latest_reading(),
     }
 
 

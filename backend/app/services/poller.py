@@ -271,6 +271,20 @@ class Poller:
                     round(snapshot.uv_index * 10)
                     if snapshot.uv_index is not None else None
                 ),
+                # ET: snapshot carries mm; DB stores tenths mm (same shape
+                # as rain_total).  See SENSOR_BOUNDS in sensor_meta.py.
+                et_daily=(
+                    round(snapshot.et_daily * 10)
+                    if snapshot.et_daily is not None else None
+                ),
+                et_monthly=(
+                    round(snapshot.et_monthly * 10)
+                    if snapshot.et_monthly is not None else None
+                ),
+                et_yearly=(
+                    round(snapshot.et_yearly * 10)
+                    if snapshot.et_yearly is not None else None
+                ),
                 heat_index=hi,
                 dew_point=dp,
                 wind_chill=wc,
@@ -283,10 +297,7 @@ class Poller:
                     if snapshot.thsw_index is not None else None
                 ),
                 pressure_trend=trend,
-                extra_json=(
-                    json.dumps(snapshot.extra)
-                    if snapshot.extra else None
-                ),
+                extra_json=self._build_extra_json(snapshot),
             )
             db.add(model)
             db.commit()
@@ -347,6 +358,25 @@ class Poller:
     def _get_daily_extremes(db) -> Optional[dict]:
         """Delegate to shared implementation."""
         return get_daily_extremes(db)
+
+    @staticmethod
+    def _build_extra_json(snapshot) -> Optional[str]:
+        """Return the driver's ``extra`` dict serialised as JSON, or None.
+
+        ET graduated from ``extra_json`` to dedicated ``sensor_readings``
+        columns (``et_daily``, ``et_monthly``, ``et_yearly``) in the
+        migration alongside this commit — the poller now writes them as
+        top-level fields on the DB row (see ``SensorReadingModel`` and
+        the ``et_daily=`` assignment in this file's storage block).
+        ``extra_json`` no longer carries ET, so this helper collapses to
+        a pass-through of ``snapshot.extra``.
+
+        Kept as a helper (rather than inlined) so future extras with
+        similar "standardised on the snapshot, blob on the row" shape
+        have an obvious place to land.
+        """
+        extras = dict(snapshot.extra) if snapshot.extra else {}
+        return json.dumps(extras) if extras else None
 
     @staticmethod
     def _cardinal(degrees: Optional[int]) -> Optional[str]:

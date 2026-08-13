@@ -130,6 +130,42 @@ export default function StationStatus() {
   // handshake completes.
   const productSku = stationStatus?.product_sku ?? null;
 
+  // Battery status — surfaced from `sensor_readings.extra_json` on every
+  // Vantage poll (see #236).  Two rows: transmitter health (OK / Low: IDs)
+  // and console voltage where reported.  Hidden entirely when the driver
+  // doesn't provide either — non-Davis stations, or Davis before the
+  // first LOOP1 with battery bits parses.
+  const battery = stationStatus?.battery ?? null;
+  const batteryRows: StatusRow[] = [];
+  if (battery != null) {
+    const lowIds = battery.transmitters_low;
+    if (lowIds.length > 0) {
+      batteryRows.push({
+        label: "Transmitters",
+        value: `Low: TX${lowIds.join(", TX")}`,
+        highlight: "danger",
+      });
+    } else if (battery.raw_transmitter_bitmask != null) {
+      // We know the bitmask was reported (empty list means it was 0);
+      // don't show a row when we don't have TX data at all.
+      batteryRows.push({
+        label: "Transmitters",
+        value: "OK",
+        highlight: "success",
+      });
+    }
+    if (battery.console_voltage != null) {
+      batteryRows.push({
+        label: "Console Battery",
+        // A Davis Vue's supercap+coin cell floats ~4.7V under normal
+        // operation. Below 4V the coin cell backup is likely depleted;
+        // warn but don't scream — this is diagnostic, not immediate.
+        value: `${battery.console_voltage.toFixed(2)} V`,
+        highlight: battery.console_voltage < 4.0 ? "warning" : null,
+      });
+    }
+  }
+
   const rows: StatusRow[] = [
     {
       label: "Station",
@@ -139,6 +175,7 @@ export default function StationStatus() {
       ? [{ label: "Product #", value: productSku } as StatusRow]
       : []),
     ...(firmware ? [{ label: "Firmware", value: firmware } as StatusRow] : []),
+    ...batteryRows,
     {
       label: "Connected",
       value: stationStatus?.connected ? "Yes" : "No",

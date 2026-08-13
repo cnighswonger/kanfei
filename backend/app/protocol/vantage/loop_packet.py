@@ -53,6 +53,8 @@ class LoopData:
     month_rain: Optional[int] = None         # clicks
     year_rain: Optional[int] = None          # clicks
     day_et: Optional[int] = None             # thousandths inch
+    month_et: Optional[int] = None           # hundredths inch
+    year_et: Optional[int] = None            # hundredths inch
     sunrise: Optional[int] = None            # hour*100 + min
     sunset: Optional[int] = None             # hour*100 + min
     forecast_icons: Optional[int] = None
@@ -346,8 +348,13 @@ def parse_loop(raw: bytes) -> Optional[LoopData]:
     data.uv_index = _valid_uv(raw[43])
     data.solar_radiation = _valid_solar(struct.unpack_from("<H", raw, 44)[0])
 
-    # ET
+    # ET — three ranges at 56/58/60.  Day is thousandths of an inch, Month
+    # and Year are hundredths (Davis Serial Reference §X.1, LOOP1 §262-264).
+    # All three are already in the LOOP packet the poller reads every cycle;
+    # no additional serial round-trips are needed to surface Month/Year.
     data.day_et = struct.unpack_from("<H", raw, 56)[0]
+    data.month_et = struct.unpack_from("<H", raw, 58)[0]
+    data.year_et = struct.unpack_from("<H", raw, 60)[0]
 
     # Extra temps (7 values at offsets 18-24, each u8, encoded as temp+90)
     data.extra_temps = [_decode_extra_temp(raw[i]) for i in range(18, 25)]
@@ -631,10 +638,16 @@ def loop_to_snapshot(
     if loop.leaf_wetnesses and loop.leaf_wetnesses[0] is not None:
         leaf_wetness = loop.leaf_wetnesses[0]
 
-    # ET: thousandths inch → mm
+    # ET: thousandths inch (day) or hundredths inch (month/year) → mm
     et_daily = None
     if loop.day_et is not None:
         et_daily = round(loop.day_et / 1000.0 * 25.4, 2)
+    et_monthly = None
+    if loop.month_et is not None:
+        et_monthly = round(loop.month_et / 100.0 * 25.4, 2)
+    et_yearly = None
+    if loop.year_et is not None:
+        et_yearly = round(loop.year_et / 100.0 * 25.4, 2)
 
     # Build extra dict with LOOP2-only and multi-sensor data
     extra: dict = {}
@@ -707,6 +720,8 @@ def loop_to_snapshot(
         soil_moisture=soil_moisture,
         leaf_wetness=leaf_wetness,
         et_daily=et_daily,
+        et_monthly=et_monthly,
+        et_yearly=et_yearly,
         thsw_index=thsw_index,
         extra=extra,
     )
