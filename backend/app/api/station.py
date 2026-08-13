@@ -57,6 +57,7 @@ _DEGRADED_RESPONSE = {
     "product_sku": None,
     "poll_interval": 0,
     "station_time": None,
+    "station_time_epoch_ms": None,
 }
 
 
@@ -76,6 +77,7 @@ async def get_station():
 
     # Read station clock and auto-sync if drifted
     station_time = None
+    station_time_epoch_ms = None
     if data.get("connected"):
         try:
             # Longer timeout — serial lock may be held by archive sync
@@ -85,9 +87,10 @@ async def get_station():
             if time_result.get("ok") and time_result["data"] is not None:
                 t = time_result["data"]
                 station_time = _format_station_time(t)
+                station_dt = _station_time_to_datetime(t)
+                station_time_epoch_ms = int(station_dt.timestamp() * 1000)
 
                 # Auto-sync if drift exceeds threshold
-                station_dt = _station_time_to_datetime(t)
                 drift = abs((datetime.now() - station_dt).total_seconds())
                 if drift > AUTO_SYNC_THRESHOLD_SECONDS:
                     logger.info(
@@ -96,7 +99,9 @@ async def get_station():
                     )
                     sync_result = await client.send_command({"cmd": "sync_station_time"})
                     if sync_result.get("ok") and sync_result["data"].get("success"):
-                        station_time = datetime.now().strftime("%H:%M:%S %m/%d")
+                        now = datetime.now()
+                        station_time = now.strftime("%H:%M:%S %m/%d")
+                        station_time_epoch_ms = int(now.timestamp() * 1000)
                         logger.info("Auto-sync complete")
             else:
                 logger.warning(
@@ -120,6 +125,7 @@ async def get_station():
         "crc_errors": data.get("crc_errors", 0),
         "timeouts": data.get("timeouts", 0),
         "station_time": station_time,
+        "station_time_epoch_ms": station_time_epoch_ms,
     }
 
 

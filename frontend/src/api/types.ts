@@ -189,6 +189,15 @@ export interface StationStatus {
   crc_errors: number;
   timeouts: number;
   station_time: string | null;
+  /**
+   * Wall-clock epoch (ms) of the console clock at the moment the backend
+   * read it. Paired with `station_time` (the display string, same read).
+   * The frontend uses this to tick a live-updating clock display between
+   * status polls without another serial read — see `StationStatus.tsx`.
+   * `null` on disconnected/degraded responses and on stations that don't
+   * support GETTIME.
+   */
+  station_time_epoch_ms: number | null;
 }
 
 // --- Console rain season ---

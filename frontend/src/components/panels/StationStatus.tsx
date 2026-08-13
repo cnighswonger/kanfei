@@ -2,7 +2,7 @@
  * Compact panel showing station connection and health information.
  * On mobile: compact card that opens a modal with full details.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWeatherData } from "../../context/WeatherDataContext.tsx";
 import { syncStationTime } from "../../api/client.ts";
 import { useCompact } from "../../dashboard/CompactContext.tsx";
@@ -31,6 +31,18 @@ function formatTime(iso: string | null): string {
   }
 }
 
+/**
+ * Format an epoch timestamp as `HH:MM:SS MM/DD` in the browser's local
+ * timezone — the same shape the backend produces for `station_time`, so
+ * the live-ticked display doesn't visually shift when it takes over
+ * from the initial server-rendered string.
+ */
+function formatStationClock(epochMs: number): string {
+  const d = new Date(epochMs);
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
+}
+
 function highlightColor(hl: "success" | "danger" | "warning" | null | undefined): string {
   if (hl === "success") return "var(--color-success)";
   if (hl === "danger") return "var(--color-danger)";
@@ -49,6 +61,41 @@ export default function StationStatus() {
   const [syncing, setSyncing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const isMobile = useCompact();
+
+  // --- Live-ticked station clock ---
+  //
+  // Capture the (station_epoch, wall_epoch) pair from each status poll and
+  // display station_epoch + (Date.now() - wall_epoch), ticked every second.
+  // The status poll runs every 5 min while connected; without this, the
+  // displayed clock ages up to 5 min between polls and looks stale enough
+  // to trigger a false-alarm Sync click. Zero extra serial cost — we're
+  // extrapolating from a snapshot, not asking the console again.
+  //
+  // Fallback to the server-formatted string when the pair is unavailable
+  // (disconnected, station doesn't support GETTIME, or first render before
+  // the first successful poll).
+  const stationEpochMs = stationStatus?.station_time_epoch_ms ?? null;
+  const [clockOffsetMs, setClockOffsetMs] = useState<number | null>(null);
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (stationEpochMs == null) {
+      setClockOffsetMs(null);
+      return;
+    }
+    setClockOffsetMs(stationEpochMs - Date.now());
+  }, [stationEpochMs]);
+
+  useEffect(() => {
+    if (clockOffsetMs == null) return;
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [clockOffsetMs]);
+
+  const stationClockDisplay =
+    clockOffsetMs != null
+      ? formatStationClock(Date.now() + clockOffsetMs)
+      : (stationStatus?.station_time ?? "--");
 
   // Firmware string — prefer the version number (e.g. "1.90") when the
   // station reports it via NVER; fall back to the free-form build date
@@ -170,7 +217,7 @@ export default function StationStatus() {
               color: "var(--color-text)",
             }}
           >
-            {stationStatus?.station_time ?? "--"}
+            {stationClockDisplay}
           </span>
         </div>
         <button
