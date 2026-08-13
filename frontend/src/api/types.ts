@@ -229,6 +229,19 @@ export interface StationStatus {
     second: number;
   } | null;
   server_epoch_ms_at_read: number | null;
+  /**
+   * Battery status derived from the latest sensor reading's `extra_json`
+   * (see #236). `null` on stations that don't report battery info, before
+   * the first poll returns, or when the extras couldn't be parsed. When
+   * present, `transmitters_low` is an empty list to mean "all OK", so
+   * consumers can distinguish "OK" (empty list) from "unknown" (whole
+   * field null).
+   */
+  battery: {
+    transmitters_low: number[];
+    console_voltage: number | null;
+    raw_transmitter_bitmask: number | null;
+  } | null;
 }
 
 // --- Console rain season ---
