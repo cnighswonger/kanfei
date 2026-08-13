@@ -2940,6 +2940,29 @@ export default function Settings() {
         </div>
 
         <div style={fieldGroup}>
+          <label style={labelStyle}>Solar Energy</label>
+          <div style={radioGroup}>
+            {[
+              { u: "MJ/m²", label: "MJ/m² (agricultural)" },
+              { u: "kWh/m²", label: "kWh/m² (solar-panel)" },
+              { u: "Wh/m²", label: "Wh/m²" },
+            ].map(({ u, label }) => (
+              <label key={u} style={radioLabel}>
+                <input
+                  type="radio"
+                  name="solar_energy_unit"
+                  checked={
+                    (val("solar_energy_unit") ?? "MJ/m²") === u
+                  }
+                  onChange={() => updateField("solar_energy_unit", u)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div style={fieldGroup}>
           <label style={labelStyle}>Timezone</label>
           <select
             style={selectStyle}

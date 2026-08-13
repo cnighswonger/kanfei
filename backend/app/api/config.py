@@ -48,6 +48,7 @@ _DEFAULTS: dict[str, object] = {
     "pressure_unit": settings.units_pressure,
     "wind_unit": settings.units_wind,
     "rain_unit": settings.units_rain,
+    "solar_energy_unit": settings.units_solar_energy,
     "metar_enabled": settings.metar_enabled,
     "metar_station": settings.metar_station_id,
     "nws_enabled": settings.nws_enabled,

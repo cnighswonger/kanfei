@@ -283,10 +283,7 @@ class Poller:
                     if snapshot.thsw_index is not None else None
                 ),
                 pressure_trend=trend,
-                extra_json=(
-                    json.dumps(snapshot.extra)
-                    if snapshot.extra else None
-                ),
+                extra_json=self._build_extra_json(snapshot),
             )
             db.add(model)
             db.commit()
@@ -347,6 +344,29 @@ class Poller:
     def _get_daily_extremes(db) -> Optional[dict]:
         """Delegate to shared implementation."""
         return get_daily_extremes(db)
+
+    @staticmethod
+    def _build_extra_json(snapshot) -> Optional[str]:
+        """Merge structured ET fields with the driver's ``extra`` dict.
+
+        ET is a first-class field on ``SensorSnapshot`` (see base.py) because
+        every station that reports it uses the same shape (mm, three ranges).
+        But we don't have dedicated ``sensor_readings`` columns for ET, so we
+        route them through ``extra_json`` alongside whatever vendor-specific
+        fields the driver already put there.
+
+        This is the same pattern issue #236 documents for the LOOP2 forecast
+        fields: standardised on the snapshot, blob-encoded on the DB row,
+        read out by the API when it needs them.
+        """
+        extras = dict(snapshot.extra) if snapshot.extra else {}
+        if snapshot.et_daily is not None:
+            extras["et_daily_mm"] = snapshot.et_daily
+        if snapshot.et_monthly is not None:
+            extras["et_monthly_mm"] = snapshot.et_monthly
+        if snapshot.et_yearly is not None:
+            extras["et_yearly_mm"] = snapshot.et_yearly
+        return json.dumps(extras) if extras else None
 
     @staticmethod
     def _cardinal(degrees: Optional[int]) -> Optional[str]:

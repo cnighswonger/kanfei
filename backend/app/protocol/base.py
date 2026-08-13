@@ -53,8 +53,13 @@ class SensorSnapshot:
     soil_moisture: Optional[int] = None     # centibars
     leaf_wetness: Optional[int] = None      # 0-15
 
-    # Evapotranspiration (mm)
+    # Evapotranspiration (mm).  Day/month/year are what the console reports
+    # in LOOP1 — daily is a running total since local midnight, monthly and
+    # yearly are running totals since their respective resets.  None on
+    # stations that don't compute ET (needs solar + temp/humidity/wind).
     et_daily: Optional[float] = None
+    et_monthly: Optional[float] = None
+    et_yearly: Optional[float] = None
 
     # Station-computed THSW index (°C).  Every other derived value is
     # calculated from raw sensor readings in calculations.py; THSW needs
