@@ -33,8 +33,9 @@ kanfei (0.1.0~beta30) unstable; urgency=medium
     sunset times over the server's own astronomical computation when
     the console reports them.  Davis stations compute sunrise and
     sunset from the coordinates you configured on the console itself
-    and display them on the LCD; the response shape gains a "source"
-    field so a consumer can tell which value came from where.  Solar
+    and display them on the LCD; the response shape gains
+    sunrise_source and sunset_source markers so a consumer can tell
+    which displayed value came from where.  Solar
     noon and twilight ranges continue to come from the astronomical
     computation, since the console doesn't report those.
 
