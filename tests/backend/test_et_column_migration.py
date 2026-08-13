@@ -93,7 +93,12 @@ class TestBackfillFromExtraJson:
 
     def _run_backfill_sql(self) -> None:
         """The exact SQL the init-time migration runs, called directly so
-        the test doesn't have to invoke the full ``init_database()``."""
+        the test doesn't have to invoke the full ``init_database()``.
+
+        Kept in sync with ``backend/app/models/database.py`` — if the
+        migration query there changes, this must change too.  The
+        `test_backfill_matches_poller_rounding` case pins the shape.
+        """
         with engine.connect() as conn:
             for column, extra_key in (
                 ("et_daily", "et_daily_mm"),
@@ -102,18 +107,19 @@ class TestBackfillFromExtraJson:
             ):
                 conn.execute(text(
                     f"UPDATE sensor_readings "
-                    f"SET {column} = CAST(json_extract(extra_json, '$.{extra_key}') * 10 AS INTEGER) "
+                    f"SET {column} = CAST(round(json_extract(extra_json, '$.{extra_key}') * 10) AS INTEGER) "
                     f"WHERE {column} IS NULL "
                     f"  AND extra_json IS NOT NULL "
+                    f"  AND json_valid(extra_json) "
                     f"  AND json_extract(extra_json, '$.{extra_key}') IS NOT NULL"
                 ))
             conn.commit()
 
     def test_all_three_backfilled(self):
         self._seed_extras_row({
-            "et_daily_mm": 3.5,        # → 35 tenths mm
+            "et_daily_mm": 3.5,        # → 35 tenths mm (round(3.5*10) = 35)
             "et_monthly_mm": 42.7,     # → 427 tenths mm
-            "et_yearly_mm": 630.68,    # → 6306 tenths mm
+            "et_yearly_mm": 630.68,    # → 6307 tenths mm (round(6306.8) = 6307)
         })
         self._run_backfill_sql()
 
@@ -122,7 +128,7 @@ class TestBackfillFromExtraJson:
             row = db.query(SensorReadingModel).first()
             assert row.et_daily == 35
             assert row.et_monthly == 427
-            assert row.et_yearly == 6306
+            assert row.et_yearly == 6307
         finally:
             db.close()
 
@@ -173,6 +179,73 @@ class TestBackfillFromExtraJson:
         try:
             row = db.query(SensorReadingModel).first()
             assert row.et_daily == 35
+        finally:
+            db.close()
+
+    def test_backfill_matches_poller_rounding(self):
+        """Backfill uses ``round()`` (not ``CAST AS INTEGER`` truncate) so
+        it matches the poller's live write path (`round(mm * 10)`).  A
+        value that would truncate down under CAST semantics rounds up
+        here, keeping backfilled rows and freshly-polled rows at the
+        same tenths-mm quantization.
+
+        3.549 mm * 10 = 35.49 → round → 35.  A different mismatch shows:
+        3.55 mm * 10 = 35.5 → round-half-to-even (banker's) → 36 in
+        Python; SQLite's ``round(35.5)`` returns 36 as well.  So a value
+        chosen to expose truncate-vs-round: 630.68 mm * 10 = 6306.8 →
+        round → 6307.  CAST would give 6306.
+        """
+        self._seed_extras_row({"et_yearly_mm": 630.68})
+        self._run_backfill_sql()
+
+        db = SessionLocal()
+        try:
+            row = db.query(SensorReadingModel).first()
+            assert row.et_yearly == 6307, (
+                "backfill must round to match the poller's round(mm*10); "
+                f"got {row.et_yearly}, expected 6307 (would be 6306 under CAST truncate)"
+            )
+        finally:
+            db.close()
+
+    def test_backfill_survives_malformed_json_row(self):
+        """A historical row with malformed extra_json must not abort the
+        migration.  The runtime readers already handle bad JSON as
+        survivable (via try/except); the migration matches that via
+        `json_valid(extra_json)`.
+
+        Without the guard, `json_extract` on invalid JSON would raise
+        `sqlite3.OperationalError: malformed JSON` and startup would
+        block, taking the whole daemon down after upgrade.
+        """
+        # A row with genuinely invalid JSON alongside a valid ET row.
+        db = SessionLocal()
+        try:
+            db.add(SensorReadingModel(
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+                station_type=16,
+                extra_json="{{not json",  # invalid
+            ))
+            db.add(SensorReadingModel(
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+                station_type=16,
+                extra_json=json.dumps({"et_daily_mm": 3.5}),  # valid
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        # Must NOT raise.  The malformed row is skipped; the valid row
+        # gets backfilled.
+        self._run_backfill_sql()
+
+        db = SessionLocal()
+        try:
+            rows = db.query(SensorReadingModel).order_by(SensorReadingModel.id).all()
+            # First row: malformed extras, no column update
+            assert rows[0].et_daily is None
+            # Second row: valid extras, backfilled
+            assert rows[1].et_daily == 35
         finally:
             db.close()
 

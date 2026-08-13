@@ -116,10 +116,21 @@ def init_database() -> None:
                     f"ALTER TABLE sensor_readings ADD COLUMN {column} INTEGER"
                 ))
                 conn.commit()
-    # Backfill from extra_json.  Guard on `extra_json IS NOT NULL AND
-    # json_extract(extra_json, '$.<key>_mm') IS NOT NULL` so we only touch
-    # rows that actually have the field.  SQLite's `json_extract` is
-    # available in every SQLite build the project targets (>= 3.9).
+    # Backfill from extra_json.  Guarded on:
+    #
+    #   - ``json_valid(extra_json)`` — a single malformed historical row
+    #     would otherwise abort startup with
+    #     ``OperationalError: malformed JSON`` when ``json_extract``
+    #     hit it.  The runtime readers (`/api/current`, `/api/station`,
+    #     `/api/astronomy`) already treat malformed extras as survivable;
+    #     the migration matches that tolerance.
+    #   - Column IS NULL — prevents double-updates on repeated init runs.
+    #   - Key is present in the extras — leaves NULL when the row was
+    #     written by a non-ET-reporting driver.
+    #
+    # ``round(...)`` (not ``CAST AS INTEGER``, which truncates) matches
+    # the poller's live write path (``round(mm * 10)``) so backfilled
+    # rows and freshly-polled rows use the same tenths-mm quantization.
     with engine.connect() as conn:
         for column, extra_key in (
             ("et_daily", "et_daily_mm"),
@@ -128,9 +139,10 @@ def init_database() -> None:
         ):
             conn.execute(text(
                 f"UPDATE sensor_readings "
-                f"SET {column} = CAST(json_extract(extra_json, '$.{extra_key}') * 10 AS INTEGER) "
+                f"SET {column} = CAST(round(json_extract(extra_json, '$.{extra_key}') * 10) AS INTEGER) "
                 f"WHERE {column} IS NULL "
                 f"  AND extra_json IS NOT NULL "
+                f"  AND json_valid(extra_json) "
                 f"  AND json_extract(extra_json, '$.{extra_key}') IS NOT NULL"
             ))
         conn.commit()

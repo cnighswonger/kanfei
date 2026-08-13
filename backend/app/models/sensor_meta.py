@@ -88,7 +88,6 @@ SENSOR_UNITS: dict[str, str] = {
 _TEMP_FIELDS = {"inside_temp", "outside_temp", "heat_index", "dew_point", "wind_chill", "feels_like",
                 "thsw_index"}
 _RAIN_FIELDS = {"rain_total", "rain_yearly"}
-_ET_FIELDS = {"et_daily", "et_monthly", "et_yearly"}
 
 SENSOR_CONVERTERS: dict[str, object] = {
     **{f: si_temp_to_display_f for f in _TEMP_FIELDS},
