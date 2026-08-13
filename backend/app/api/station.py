@@ -124,15 +124,21 @@ async def get_station():
                     sync_result = await client.send_command({"cmd": "sync_station_time"})
                     if sync_result.get("ok") and sync_result["data"].get("success"):
                         now = datetime.now()
-                        station_time = now.strftime("%H:%M:%S %m/%d")
+                        # Build components from the fresh `now` but inherit
+                        # `year` availability from the pre-sync read `t`.
+                        # Then re-derive `station_time` from the same dict
+                        # via `_format_station_time` so the display string
+                        # and the components can never disagree on whether
+                        # the year suffix is present.
                         station_time_components = {
-                            "year": t.get("year"),  # preserve year-availability shape
+                            "year": t.get("year"),
                             "month": now.month,
                             "day": now.day,
                             "hour": now.hour,
                             "minute": now.minute,
                             "second": now.second,
                         }
+                        station_time = _format_station_time(station_time_components)
                         server_epoch_ms_at_read = int(now.timestamp() * 1000)
                         logger.info("Auto-sync complete")
             else:
