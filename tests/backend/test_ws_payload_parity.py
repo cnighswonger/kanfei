@@ -16,9 +16,6 @@ blinking.
 """
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
-
-import pytest
 
 from app.services.poller import Poller
 
