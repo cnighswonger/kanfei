@@ -15,7 +15,10 @@ from typing import Any, Callable, Coroutine, Optional
 from sqlalchemy import func
 
 from .daily_extremes import get_daily_extremes
+from .solar_energy import compute_daily_solar_energy_j_per_m2, joules_to_display_unit
+from .uv_warning import classify_uv
 
+from ..config import settings
 from ..protocol.base import StationDriver, SensorSnapshot
 from ..services.calculations import (
     heat_index,
@@ -304,12 +307,37 @@ class Poller:
 
             # Query daily extremes while session is open
             extremes = self._get_daily_extremes(db)
+            # Solar-energy accumulator needs the same DB session and the
+            # operator's unit preference.  Match what /api/current computes
+            # so the WS broadcast doesn't blink the field to null on every
+            # push (the frontend does a full setCurrentConditions(data)
+            # replace on each WS message — any field missing from the WS
+            # payload but present in /api/current disappears from the tile
+            # for a poll cycle, then reappears at the next REST refresh).
+            solar_j = compute_daily_solar_energy_j_per_m2(db)
+            unit_row = db.query(StationConfigModel).filter_by(
+                key="solar_energy_unit",
+            ).first()
+            solar_energy_unit = (
+                unit_row.value if unit_row and unit_row.value
+                else settings.units_solar_energy
+            )
+            solar_energy_daily_value = joules_to_display_unit(
+                solar_j, solar_energy_unit,
+            )
+            solar_energy_daily = (
+                {"value": solar_energy_daily_value, "unit": solar_energy_unit}
+                if solar_energy_daily_value is not None else None
+            )
         finally:
             db.close()
 
         # Broadcast to subscribers (IPC clients / WebSocket relay)
         if self._broadcast_callback:
-            data_dict = self._snapshot_to_dict(snapshot, hi, dp, wc, fl, theta, trend, extremes)
+            data_dict = self._snapshot_to_dict(
+                snapshot, hi, dp, wc, fl, theta, trend, extremes,
+                solar_energy_daily=solar_energy_daily,
+            )
             await self._broadcast_callback({
                 "type": "sensor_update",
                 "data": data_dict,
@@ -395,6 +423,7 @@ class Poller:
         theta: Optional[int],
         trend: Optional[str],
         extremes: Optional[dict] = None,
+        solar_energy_daily: Optional[dict] = None,
     ) -> dict:
         """Convert a SensorSnapshot (SI) to a JSON-serializable dict for WebSocket.
 
@@ -447,6 +476,16 @@ class Poller:
         def _rain(mm: Optional[float]) -> Optional[float]:
             """mm float → inches display float."""
             return round(mm / 25.4, 2) if mm is not None else None
+
+        def _et_display(mm: Optional[float]) -> Optional[dict]:
+            """ET mm float → {value, unit} in operator's rain unit.
+            Matches the /api/current shape from api/current.py so the
+            frontend can consume WS and REST payloads the same way."""
+            if mm is None:
+                return None
+            if settings.units_rain == "mm":
+                return {"value": round(mm, 2), "unit": "mm"}
+            return {"value": round(mm / 25.4, 3), "unit": "in"}
 
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -508,5 +547,18 @@ class Poller:
                 {"value": snapshot.uv_index, "unit": ""}
                 if snapshot.uv_index is not None else None
             ),
+            # WHO UV band — derived from uv_index server-side so consumers
+            # don't reimplement the boundaries (matches /api/current shape).
+            "uv_warning": classify_uv(snapshot.uv_index),
+            # Trapezoid-integrated cumulative solar energy since local
+            # midnight, in the operator's preferred unit.  Computed
+            # upstream in the poll flow while the DB session was open;
+            # passed in so we don't re-open a session per broadcast.
+            "solar_energy_daily": solar_energy_daily,
+            # ET: snapshot carries mm; display in the operator's rain unit
+            # (same convention as /api/current).
+            "et_daily": _et_display(snapshot.et_daily),
+            "et_monthly": _et_display(snapshot.et_monthly),
+            "et_yearly": _et_display(snapshot.et_yearly),
             "daily_extremes": extremes,
         }
