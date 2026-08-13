@@ -2,7 +2,7 @@
  * Compact panel showing station connection and health information.
  * On mobile: compact card that opens a modal with full details.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWeatherData } from "../../context/WeatherDataContext.tsx";
 import { syncStationTime } from "../../api/client.ts";
 import { useCompact } from "../../dashboard/CompactContext.tsx";
@@ -31,6 +31,37 @@ function formatTime(iso: string | null): string {
   }
 }
 
+interface StationClockComponents {
+  year: number | null;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+/**
+ * Advance the console's reported wall-clock components forward by
+ * `elapsedMs` and format as `HH:MM:SS MM/DD` (or `HH:MM:SS MM/DD/YYYY`
+ * when the station reported a year). All arithmetic goes through UTC to
+ * keep the browser's local timezone from touching the values — the
+ * components are treated as opaque wall-clock fields that just need to
+ * roll forward by the elapsed delta, not as an instant in time.
+ *
+ * When `year` is null (older station), we synthesize a placeholder for
+ * the arithmetic and drop it from the output so the format still matches
+ * the backend's `station_time` string.
+ */
+function formatStationClock(c: StationClockComponents, elapsedMs: number): string {
+  const yearPresent = c.year != null;
+  const seedYear = c.year ?? 2000; // placeholder — arithmetic only, hidden from output
+  const seedUtcMs = Date.UTC(seedYear, c.month - 1, c.day, c.hour, c.minute, c.second);
+  const d = new Date(seedUtcMs + elapsedMs);
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const base = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} ${pad(d.getUTCMonth() + 1)}/${pad(d.getUTCDate())}`;
+  return yearPresent ? `${base}/${d.getUTCFullYear()}` : base;
+}
+
 function highlightColor(hl: "success" | "danger" | "warning" | null | undefined): string {
   if (hl === "success") return "var(--color-success)";
   if (hl === "danger") return "var(--color-danger)";
@@ -49,6 +80,38 @@ export default function StationStatus() {
   const [syncing, setSyncing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const isMobile = useCompact();
+
+  // --- Live-ticked station clock ---
+  //
+  // The `/api/station` poll returns the console's wall-clock components
+  // plus the server's UTC-epoch at the moment of the read. We advance
+  // the components forward by `Date.now() - server_epoch_ms_at_read` and
+  // format them as-is, without any timezone conversion. That keeps the
+  // display faithful to what the console actually shows — the browser's
+  // local timezone never touches the output — and avoids the false-alarm
+  // Sync click that a 5-minute-stale readout triggers.
+  //
+  // Zero extra serial cost: this is pure extrapolation between snapshots.
+  // Real console drift (crystal oscillator, seconds per week) shows up
+  // as a small offset that persists until the next auto-sync.
+  //
+  // Fallback to the server-formatted string when the pair is unavailable
+  // (disconnected, station doesn't support GETTIME, or first render
+  // before the first successful poll).
+  const components = stationStatus?.station_time_components ?? null;
+  const readAnchor = stationStatus?.server_epoch_ms_at_read ?? null;
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (components == null || readAnchor == null) return;
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [components, readAnchor]);
+
+  const stationClockDisplay =
+    components != null && readAnchor != null
+      ? formatStationClock(components, Date.now() - readAnchor)
+      : (stationStatus?.station_time ?? "--");
 
   // Firmware string — prefer the version number (e.g. "1.90") when the
   // station reports it via NVER; fall back to the free-form build date
@@ -170,7 +233,7 @@ export default function StationStatus() {
               color: "var(--color-text)",
             }}
           >
-            {stationStatus?.station_time ?? "--"}
+            {stationClockDisplay}
           </span>
         </div>
         <button

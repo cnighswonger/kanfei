@@ -57,6 +57,8 @@ _DEGRADED_RESPONSE = {
     "product_sku": None,
     "poll_interval": 0,
     "station_time": None,
+    "station_time_components": None,
+    "server_epoch_ms_at_read": None,
 }
 
 
@@ -75,7 +77,23 @@ async def get_station():
     data = result["data"]
 
     # Read station clock and auto-sync if drifted
+    #
+    # The clock read returns two paired values for the frontend's live-tick
+    # display (`StationStatus.tsx`):
+    #
+    #   - `station_time_components`: the raw wall-clock fields the console
+    #     reported (year may be null on stations that don't return one)
+    #   - `server_epoch_ms_at_read`: the server's UTC epoch (ms) at the
+    #     moment of the read
+    #
+    # The client uses (Date.now() - server_epoch_ms_at_read) to advance
+    # the components forward — treating them as opaque wall values,
+    # never converting between timezones. This avoids the browser tz
+    # ≠ server tz display drift that an epoch-of-a-naive-datetime
+    # representation would introduce.
     station_time = None
+    station_time_components = None
+    server_epoch_ms_at_read = None
     if data.get("connected"):
         try:
             # Longer timeout — serial lock may be held by archive sync
@@ -85,6 +103,15 @@ async def get_station():
             if time_result.get("ok") and time_result["data"] is not None:
                 t = time_result["data"]
                 station_time = _format_station_time(t)
+                station_time_components = {
+                    "year": t.get("year"),
+                    "month": t["month"],
+                    "day": t["day"],
+                    "hour": t["hour"],
+                    "minute": t["minute"],
+                    "second": t["second"],
+                }
+                server_epoch_ms_at_read = int(datetime.now().timestamp() * 1000)
 
                 # Auto-sync if drift exceeds threshold
                 station_dt = _station_time_to_datetime(t)
@@ -96,7 +123,23 @@ async def get_station():
                     )
                     sync_result = await client.send_command({"cmd": "sync_station_time"})
                     if sync_result.get("ok") and sync_result["data"].get("success"):
-                        station_time = datetime.now().strftime("%H:%M:%S %m/%d")
+                        now = datetime.now()
+                        # Build components from the fresh `now` but inherit
+                        # `year` availability from the pre-sync read `t`.
+                        # Then re-derive `station_time` from the same dict
+                        # via `_format_station_time` so the display string
+                        # and the components can never disagree on whether
+                        # the year suffix is present.
+                        station_time_components = {
+                            "year": t.get("year"),
+                            "month": now.month,
+                            "day": now.day,
+                            "hour": now.hour,
+                            "minute": now.minute,
+                            "second": now.second,
+                        }
+                        station_time = _format_station_time(station_time_components)
+                        server_epoch_ms_at_read = int(now.timestamp() * 1000)
                         logger.info("Auto-sync complete")
             else:
                 logger.warning(
@@ -120,6 +163,8 @@ async def get_station():
         "crc_errors": data.get("crc_errors", 0),
         "timeouts": data.get("timeouts", 0),
         "station_time": station_time,
+        "station_time_components": station_time_components,
+        "server_epoch_ms_at_read": server_epoch_ms_at_read,
     }
 
 
