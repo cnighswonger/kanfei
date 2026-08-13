@@ -379,11 +379,18 @@ specific need.
 
 ## Reproduction
 
-The audit was captured by
-`scripts/vantage_wire_audit.py` (not in-repo; assembled ad-hoc during
-this session).  If we want to re-run this on a future firmware, or
-against the production console, we should package that script and add
-it here.  Filed as a note; not blocking.
+The audit is captured by `scripts/vantage_wire_audit.py`.  Run
+against any Vantage-family console (defaults to `/dev/ttyUSB4`, the
+bench Vue on vsits-02):
+
+    python3 scripts/vantage_wire_audit.py [--port PORT] [--baud BAUD] > audit.json
+
+The script uses the driver's raw send/receive primitives, so the
+output is byte-for-byte what came off the wire — suitable for
+diffing against this report's captures or against a fresh capture
+after a firmware change.  Nothing writes state.  Do NOT run against
+a console currently held by `kanfei-logger` on the same port
+(single-master serial contention will produce fake CRC errors).
 
 ## Related
 
