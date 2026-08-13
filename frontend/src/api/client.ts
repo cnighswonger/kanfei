@@ -617,6 +617,12 @@ export function fetchSignalQuality(): Promise<
   return request("/api/station/signal-quality");
 }
 
+export function fetchRadioState(): Promise<
+  import("./types.ts").RadioState
+> {
+  return request("/api/station/radio-state");
+}
+
 // --- Vantage sensor calibration ---
 
 export function fetchVantageCalibration(): Promise<

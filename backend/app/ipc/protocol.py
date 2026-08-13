@@ -39,6 +39,7 @@ CMD_READ_LOCATION = "read_location"          # console lat/lon from EEPROM
 CMD_SET_LOCATION = "set_location"            # write + NEWSETUP
 CMD_READ_RAIN_SEASON = "read_rain_season"    # yearly-rain-reset month
 CMD_SET_RAIN_SEASON = "set_rain_season"      # RAIN_YEAR_START via EEBWR
+CMD_RADIO_STATE = "radio_state"              # OPMODE — undocumented, read-only
 
 # --- Wire helpers ---
 

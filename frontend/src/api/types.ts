@@ -174,6 +174,14 @@ export interface StationStatus {
    * even on VP1 where NVER is absent.
    */
   firmware_date: string | null;
+  /**
+   * Davis product SKU (4-digit ASCII string, e.g. "6351" for Vantage
+   * Vue Wireless with WeatherLink IP).  Populated on Vue / VP2 via the
+   * undocumented `IDENT` command at connect; `null` on stations that
+   * don't support it or when the response was malformed.  See
+   * `reference/vantage_fw433_wire_audit.md` §N1.
+   */
+  product_sku: string | null;
   poll_interval: number;
   last_poll: string | null;
   archive_records: number;
@@ -872,6 +880,31 @@ export interface SignalQuality {
    * nothing"; the RXCHECK counters are what say that.
    */
   receivers: number[] | null;
+}
+
+/**
+ * Radio state and per-unit crystal calibration via OPMODE.
+ *
+ * Undocumented Davis command, verified identical on Vue fw 2.12 and
+ * fw 4.33 in the wire audit (see `reference/vantage_fw433_wire_audit.md`
+ * §N3). Every field is a normalised integer; the wire's `TEMP CAL:`
+ * key with a literal space is folded to `TEMP_CAL` by the driver.
+ *
+ * All fields optional because malformed lines are dropped by the driver
+ * rather than crashing the whole read — a legitimately supported
+ * console with a weird firmware may return a partial dict.
+ */
+export interface RadioState {
+  TST?: number;
+  TX?: number;
+  RX?: number;
+  HOP?: number;
+  BAND?: number;
+  CHAN?: number;
+  DOM?: number;
+  XTLCAL?: number;
+  TEMP?: number;
+  TEMP_CAL?: number;
 }
 
 // --- Vantage sensor calibration ---

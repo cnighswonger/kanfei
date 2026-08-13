@@ -42,6 +42,48 @@ def cmd_nver() -> bytes:
     return b"NVER\n"
 
 
+def cmd_opmode() -> bytes:
+    """OPMODE — read radio state and per-unit crystal calibration.
+
+    Undocumented in Davis Serial Communication Reference v2.6.1, but
+    verified working identically on Vantage Vue Console fw 2.12 and
+    fw 4.33 during the wire audit (see
+    `reference/vantage_fw433_wire_audit.md`).  Returns a multi-line
+    ASCII block, one ``KEY: value`` per line, terminated by an empty
+    ``\\n\\r`` line.  Fields observed on Vue:
+
+        TST:      test-mode flag (0 = normal ops, 1 = test)
+        TX:       transmit configuration
+        RX:       receive configuration
+        HOP:      hop mode
+        BAND:     radio band
+        CHAN:     radio channel
+        DOM:      radio domain (1 = US 902-928 MHz per convention)
+        XTLCAL:   per-unit factory crystal calibration (immutable)
+        TEMP:     raw crystal / oven temperature reading
+        TEMP CAL: temperature calibration offset
+
+    Behaviour on VP1 / older VP2 firmware is not verified — callers
+    must tolerate an empty or malformed response.
+    """
+    return b"OPMODE\n"
+
+
+def cmd_ident() -> bytes:
+    """IDENT — get product SKU.
+
+    Undocumented in Davis Serial Communication Reference v2.6.1, but
+    verified working identically on Vantage Vue Console fw 2.12 and
+    fw 4.33 during the wire audit (see
+    `reference/vantage_fw433_wire_audit.md`).  Returns the four-digit
+    product number as ASCII (`6351` for Vantage Vue Wireless with
+    WeatherLink IP, etc.).  Behaviour on older Vantage Pro / Pro2
+    firmware is not verified — callers must tolerate an empty or
+    malformed response.
+    """
+    return b"IDENT\n"
+
+
 def cmd_rxcheck() -> bytes:
     """RXCHECK — receiver diagnostics."""
     return b"RXCHECK\n"

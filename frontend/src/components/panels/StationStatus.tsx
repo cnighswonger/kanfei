@@ -58,11 +58,23 @@ export default function StationStatus() {
   const firmware =
     stationStatus?.firmware_version ?? stationStatus?.firmware_date ?? null;
 
+  // Product SKU from the undocumented IDENT command (see
+  // reference/vantage_fw433_wire_audit.md).  On Davis this is the
+  // 4-digit product-bundle number (e.g. "6351" for Vantage Vue
+  // Wireless with WeatherLink IP), distinct from the station model
+  // reported by station_type_code.  Null on stations that don't
+  // support IDENT — legacy, LinkDriver, or before the connect
+  // handshake completes.
+  const productSku = stationStatus?.product_sku ?? null;
+
   const rows: StatusRow[] = [
     {
       label: "Station",
       value: stationStatus?.type_name ?? "--",
     },
+    ...(productSku
+      ? [{ label: "Product #", value: productSku } as StatusRow]
+      : []),
     ...(firmware ? [{ label: "Firmware", value: firmware } as StatusRow] : []),
     {
       label: "Connected",
