@@ -6,6 +6,7 @@ from fastapi import APIRouter, Query, Depends
 from sqlalchemy import and_, case, func, Integer
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..models.database import get_db
 from ..models.sensor_reading import SensorReadingModel
 from ..models.sensor_meta import (
@@ -16,6 +17,11 @@ from ..models.sensor_meta import (
     SENSOR_SPIKE_THRESHOLDS,
     convert,
 )
+from ..services.solar_energy import (
+    compute_daily_solar_energy_series,
+    joules_to_display_unit,
+)
+from .config import get_effective_config
 
 router = APIRouter()
 
@@ -203,3 +209,44 @@ def _aggregate(db, sensor, column, start_dt, end_dt, resolution,
         }
         for r in results
     ]
+
+
+@router.get("/history/solar-energy")
+def get_solar_energy_history(
+    days: int = Query(default=14, ge=1, le=366,
+                       description="Number of local calendar days to return"),
+    db: Session = Depends(get_db),
+):
+    """Return one integrated daily-solar-energy value per local calendar
+    day for the last ``days`` days, oldest first.
+
+    Solar radiation is stored per-poll as an instantaneous W/m² value;
+    daily *energy* is the time-integral of that flux from local midnight
+    to local midnight.  Davis has no native daily-energy accumulator
+    (``SOLAR_ALARM`` is a threshold, not a running sum), so this is
+    computed from stored samples.
+
+    The last entry is always today up to the current instant — a
+    partial-day value that grows as the day progresses.
+
+    Value unit follows the operator's ``solar_energy_unit`` preference
+    (``MJ/m²`` / ``kWh/m²`` / ``Wh/m²``); values are already converted
+    for direct display.  Days with fewer than two samples (station
+    offline, no solar sensor for part of the window) return
+    ``value: null`` so the caller can render a gap.
+    """
+    cfg = get_effective_config(db)
+    unit = str(cfg.get("solar_energy_unit") or settings.units_solar_energy)
+
+    series = compute_daily_solar_energy_series(db, days=days)
+    return {
+        "unit": unit,
+        "days": days,
+        "points": [
+            {
+                "date": entry["date"],
+                "value": joules_to_display_unit(entry["j_per_m2"], unit),
+            }
+            for entry in series
+        ],
+    }

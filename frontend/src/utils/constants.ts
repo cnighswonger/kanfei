@@ -47,6 +47,7 @@ export const SENSOR_DISPLAY_NAMES: Record<string, string> = {
   et_daily: "ET Today",
   et_monthly: "ET This Month",
   et_yearly: "ET This Year",
+  solar_energy_daily: "Daily Solar Energy",
 };
 
 // --- Unit labels ---
