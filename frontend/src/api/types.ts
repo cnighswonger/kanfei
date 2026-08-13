@@ -190,14 +190,24 @@ export interface StationStatus {
   timeouts: number;
   station_time: string | null;
   /**
-   * Wall-clock epoch (ms) of the console clock at the moment the backend
-   * read it. Paired with `station_time` (the display string, same read).
-   * The frontend uses this to tick a live-updating clock display between
-   * status polls without another serial read — see `StationStatus.tsx`.
-   * `null` on disconnected/degraded responses and on stations that don't
-   * support GETTIME.
+   * Raw wall-clock fields the console reported at the last read. Paired
+   * with `server_epoch_ms_at_read` for the frontend's live-tick display
+   * (`StationStatus.tsx`): the client advances these components forward
+   * by `Date.now() - server_epoch_ms_at_read` and formats them as-is,
+   * without any timezone conversion. `year` is null on stations whose
+   * `GETTIME` response doesn't include it. Both fields null on
+   * disconnected/degraded responses and on stations that don't support
+   * GETTIME at all.
    */
-  station_time_epoch_ms: number | null;
+  station_time_components: {
+    year: number | null;
+    month: number;
+    day: number;
+    hour: number;
+    minute: number;
+    second: number;
+  } | null;
+  server_epoch_ms_at_read: number | null;
 }
 
 // --- Console rain season ---

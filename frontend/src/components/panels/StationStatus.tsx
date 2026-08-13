@@ -31,16 +31,35 @@ function formatTime(iso: string | null): string {
   }
 }
 
+interface StationClockComponents {
+  year: number | null;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
 /**
- * Format an epoch timestamp as `HH:MM:SS MM/DD` in the browser's local
- * timezone — the same shape the backend produces for `station_time`, so
- * the live-ticked display doesn't visually shift when it takes over
- * from the initial server-rendered string.
+ * Advance the console's reported wall-clock components forward by
+ * `elapsedMs` and format as `HH:MM:SS MM/DD` (or `HH:MM:SS MM/DD/YYYY`
+ * when the station reported a year). All arithmetic goes through UTC to
+ * keep the browser's local timezone from touching the values — the
+ * components are treated as opaque wall-clock fields that just need to
+ * roll forward by the elapsed delta, not as an instant in time.
+ *
+ * When `year` is null (older station), we synthesize a placeholder for
+ * the arithmetic and drop it from the output so the format still matches
+ * the backend's `station_time` string.
  */
-function formatStationClock(epochMs: number): string {
-  const d = new Date(epochMs);
+function formatStationClock(c: StationClockComponents, elapsedMs: number): string {
+  const yearPresent = c.year != null;
+  const seedYear = c.year ?? 2000; // placeholder — arithmetic only, hidden from output
+  const seedUtcMs = Date.UTC(seedYear, c.month - 1, c.day, c.hour, c.minute, c.second);
+  const d = new Date(seedUtcMs + elapsedMs);
   const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
+  const base = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} ${pad(d.getUTCMonth() + 1)}/${pad(d.getUTCDate())}`;
+  return yearPresent ? `${base}/${d.getUTCFullYear()}` : base;
 }
 
 function highlightColor(hl: "success" | "danger" | "warning" | null | undefined): string {
@@ -64,37 +83,34 @@ export default function StationStatus() {
 
   // --- Live-ticked station clock ---
   //
-  // Capture the (station_epoch, wall_epoch) pair from each status poll and
-  // display station_epoch + (Date.now() - wall_epoch), ticked every second.
-  // The status poll runs every 5 min while connected; without this, the
-  // displayed clock ages up to 5 min between polls and looks stale enough
-  // to trigger a false-alarm Sync click. Zero extra serial cost — we're
-  // extrapolating from a snapshot, not asking the console again.
+  // The `/api/station` poll returns the console's wall-clock components
+  // plus the server's UTC-epoch at the moment of the read. We advance
+  // the components forward by `Date.now() - server_epoch_ms_at_read` and
+  // format them as-is, without any timezone conversion. That keeps the
+  // display faithful to what the console actually shows — the browser's
+  // local timezone never touches the output — and avoids the false-alarm
+  // Sync click that a 5-minute-stale readout triggers.
+  //
+  // Zero extra serial cost: this is pure extrapolation between snapshots.
+  // Real console drift (crystal oscillator, seconds per week) shows up
+  // as a small offset that persists until the next auto-sync.
   //
   // Fallback to the server-formatted string when the pair is unavailable
-  // (disconnected, station doesn't support GETTIME, or first render before
-  // the first successful poll).
-  const stationEpochMs = stationStatus?.station_time_epoch_ms ?? null;
-  const [clockOffsetMs, setClockOffsetMs] = useState<number | null>(null);
+  // (disconnected, station doesn't support GETTIME, or first render
+  // before the first successful poll).
+  const components = stationStatus?.station_time_components ?? null;
+  const readAnchor = stationStatus?.server_epoch_ms_at_read ?? null;
   const [, setTick] = useState(0);
 
   useEffect(() => {
-    if (stationEpochMs == null) {
-      setClockOffsetMs(null);
-      return;
-    }
-    setClockOffsetMs(stationEpochMs - Date.now());
-  }, [stationEpochMs]);
-
-  useEffect(() => {
-    if (clockOffsetMs == null) return;
+    if (components == null || readAnchor == null) return;
     const id = setInterval(() => setTick((n) => n + 1), 1000);
     return () => clearInterval(id);
-  }, [clockOffsetMs]);
+  }, [components, readAnchor]);
 
   const stationClockDisplay =
-    clockOffsetMs != null
-      ? formatStationClock(Date.now() + clockOffsetMs)
+    components != null && readAnchor != null
+      ? formatStationClock(components, Date.now() - readAnchor)
       : (stationStatus?.station_time ?? "--");
 
   // Firmware string — prefer the version number (e.g. "1.90") when the
