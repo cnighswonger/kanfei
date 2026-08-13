@@ -31,6 +31,9 @@ const SENSOR_UNITS: Record<string, string> = {
   dew_point: "F",
   wind_chill: "F",
   feels_like: "F",
+  et_daily: "in",
+  et_monthly: "in",
+  et_yearly: "in",
 };
 
 // --- Date range helpers ---

@@ -44,6 +44,9 @@ export const SENSOR_DISPLAY_NAMES: Record<string, string> = {
   dew_point: "Dew Point",
   wind_chill: "Wind Chill",
   feels_like: "Feels Like",
+  et_daily: "ET Today",
+  et_monthly: "ET This Month",
+  et_yearly: "ET This Year",
 };
 
 // --- Unit labels ---

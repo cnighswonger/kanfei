@@ -20,8 +20,6 @@ from ..services.station_naming import resolve_station_name
 from ..services.uv_warning import classify_uv
 from .config import get_effective_config
 
-import json
-
 router = APIRouter()
 
 CARDINAL_DIRECTIONS = [
@@ -92,25 +90,14 @@ def get_current(db: Session = Depends(get_db)):
 
     station_name = resolve_station_name(reading.station_type, db)
 
-    # ET fields live in extra_json rather than a dedicated column (same
-    # pattern as the LOOP2 forecast fields discussed in issue #236).  They
-    # come off the wire in mm; convert to the operator's rain unit for the
-    # display value.  None on stations that don't compute ET.
-    et_daily_mm: float | None = None
-    et_monthly_mm: float | None = None
-    et_yearly_mm: float | None = None
-    if reading.extra_json:
-        try:
-            extras = json.loads(reading.extra_json)
-            et_daily_mm = extras.get("et_daily_mm")
-            et_monthly_mm = extras.get("et_monthly_mm")
-            et_yearly_mm = extras.get("et_yearly_mm")
-        except (ValueError, TypeError):
-            pass
-
-    def _et_display(mm: float | None) -> dict | None:
-        if mm is None:
+    # ET fields graduated from `extra_json` to dedicated columns in the
+    # beta30 migration (see database.py and sensor_reading.py).  Read
+    # from the columns; convert tenths-mm to the operator's rain unit.
+    # None on stations that don't compute ET.
+    def _et_display(tenths_mm: int | None) -> dict | None:
+        if tenths_mm is None:
             return None
+        mm = tenths_mm / 10.0
         if settings.units_rain == "mm":
             return {"value": round(mm, 2), "unit": "mm"}
         return {"value": round(mm / 25.4, 3), "unit": "in"}
@@ -180,8 +167,8 @@ def get_current(db: Session = Depends(get_db)):
         "uv_index": _val("uv_index", reading.uv_index),
         "uv_warning": uv_warning,
         "solar_energy_daily": solar_energy_daily,
-        "et_daily": _et_display(et_daily_mm),
-        "et_monthly": _et_display(et_monthly_mm),
-        "et_yearly": _et_display(et_yearly_mm),
+        "et_daily": _et_display(reading.et_daily),
+        "et_monthly": _et_display(reading.et_monthly),
+        "et_yearly": _et_display(reading.et_yearly),
         "daily_extremes": _get_daily_extremes(db),
     }

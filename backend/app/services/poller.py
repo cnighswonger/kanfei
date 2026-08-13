@@ -271,6 +271,20 @@ class Poller:
                     round(snapshot.uv_index * 10)
                     if snapshot.uv_index is not None else None
                 ),
+                # ET: snapshot carries mm; DB stores tenths mm (same shape
+                # as rain_total).  See SENSOR_BOUNDS in sensor_meta.py.
+                et_daily=(
+                    round(snapshot.et_daily * 10)
+                    if snapshot.et_daily is not None else None
+                ),
+                et_monthly=(
+                    round(snapshot.et_monthly * 10)
+                    if snapshot.et_monthly is not None else None
+                ),
+                et_yearly=(
+                    round(snapshot.et_yearly * 10)
+                    if snapshot.et_yearly is not None else None
+                ),
                 heat_index=hi,
                 dew_point=dp,
                 wind_chill=wc,
@@ -347,25 +361,21 @@ class Poller:
 
     @staticmethod
     def _build_extra_json(snapshot) -> Optional[str]:
-        """Merge structured ET fields with the driver's ``extra`` dict.
+        """Return the driver's ``extra`` dict serialised as JSON, or None.
 
-        ET is a first-class field on ``SensorSnapshot`` (see base.py) because
-        every station that reports it uses the same shape (mm, three ranges).
-        But we don't have dedicated ``sensor_readings`` columns for ET, so we
-        route them through ``extra_json`` alongside whatever vendor-specific
-        fields the driver already put there.
+        ET graduated from ``extra_json`` to dedicated ``sensor_readings``
+        columns (``et_daily``, ``et_monthly``, ``et_yearly``) in the
+        migration alongside this commit — the poller now writes them as
+        top-level fields on the DB row (see ``SensorReadingModel`` and
+        the ``et_daily=`` assignment in this file's storage block).
+        ``extra_json`` no longer carries ET, so this helper collapses to
+        a pass-through of ``snapshot.extra``.
 
-        This is the same pattern issue #236 documents for the LOOP2 forecast
-        fields: standardised on the snapshot, blob-encoded on the DB row,
-        read out by the API when it needs them.
+        Kept as a helper (rather than inlined) so future extras with
+        similar "standardised on the snapshot, blob on the row" shape
+        have an obvious place to land.
         """
         extras = dict(snapshot.extra) if snapshot.extra else {}
-        if snapshot.et_daily is not None:
-            extras["et_daily_mm"] = snapshot.et_daily
-        if snapshot.et_monthly is not None:
-            extras["et_monthly_mm"] = snapshot.et_monthly
-        if snapshot.et_yearly is not None:
-            extras["et_yearly_mm"] = snapshot.et_yearly
         return json.dumps(extras) if extras else None
 
     @staticmethod

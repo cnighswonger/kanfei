@@ -95,6 +95,46 @@ def init_database() -> None:
             ))
             conn.commit()
 
+    # Migrate: add et_daily / et_monthly / et_yearly columns (beta30 follow-on
+    # to #329). ET graduated from `extra_json` to dedicated columns so
+    # `/api/history` can chart them the same way it charts rain and
+    # temperature.  Store shape matches rain_total: integer tenths of a
+    # millimetre.  See SENSOR_BOUNDS in sensor_meta.py.
+    #
+    # Backfill: for rows written before this migration ran, the historical
+    # ET values are already in `extra_json` under keys `et_daily_mm`,
+    # `et_monthly_mm`, `et_yearly_mm` (floats, millimetres).  Copy those
+    # into the new columns as int tenths-mm so charts have full history
+    # from day one after the upgrade.  Idempotent — the backfill only
+    # UPDATES rows where the column is still NULL.
+    for column in ("et_daily", "et_monthly", "et_yearly"):
+        with engine.connect() as conn:
+            try:
+                conn.execute(text(f"SELECT {column} FROM sensor_readings LIMIT 1"))
+            except Exception:
+                conn.execute(text(
+                    f"ALTER TABLE sensor_readings ADD COLUMN {column} INTEGER"
+                ))
+                conn.commit()
+    # Backfill from extra_json.  Guard on `extra_json IS NOT NULL AND
+    # json_extract(extra_json, '$.<key>_mm') IS NOT NULL` so we only touch
+    # rows that actually have the field.  SQLite's `json_extract` is
+    # available in every SQLite build the project targets (>= 3.9).
+    with engine.connect() as conn:
+        for column, extra_key in (
+            ("et_daily", "et_daily_mm"),
+            ("et_monthly", "et_monthly_mm"),
+            ("et_yearly", "et_yearly_mm"),
+        ):
+            conn.execute(text(
+                f"UPDATE sensor_readings "
+                f"SET {column} = CAST(json_extract(extra_json, '$.{extra_key}') * 10 AS INTEGER) "
+                f"WHERE {column} IS NULL "
+                f"  AND extra_json IS NOT NULL "
+                f"  AND json_extract(extra_json, '$.{extra_key}') IS NOT NULL"
+            ))
+        conn.commit()
+
     # Migrate: cwop_mute_* → channel_mute_* (issue #162)
     # Mute keys were CWOP-specific in beta16; from beta17 they gate every
     # outbound upload, so the prefix is generalised.  Copy old → new for
