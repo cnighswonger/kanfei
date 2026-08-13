@@ -882,6 +882,31 @@ export interface SignalQuality {
   receivers: number[] | null;
 }
 
+/**
+ * Radio state and per-unit crystal calibration via OPMODE.
+ *
+ * Undocumented Davis command, verified identical on Vue fw 2.12 and
+ * fw 4.33 in the wire audit (see `reference/vantage_fw433_wire_audit.md`
+ * §N3). Every field is a normalised integer; the wire's `TEMP CAL:`
+ * key with a literal space is folded to `TEMP_CAL` by the driver.
+ *
+ * All fields optional because malformed lines are dropped by the driver
+ * rather than crashing the whole read — a legitimately supported
+ * console with a weird firmware may return a partial dict.
+ */
+export interface RadioState {
+  TST?: number;
+  TX?: number;
+  RX?: number;
+  HOP?: number;
+  BAND?: number;
+  CHAN?: number;
+  DOM?: number;
+  XTLCAL?: number;
+  TEMP?: number;
+  TEMP_CAL?: number;
+}
+
 // --- Vantage sensor calibration ---
 
 /**

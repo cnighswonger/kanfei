@@ -1,4 +1,5 @@
 import { useIsMobile } from "../hooks/useIsMobile.ts";
+import RxDiagnostics from "../components/panels/RxDiagnostics.tsx";
 
 // --- About-specific overrides ---
 // The supercell background blends with default muted grays — use a brighter tone.
@@ -222,7 +223,9 @@ export default function About() {
         </div>
       </div>
 
-
+      {/* RX Diagnostics — hides itself when the driver doesn't report
+          reception counters or when the caller isn't admin. */}
+      <RxDiagnostics isMobile={isMobile} />
 
       {/* Credits */}
       <div style={{ ...cardStyle, padding: isMobile ? "14px" : "20px" }}>
