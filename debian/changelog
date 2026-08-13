@@ -1,3 +1,44 @@
+kanfei (0.1.0~beta28) unstable; urgency=medium
+
+  * Shows the console's Davis product SKU on the Station Status panel.
+    The console reports its 4-digit product number in response to an
+    undocumented `IDENT` query, and the value is stable per hardware
+    revision — a Vue Console shows 6351, a Vue Wireless with WeatherLink
+    IP shows 6350, and so on.  Reading it once at connect lets Kanfei
+    tell you which specific unit is talking, useful when you have
+    multiple consoles on the bench or when you are troubleshooting
+    whether the hardware in front of you is the model whose firmware
+    quirks a doc is describing.  Populated on Vue and Vantage Pro2;
+    blank on stations that predate the command or on non-Davis drivers.
+
+  * Adds an RX Diagnostics tile to the About page for Davis Vue and
+    Vantage Pro2 consoles.  Bundles two reads behind one refresh:
+    reception counters (packets received/missed, longest unbroken run,
+    resyncs, CRC errors, derived reception rate) so you can see whether
+    your sensors are being heard, and radio state (band, channel, radio
+    domain, crystal calibration, console temperature) so you can confirm
+    the console is listening where you expect it to.  Manual refresh
+    only — each read holds the console's serial lock briefly, so a
+    polling tile would starve the logger.  The tile hides itself
+    entirely on non-Vantage stations and for non-admin users.
+
+  * Adds a wire-audit script (`scripts/vantage_wire_audit.py`) that
+    records the console's response to every documented Davis serial
+    command plus a full 4 KB EEPROM dump.  Read-only, no writes.  This
+    is the script that produced the fw 4.33 audit report captured in
+    `reference/vantage_fw433_wire_audit.md` — useful when you suspect
+    a firmware difference is behind a reception or calibration quirk.
+
+  * Documentation: full wire-audit report for Vantage Vue console
+    firmware 4.33 (`reference/vantage_fw433_wire_audit.md`).  Diffs
+    the fw 4.33 wire behaviour against the Davis Serial Communication
+    Reference and the widely-deployed fw 2.12, calls out three
+    departures and five undocumented but universal commands, and
+    records what NOT to touch (the bare `RESET` command puts a Vue into
+    a setup-wizard-required state on the LCD).
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Wed, 13 Aug 2026 00:20:00 +0000
+
 kanfei (0.1.0~beta27) unstable; urgency=medium
 
   * Adds a multi-station cross-check to the barometer calibration reference.
