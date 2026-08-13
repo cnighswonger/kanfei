@@ -1,3 +1,44 @@
+kanfei (0.1.0~beta29) unstable; urgency=medium
+
+  * The Station Clock row on the Station Status panel now ticks every
+    second between polls instead of freezing for the five-minute gap
+    between backend refreshes.  The console's clock stays visible and
+    live, which stops the false-alarm impulse to click "Sync" when the
+    console is actually in fine shape — the display was stale, not the
+    clock.  The tick is pure client-side extrapolation from the last
+    polled snapshot, so no additional serial traffic is added: real
+    console drift (a few seconds per week on a crystal oscillator)
+    still shows up as a small persistent offset until the next
+    auto-sync.  The station's own wall-clock components are advanced
+    forward without any timezone conversion, so the display matches
+    what your console face shows regardless of where your browser is.
+
+  * The midnight rain rollover — the once-a-day task that captures
+    yesterday's rain total and clears the daily counter for the new
+    day — now works on every driver, not just Davis.  Until this
+    release, non-Davis stations (Tempest, and any future TCP/HTTP
+    drivers) silently skipped the rollover; their "Yesterday" tile
+    stayed frozen forever on whatever value it happened to hold when
+    the station was first added.  Kanfei now reads the day's terminal
+    total from its own database (which every driver's polling path
+    writes to) and persists it as yesterday, which is the shared
+    contract every driver already participates in.  Davis stations
+    additionally clear their hardware register, same as before —
+    that half is unchanged, including the "clear must succeed before
+    yesterday is committed" safeguard added earlier.
+
+  * Removes a legacy state-file migration branch that seeded the
+    poller's cached daily rain value using a hardcoded conversion
+    that was only correct at the default rain calibration.  The
+    branch was already effectively unreachable — the state file is
+    rewritten on every clean shutdown, so anyone who had restarted
+    Kanfei since the format switched had long since moved to the
+    new key.  The removal is a defensive cleanup: nobody with a
+    non-default rain calibration will get a subtly-wrong seed on
+    their first post-restore poll cycle.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Thu, 13 Aug 2026 15:10:00 +0000
+
 kanfei (0.1.0~beta28) unstable; urgency=medium
 
   * Shows the console's Davis product SKU on the Station Status panel.
