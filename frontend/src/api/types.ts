@@ -88,6 +88,27 @@ export interface CurrentConditions {
   derived: DerivedData;
   solar_radiation: ValueWithUnit | null;
   uv_index: ValueWithUnit | null;
+  /**
+   * WHO UV Index warning band ("Low" | "Moderate" | "High" | "Very High" |
+   * "Extreme"). Derived server-side from `uv_index` so consumers don't
+   * re-implement the same boundary logic. Null when uv_index is null.
+   */
+  uv_warning: string | null;
+  /**
+   * Trapezoid-integrated solar radiation since local midnight, in the
+   * operator's preferred unit (see `solar_energy_unit` config). Null on
+   * stations without a solar sensor or before the second sample of the
+   * day lands.
+   */
+  solar_energy_daily: ValueWithUnit | null;
+  /**
+   * Evapotranspiration: running totals over day / calendar month /
+   * calendar year, in the operator's `rain_unit` (in or mm). Null on
+   * stations that don't compute ET (needs solar + temp/humidity/wind).
+   */
+  et_daily: ValueWithUnit | null;
+  et_monthly: ValueWithUnit | null;
+  et_yearly: ValueWithUnit | null;
   daily_extremes: DailyExtremes | null;
 }
 

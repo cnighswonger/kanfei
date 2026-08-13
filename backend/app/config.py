@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     units_pressure: str = "inHg"  # inHg, hPa, or mb
     units_wind: str = "mph"  # mph, kph, or knots
     units_rain: str = "in"  # in or mm
+    units_solar_energy: str = "MJ/m²"  # MJ/m², kWh/m², or Wh/m²
 
     # METAR
     metar_enabled: bool = False
