@@ -177,14 +177,63 @@ class TestRequireAdminBypass:
 
 
 class TestCacheInvalidation:
-    """The setup handlers call ``invalidate_cache`` after they change
-    ``station_driver_type``.  Directly test that path."""
+    """Every writer of ``station_driver_type`` must invalidate the
+    ``is_public_mode`` cache in its own commit path.  Missing one leaves
+    the read-only gate stale for up to 30 s after the flip (PR #337
+    Codex round 1 blocker on ``/api/config``)."""
 
     def test_cache_reflects_new_driver_type_after_invalidate(self, clean_station_config):
         _set_driver_type("public_relay")
         assert public_mode.is_public_mode() is True
         _set_driver_type("legacy")
         assert public_mode.is_public_mode() is False
+
+    def test_put_config_flip_to_public_relay_blocks_next_write(self, clean_station_config):
+        """A ``PUT /api/config`` that flips ``station_driver_type`` to
+        ``public_relay`` must have the middleware block the very next
+        write — no 30 s cache window in which writes still slip through.
+        Regression for PR #337 Codex round 1."""
+        _set_driver_type("legacy")
+        # Prime the cache with the pre-flip (False) value.
+        assert public_mode.is_public_mode() is False
+        with TestClient(app) as c:
+            # A pre-flip write is not gated by public mode (the read
+            # here — it might 401 or 422, but not the mode 403).
+            resp = c.put("/api/config", json=[])
+            assert resp.status_code != 403 or resp.json() != {
+                "detail": "Kanfei is running in read-only public mode",
+            }
+
+            # Flip via /api/config PUT — the code path Codex flagged.
+            resp = c.put("/api/config", json=[
+                {"key": "station_driver_type", "value": "public_relay"},
+            ])
+            assert resp.status_code == 200, resp.text
+
+            # Next write must be gated — no cache lag allowed.
+            resp = c.put("/api/config", json=[])
+            assert resp.status_code == 403
+            assert resp.json() == {
+                "detail": "Kanfei is running in read-only public mode",
+            }
+
+    def test_put_config_flip_away_from_public_unblocks_next_write(self, clean_station_config):
+        """Same invariant in the other direction: flipping OUT of public
+        mode via /api/config must let the next write through immediately."""
+        _set_driver_type("public_relay")
+        assert public_mode.is_public_mode() is True
+        with TestClient(app) as c:
+            # /api/config PUT is blocked in public mode — but the middleware
+            # only sees the PATH, not the payload, so we cannot flip out
+            # of public mode via /api/config once it is on.  Simulate the
+            # flip via a direct DB write (mirrors what would happen if
+            # the operator re-ran the setup wizard).
+            _set_driver_type("legacy")
+            # Next write must go through.
+            resp = c.put("/api/config", json=[])
+            assert resp.status_code != 403 or resp.json() != {
+                "detail": "Kanfei is running in read-only public mode",
+            }
 
 
 # --------------- Route-walk regression guard ---------------
