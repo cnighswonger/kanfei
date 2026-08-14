@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..models.database import get_db
 from ..models.station_config import StationConfigModel
+from ..services.public_mode import invalidate_cache as invalidate_public_mode_cache
 from .dependencies import require_admin
 
 router = APIRouter()
@@ -234,6 +235,13 @@ def update_config(updates: list[ConfigUpdate], db: Session = Depends(get_db), _a
         if row:
             current_secrets[key] = row.value
 
+    # Track whether this update touches the public-mode indicator so the
+    # 30 s cache can be dropped after commit.  Every path that mutates
+    # ``station_driver_type`` must do this; without it the read-only
+    # gate goes stale for up to 30 s after the flip (issue #336,
+    # PR #337 Codex round 1).
+    driver_type_touched = False
+
     for update in updates:
         # Skip masked secret values — the frontend sends back the masked
         # version from GET /config; writing it would destroy the real secret.
@@ -264,6 +272,17 @@ def update_config(updates: list[ConfigUpdate], db: Session = Depends(get_db), _a
                 updated_at=datetime.now(timezone.utc),
             )
             db.add(new_item)
+
+        if update.key == "station_driver_type":
+            driver_type_touched = True
+
     db.commit()
+
+    if driver_type_touched:
+        # Drop the cached is_public_mode() value so the next request
+        # sees the new state immediately.  Deferred until after commit
+        # so a rolled-back write cannot re-poison the cache.
+        invalidate_public_mode_cache()
+
     items = db.query(StationConfigModel).all()
     return [{"key": item.key, "value": _coerce_value(item.value)} for item in items]
