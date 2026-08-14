@@ -135,6 +135,14 @@ def _create_driver(driver_type: str, config: dict) -> StationDriver:
     baud = int(config.get("baud_rate", settings.baud_rate))
     timeout = float(config.get("serial_timeout", settings.serial_timeout))
 
+    if driver_type == "public_relay":
+        # Public droplet demo — no wire, no socket.  Selecting this
+        # driver also puts the app into read-only mode (issue #336, see
+        # app/services/public_mode.py).  Ingest arrives via HTTP push
+        # (Phase 2), which calls the driver's push_snapshot buffer.
+        from app.protocol.public_relay.driver import PublicRelayDriver
+        return PublicRelayDriver()
+
     if driver_type == "legacy":
         return LinkDriver(port=port, baud_rate=baud, timeout=timeout)
 

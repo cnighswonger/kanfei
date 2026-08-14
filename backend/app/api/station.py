@@ -296,6 +296,17 @@ DRIVER_CATALOG = [
         "description": "HTTP push from Ambient Weather stations (WS-2902, WS-5000) or any Fine Offset station with Ecowitt firmware.",
         "config_fields": ["ambient_listen_port"],
     },
+    {
+        # Public-facing droplet mode.  Selecting this driver puts the
+        # entire app into read-only public mode (issue #336) — the
+        # write-block middleware and require_admin guest bypass both
+        # key off this exact string.  See app/services/public_mode.py.
+        "type": "public_relay",
+        "name": "Public Relay (droplet demo)",
+        "connection": "http_push",
+        "description": "Read-only public droplet.  Data is pushed by a local station's private Kanfei instance; the entire Settings UI is accessible read-only.",
+        "config_fields": [],
+    },
 ]
 
 

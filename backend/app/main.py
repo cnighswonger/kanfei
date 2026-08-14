@@ -10,10 +10,10 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, JSONResponse
 
 from .config import settings
 from .version import VERSION
@@ -24,6 +24,7 @@ from .api.router import api_router
 from .api import backgrounds as backgrounds_api
 from .ws.handler import websocket_endpoint
 from .services.log_buffer import install as install_log_buffer
+from .services.public_mode import is_public_mode
 
 # kanfei-nowcast is an optional add-on package.
 try:
@@ -296,6 +297,39 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
     )
+
+    # Read-only gate for public droplet mode.
+    #
+    # When ``station_driver_type == 'public_relay'`` (see
+    # ``app/services/public_mode.py``), every state-mutating HTTP method
+    # returns 403 unless the path is in the allowlist below.  The
+    # allowlist is empty in Phase 1; Phase 2 adds
+    # ``/api/ingest/reading`` and ``/api/ingest/config`` so the local
+    # push service can feed the droplet.
+    #
+    # Why middleware, not per-endpoint Depends: this gate must catch
+    # write endpoints that are OPEN today (``/api/auth/login``,
+    # ``/api/auth/setup-admin``, the bootstrap-bypass path in
+    # ``/api/setup/*``) as well as any future OPEN write endpoint someone
+    # forgets to gate.  A middleware at the outermost layer covers all
+    # of them without a per-endpoint refactor.
+    #
+    # WebSocket coverage: today's WS channel is server-to-client only
+    # (sensor broadcasts).  If a future feature adds inbound WS commands
+    # that mutate state, they need their own gate — this HTTP middleware
+    # will not catch them.
+    app.state.public_mode_write_allowlist = frozenset()
+
+    @app.middleware("http")
+    async def public_mode_write_block(request: Request, call_next):
+        if (request.method in {"POST", "PUT", "DELETE", "PATCH"}
+                and request.url.path not in app.state.public_mode_write_allowlist
+                and is_public_mode()):
+            return JSONResponse(
+                {"detail": "Kanfei is running in read-only public mode"},
+                status_code=403,
+            )
+        return await call_next(request)
 
     # API routes
     app.include_router(api_router)
