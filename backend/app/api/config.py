@@ -27,6 +27,11 @@ _SECRET_KEYS = frozenset({
     "bot_telegram_token",
     "bot_discord_token",
     "wu_station_key",
+    # Shared secret between the private-station relay and the public
+    # droplet's ingest endpoints (issue #336 Phase 2).  Masked so a
+    # curious viewer of GET /api/config cannot lift it and impersonate
+    # the local relay.
+    "public_mode_ingest_secret",
 })
 
 
@@ -148,6 +153,11 @@ _DEFAULTS: dict[str, object] = {
     "bot_discord_last_error": "",
     "bot_discord_conditions_enabled": False,
     "bot_discord_conditions_interval": 30,    # minutes
+    # Public-relay ingest secret (issue #336 Phase 2).  Shared between the
+    # private-station relay and the public droplet; the droplet's ingest
+    # endpoints reject any push whose bearer token does not match this.
+    # Masked in GET /api/config via _SECRET_KEYS above.
+    "public_mode_ingest_secret": "",
     # Backup
     "backup_enabled": False,
     "backup_interval_hours": 24,

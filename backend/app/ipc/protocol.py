@@ -41,6 +41,12 @@ CMD_READ_RAIN_SEASON = "read_rain_season"    # yearly-rain-reset month
 CMD_SET_RAIN_SEASON = "set_rain_season"      # RAIN_YEAR_START via EEBWR
 CMD_RADIO_STATE = "radio_state"              # OPMODE — undocumented, read-only
 
+# Public-relay ingest (issue #336 Phase 2).  These are the commands the
+# droplet's HTTP ingest endpoints (POST /api/ingest/{reading,config})
+# forward to the daemon so the buffered PublicRelayDriver sees the push.
+CMD_INGEST_READING = "ingest_reading"        # push a SensorSnapshot payload
+CMD_INGEST_CONFIG = "ingest_config"          # push upstream identity/config
+
 # --- Wire helpers ---
 
 IPC_HOST = "127.0.0.1"
