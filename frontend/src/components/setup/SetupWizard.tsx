@@ -25,6 +25,11 @@ interface WizardState {
   ecowittIp: string;
   tempestHubSn: string;
   ambientListenPort: number;
+  // Public-droplet setup only (issue #336 Phase 4).  Sent as
+  // public_mode_ingest_secret via /api/setup/complete so the same
+  // pass-through writer already used for every other config key
+  // lands it in station_config.
+  publicModeIngestSecret: string;
   latitude: number;
   longitude: number;
   elevation: number;
@@ -117,6 +122,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     ecowittIp: "",
     tempestHubSn: "",
     ambientListenPort: 8080,
+    publicModeIngestSecret: "",
     latitude: 0,
     longitude: 0,
     elevation: 0,
@@ -148,6 +154,13 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
       if (["weatherlink_ip", "weatherlink_live"].includes(state.driverType))
         return !!state.weatherlinkIp;
       if (state.driverType === "ecowitt") return !!state.ecowittIp;
+      // Public droplet needs a non-trivial ingest secret so the
+      // operator can't accidentally publish a droplet with an empty
+      // or too-short shared credential.  16 chars is short enough to
+      // paste but long enough to resist casual guessing; a
+      // paranoid operator can use anything longer.
+      if (state.driverType === "public_relay")
+        return state.publicModeIngestSecret.length >= 16;
       // Tempest and Ambient can proceed with defaults
       return !!state.driverType;
     }
@@ -175,6 +188,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
         ecowitt_ip: state.ecowittIp,
         tempest_hub_sn: state.tempestHubSn,
         ambient_listen_port: state.ambientListenPort,
+        public_mode_ingest_secret: state.publicModeIngestSecret,
         latitude: state.latitude,
         longitude: state.longitude,
         elevation: state.elevation,
@@ -241,6 +255,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
               ecowittIp={state.ecowittIp}
               tempestHubSn={state.tempestHubSn}
               ambientListenPort={state.ambientListenPort}
+              publicModeIngestSecret={state.publicModeIngestSecret}
               onChange={handleChange}
             />
           )}

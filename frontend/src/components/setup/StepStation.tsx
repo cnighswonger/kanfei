@@ -33,6 +33,7 @@ interface StepStationProps {
   ecowittIp: string;
   tempestHubSn: string;
   ambientListenPort: number;
+  publicModeIngestSecret: string;
   onChange: (partial: Record<string, unknown>) => void;
 }
 
@@ -102,6 +103,7 @@ export default function StepStation({
   ecowittIp,
   tempestHubSn,
   ambientListenPort,
+  publicModeIngestSecret,
   onChange,
 }: StepStationProps) {
   const [drivers, setDrivers] = useState<DriverInfo[]>([]);
@@ -420,7 +422,8 @@ export default function StepStation({
           )}
 
           {/* HTTP push (Ambient) */}
-          {selectedDriver.connection === "http_push" && (
+          {selectedDriver.connection === "http_push" &&
+            selectedDriver.type === "ambient" && (
             <div>
               <label style={labelStyle}>Listen Port</label>
               <input
@@ -441,6 +444,44 @@ export default function StepStation({
                 Configure your Ambient Weather station to push data to this
                 computer's IP on this port. Use Wunderground or Ecowitt custom
                 server settings on the station.
+              </p>
+            </div>
+          )}
+
+          {/* HTTP push (Public droplet) — the ingest secret is the
+              shared credential the private station's relay will send
+              on every push.  16-char minimum enforced by the wizard's
+              canAdvance so a droplet can't be published with an empty
+              or trivially-short secret. */}
+          {selectedDriver.connection === "http_push" &&
+            selectedDriver.type === "public_relay" && (
+            <div>
+              <label style={labelStyle}>Ingest Secret</label>
+              <input
+                style={inputStyle}
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="Paste a strong shared secret (min 16 chars)"
+                value={publicModeIngestSecret}
+                onChange={(e) =>
+                  onChange({ publicModeIngestSecret: e.target.value })
+                }
+              />
+              <p
+                style={{
+                  fontSize: "calc(12px * var(--font-scale))",
+                  color: "var(--color-text-muted)",
+                  marginTop: "6px",
+                }}
+              >
+                Generate with{" "}
+                <code style={{ fontFamily: "var(--font-mono, monospace)" }}>
+                  openssl rand -base64 32
+                </code>{" "}
+                and paste the same value into the private station's Public
+                Droplet Relay settings.  Kanfei stores this masked and
+                requires it on every incoming push.
               </p>
             </div>
           )}

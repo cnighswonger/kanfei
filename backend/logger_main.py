@@ -49,6 +49,7 @@ from app.ipc.server import IPCServer
 from app.ipc import protocol as ipc
 from app.services.wunderground import WundergroundUploader
 from app.services.cwop import CwopUploader
+from app.services.public_relay_sender import PublicRelaySender
 
 logger = logging.getLogger("davis.logger")
 
@@ -205,6 +206,10 @@ class LoggerDaemon:
         self._sample_period: Optional[int] = None
         self.wu_uploader = WundergroundUploader()
         self.cwop_uploader = CwopUploader()
+        # Public-droplet relay (issue #336 Phase 3).  Third uploader
+        # alongside WU/CWOP; self-gated inside ``maybe_upload`` on
+        # driver type and config-enabled.
+        self.relay_sender = PublicRelaySender()
 
     # ---- helpers for LinkDriver-specific operations ----
 
@@ -252,6 +257,10 @@ class LoggerDaemon:
         await self._teardown_driver()
         if self.ipc_server:
             await self.ipc_server.stop()
+        # Release the relay sender's httpx client so we don't leave
+        # sockets in TIME_WAIT.  Safe even if the sender never opened
+        # a connection.
+        await self.relay_sender.close()
         logger.info("Logger daemon stopped")
         # Exit directly — asyncio.run() cleanup hangs on executor threads
         logging.shutdown()
@@ -336,6 +345,13 @@ class LoggerDaemon:
             if msg.get("type") == "sensor_update":
                 await self.wu_uploader.maybe_upload(msg["data"])
                 await self.cwop_uploader.maybe_upload(msg["data"])
+                # Public-droplet relay.  Uses the raw SensorSnapshot
+                # (attached by ``poller._process_reading``) so the
+                # ingest payload mirrors the dataclass 1:1 without
+                # reverse-engineering the REST-shaped ``data`` dict.
+                await self.relay_sender.maybe_upload(
+                    msg.get("snapshot"), self.driver,
+                )
 
         self.poller.set_broadcast_callback(_broadcast_and_upload)
 

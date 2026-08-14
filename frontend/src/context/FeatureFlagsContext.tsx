@@ -19,6 +19,10 @@ export interface FeatureFlags {
   nowcastEnabled: boolean;
   sprayEnabled: boolean;
   mapEnabled: boolean;
+  // Public-droplet read-only mode (issue #336 Phase 4).  Computed
+  // server-side from station_driver_type == "public_relay", so a
+  // driver flip via the setup wizard flips this without a restart.
+  publicModeActive: boolean;
 }
 
 interface FeatureFlagsContextValue {
@@ -29,12 +33,18 @@ interface FeatureFlagsContextValue {
 
 const FeatureFlagsContext = createContext<FeatureFlagsContextValue | null>(null);
 
-const DEFAULTS: FeatureFlags = { nowcastEnabled: false, sprayEnabled: false, mapEnabled: false };
+const DEFAULTS: FeatureFlags = {
+  nowcastEnabled: false,
+  sprayEnabled: false,
+  mapEnabled: false,
+  publicModeActive: false,
+};
 
 const FLAG_KEYS: Record<string, keyof FeatureFlags> = {
   nowcast_enabled: "nowcastEnabled",
   spray_enabled: "sprayEnabled",
   map_enabled: "mapEnabled",
+  public_mode_active: "publicModeActive",
 };
 
 function extractFlags(
@@ -62,6 +72,7 @@ export function FeatureFlagsProvider({ children }: { children: ReactNode }) {
         nowcastEnabled: flagData.nowcast_enabled === true,
         sprayEnabled: flagData.spray_enabled === true,
         mapEnabled: flagData.map_enabled === true,
+        publicModeActive: flagData.public_mode_active === true,
       });
     } catch {
       // Fallback to full config (requires auth) for Settings refresh.
