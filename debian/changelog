@@ -1,3 +1,31 @@
+kanfei (0.1.0~beta31) unstable; urgency=medium
+
+  * Adds a public-facing droplet mode.  Kanfei can now run on a second
+    machine — a small cloud droplet, typically — that displays live
+    weather data pushed from a private station without exposing any
+    write surface.  The droplet runs the exact same package as the
+    private station; the only difference is a driver selection at
+    setup time.  Every write endpoint returns 403 except two
+    bearer-authenticated ingest paths that accept snapshot pushes from
+    the private station.  Guests browse the dashboard, live tiles, and
+    read-only Settings; nothing they do can change state or reach the
+    private station's hardware.  Full operator documentation lives at
+    docs/public-droplet.md, with a reference nginx recipe at
+    reference/nginx-public-droplet.conf.example that terminates TLS
+    and locks the ingest paths to the private station's outbound IP.
+
+  * Adds a Public Droplet Relay section to the Station settings tab on
+    the private station side.  Toggle it on, paste the droplet's URL
+    and the shared bearer secret you set on the droplet, and Save.
+    The relay task in kanfei-logger picks up the change on the next
+    poll cycle — no restart — and starts pushing every sensor snapshot
+    to the droplet's ingest endpoint alongside the existing Weather
+    Underground and CWOP uploads.  The panel surfaces a red banner
+    with the last push failure so an operator sees a stalled relay
+    without having to tail the systemd journal.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Fri, 14 Aug 2026 22:19:57 +0000
+
 kanfei (0.1.0~beta30) unstable; urgency=medium
 
   * Adds three new rows to the Solar & UV tile.  The first is the
