@@ -284,3 +284,31 @@ class TestSecretMasking:
             "masked (see _SECRET_KEYS in app/api/config.py)"
         )
         assert "*" in items["public_mode_ingest_secret"]
+
+    def test_secret_masked_in_public_mode_get_config(self, clean_station_config):
+        """The require_admin bypass on a public droplet lets guests read
+        /api/config so the read-only Settings UI has data to render.
+        Masking MUST still cover the ingest secret on that path —
+        otherwise any web visitor to the droplet can pull the shared
+        secret and impersonate the upstream relay.
+
+        This is the specific scenario Codex round 1 on PR #339 verified
+        manually and asked to be pinned as a test.
+        """
+        _set_config("station_driver_type", "public_relay")
+        _set_config("public_mode_ingest_secret", "abcd" + "e" * 28)
+        public_mode.invalidate_cache()
+        with TestClient(app) as c:
+            # NO Authorization header — the require_admin bypass is what
+            # makes this reach the handler in public mode.
+            resp = c.get("/api/config")
+        assert resp.status_code == 200, resp.text
+        items = {item["key"]: item["value"] for item in resp.json()}
+        assert "public_mode_ingest_secret" in items
+        assert items["public_mode_ingest_secret"] != "abcd" + "e" * 28, (
+            "PUBLIC DROPLET LEAK: GET /api/config returned the raw ingest "
+            "secret to an unauthenticated guest. Any web visitor could "
+            "lift it and impersonate the upstream relay. Fix by ensuring "
+            "public_mode_ingest_secret stays in _SECRET_KEYS."
+        )
+        assert "*" in items["public_mode_ingest_secret"]
