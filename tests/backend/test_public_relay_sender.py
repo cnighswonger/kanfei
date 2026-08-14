@@ -290,6 +290,32 @@ class TestFailureModes:
         assert sender._effective_interval <= MAX_BACKOFF_INTERVAL
         assert sender._consecutive_errors >= MAX_CONSECUTIVE_ERRORS
 
+    def test_identity_push_shares_backoff_gate(self, clean_station_config):
+        """Codex round 1 on PR #340: a failed identity push must not
+        fire on every broadcast when the reading path has already
+        backed off — otherwise a down droplet gets ~2x the traffic
+        the operator thinks they've throttled to."""
+        _enable_relay()
+        sender = PublicRelaySender()
+        mock = _install_mock_client(sender)
+        mock.post.return_value = httpx.Response(503, json={"detail": "down"})
+
+        # Drive the sender into a backoff state.
+        for _ in range(MAX_CONSECUTIVE_ERRORS + 1):
+            _run(sender.maybe_upload(_snapshot(), _FakeDriver()))
+        assert sender._effective_interval > 0
+        calls_after_backoff = mock.post.call_count
+
+        # One more broadcast — reading push should be gated (no new
+        # call), and the identity push must also be gated (otherwise
+        # it would still fire because the hash never advanced past the
+        # first failed attempt).
+        _run(sender.maybe_upload(_snapshot(), _FakeDriver()))
+        assert mock.post.call_count == calls_after_backoff, (
+            "Identity push fired despite reading-path backoff being "
+            "active — see Codex round 1 on PR #340."
+        )
+
 
 # ---------------- Edge cases ----------------
 

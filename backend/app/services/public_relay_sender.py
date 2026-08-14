@@ -189,12 +189,26 @@ class PublicRelaySender:
         cosmetic and a stale label on the droplet is not a data-flow
         failure.  Reading pushes stay the authoritative "is the relay
         working" signal.
+
+        Backoff: we honour the reading path's ``_effective_interval``
+        gate here so a down droplet doesn't get spammed with identity
+        pushes every broadcast just because ``_last_identity_hash``
+        never advances.  Codex round 1 on PR #340 flagged this — the
+        reading path backs off, but identity was ignoring it.
         """
         payload = self._identity_payload(driver)
         digest = hashlib.sha256(
             json.dumps(payload, sort_keys=True, default=str).encode()
         ).hexdigest()
         if digest == self._last_identity_hash:
+            return
+
+        # Share the reading backoff timer.  ``_last_upload`` is
+        # updated by both successful reading pushes and by the backoff
+        # anchor in ``_apply_backoff``, so this gate widens naturally
+        # as failures accumulate.
+        now = time.monotonic()
+        if self._effective_interval and now - self._last_upload < self._effective_interval:
             return
 
         url = f"{self._target_url}/api/ingest/config"
@@ -206,7 +220,7 @@ class PublicRelaySender:
                 payload.get("station_name") or "<no name>",
             )
         # A failed identity push retries on the next broadcast because
-        # the hash never advances.
+        # the hash never advances — subject to the backoff gate above.
 
     # ---- HTTP core ----
 

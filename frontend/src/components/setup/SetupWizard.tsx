@@ -166,12 +166,17 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     }
     if (step === 1)
       return state.latitude !== 0 || state.longitude !== 0;
-    if (step === 3)
+    if (step === 3) {
+      // Public droplet has no admin account (require_admin bypass on
+      // that mode covers reads; there is nothing to authenticate).
+      // Let the operator click Finish without typing a password.
+      if (state.driverType === "public_relay") return true;
       return (
         state.adminUsername.length >= 3 &&
         state.adminPassword.length >= 8 &&
         state.adminPassword === state.adminPasswordConfirm
       );
+    }
     return true;
   };
 
@@ -179,6 +184,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     setSubmitting(true);
     setError(null);
     try {
+      const isPublicDroplet = state.driverType === "public_relay";
       const config: SetupConfig = {
         serial_port: state.serialPort,
         baud_rate: state.baudRate,
@@ -188,7 +194,10 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
         ecowitt_ip: state.ecowittIp,
         tempest_hub_sn: state.tempestHubSn,
         ambient_listen_port: state.ambientListenPort,
-        public_mode_ingest_secret: state.publicModeIngestSecret,
+        // Trim so a stray paste-tab or leading space doesn't create
+        // a bearer that fails to match the droplet's stored copy —
+        // constant-time compare has no notion of "close enough".
+        public_mode_ingest_secret: state.publicModeIngestSecret.trim(),
         latitude: state.latitude,
         longitude: state.longitude,
         elevation: state.elevation,
@@ -201,7 +210,17 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
         nws_enabled: state.nwsEnabled,
       };
       await completeSetup(config);
-      await setupAdmin(state.adminUsername, state.adminPassword);
+      // Public droplet has NO admin account: the require_admin
+      // bypass is what makes the read-only Settings UI browsable to
+      // guests, and the write-block middleware fires as soon as
+      // completeSetup commits ``station_driver_type = public_relay``.
+      // Calling setup-admin here would be blocked by that middleware
+      // (POST outside the ingest allowlist → 403), leaving the
+      // droplet marked "setup complete" but the wizard in an error
+      // state.  Codex round 1 on PR #340 caught this.
+      if (!isPublicDroplet) {
+        await setupAdmin(state.adminUsername, state.adminPassword);
+      }
       onComplete();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -284,6 +303,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
               adminUsername={state.adminUsername}
               adminPassword={state.adminPassword}
               adminPasswordConfirm={state.adminPasswordConfirm}
+              driverType={state.driverType}
               onChange={handleChange}
             />
           )}
