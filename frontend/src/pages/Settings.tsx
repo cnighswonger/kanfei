@@ -715,6 +715,29 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
   const sensorRowCount = sensorReadingsStats?.row_count ?? 0;
   const estimatedCompacted = Math.ceil(sensorRowCount / 30);
 
+  // Public-droplet placard.  Every action on this tab is destructive
+  // (purge, compact, factory wipe); rather than gate each destructive
+  // button individually, short-circuit the whole tab with a message
+  // so guests see the section exists and know why it's inactive.
+  // Issue #336 Phase 4.
+  const { flags: featureFlags } = useFeatureFlags();
+  if (featureFlags.publicModeActive) {
+    return (
+      <div style={{
+        ...cardStyle,
+        padding: isMobile ? "12px" : "20px",
+        textAlign: "center",
+        color: "var(--color-text-muted)",
+      }}>
+        <h3 style={sectionTitle}>Database</h3>
+        <p style={{ fontFamily: "var(--font-body)", margin: 0 }}>
+          This is a read-only public droplet.  Database administration
+          is only available on the private station instance.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Status messages */}
@@ -1188,6 +1211,27 @@ function BackupTab({ val, updateField, isMobile }: {
   const lastSuccess = String(val("backup_last_success") || "");
   const lastError = String(val("backup_last_error") || "");
 
+  // Public-droplet placard — every action here (schedule, trigger,
+  // restore, delete) is destructive or writes state a droplet has
+  // no reason to own.  Issue #336 Phase 4.
+  const { flags: featureFlags } = useFeatureFlags();
+  if (featureFlags.publicModeActive) {
+    return (
+      <div style={{
+        ...cardStyle,
+        padding: isMobile ? "12px" : "20px",
+        textAlign: "center",
+        color: "var(--color-text-muted)",
+      }}>
+        <h3 style={sectionTitle}>Backup</h3>
+        <p style={{ fontFamily: "var(--font-body)", margin: 0 }}>
+          This is a read-only public droplet.  Backup management is
+          only available on the private station instance.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Automatic Backups */}
@@ -1423,6 +1467,7 @@ function BackupTab({ val, updateField, isMobile }: {
 // --- System Log Tab ---
 
 function ChangePasswordCard() {
+  const { flags: featureFlags } = useFeatureFlags();
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -1449,6 +1494,13 @@ function ChangePasswordCard() {
       setSaving(false);
     }
   };
+
+  // Password change is meaningless on a public droplet: no admin user
+  // exists there (require_admin bypass is active), so there is
+  // nothing to authenticate.  Issue #336 Phase 4.
+  if (featureFlags.publicModeActive) {
+    return null;
+  }
 
   return (
     <div style={cardStyle}>
@@ -2190,36 +2242,44 @@ export default function Settings() {
           </span>
         )}
 
-        <button
-          style={{
-            ...btnPrimary,
-            fontSize: "calc(13px * var(--font-scale))",
-            padding: "8px 16px",
-            opacity: saving ? 0.6 : 1,
-            cursor: saving ? "wait" : "pointer",
-          }}
-          onClick={handleSave}
-          disabled={saving || reconnecting}
-        >
-          {saving && !reconnecting ? "Saving..." : "Save"}
-        </button>
+        {/* Save + Reconnect are hidden on a public droplet — writes
+            are gated at the middleware, and rendering a disabled Save
+            just teases guests with a button they can't use.  See
+            issue #336 Phase 4. */}
+        {!flags.publicModeActive && (
+          <>
+            <button
+              style={{
+                ...btnPrimary,
+                fontSize: "calc(13px * var(--font-scale))",
+                padding: "8px 16px",
+                opacity: saving ? 0.6 : 1,
+                cursor: saving ? "wait" : "pointer",
+              }}
+              onClick={handleSave}
+              disabled={saving || reconnecting}
+            >
+              {saving && !reconnecting ? "Saving..." : "Save"}
+            </button>
 
-        <button
-          style={{
-            ...btnPrimary,
-            fontSize: "calc(13px * var(--font-scale))",
-            padding: "8px 16px",
-            background: "var(--color-bg-secondary)",
-            color: "var(--color-text)",
-            border: "1px solid var(--color-border)",
-            opacity: reconnecting ? 0.6 : 1,
-            cursor: reconnecting ? "wait" : "pointer",
-          }}
-          onClick={handleSaveAndReconnect}
-          disabled={saving || reconnecting}
-        >
-          {reconnecting ? "Reconnecting..." : "Save & Reconnect"}
-        </button>
+            <button
+              style={{
+                ...btnPrimary,
+                fontSize: "calc(13px * var(--font-scale))",
+                padding: "8px 16px",
+                background: "var(--color-bg-secondary)",
+                color: "var(--color-text)",
+                border: "1px solid var(--color-border)",
+                opacity: reconnecting ? 0.6 : 1,
+                cursor: reconnecting ? "wait" : "pointer",
+              }}
+              onClick={handleSaveAndReconnect}
+              disabled={saving || reconnecting}
+            >
+              {reconnecting ? "Reconnecting..." : "Save & Reconnect"}
+            </button>
+          </>
+        )}
       </div>
       </div>
 
@@ -2391,6 +2451,7 @@ export default function Settings() {
               style={selectStyle}
               value={String(val("station_driver_type") || "legacy")}
               onChange={(e) => updateField("station_driver_type", e.target.value)}
+              disabled={flags.publicModeActive}
             >
               <option value="legacy">Davis Weather Monitor / Wizard (serial)</option>
               <option value="vantage">Davis Vantage Pro / Pro2 / Vue (serial)</option>
@@ -2399,6 +2460,7 @@ export default function Settings() {
               <option value="ecowitt">Ecowitt / Fine Offset (LAN)</option>
               <option value="tempest">WeatherFlow Tempest (UDP)</option>
               <option value="ambient">Ambient Weather (HTTP push)</option>
+              <option value="public_relay">Public Relay (droplet demo)</option>
             </select>
             <span style={{ fontSize: "calc(11px * var(--font-scale))", color: "var(--color-text-muted)", display: "block", marginTop: "4px", fontFamily: "var(--font-body)" }}>
               Click <strong>Save &amp; Reconnect</strong> after changing to apply the new driver.
@@ -2538,6 +2600,70 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      {/* Public Droplet Relay — private-station side of the demo
+          droplet feature (issue #336 Phase 3).  Hidden on droplets
+          themselves (their driver IS public_relay; nothing to relay).
+          The sender in kanfei-logger re-reads these fields on every
+          poll cycle, so changes take effect on the next broadcast
+          without a restart. */}
+      {String(val("station_driver_type") || "legacy") !== "public_relay" && (
+      <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
+        <h3 style={sectionTitle}>Public Droplet Relay</h3>
+        <p style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-muted)", marginBottom: "16px", fontFamily: "var(--font-body)", marginTop: 0 }}>
+          Push live readings to a public droplet running Kanfei in
+          read-only mode.  See <code style={{ fontFamily: "var(--font-mono, monospace)" }}>docs/public-droplet.md</code>.
+        </p>
+        <div style={gridTwoCol(isMobile)}>
+          <div style={fieldGroup}>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={val("public_relay_enabled") === true || val("public_relay_enabled") === "true"}
+                onChange={(e) => updateField("public_relay_enabled", e.target.checked)}
+              />
+              Enable relay
+            </label>
+          </div>
+          <div />
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Target URL (droplet base)</label>
+            <input
+              style={inputStyle}
+              type="text"
+              placeholder="https://droplet.example.com"
+              value={String(val("public_relay_target_url") || "")}
+              onChange={(e) => updateField("public_relay_target_url", e.target.value)}
+            />
+          </div>
+          <div style={fieldGroup}>
+            <label style={labelStyle}>Shared secret (bearer)</label>
+            <input
+              style={inputStyle}
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="Paste the droplet's public_mode_ingest_secret"
+              value={String(val("public_relay_secret") || "")}
+              onChange={(e) => updateField("public_relay_secret", e.target.value)}
+            />
+          </div>
+        </div>
+        {String(val("public_relay_last_error") || "").length > 0 && (
+          <div style={{
+            marginTop: "12px",
+            padding: "8px 12px",
+            border: "1px solid var(--color-danger)",
+            borderRadius: "6px",
+            color: "var(--color-danger)",
+            fontFamily: "var(--font-body)",
+            fontSize: "calc(13px * var(--font-scale))",
+          }}>
+            Last push failure: {String(val("public_relay_last_error"))}
+          </div>
+        )}
+      </div>
+      )}
 
       {/* WeatherLink section — only for Davis serial drivers */}
       {["legacy", "vantage"].includes(String(val("station_driver_type") || "legacy")) && (
@@ -3901,32 +4027,37 @@ export default function Settings() {
         )}
 
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-          {!showAddAlert && (
+          {/* Add/Save controls hidden on a public droplet — alerts on
+              a demo instance would fire with nowhere to route.  Issue
+              #336 Phase 4. */}
+          {!flags.publicModeActive && !showAddAlert && (
             <button style={btnPrimary} onClick={() => setShowAddAlert(true)}>
               Add Alert
             </button>
           )}
-          <button
-            style={{
-              ...btnPrimary,
-              opacity: alertSaving ? 0.6 : 1,
-            }}
-            onClick={async () => {
-              setAlertSaving(true);
-              setAlertSuccess(false);
-              try {
-                await updateConfig([{ key: "alert_thresholds", value: JSON.stringify(alertThresholds) }]);
-                setAlertSuccess(true);
-              } catch {
-                setError("Failed to save alerts");
-              } finally {
-                setAlertSaving(false);
-              }
-            }}
-            disabled={alertSaving}
-          >
-            {alertSaving ? "Saving..." : "Save Alerts"}
-          </button>
+          {!flags.publicModeActive && (
+            <button
+              style={{
+                ...btnPrimary,
+                opacity: alertSaving ? 0.6 : 1,
+              }}
+              onClick={async () => {
+                setAlertSaving(true);
+                setAlertSuccess(false);
+                try {
+                  await updateConfig([{ key: "alert_thresholds", value: JSON.stringify(alertThresholds) }]);
+                  setAlertSuccess(true);
+                } catch {
+                  setError("Failed to save alerts");
+                } finally {
+                  setAlertSaving(false);
+                }
+              }}
+              disabled={alertSaving}
+            >
+              {alertSaving ? "Saving..." : "Save Alerts"}
+            </button>
+          )}
 
           {alertSuccess && (
             <span style={{ color: "var(--color-success)", fontSize: "calc(14px * var(--font-scale))", fontFamily: "var(--font-body)" }}>

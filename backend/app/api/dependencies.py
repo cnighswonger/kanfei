@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..models.auth import UserModel
 from ..models.database import SessionLocal
 from ..services.auth import any_user_exists, validate_api_key, validate_session
+from ..services.public_mode import is_public_mode
 
 
 def _get_db():
@@ -54,6 +55,14 @@ def require_admin(
     During initial setup (no users exist), all requests pass through
     so the setup wizard can create the first admin account.
     """
+    # Public droplet: guest reads admin-only GETs so the read-only
+    # Settings UI has data to render.  Writes are still blocked at the
+    # middleware layer (see ``public_mode_write_block`` in
+    # ``app/main.py``); a bypass here only widens the read surface.
+    # Issue #336.
+    if is_public_mode():
+        return None  # type: ignore[return-value]
+
     # Bootstrap: if no users exist yet, allow unauthenticated access
     # so the setup wizard can run.
     if not any_user_exists(db):

@@ -22,6 +22,7 @@ from ..models.database import get_db
 from ..models.station_config import StationConfigModel
 from ..protocol.serial_port import list_serial_ports
 from ..ipc.dependencies import get_ipc_client
+from ..services.public_mode import invalidate_cache as invalidate_public_mode_cache
 from .dependencies import require_admin
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,12 @@ class SetupConfig(BaseModel):
     metar_enabled: bool = False
     metar_station: str = "XXXX"
     nws_enabled: bool = False
+    # Public droplet only (issue #336 Phase 4).  When the operator
+    # picks the "Public Relay (droplet demo)" driver, the wizard
+    # collects the shared bearer secret here and this handler writes
+    # it to ``station_config.public_mode_ingest_secret``.  Optional so
+    # a non-droplet setup doesn't have to send it.
+    public_mode_ingest_secret: str = ""
 
 
 # --------------- Endpoints ---------------
@@ -164,6 +171,10 @@ async def complete_setup(config: SetupConfig, db: Session = Depends(get_db), _ad
         ))
 
     db.commit()
+    # Driver type may have flipped to or from ``public_relay``; drop the
+    # 30 s cache so the write-block middleware sees the new value on the
+    # very next request rather than the cached one.
+    invalidate_public_mode_cache()
     logger.info("Setup complete — config saved to database")
 
     # Tell the logger daemon to connect with the new settings
@@ -186,6 +197,10 @@ async def complete_setup(config: SetupConfig, db: Session = Depends(get_db), _ad
 @router.post("/setup/reconnect")
 async def reconnect_endpoint(_admin=Depends(require_admin)):
     """Reconnect using current DB config."""
+    # ``reconnect`` re-reads ``station_driver_type`` from the DB, so a
+    # cached public-mode result from before an operator changed drivers
+    # would otherwise stick around for up to 30 s.
+    invalidate_public_mode_cache()
     try:
         client = get_ipc_client()
         result = await client.send_command({"cmd": "reconnect"}, timeout=60.0)

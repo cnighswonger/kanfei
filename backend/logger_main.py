@@ -49,6 +49,7 @@ from app.ipc.server import IPCServer
 from app.ipc import protocol as ipc
 from app.services.wunderground import WundergroundUploader
 from app.services.cwop import CwopUploader
+from app.services.public_relay_sender import PublicRelaySender
 
 logger = logging.getLogger("davis.logger")
 
@@ -135,6 +136,14 @@ def _create_driver(driver_type: str, config: dict) -> StationDriver:
     baud = int(config.get("baud_rate", settings.baud_rate))
     timeout = float(config.get("serial_timeout", settings.serial_timeout))
 
+    if driver_type == "public_relay":
+        # Public droplet demo — no wire, no socket.  Selecting this
+        # driver also puts the app into read-only mode (issue #336, see
+        # app/services/public_mode.py).  Ingest arrives via HTTP push
+        # (Phase 2), which calls the driver's push_snapshot buffer.
+        from app.protocol.public_relay.driver import PublicRelayDriver
+        return PublicRelayDriver()
+
     if driver_type == "legacy":
         return LinkDriver(port=port, baud_rate=baud, timeout=timeout)
 
@@ -197,6 +206,10 @@ class LoggerDaemon:
         self._sample_period: Optional[int] = None
         self.wu_uploader = WundergroundUploader()
         self.cwop_uploader = CwopUploader()
+        # Public-droplet relay (issue #336 Phase 3).  Third uploader
+        # alongside WU/CWOP; self-gated inside ``maybe_upload`` on
+        # driver type and config-enabled.
+        self.relay_sender = PublicRelaySender()
 
     # ---- helpers for LinkDriver-specific operations ----
 
@@ -244,6 +257,10 @@ class LoggerDaemon:
         await self._teardown_driver()
         if self.ipc_server:
             await self.ipc_server.stop()
+        # Release the relay sender's httpx client so we don't leave
+        # sockets in TIME_WAIT.  Safe even if the sender never opened
+        # a connection.
+        await self.relay_sender.close()
         logger.info("Logger daemon stopped")
         # Exit directly — asyncio.run() cleanup hangs on executor threads
         logging.shutdown()
@@ -328,6 +345,13 @@ class LoggerDaemon:
             if msg.get("type") == "sensor_update":
                 await self.wu_uploader.maybe_upload(msg["data"])
                 await self.cwop_uploader.maybe_upload(msg["data"])
+                # Public-droplet relay.  Uses the raw SensorSnapshot
+                # (attached by ``poller._process_reading``) so the
+                # ingest payload mirrors the dataclass 1:1 without
+                # reverse-engineering the REST-shaped ``data`` dict.
+                await self.relay_sender.maybe_upload(
+                    msg.get("snapshot"), self.driver,
+                )
 
         self.poller.set_broadcast_callback(_broadcast_and_upload)
 
@@ -1079,6 +1103,8 @@ class LoggerDaemon:
         h(ipc.CMD_SET_LOCATION, self._h_set_location)
         h(ipc.CMD_READ_RAIN_SEASON, self._h_read_rain_season)
         h(ipc.CMD_SET_RAIN_SEASON, self._h_set_rain_season)
+        h(ipc.CMD_INGEST_READING, self._h_ingest_reading)
+        h(ipc.CMD_INGEST_CONFIG, self._h_ingest_config)
 
     # ---- IPC handlers ----
 
@@ -2177,6 +2203,66 @@ class LoggerDaemon:
             except Exception as exc:
                 logger.warning("Post-force archive sync failed: %s", exc)
         return {"success": ok, "records_synced": records_synced}
+
+    # --- Public-relay ingest (issue #336 Phase 2) ---
+    #
+    # The HTTP ingest endpoints on the droplet forward pushed data here
+    # via IPC.  Both handlers are defensive against being called when
+    # the current driver is not ``PublicRelayDriver``: the HTTP layer's
+    # write-block middleware only lets these paths through in public
+    # mode, but the daemon should refuse independently so a mis-routed
+    # IPC never reaches an unrelated driver.
+
+    def _require_public_relay(self):
+        """Return the driver iff it's a ``PublicRelayDriver``.
+
+        Raises ``RuntimeError`` otherwise — surfaced by the IPC server
+        as an error response the HTTP handler maps to HTTP 400.
+        """
+        from app.protocol.public_relay.driver import PublicRelayDriver
+
+        drv = self.driver
+        if drv is None:
+            raise RuntimeError("Not connected")
+        if not isinstance(drv, PublicRelayDriver):
+            raise RuntimeError(
+                "ingest endpoints are only available when "
+                "station_driver_type == 'public_relay'"
+            )
+        return drv
+
+    async def _h_ingest_reading(self, msg: dict) -> dict[str, Any]:
+        """Buffer a pushed sensor snapshot into the PublicRelayDriver.
+
+        Wire schema is a SensorSnapshot mirror: keys align 1:1 with the
+        dataclass fields, all optional, unknown keys ignored so a Phase 3
+        relay running ahead of the droplet's Kanfei version does not
+        break the ingest.
+        """
+        from dataclasses import fields
+        from app.protocol.base import SensorSnapshot
+
+        drv = self._require_public_relay()
+        snapshot_dict = msg.get("snapshot") or {}
+        if not isinstance(snapshot_dict, dict):
+            raise RuntimeError("snapshot must be a JSON object")
+
+        allowed = {f.name for f in fields(SensorSnapshot)}
+        cleaned = {k: v for k, v in snapshot_dict.items() if k in allowed}
+        snap = SensorSnapshot(**cleaned)
+        drv.push_snapshot(snap)
+        return {"success": True}
+
+    async def _h_ingest_config(self, msg: dict) -> dict[str, Any]:
+        """Push upstream identity (station_name, firmware, capabilities)
+        into the driver so the droplet's Station Status tile can render
+        the real upstream station rather than the bare 'Public Relay'."""
+        drv = self._require_public_relay()
+        config = msg.get("config") or {}
+        if not isinstance(config, dict):
+            raise RuntimeError("config must be a JSON object")
+        drv.push_config(config)
+        return {"success": True}
 
 
 # --------------- Entry point ---------------

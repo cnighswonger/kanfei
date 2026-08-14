@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..models.database import get_db
 from ..models.station_config import StationConfigModel
+from ..services.public_mode import invalidate_cache as invalidate_public_mode_cache
 from .dependencies import require_admin
 
 router = APIRouter()
@@ -26,6 +27,16 @@ _SECRET_KEYS = frozenset({
     "bot_telegram_token",
     "bot_discord_token",
     "wu_station_key",
+    # Shared secret between the private-station relay and the public
+    # droplet's ingest endpoints (issue #336 Phase 2).  Masked so a
+    # curious viewer of GET /api/config cannot lift it and impersonate
+    # the local relay.
+    "public_mode_ingest_secret",
+    # Same secret as ``public_mode_ingest_secret`` but stored on the
+    # PRIVATE station side (issue #336 Phase 3).  The private-station
+    # relay sends this as the bearer credential when POSTing to the
+    # droplet's ingest endpoints.  Masked for the same reason.
+    "public_relay_secret",
 })
 
 
@@ -147,6 +158,22 @@ _DEFAULTS: dict[str, object] = {
     "bot_discord_last_error": "",
     "bot_discord_conditions_enabled": False,
     "bot_discord_conditions_interval": 30,    # minutes
+    # Public-relay ingest secret (issue #336 Phase 2).  Shared between the
+    # private-station relay and the public droplet; the droplet's ingest
+    # endpoints reject any push whose bearer token does not match this.
+    # Masked in GET /api/config via _SECRET_KEYS above.
+    "public_mode_ingest_secret": "",
+    # Private-side relay (issue #336 Phase 3).  These live on the
+    # private station's Kanfei; the relay task in kanfei-logger reads
+    # them each poll cycle so a config change takes effect without a
+    # restart (same pattern as WU/CWOP).  ``public_relay_last_error``
+    # is written by the sender and read-only from the UI's point of
+    # view — the field surfaces a stale error so operators know the
+    # push has been failing, and clears itself on the next success.
+    "public_relay_enabled": False,
+    "public_relay_target_url": "",       # e.g. https://droplet.example.com
+    "public_relay_secret": "",           # bearer; must match droplet's
+    "public_relay_last_error": "",
     # Backup
     "backup_enabled": False,
     "backup_interval_hours": 24,
@@ -196,14 +223,32 @@ def get_effective_config(db: Session) -> dict[str, object]:
 
 
 # Public feature flags — no auth required.
-_PUBLIC_FLAG_KEYS = frozenset({"nowcast_enabled", "spray_enabled", "map_enabled"})
+_PUBLIC_FLAG_KEYS = frozenset({
+    "nowcast_enabled", "spray_enabled", "map_enabled",
+    # Public-droplet read-only mode indicator (issue #336 Phase 4).
+    # Computed from ``station_driver_type`` rather than a stored flag,
+    # so a driver flip takes effect without a second config row to keep
+    # in sync — see the ``public_mode_active`` branch in
+    # ``get_feature_flags`` below.
+    "public_mode_active",
+})
 
 
 @router.get("/config/flags")
 def get_feature_flags(db: Session = Depends(get_db)):
     """Return public feature flags (no authentication required)."""
+    from ..services.public_mode import is_public_mode
+
     saved = {item.key: _coerce_value(item.value) for item in db.query(StationConfigModel).all()}
-    return {key: saved.get(key, _DEFAULTS.get(key, False)) for key in _PUBLIC_FLAG_KEYS}
+    result = {
+        key: saved.get(key, _DEFAULTS.get(key, False))
+        for key in _PUBLIC_FLAG_KEYS
+    }
+    # ``public_mode_active`` is COMPUTED, not stored — a droplet is
+    # identified by its driver type, and having two rows to keep in
+    # sync would let them drift.
+    result["public_mode_active"] = is_public_mode()
+    return result
 
 
 @router.get("/config")
@@ -233,6 +278,13 @@ def update_config(updates: list[ConfigUpdate], db: Session = Depends(get_db), _a
         row = db.query(StationConfigModel).filter_by(key=key).first()
         if row:
             current_secrets[key] = row.value
+
+    # Track whether this update touches the public-mode indicator so the
+    # 30 s cache can be dropped after commit.  Every path that mutates
+    # ``station_driver_type`` must do this; without it the read-only
+    # gate goes stale for up to 30 s after the flip (issue #336,
+    # PR #337 Codex round 1).
+    driver_type_touched = False
 
     for update in updates:
         # Skip masked secret values — the frontend sends back the masked
@@ -264,6 +316,17 @@ def update_config(updates: list[ConfigUpdate], db: Session = Depends(get_db), _a
                 updated_at=datetime.now(timezone.utc),
             )
             db.add(new_item)
+
+        if update.key == "station_driver_type":
+            driver_type_touched = True
+
     db.commit()
+
+    if driver_type_touched:
+        # Drop the cached is_public_mode() value so the next request
+        # sees the new state immediately.  Deferred until after commit
+        # so a rolled-back write cannot re-poison the cache.
+        invalidate_public_mode_cache()
+
     items = db.query(StationConfigModel).all()
     return [{"key": item.key, "value": _coerce_value(item.value)} for item in items]

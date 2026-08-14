@@ -647,6 +647,10 @@ export interface SetupConfig {
   ecowitt_ip: string;
   tempest_hub_sn: string;
   ambient_listen_port: number;
+  // Only used when station_driver_type == "public_relay" — the
+  // shared bearer secret the local station's relay must present on
+  // every push (issue #336 Phase 4).
+  public_mode_ingest_secret?: string;
   latitude: number;
   longitude: number;
   elevation: number;
