@@ -68,6 +68,12 @@ class SetupConfig(BaseModel):
     metar_enabled: bool = False
     metar_station: str = "XXXX"
     nws_enabled: bool = False
+    # Public droplet only (issue #336 Phase 4).  When the operator
+    # picks the "Public Relay (droplet demo)" driver, the wizard
+    # collects the shared bearer secret here and this handler writes
+    # it to ``station_config.public_mode_ingest_secret``.  Optional so
+    # a non-droplet setup doesn't have to send it.
+    public_mode_ingest_secret: str = ""
 
 
 # --------------- Endpoints ---------------

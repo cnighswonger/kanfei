@@ -6,6 +6,7 @@ interface StepAccountProps {
   adminUsername: string;
   adminPassword: string;
   adminPasswordConfirm: string;
+  driverType: string;
   onChange: (partial: { adminUsername?: string; adminPassword?: string; adminPasswordConfirm?: string }) => void;
 }
 
@@ -39,8 +40,32 @@ const hintStyle: React.CSSProperties = {
   marginTop: "4px",
 };
 
-export default function StepAccount({ adminUsername, adminPassword, adminPasswordConfirm, onChange }: StepAccountProps) {
+export default function StepAccount({ adminUsername, adminPassword, adminPasswordConfirm, driverType, onChange }: StepAccountProps) {
   const mismatch = adminPassword.length > 0 && adminPasswordConfirm.length > 0 && adminPassword !== adminPasswordConfirm;
+
+  // Public droplet has no admin account (require_admin bypass covers
+  // reads; writes are middleware-blocked).  Skip the form entirely
+  // so the operator can click Finish.  Issue #336 Phase 4.
+  if (driverType === "public_relay") {
+    return (
+      <div>
+        <h2 style={{ fontSize: "calc(18px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", margin: "0 0 8px 0" }}>
+          Admin Account
+        </h2>
+        <p style={{ fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-secondary)", margin: "0 0 12px 0" }}>
+          Not required for a public droplet.  Click <strong>Finish Setup</strong>
+          {" "}to complete.
+        </p>
+        <p style={hintStyle}>
+          A public droplet is a read-only demo instance — every write
+          endpoint is blocked at the middleware layer, so there is
+          nothing for an admin account to authenticate.  If you later
+          switch this instance to a real station driver, re-run the
+          setup wizard and you'll be prompted to create an admin then.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div>

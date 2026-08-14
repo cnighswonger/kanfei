@@ -338,9 +338,18 @@ class Poller:
                 snapshot, hi, dp, wc, fl, theta, trend, extremes,
                 solar_energy_daily=solar_energy_daily,
             )
+            # ``snapshot`` (the raw SensorSnapshot dataclass) rides
+            # along so downstream consumers that need the flat SI
+            # shape don't have to reverse-engineer it from the nested
+            # ``data`` dict.  The public-relay sender in
+            # ``kanfei-logger`` uses this to build the ingest payload
+            # that mirrors ``SensorSnapshot`` 1:1 (issue #336 Phase 3);
+            # ``data_dict`` is REST-current-shaped and lossy after
+            # unit conversion.
             await self._broadcast_callback({
                 "type": "sensor_update",
                 "data": data_dict,
+                "snapshot": snapshot,
             })
 
             # Reload thresholds each cycle so config changes take effect
