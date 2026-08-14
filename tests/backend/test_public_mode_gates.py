@@ -21,13 +21,13 @@ Issue #336 (Phase 1).
 from datetime import datetime, timezone
 
 import pytest
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.database import Base, SessionLocal, engine
 from app.models.station_config import StationConfigModel
 from app.services import public_mode
+from ._route_walk import walk_api_routes
 
 
 @pytest.fixture(autouse=True)
@@ -251,15 +251,18 @@ def _write_routes() -> list[tuple[str, str]]:
     """Enumerate every ``APIRoute`` with a state-mutating method.
 
     Returns a list of ``(method, concrete_path)`` pairs suitable for
-    parametrisation.  Both halves are load-bearing: iterating
-    ``app.routes`` catches endpoints someone forgot to gate, and
+    parametrisation.  Both halves are load-bearing: walking every
+    reachable route catches endpoints someone forgot to gate, and
     substituting params lets us hit ones with URL variables like
     ``/api/backup/{name}``.
+
+    Uses ``walk_api_routes`` because FastAPI 0.141+ wraps included
+    routers in ``_IncludedRouter`` — a naive ``isinstance(r, APIRoute)``
+    filter on ``app.routes`` returns an empty list and vacuously
+    passes, silently defanging the whole regression guard.
     """
     routes: list[tuple[str, str]] = []
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
+    for route in walk_api_routes(app):
         methods = route.methods & {"POST", "PUT", "DELETE", "PATCH"}
         if not methods:
             continue

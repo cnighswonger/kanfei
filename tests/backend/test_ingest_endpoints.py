@@ -254,9 +254,15 @@ class TestMiddlewareAllowlist:
     def test_allowlist_matches_route_paths_exactly(self):
         """A trailing-slash mismatch between the middleware allowlist and
         the FastAPI route path would silently 403 all ingests.  Assert
-        every allowlist entry corresponds to a real route."""
-        from fastapi.routing import APIRoute
-        route_paths = {r.path for r in app.routes if isinstance(r, APIRoute)}
+        every allowlist entry corresponds to a real route.
+
+        FastAPI 0.141 changed ``include_router`` to wrap nested routers
+        in ``_IncludedRouter``; ``walk_api_routes`` handles both shapes
+        so this guard doesn't turn into a vacuous no-op on version bump
+        (which was the PR #339 first-CI failure).
+        """
+        from ._route_walk import walk_api_routes
+        route_paths = {r.path for r in walk_api_routes(app)}
         for path in app.state.public_mode_write_allowlist:
             assert path in route_paths, (
                 f"Allowlist entry {path!r} does not match any registered "
