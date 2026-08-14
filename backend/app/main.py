@@ -303,9 +303,9 @@ def create_app() -> FastAPI:
     # When ``station_driver_type == 'public_relay'`` (see
     # ``app/services/public_mode.py``), every state-mutating HTTP method
     # returns 403 unless the path is in the allowlist below.  The
-    # allowlist is empty in Phase 1; Phase 2 adds
-    # ``/api/ingest/reading`` and ``/api/ingest/config`` so the local
-    # push service can feed the droplet.
+    # allowlist holds the ingest endpoints — the ONLY writes a public
+    # droplet legitimately accepts — and each is separately gated by
+    # the ``require_ingest_secret`` bearer check in ``app/api/ingest.py``.
     #
     # Why middleware, not per-endpoint Depends: this gate must catch
     # write endpoints that are OPEN today (``/api/auth/login``,
@@ -318,7 +318,10 @@ def create_app() -> FastAPI:
     # (sensor broadcasts).  If a future feature adds inbound WS commands
     # that mutate state, they need their own gate — this HTTP middleware
     # will not catch them.
-    app.state.public_mode_write_allowlist = frozenset()
+    app.state.public_mode_write_allowlist = frozenset({
+        "/api/ingest/reading",
+        "/api/ingest/config",
+    })
 
     @app.middleware("http")
     async def public_mode_write_block(request: Request, call_next):

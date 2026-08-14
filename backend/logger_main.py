@@ -1087,6 +1087,8 @@ class LoggerDaemon:
         h(ipc.CMD_SET_LOCATION, self._h_set_location)
         h(ipc.CMD_READ_RAIN_SEASON, self._h_read_rain_season)
         h(ipc.CMD_SET_RAIN_SEASON, self._h_set_rain_season)
+        h(ipc.CMD_INGEST_READING, self._h_ingest_reading)
+        h(ipc.CMD_INGEST_CONFIG, self._h_ingest_config)
 
     # ---- IPC handlers ----
 
@@ -2185,6 +2187,66 @@ class LoggerDaemon:
             except Exception as exc:
                 logger.warning("Post-force archive sync failed: %s", exc)
         return {"success": ok, "records_synced": records_synced}
+
+    # --- Public-relay ingest (issue #336 Phase 2) ---
+    #
+    # The HTTP ingest endpoints on the droplet forward pushed data here
+    # via IPC.  Both handlers are defensive against being called when
+    # the current driver is not ``PublicRelayDriver``: the HTTP layer's
+    # write-block middleware only lets these paths through in public
+    # mode, but the daemon should refuse independently so a mis-routed
+    # IPC never reaches an unrelated driver.
+
+    def _require_public_relay(self):
+        """Return the driver iff it's a ``PublicRelayDriver``.
+
+        Raises ``RuntimeError`` otherwise — surfaced by the IPC server
+        as an error response the HTTP handler maps to HTTP 400.
+        """
+        from app.protocol.public_relay.driver import PublicRelayDriver
+
+        drv = self.driver
+        if drv is None:
+            raise RuntimeError("Not connected")
+        if not isinstance(drv, PublicRelayDriver):
+            raise RuntimeError(
+                "ingest endpoints are only available when "
+                "station_driver_type == 'public_relay'"
+            )
+        return drv
+
+    async def _h_ingest_reading(self, msg: dict) -> dict[str, Any]:
+        """Buffer a pushed sensor snapshot into the PublicRelayDriver.
+
+        Wire schema is a SensorSnapshot mirror: keys align 1:1 with the
+        dataclass fields, all optional, unknown keys ignored so a Phase 3
+        relay running ahead of the droplet's Kanfei version does not
+        break the ingest.
+        """
+        from dataclasses import fields
+        from app.protocol.base import SensorSnapshot
+
+        drv = self._require_public_relay()
+        snapshot_dict = msg.get("snapshot") or {}
+        if not isinstance(snapshot_dict, dict):
+            raise RuntimeError("snapshot must be a JSON object")
+
+        allowed = {f.name for f in fields(SensorSnapshot)}
+        cleaned = {k: v for k, v in snapshot_dict.items() if k in allowed}
+        snap = SensorSnapshot(**cleaned)
+        drv.push_snapshot(snap)
+        return {"success": True}
+
+    async def _h_ingest_config(self, msg: dict) -> dict[str, Any]:
+        """Push upstream identity (station_name, firmware, capabilities)
+        into the driver so the droplet's Station Status tile can render
+        the real upstream station rather than the bare 'Public Relay'."""
+        drv = self._require_public_relay()
+        config = msg.get("config") or {}
+        if not isinstance(config, dict):
+            raise RuntimeError("config must be a JSON object")
+        drv.push_config(config)
+        return {"success": True}
 
 
 # --------------- Entry point ---------------
