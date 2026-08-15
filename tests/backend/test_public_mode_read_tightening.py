@@ -167,17 +167,31 @@ class TestPublicModeConfigFilter:
     """
 
     def test_hidden_keys_absent_from_public_mode_response(self, public_droplet):
-        # Seed a couple of hidden keys with observable values so a
-        # regression (dropping the filter) would leak them into the
-        # response.
-        _set("bot_discord_guild_id", "123456789012345678")
-        _set("wu_station_id", "KDCA1234")
-        _set("backup_last_error", "disk full 2026-08-15")
+        """Seed EVERY hidden key with an observable value, then assert
+        every one is absent from the response.  A per-key seed catches
+        typos in the hidden set: a set-intersection alone would silently
+        pass a misspelled entry (nonexistent key never appears in the
+        response, intersection is empty).  Codex round 1 on PR #343
+        caught exactly that shape — ``backup_schedule`` typo for the
+        real key ``backup_schedule_time``.
+        """
+        from app.api.config import _DEFAULTS
+
+        # Seed every hidden key with a value that would show up if
+        # unfiltered.  Sentinel: prefix the key name so a leak is
+        # traceable in test output.
+        for key in _PUBLIC_MODE_HIDDEN_KEYS:
+            assert key in _DEFAULTS, (
+                f"_PUBLIC_MODE_HIDDEN_KEYS references {key!r} which is "
+                f"not in _DEFAULTS — this key will never be in a "
+                f"response, so hiding it is a no-op.  Typo?  Rename?"
+            )
+            _set(key, f"SEED_{key}")
 
         resp = public_droplet.get("/api/config")
         assert resp.status_code == 200, resp.text
-
         returned_keys = {item["key"] for item in resp.json()}
+
         leaked = returned_keys & _PUBLIC_MODE_HIDDEN_KEYS
         assert not leaked, (
             f"Public-mode GET /api/config leaked hidden keys: "
@@ -185,6 +199,18 @@ class TestPublicModeConfigFilter:
             f"_PUBLIC_MODE_HIDDEN_KEYS in app/api/config.py.  "
             f"Red-team finding #1, 2026-08-15."
         )
+
+        # Belt-and-suspenders: sentinel values must not appear in ANY
+        # returned value, in case a future refactor moves a hidden
+        # key's value under a different key name.
+        for item in resp.json():
+            v = item.get("value")
+            if isinstance(v, str) and v.startswith("SEED_"):
+                pytest.fail(
+                    f"Response leaks a seeded value {v!r} at "
+                    f"key {item['key']!r} — a hidden key's value "
+                    f"escaped through a different response field."
+                )
 
     def test_hidden_keys_present_for_admin_on_private_station(self, clean_station_config):
         """The filter is public-mode-only.  A real admin on a private

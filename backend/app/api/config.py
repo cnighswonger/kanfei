@@ -276,7 +276,7 @@ _PUBLIC_MODE_HIDDEN_KEYS = frozenset({
     "backup_enabled",
     "backup_interval_hours",
     "backup_retention_count",
-    "backup_schedule",
+    "backup_schedule_time",
     "backup_directory",
     "backup_last_success",
     "backup_last_error",
