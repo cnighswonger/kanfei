@@ -16,6 +16,10 @@ import { fetchConfig, updateConfig } from "../api/client.ts";
 const UI_DEFAULTS: Record<string, string> = {
   ui_sidebar_collapsed: "false",
   ui_theme: "dark",
+  // UI refactor PR 3: persona drives the dashboard tile set and the
+  // sidebar filter.  Valid: 'everyday' (default), 'agriculture',
+  // 'weather_nerd'.
+  ui_persona: "everyday",
   ui_timezone: "auto",
   ui_weather_bg_enabled: "true",
   ui_weather_bg_intensity: "30",
@@ -61,7 +65,17 @@ export function readUIPref(key: string, defaultValue: string): string {
   return defaultValue;
 }
 
-/** Write to localStorage (sync) + fire-and-forget PUT to backend. */
+/** Write to localStorage (sync) + fire-and-forget PUT to backend.
+ *
+ * The PUT is admin-only (``/api/config`` requires ``require_admin``
+ * unless on a public droplet where the bypass allows GET but writes
+ * still 403 via the middleware).  For anonymous visitors the PUT
+ * fails; that's expected and by design — anonymous pref changes are
+ * browser-local only per the UI refactor's read-only-droplet
+ * decision.  We swallow the 401/403 at debug level to keep the
+ * console clean on the public droplet.  Any other error still warns
+ * so a real backend problem doesn't hide.
+ */
 export function writeUIPref(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
@@ -69,6 +83,12 @@ export function writeUIPref(key: string, value: string): void {
     /* localStorage unavailable */
   }
   updateConfig([{ key, value }]).catch((err) => {
+    const msg = String(err?.message ?? err ?? "");
+    if (msg.includes("401") || msg.includes("403")) {
+      // Anonymous visitor — pref is browser-local only, as designed.
+      console.debug(`[uiPrefs] ${key} kept browser-local (not authenticated)`);
+      return;
+    }
     console.warn(`[uiPrefs] failed to save ${key} to backend:`, err);
   });
 }

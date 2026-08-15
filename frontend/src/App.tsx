@@ -5,6 +5,7 @@ import { WeatherBackgroundProvider } from './context/WeatherBackgroundContext';
 import { WeatherDataProvider, useWeatherData } from './context/WeatherDataContext';
 import { AlertProvider } from './context/AlertContext';
 import { FeatureFlagsProvider, useFeatureFlags } from './context/FeatureFlagsContext';
+import { PersonaProvider } from './context/PersonaContext';
 import { DashboardLayoutProvider } from './dashboard/DashboardLayoutContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AlertToast from './components/AlertToast';
@@ -133,11 +134,13 @@ function App() {
           <AuthProvider>
             <WeatherDataProvider>
               <FeatureFlagsProvider>
-                <AlertProvider>
-                  <DashboardLayoutProvider>
-                    <AppContent />
-                  </DashboardLayoutProvider>
-                </AlertProvider>
+                <PersonaProvider>
+                  <AlertProvider>
+                    <DashboardLayoutProvider>
+                      <AppContent />
+                    </DashboardLayoutProvider>
+                  </AlertProvider>
+                </PersonaProvider>
               </FeatureFlagsProvider>
             </WeatherDataProvider>
           </AuthProvider>
