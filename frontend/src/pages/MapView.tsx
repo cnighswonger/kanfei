@@ -256,20 +256,28 @@ function BaseLayers({ defaultLayer, radarTs, radarOpacity, radarFrame }: { defau
   // rationale.
   const showOsmRoads = !flags.publicModeActive;
 
+  // If the configured default is a layer we're hiding, fall back to
+  // "Map" so at least one base layer stays ``checked`` — Leaflet
+  // will otherwise mount NO base tiles and the map starts blank.
+  // Codex round 1 on PR #341 caught this.
+  const effectiveDefaultLayer = (!showOsmRoads && defaultLayer === "Roads")
+    ? "Map"
+    : defaultLayer;
+
   return (
     <LayersControl position="topright">
-      <LayersControl.BaseLayer checked={defaultLayer === "Map"} name="Map">
+      <LayersControl.BaseLayer checked={effectiveDefaultLayer === "Map"} name="Map">
         <TileLayer key={`map-${themeName}`} url={defaultMap} attribution={TILE_CARTO_ATTR} subdomains="abcd" maxZoom={19} />
       </LayersControl.BaseLayer>
       {showOsmRoads && (
-        <LayersControl.BaseLayer checked={defaultLayer === "Roads"} name="Roads">
+        <LayersControl.BaseLayer checked={effectiveDefaultLayer === "Roads"} name="Roads">
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution={TILE_OSM_ATTR} maxZoom={19} />
         </LayersControl.BaseLayer>
       )}
-      <LayersControl.BaseLayer checked={defaultLayer === "Satellite"} name="Satellite">
+      <LayersControl.BaseLayer checked={effectiveDefaultLayer === "Satellite"} name="Satellite">
         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution={TILE_ESRI_ATTR} maxZoom={19} />
       </LayersControl.BaseLayer>
-      <LayersControl.BaseLayer checked={defaultLayer === "Terrain"} name="Terrain">
+      <LayersControl.BaseLayer checked={effectiveDefaultLayer === "Terrain"} name="Terrain">
         <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution={TILE_TOPO_ATTR} maxZoom={17} />
       </LayersControl.BaseLayer>
       <LayersControl.Overlay checked name="Radar">
