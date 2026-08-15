@@ -248,10 +248,8 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
           <span className="header-connected-label">{connected ? 'Connected' : 'Disconnected'}</span>
         </div>
 
-        {/* Persona switch — 3 segments.  Mobile falls back to select
-            below the connected-status line via CSS media, but the
-            default rendering is a segmented button group so switching
-            personas is a single click, not a two-click open-and-pick. */}
+        {/* Persona switch — 3 segments.  Segmented button group so
+            switching personas is one click rather than open-and-pick. */}
         <div
           role="group"
           aria-label="Persona"
