@@ -1,19 +1,13 @@
 /**
- * Almanac tile per Design REVIEW-02: sunrise/sunset, day length with
- * day-over-day change, moon phase with illumination, station type +
- * firmware.  Rendered as a plain 4-row key/value table in the mock.
+ * Almanac tile: sunrise/sunset, day length, moon phase, station type.
+ * Backend returns pre-formatted display strings for sun times and a
+ * ``moon.illumination`` already expressed as a percentage — pass both
+ * straight through.
  */
 import { useEffect, useState } from 'react';
 import { fetchAstronomy, fetchStationStatus } from '../../api/client.ts';
 import type { AstronomyResponse, StationStatus } from '../../api/types.ts';
 import TileLabel from '../common/TileLabel.tsx';
-
-function fmtTime(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  } catch { return iso; }
-}
 
 export default function AlmanacTile() {
   const [astro, setAstro] = useState<AstronomyResponse | null>(null);
@@ -56,7 +50,7 @@ export default function AlmanacTile() {
         <tbody>
           <Row label="Sunrise / sunset" value={
             astro
-              ? `${fmtTime(astro.sun.sunrise)} · ${fmtTime(astro.sun.sunset)}`
+              ? `${astro.sun.sunrise} · ${astro.sun.sunset}`
               : '—'
           } />
           <Row label="Day length" value={
@@ -66,7 +60,7 @@ export default function AlmanacTile() {
           } />
           <Row label="Moon" value={
             astro
-              ? `${astro.moon.phase} ${Math.round(astro.moon.illumination * 100)}%`
+              ? `${astro.moon.phase} ${Math.round(astro.moon.illumination)}%`
               : '—'
           } />
           <Row label="Station" value={
