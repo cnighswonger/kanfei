@@ -41,6 +41,26 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+/* Paper-theme ornamental plate layer.  ThemeContext publishes the
+   --plate-* custom properties; AppShell renders a permanent
+   <div class="app-plate"> element that this rule paints.  Non-paper
+   themes ship --plate-image: none / --plate-opacity: 0, so the
+   element exists but is invisible. */
+.app-plate {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background-image: var(--plate-image, none);
+  background-repeat: no-repeat;
+  background-position: var(--plate-position, center);
+  background-size: var(--plate-size, contain);
+  mix-blend-mode: var(--plate-blend, normal);
+  opacity: var(--plate-opacity, 0);
+  filter: var(--plate-filter, none);
+  transition: opacity 0.3s ease;
+}
+
 #root {
   min-height: 100vh;
 }
