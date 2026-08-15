@@ -308,9 +308,16 @@ export default function DashboardGrid() {
                   boxSizing: "border-box",
                 }}
               >
-                <CompactProvider value={compact}>
-                  {wrapped}
-                </CompactProvider>
+                {/* Content-only clip: prevents an oversized tile
+                    component (e.g. SolarUVGauge's flex-centered arc)
+                    from spilling into the neighbouring cell, without
+                    clipping any external chrome the outer wrapper
+                    might carry. */}
+                <div style={{ height: "100%", overflow: "hidden" }}>
+                  <CompactProvider value={compact}>
+                    {wrapped}
+                  </CompactProvider>
+                </div>
               </div>
             );
           })}
