@@ -16,6 +16,7 @@ import { fetchConfig, updateConfig } from "../api/client.ts";
 const UI_DEFAULTS: Record<string, string> = {
   ui_sidebar_collapsed: "false",
   ui_theme: "dark",
+  ui_persona: "everyday",
   ui_timezone: "auto",
   ui_weather_bg_enabled: "true",
   ui_weather_bg_intensity: "30",
@@ -61,7 +62,15 @@ export function readUIPref(key: string, defaultValue: string): string {
   return defaultValue;
 }
 
-/** Write to localStorage (sync) + fire-and-forget PUT to backend. */
+/** Write to localStorage (sync) + fire-and-forget PUT to backend.
+ *
+ * The backend PUT is admin-only.  Anonymous visitors are expected
+ * to fail it and keep their change in localStorage only — a passer-by
+ * on a public droplet can't reskin the installation for everyone.
+ * 401/403 responses are logged at debug level so the console stays
+ * clean for that (intended) path; any other error still warns so a
+ * real backend problem doesn't hide.
+ */
 export function writeUIPref(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
@@ -69,6 +78,13 @@ export function writeUIPref(key: string, value: string): void {
     /* localStorage unavailable */
   }
   updateConfig([{ key, value }]).catch((err) => {
+    // The API client throws ApiError with a structured .status.
+    // A raw fetch failure won't have one, so fall through to warn.
+    const status = (err as { status?: number } | null | undefined)?.status;
+    if (status === 401 || status === 403) {
+      console.debug(`[uiPrefs] ${key} kept browser-local (not authenticated)`);
+      return;
+    }
     console.warn(`[uiPrefs] failed to save ${key} to backend:`, err);
   });
 }

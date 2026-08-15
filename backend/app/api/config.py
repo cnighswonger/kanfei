@@ -134,6 +134,7 @@ _DEFAULTS: dict[str, object] = {
     # UI preferences (persisted server-side so they survive browser resets)
     "ui_sidebar_collapsed": False,
     "ui_theme": "dark",
+    "ui_persona": "everyday",
     "ui_timezone": "auto",
     "ui_weather_bg_enabled": True,
     "ui_weather_bg_intensity": 30,
