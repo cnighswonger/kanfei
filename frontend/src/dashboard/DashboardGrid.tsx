@@ -287,12 +287,17 @@ export default function DashboardGrid() {
             );
 
             const rowSpan = placement.rowSpan ?? DEFAULT_ROW_SPAN;
+            const useExplicit = !isMobile && placement.gridColStart != null && placement.gridRowStart != null;
             return (
               <div
                 key={placement.tileId}
                 style={{
-                  gridColumn: `span ${span}`,
-                  gridRow: `span ${rowSpan}`,
+                  gridColumn: useExplicit
+                    ? `${placement.gridColStart} / span ${span}`
+                    : `span ${span}`,
+                  gridRow: useExplicit
+                    ? `${placement.gridRowStart} / span ${rowSpan}`
+                    : `span ${rowSpan}`,
                 }}
               >
                 <CompactProvider value={compact}>

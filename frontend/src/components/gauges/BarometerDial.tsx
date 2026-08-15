@@ -1,90 +1,54 @@
 /**
- * SVG circular analog barometer dial with needle and trend arrow overlay.
+ * Wheel barometer per Design REVIEW-02: 240° sweep aneroid dial from
+ * ``wheelDial()`` at 300 px on desktop, graduated ticks + zone names +
+ * a pale 3 h-old trend hand.  Value / trend / zone / H·L readout sits
+ * beside the dial (portrait tile) or below (very-narrow fallback).
  */
+import { useTheme } from "../../context/ThemeContext.tsx";
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
 import TileLabel from "../common/TileLabel.tsx";
 import { formatTimestamp } from "../../utils/formatting.ts";
+import { wheelDial, DEFAULT_DIAL } from "../../utils/gauges.ts";
 
 interface BarometerDialProps {
-  value: number | null;        // Pressure in display units (e.g. 29.921 inHg)
-  unit: string;                // 'inHg' or 'hPa'
+  value: number | null;
+  unit: string;
   trend?: 'rising' | 'falling' | 'steady' | null;
-  trendRate?: number | null;   // Rate of change
-  high?: number | null;        // Today's high
-  low?: number | null;         // Today's low
-  highAt?: string | null;      // ISO-8601 UTC timestamp of today's high
-  lowAt?: string | null;       // ISO-8601 UTC timestamp of today's low
+  trendRate?: number | null;
+  high?: number | null;
+  low?: number | null;
+  highAt?: string | null;
+  lowAt?: string | null;
 }
 
-const RANGES = {
-  inHg: { min: 28.5, max: 31.0, step: 0.5, decimals: 2 },
-  hPa: { min: 965, max: 1050, step: 10, decimals: 0 },
-};
+const DIAL_SIZE = 300;
 
-export default function BarometerDial({ value, unit, trend, high, low, highAt, lowAt }: BarometerDialProps) {
-  const range = RANGES[unit as keyof typeof RANGES] || RANGES.inHg;
-  const { min, max, step, decimals } = range;
+function zoneFor(inHg: number): string {
+  if (inHg < 28.9) return 'stormy';
+  if (inHg < 29.4) return 'rain';
+  if (inHg < 29.9) return 'change';
+  if (inHg < 30.4) return 'fair';
+  return 'set fair';
+}
 
-  const cx = 130;
-  const cy = 130;
-  const r = 105;
-  const startAngle = -225;  // degrees from 12 o'clock (bottom-left)
-  const endAngle = 45;      // degrees (bottom-right)
-  const sweep = endAngle - startAngle; // 270 degrees
-
-  const valToAngle = (v: number): number => {
-    const frac = Math.max(0, Math.min(1, (v - min) / (max - min)));
-    return startAngle + frac * sweep;
-  };
-
-  const angleToXY = (angleDeg: number, radius: number) => {
-    const rad = (angleDeg - 90) * (Math.PI / 180);
-    return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) };
-  };
-
-  // Generate tick marks
-  const ticks: { value: number; major: boolean }[] = [];
-  for (let v = min; v <= max; v += step) {
-    ticks.push({ value: v, major: true });
-    if (v + step / 2 <= max) {
-      ticks.push({ value: v + step / 2, major: false });
-    }
-  }
-
-  // Needle angle
-  const needleAngle = value !== null ? valToAngle(value) : valToAngle((min + max) / 2);
-  const needleTip = angleToXY(needleAngle, r - 15);
-  const needleTail = angleToXY(needleAngle + 180, 12);
-
-  // Zone labels
-  const zones = unit === 'inHg'
-    ? [
-        { label: 'STORMY', angle: valToAngle(28.9) },
-        { label: 'RAIN', angle: valToAngle(29.4) },
-        { label: 'CHANGE', angle: valToAngle(29.75) },
-        { label: 'FAIR', angle: valToAngle(30.1) },
-        { label: 'DRY', angle: valToAngle(30.6) },
-      ]
-    : [
-        { label: 'STORMY', angle: valToAngle(980) },
-        { label: 'RAIN', angle: valToAngle(1000) },
-        { label: 'CHANGE', angle: valToAngle(1013) },
-        { label: 'FAIR', angle: valToAngle(1025) },
-        { label: 'DRY', angle: valToAngle(1040) },
-      ];
-
-  const trendSymbol = trend === 'rising' ? '\u2191' : trend === 'falling' ? '\u2193' : trend === 'steady' ? '\u2192' : '';
-  const trendColor = trend === 'rising' ? 'var(--color-success)' : trend === 'falling' ? 'var(--color-warning)' : 'var(--color-text-muted)';
-
+export default function BarometerDial({
+  value, unit, trend, trendRate, high, low, highAt, lowAt,
+}: BarometerDialProps) {
   const isMobile = useCompact();
+  const { theme } = useTheme();
+
+  const decimals = unit === 'inHg' ? 2 : 0;
+  const trendSymbol = trend === 'rising' ? '↑' : trend === 'falling' ? '↓' : trend === 'steady' ? '→' : '';
+  const trendLabel = trend === 'rising' ? 'RISING' : trend === 'falling' ? 'FALLING' : trend === 'steady' ? 'STEADY' : '';
+
   if (isMobile) {
     return (
       <CompactCard
         label="Barometer"
         secondary={
           <>
-            {trendSymbol && <span style={{ color: trendColor }}>{trendSymbol} </span>}
+            {trendSymbol && <span>{trendSymbol} </span>}
             {(high != null || low != null) && (
               <span>H {high?.toFixed(decimals) ?? "--"} / L {low?.toFixed(decimals) ?? "--"}</span>
             )}
@@ -101,162 +65,176 @@ export default function BarometerDial({ value, unit, trend, high, low, highAt, l
     );
   }
 
+  // wheelDial's fixed range is inHg (28.5–31.0); pass through when unit
+  // matches, fall back to dial-midpoint when the value is null.
+  const dialValue = value ?? 29.92;
+  const d = wheelDial(dialValue, DIAL_SIZE, theme.dial ?? DEFAULT_DIAL);
+  const rimStroke = 'var(--color-border)';
+  const ink = 'var(--color-text)';
+  const inkSecondary = 'var(--color-text-secondary)';
+  const inkMuted = 'var(--color-text-muted)';
+  const needleColor = 'var(--color-barometer-needle)';
+
   return (
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '12px',
+      padding: '16px',
       background: 'var(--color-bg-card)',
       borderRadius: 'var(--gauge-border-radius, 16px)',
       boxShadow: 'var(--gauge-shadow, 0 4px 24px rgba(0,0,0,0.4))',
       border: '1px solid var(--color-border)',
       height: '100%',
       boxSizing: 'border-box',
+      overflow: 'hidden',
     }}>
       <TileLabel>Barometer</TileLabel>
 
-      <svg width="260" height="200" viewBox="0 0 260 200">
-        {/* Dial face background */}
-        <circle cx={cx} cy={cy} r={r + 8} fill="none" stroke="var(--color-border)" strokeWidth="1" />
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, alignItems: 'center', gap: '12px' }}>
+        <svg
+          width={DIAL_SIZE}
+          height={DIAL_SIZE}
+          viewBox={`0 0 ${DIAL_SIZE} ${DIAL_SIZE}`}
+          style={{ flexShrink: 0, maxWidth: '100%', maxHeight: '100%' }}
+        >
+          {/* Rim pair */}
+          <circle cx={d.cx} cy={d.cy} r={d.rimOuter} fill="none" stroke={rimStroke} strokeWidth="1" />
+          <circle cx={d.cx} cy={d.cy} r={d.rimInner} fill="none" stroke={rimStroke} strokeWidth="0.5" opacity="0.6" />
 
-        {/* Zone arc (colored background) */}
-        {(() => {
-          const arcStart = angleToXY(startAngle, r - 2);
-          const arcEnd = angleToXY(endAngle, r - 2);
-          const largeArc = sweep > 180 ? 1 : 0;
-          return (
-            <path
-              d={`M ${arcStart.x} ${arcStart.y} A ${r - 2} ${r - 2} 0 ${largeArc} 1 ${arcEnd.x} ${arcEnd.y}`}
-              fill="none"
-              stroke="var(--color-gauge-track)"
-              strokeWidth="20"
-              opacity="0.4"
-            />
-          );
-        })()}
+          {/* Minor ticks then major (render order per gauges.ts docstring) */}
+          {d.minor.map((t, i) => (
+            <line key={`m${i}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={inkSecondary} strokeWidth={t.sw ?? 1} />
+          ))}
+          {d.major.map((t, i) => (
+            <line key={`M${i}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={ink} strokeWidth={t.sw ?? 2} />
+          ))}
 
-        {/* Tick marks */}
-        {ticks.map((tick, i) => {
-          const angle = valToAngle(tick.value);
-          const outerR = r + 2;
-          const innerR = tick.major ? r - 18 : r - 10;
-          const outer = angleToXY(angle, outerR);
-          const inner = angleToXY(angle, innerR);
-          const labelPos = angleToXY(angle, r - 28);
-          return (
-            <g key={i}>
-              <line
-                x1={outer.x} y1={outer.y}
-                x2={inner.x} y2={inner.y}
-                stroke="var(--color-text-secondary)"
-                strokeWidth={tick.major ? 2 : 1}
-              />
-              {tick.major && (
-                <text
-                  x={labelPos.x} y={labelPos.y + 3}
-                  style={{ fontSize: "calc(9px * var(--font-scale))" }}
-                  fill="var(--color-text-secondary)"
-                  fontFamily="var(--font-gauge)"
-                  textAnchor="middle"
-                >
-                  {tick.value.toFixed(unit === 'inHg' ? 1 : 0)}
-                </text>
-              )}
-            </g>
-          );
-        })}
-
-        {/* Zone labels */}
-        {zones.map((zone, i) => {
-          const pos = angleToXY(zone.angle, r - 45);
-          return (
+          {/* Numerals */}
+          {d.numerals.map((n, i) => (
             <text
-              key={i}
-              x={pos.x} y={pos.y + 2}
-              style={{ fontSize: "calc(6px * var(--font-scale))" }}
-              fill="var(--color-text-muted)"
-              fontFamily="var(--font-body)"
+              key={`n${i}`}
+              x={n.x} y={n.y}
+              fontFamily="var(--font-gauge)"
+              fontSize="calc(11px * var(--font-scale))"
+              fill={ink}
               textAnchor="middle"
-              opacity="0.7"
             >
-              {zone.label}
+              {n.label}
             </text>
-          );
-        })}
+          ))}
 
-        {/* Needle */}
-        <line
-          x1={needleTail.x} y1={needleTail.y}
-          x2={needleTip.x} y2={needleTip.y}
-          stroke="var(--color-barometer-needle, #f59e0b)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          style={{ transition: 'x1 0.8s ease, y1 0.8s ease, x2 0.8s ease, y2 0.8s ease' }}
-        />
-        {/* Needle center */}
-        <circle cx={cx} cy={cy} r="5" fill="var(--color-barometer-needle, #f59e0b)" />
-        <circle cx={cx} cy={cy} r="2.5" fill="var(--color-bg-card-solid, var(--color-bg-card))" />
+          {/* Zone words */}
+          {d.zones.map((z, i) => (
+            <text
+              key={`z${i}`}
+              x={z.x} y={z.y}
+              fontFamily="var(--font-mono)"
+              fontSize="calc(9px * var(--font-scale))"
+              letterSpacing="1.2"
+              fill={inkMuted}
+              textAnchor="middle"
+            >
+              {z.label}
+            </text>
+          ))}
 
-        {/* Digital readout at bottom of dial */}
-        <text
-          x={cx} y={cy + 35}
-          style={{ fontSize: "calc(18px * var(--font-scale))" }}
-          fontFamily="var(--font-gauge)"
-          fontWeight="bold"
-          fill="var(--color-text)"
-          textAnchor="middle"
-        >
-          {value !== null ? value.toFixed(decimals) : '--'}
-        </text>
-        <text
-          x={cx} y={cy + 48}
-          style={{ fontSize: "calc(10px * var(--font-scale))" }}
-          fontFamily="var(--font-body)"
-          fill="var(--color-text-secondary)"
-          textAnchor="middle"
-        >
-          {unit}
-        </text>
+          {/* Trend hand (pale, 3 h behind) */}
+          <line
+            x1={d.cx} y1={d.cy}
+            x2={d.trend.x} y2={d.trend.y}
+            stroke={needleColor}
+            strokeWidth="2"
+            strokeLinecap="round"
+            opacity="0.35"
+          />
 
-        {/* Trend indicator */}
-        {trend && (
-          <text
-            x={cx + 40} y={cy + 40}
-            style={{ fontSize: "calc(20px * var(--font-scale))" }}
-            fill={trend === 'rising' ? 'var(--color-success)' : trend === 'falling' ? 'var(--color-danger)' : 'var(--color-text-secondary)'}
-            textAnchor="middle"
-            fontWeight="bold"
-          >
-            {trendSymbol}
-          </text>
-        )}
-      </svg>
+          {/* Live needle */}
+          <line
+            x1={d.cx} y1={d.cy}
+            x2={d.tip.x} y2={d.tip.y}
+            stroke={needleColor}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            style={{ transition: 'x2 0.8s ease, y2 0.8s ease' }}
+          />
 
-      {(high != null || low != null) && (
+          {/* Hub cap */}
+          <circle cx={d.cx} cy={d.cy} r="5" fill={needleColor} />
+          <circle cx={d.cx} cy={d.cy} r="2" fill="var(--color-bg-card)" />
+        </svg>
+
         <div style={{
-          fontSize: 'calc(12px * var(--font-scale))',
-          fontFamily: 'var(--font-gauge)',
-          color: 'var(--color-text-secondary)',
-          marginTop: '-4px',
-          textAlign: 'center',
-          lineHeight: 1.3,
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minWidth: 0,
+          gap: '10px',
         }}>
           <div>
-            H {high != null ? high.toFixed(decimals) : '--'}
-            {' / '}
-            L {low != null ? low.toFixed(decimals) : '--'}
+            <span style={{
+              fontFamily: 'var(--font-gauge)',
+              fontSize: 'calc(34px * var(--font-scale))',
+              fontWeight: 600,
+              color: ink,
+            }}>
+              {value != null ? value.toFixed(decimals) : '--'}
+            </span>
+            <span style={{
+              fontFamily: 'var(--font-gauge)',
+              fontSize: 'calc(13px * var(--font-scale))',
+              color: inkMuted,
+              marginLeft: '4px',
+            }}>
+              {unit}
+            </span>
           </div>
-          {(highAt || lowAt) && (
-            <div style={{ fontSize: 'calc(10px * var(--font-scale))', color: 'var(--color-text-muted)' }}>
-              {highAt && <>H {formatTimestamp(highAt)}</>}
-              {highAt && lowAt && ' · '}
-              {lowAt && <>L {formatTimestamp(lowAt)}</>}
+
+          {trendLabel && (
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'calc(10px * var(--font-scale))',
+              letterSpacing: '1.5px',
+              textTransform: 'uppercase',
+              color: inkSecondary,
+            }}>
+              {trendSymbol} {trendLabel}
+              {trendRate != null && ` ${trendRate >= 0 ? '+' : ''}${trendRate.toFixed(2)} ${unit.toUpperCase()}/3H`}
+            </div>
+          )}
+
+          <div style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: 'calc(11px * var(--font-scale))',
+            fontStyle: 'italic',
+            color: inkSecondary,
+            lineHeight: 1.4,
+          }}>
+            Zone: {zoneFor(value ?? 29.92)}.
+          </div>
+
+          {(high != null || low != null) && (
+            <div style={{
+              fontFamily: 'var(--font-gauge)',
+              fontSize: 'calc(11px * var(--font-scale))',
+              color: inkSecondary,
+              marginTop: 'auto',
+              paddingTop: '8px',
+              borderTop: `var(--rule-width, 1px) var(--rule-style, solid) var(--rule-hair)`,
+            }}>
+              <div>
+                H {high != null ? high.toFixed(decimals) : '--'} · L {low != null ? low.toFixed(decimals) : '--'}
+              </div>
+              {(highAt || lowAt) && (
+                <div style={{ fontSize: 'calc(10px * var(--font-scale))', color: inkMuted, marginTop: '2px' }}>
+                  {highAt && `H ${formatTimestamp(highAt)}`}
+                  {highAt && lowAt && ' · '}
+                  {lowAt && `L ${formatTimestamp(lowAt)}`}
+                </div>
+              )}
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

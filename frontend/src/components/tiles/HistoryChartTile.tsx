@@ -1,24 +1,18 @@
 /**
- * Full-width 24-hour temperature + dew point chart per Design REVIEW-02.
- *
- * Highcharts spline with two series — temperature as the primary trace
- * (chart.trace accent), dew point as chart.traceSecondary.  Per the
- * mock this is the second thing the eye lands on after the hero
- * temperature, and it's the biggest single absence from the shipped
- * dashboard.
- *
- * The paper-theme "ledger grid" (pale horizontals, stronger midline,
- * faint hour verticals) is a later composition PR — this tile lands
- * the chart with the current shared chart tokens; the ruled ledger
- * treatment folds in with PR 25 (`geometry/gauges.ts` wiring).
+ * 24-hour temperature + dew point spline.  On paper themes a
+ * ``ledgerGrid()`` overlay draws pale ruled horizontals (with a
+ * stronger midline) behind the plot so the trace reads as ink on
+ * ruled paper rather than a line on a chart.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Highcharts from 'highcharts';
 import { HighchartsReact } from 'highcharts-react-official';
 import { fetchHistory } from '../../api/client.ts';
 import type { HistoryPoint } from '../../api/types.ts';
 import { getHighchartsTimeConfig } from '../../utils/timezone.ts';
 import TileLabel from '../common/TileLabel.tsx';
+import { useTheme } from '../../context/ThemeContext.tsx';
+import { ledgerGrid } from '../../utils/gauges.ts';
 
 function getCSSVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -28,6 +22,23 @@ export default function HistoryChartTile() {
   const [tempPts, setTempPts] = useState<HistoryPoint[]>([]);
   const [dewPts, setDewPts] = useState<HistoryPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const { theme } = useTheme();
+  const paper = theme.surface?.ownsBackground === true;
+  const plotRef = useRef<HTMLDivElement>(null);
+  const [plotSize, setPlotSize] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    if (!paper) return;
+    const el = plotRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setPlotSize({ w: entry.contentRect.width, h: entry.contentRect.height });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [paper]);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,14 +129,37 @@ export default function HistoryChartTile() {
       boxSizing: 'border-box',
     }}>
       <TileLabel>Temperature &amp; dew point, 24 hours</TileLabel>
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div ref={plotRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        {paper && plotSize.w > 0 && plotSize.h > 0 && (
+          <svg
+            width={plotSize.w}
+            height={plotSize.h}
+            viewBox={`0 0 ${plotSize.w} ${plotSize.h}`}
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+            aria-hidden
+          >
+            {(() => {
+              const g = ledgerGrid(plotSize.w, plotSize.h);
+              return (
+                <>
+                  {g.hRules.map((r, i) => (
+                    <line key={`h${i}`} x1={0} y1={r.y} x2={plotSize.w} y2={r.y} stroke="var(--chart-grid)" opacity={r.op} />
+                  ))}
+                  {g.vRules.map((r, i) => (
+                    <line key={`v${i}`} x1={r.x} y1={0} x2={r.x} y2={plotSize.h} stroke="var(--chart-grid)" opacity={r.op} />
+                  ))}
+                </>
+              );
+            })()}
+          </svg>
+        )}
         {loading && !tempPts.length ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-muted)' }}>Loading…</div>
         ) : (
           <HighchartsReact
             highcharts={Highcharts}
             options={options}
-            containerProps={{ style: { height: '100%', width: '100%' } }}
+            containerProps={{ style: { height: '100%', width: '100%', position: 'relative', zIndex: 1 } }}
           />
         )}
       </div>
