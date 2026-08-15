@@ -225,7 +225,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
                     width: '20px',
                     textAlign: 'center',
                     flexShrink: 0,
-                    color: isActive ? 'var(--color-accent)' : (iconHue ?? 'var(--color-text-secondary)'),
+                    color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                   }}>
                     {item.icon}
                   </span>
