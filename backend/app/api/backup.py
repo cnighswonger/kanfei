@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from ..config import settings
-from .dependencies import require_admin
+from .dependencies import require_admin, require_admin_read
 from ..services.backup import (
     create_backup,
     restore_backup,
@@ -53,14 +53,14 @@ def trigger_backup(_admin=Depends(require_admin)):
 
 
 @router.get("/list")
-def get_backups(_admin=Depends(require_admin)):
+def get_backups(_admin=Depends(require_admin_read)):
     """List existing backups."""
     backup_dir = get_backup_dir(settings.db_path)
     return list_backups(backup_dir)
 
 
 @router.get("/download/{name}")
-def download_backup(name: str, _admin=Depends(require_admin)):
+def download_backup(name: str, _admin=Depends(require_admin_read)):
     """Download a backup archive by name."""
     # Sanitize filename — prevent path traversal
     if "/" in name or "\\" in name or ".." in name:

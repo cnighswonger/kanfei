@@ -20,7 +20,7 @@ from ..services.auth import (
     revoke_session,
     verify_password,
 )
-from .dependencies import _get_db, require_admin
+from .dependencies import _get_db, require_admin, require_admin_read
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +159,7 @@ async def create_api_key_endpoint(
 @router.get("/api-keys")
 async def list_api_keys_endpoint(
     db: Session = Depends(_get_db),
-    _admin: UserModel = Depends(require_admin),
+    _admin: UserModel = Depends(require_admin_read),
 ):
     """List API keys (prefix + label only, never the full key)."""
     if _admin is None:

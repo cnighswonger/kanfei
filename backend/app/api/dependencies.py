@@ -75,6 +75,48 @@ def require_admin(
     return user
 
 
+def require_admin_read(
+    request: Request,
+    user: UserModel | None = Depends(get_current_user),
+    db: Session = Depends(_get_db),
+) -> UserModel:
+    """Strict admin-only for endpoints that return secret-bearing or
+    bulk-DB data.
+
+    Same shape as ``require_admin`` **without** the public-mode bypass:
+    an unauthenticated guest on a public droplet is refused (401)
+    rather than allowed through.  Use this on any admin GET whose
+    response contains information the operator was trusted with
+    privately — SQLite dumps, backup archives, secret prefixes, log
+    streams.
+
+    The bootstrap bypass (no users exist yet) is preserved so the
+    setup wizard's initial flow still works.
+
+    Issue #336 red-team follow-up (2026-08-15): the public-mode
+    ``require_admin`` bypass was fine for state-mutation gating
+    (writes still 403 at the middleware layer) but wrong for the
+    class of GETs that stream data the admin was trusted with.
+    Specifically, ``GET /api/db-admin/export/backup`` returned the
+    full SQLite dump — including the plaintext
+    ``public_mode_ingest_secret`` — to any unauthenticated caller.
+    """
+    # Bootstrap: if no users exist yet, allow the setup wizard
+    # through — BUT ONLY on a private station.  A public droplet
+    # never has an admin (its wizard skips the account step by
+    # design), so ``any_user_exists`` returns False forever.  Without
+    # the ``and not is_public_mode()`` guard, this bypass would
+    # exactly re-open the read surface we're trying to close.
+    if not any_user_exists(db) and not is_public_mode():
+        return None  # type: ignore[return-value]
+
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
 def optional_auth(
     user: UserModel | None = Depends(get_current_user),
 ) -> UserModel | None:
