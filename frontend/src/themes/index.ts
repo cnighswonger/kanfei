@@ -228,11 +228,15 @@ export interface Theme {
 
 export const themes: Record<string, Theme> = { dark, light, classic, glaisher, mammoth };
 /**
- * The shipping default.  Stays ``dark`` for this PR (invisible landing).
- * Flipped to ``mammoth`` at the end of the refactor, together with the
- * ``backend/app/config.py`` ``KANFEI_THEME`` default flip.  See task 73.
+ * The shipping default is now ``mammoth`` — "The Mammoth's Log," a paper
+ * theme that owns the page background and gives the app a distinct
+ * first-view identity instead of the generic dark shell.  Users who
+ * saved a different theme (via ThemeContext's localStorage/backend
+ * pref) still see their choice; this only changes what a fresh visitor
+ * sees.  Keep in sync with backend ``ui_theme`` default in
+ * ``backend/app/api/config.py``.
  */
-export const defaultTheme = 'dark';
+export const defaultTheme = 'mammoth';
 export { dark, light, classic, glaisher, mammoth };
 
 /** Deep-merge overrides onto a base preset to create a custom theme.

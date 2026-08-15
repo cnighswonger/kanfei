@@ -94,6 +94,17 @@ export default function WeatherBackground() {
   const { theme } = useTheme();
   const prevSceneRef = useRef<WeatherScene>(scene);
 
+  // A theme with ``surface.ownsBackground`` owns the page ground
+  // outright (paper themes: mammoth, glaisher).  Compositing a
+  // condition-gradient behind cream paper and multiply-blended
+  // engravings reads as mud, so the weather background is suppressed
+  // entirely while such a theme is active — no render, no translucent
+  // container overrides.  Enabling it in Settings has no visible
+  // effect; that switch will get a "not available while <theme>"
+  // note in a follow-up PR.
+  const themeOwnsBackground = theme.surface.ownsBackground;
+  const active = enabled && !themeOwnsBackground;
+
   // Track previous scene for crossfade
   useEffect(() => {
     prevSceneRef.current = scene;
@@ -104,7 +115,7 @@ export default function WeatherBackground() {
   // and chart backgrounds so only container backgrounds become transparent.
   useEffect(() => {
     const root = document.documentElement;
-    if (enabled) {
+    if (active) {
       // Signal to ThemeContext to skip these properties on theme changes
       root.dataset.weatherBg = "active";
       // Transparency 0 → fully opaque (alpha=1); 100 → mostly transparent (alpha=0.3)
@@ -121,9 +132,9 @@ export default function WeatherBackground() {
         root.style.removeProperty(`${prop}-solid`);
       }
     }
-  }, [enabled, transparency, theme]);
+  }, [active, transparency, theme]);
 
-  if (!enabled) return null;
+  if (!active) return null;
 
   const overlayOpacity = 1 - intensity / 100;
   const customUrl = customImages[scene];

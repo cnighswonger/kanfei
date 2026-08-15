@@ -24,7 +24,16 @@ html {
 
 body {
   min-height: 100vh;
-  background: var(--color-bg);
+  background-color: var(--color-bg);
+  /* Paper themes set --surface-texture to a multi-radial-gradient
+     that renders as the paper's warmth spots.  Non-paper themes set
+     it to 'none' via applyThemeToDOM, so this rule is invisible on
+     them.  This is the wiring the PR-2 docstring referred to as
+     "the shell will pick this up in PR 4"; landed with the mammoth-
+     default flip because the flip is only visible if the texture
+     actually renders. */
+  background-image: var(--surface-texture, none);
+  background-attachment: fixed;
   color: var(--color-text);
   font-family: var(--font-body);
   font-size: calc(14px * var(--font-scale, 1));
