@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models.database import get_db
-from .dependencies import require_admin
+from .dependencies import require_admin, require_admin_read
 from ..models.sensor_reading import SensorReadingModel
 from ..models.archive_record import ArchiveRecordModel
 from ..models.nowcast import NowcastHistory, NowcastVerification, NowcastKnowledge
@@ -108,7 +108,7 @@ class CompactRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.get("/stats")
-def get_stats(db: Session = Depends(get_db), _admin=Depends(require_admin)):
+def get_stats(db: Session = Depends(get_db), _admin=Depends(require_admin_read)):
     """Row counts and date ranges for all tables, plus database file size."""
     tables = []
     for table_name, info in _TABLE_REGISTRY.items():
@@ -192,7 +192,7 @@ def export_json(
     start: str | None = Query(None),
     end: str | None = Query(None),
     db: Session = Depends(get_db),
-    _admin=Depends(require_admin),
+    _admin=Depends(require_admin_read),
 ):
     """Stream a JSON export of a single table."""
     info = _TABLE_REGISTRY.get(table)
@@ -216,8 +216,14 @@ def export_json(
 # ---------------------------------------------------------------------------
 
 @router.get("/export/backup")
-def export_backup(_admin=Depends(require_admin)):
-    """Download a consistent SQLite database backup."""
+def export_backup(_admin=Depends(require_admin_read)):
+    """Download a consistent SQLite database backup.
+
+    Gated on ``require_admin_read`` (no public-mode bypass) because
+    this route streams the full DB — including secret-bearing
+    ``station_config`` rows that the masking in ``get_config`` never
+    sees.  Red-team finding #2, 2026-08-15.
+    """
     today = date.today().isoformat()
     filename = f"kanfei_backup_{today}.db"
 
