@@ -162,13 +162,15 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
         top: 0,
         left: 0,
         right: 0,
-        height: '56px',
+        height: paper ? '60px' : '56px',
         background: 'var(--color-header-bg)',
-        borderBottom: paper ? 'none' : '1px solid var(--color-border)',
+        borderBottom: paper
+          ? `${theme.rules.hairline}px solid ${theme.rules.strong}`
+          : '1px solid var(--color-border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 20px',
+        padding: paper ? '0 26px' : '0 20px',
         zIndex: 100,
         fontFamily: 'var(--font-body)',
         color: paper ? paperInk : undefined,
@@ -199,7 +201,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
           className="header-title"
           style={{
             margin: 0,
-            fontSize: paper ? 'calc(22px * var(--font-scale))' : 'calc(18px * var(--font-scale))',
+            fontSize: paper ? 'calc(26px * var(--font-scale))' : 'calc(18px * var(--font-scale))',
             fontWeight: paper ? 400 : 600,
             fontStyle: paper ? 'italic' : 'normal',
             color: paper ? paperInk : 'var(--color-text)',
@@ -221,7 +223,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
               whiteSpace: 'nowrap',
             }}
           >
-            {`· ${themeTag} · STATION`}
+            {`${themeTag} · STATION`}
           </span>
         )}
         {!paper && local && (() => {
@@ -403,66 +405,48 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
           </>
         )}
 
-        <select
-          className="header-theme-select"
-          value={themeName}
-          onChange={(e) => setThemeName(e.target.value)}
-          style={paper ? {
-            background: 'transparent',
-            color: paperInk,
-            border: '1px solid var(--color-border)',
-            borderRadius: '2px',
-            padding: '6px 10px',
-            fontSize: 'calc(11px * var(--font-scale))',
-            fontFamily: 'var(--font-mono)',
-            letterSpacing: '0.10em',
-            cursor: 'pointer',
-            outline: 'none',
-          } : {
-            background: 'var(--color-bg-secondary)',
-            color: 'var(--color-text)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '6px',
-            padding: '6px 10px',
-            fontSize: 'calc(13px * var(--font-scale))',
-            fontFamily: 'var(--font-body)',
-            cursor: 'pointer',
-            outline: 'none',
-          }}
-        >
-          {Object.values(themes).map((t) => (
-            <option key={t.name} value={t.name}>
-              {t.label}
-            </option>
-          ))}
-        </select>
+        {!paper && (
+          <select
+            className="header-theme-select"
+            value={themeName}
+            onChange={(e) => setThemeName(e.target.value)}
+            style={{
+              background: 'var(--color-bg-secondary)',
+              color: 'var(--color-text)',
+              border: '1px solid var(--color-border)',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: 'calc(13px * var(--font-scale))',
+              fontFamily: 'var(--font-body)',
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            {Object.values(themes).map((t) => (
+              <option key={t.name} value={t.name}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        )}
 
-        <button
-          onClick={user?.authenticated ? logout : () => navigate("/login", { state: { from: location.pathname } })}
-          style={paper ? {
-            background: 'none',
-            border: '1px solid var(--color-border)',
-            borderRadius: '2px',
-            padding: '6px 12px',
-            fontSize: 'calc(11px * var(--font-scale))',
-            fontFamily: 'var(--font-mono)',
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: paperInkDim,
-            cursor: 'pointer',
-          } : {
-            background: 'none',
-            border: '1px solid var(--color-border)',
-            borderRadius: '6px',
-            padding: '6px 10px',
-            fontSize: 'calc(12px * var(--font-scale))',
-            fontFamily: 'var(--font-body)',
-            color: 'var(--color-text-secondary)',
-            cursor: 'pointer',
-          }}
-        >
-          {user?.authenticated ? "Logout" : "Login"}
-        </button>
+        {!paper && (
+          <button
+            onClick={user?.authenticated ? logout : () => navigate("/login", { state: { from: location.pathname } })}
+            style={{
+              background: 'none',
+              border: '1px solid var(--color-border)',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: 'calc(12px * var(--font-scale))',
+              fontFamily: 'var(--font-body)',
+              color: 'var(--color-text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            {user?.authenticated ? "Logout" : "Login"}
+          </button>
+        )}
       </div>
     </header>
   );

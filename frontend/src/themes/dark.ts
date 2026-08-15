@@ -88,6 +88,13 @@ const dark: Theme = {
   },
   dial: { gradOuter: 0.967, gradInner: 0.887, numeral: 0.747, zone: 0.573, needle: 0.66, trendHand: 0.46 },
   gauge: { strokeWidth: 8, bgOpacity: 0.3, shadow: '0 4px 24px rgba(0,0,0,0.4)', borderRadius: '16px' },
+  nav: {
+    iconHues: {
+      '/': '#4c8dff', '/history': '#b28dff', '/forecast': '#4fc3f7',
+      '/astronomy': '#f5c451', '/map': '#3ddc84', '/nowcast': '#ff7a6b',
+      '/spray': '#5ec9a7',
+    },
+  },
   fontScale: 1.0,
 };
 

@@ -28,6 +28,8 @@ const navItems: NavItem[] = [
   { to: '/settings', label: 'Settings', icon: '⚙' },
 ];
 
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+
 /**
  * Persona-specific overlays on top of the feature-flag filter.
  *
@@ -117,15 +119,17 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
         className={`sidebar ${open ? 'sidebar-open' : ''}`}
         style={{
           position: 'fixed',
-          top: '56px',
+          top: paper ? '60px' : '56px',
           left: 0,
           bottom: 0,
           width: collapsed ? '56px' : '220px',
           background: 'var(--color-sidebar-bg)',
-          borderRight: paper ? 'none' : '1px solid var(--color-border)',
+          borderRight: paper
+            ? `${theme.rules.hairline}px solid ${theme.rules.strong}`
+            : '1px solid var(--color-border)',
           display: 'flex',
           flexDirection: 'column',
-          padding: '12px 0',
+          padding: paper ? '18px 0' : '12px 0',
           zIndex: 50,
           overflowY: 'auto',
           overflowX: 'hidden',
@@ -133,8 +137,14 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
           transition: 'transform 0.2s ease, width 0.2s ease',
         }}
       >
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: paper ? '0' : '2px', padding: paper ? '0' : '0 8px', flex: 1 }}>
-          {visibleNavItems.map((item) => (
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: paper ? '0' : '2px', padding: paper ? '0 14px' : '0 8px', flex: 1 }}>
+          {visibleNavItems.map((item, itemIdx) => {
+            const iconHue = theme.nav?.iconHues?.[item.to];
+            const showRoman = paper && theme.nav?.indexStyle === 'roman' && !collapsed;
+            const separator = paper
+              ? `${theme.rules.hairline}px ${theme.rules.style} ${theme.rules.strong}`
+              : 'none';
+            return (
             <NavLink
               key={item.to}
               to={item.to}
@@ -145,17 +155,18 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: collapsed ? 'center' : 'space-between',
-                padding: collapsed ? '12px 0' : '11px 20px',
+                padding: collapsed ? '12px 0' : '11px 12px',
                 textDecoration: 'none',
                 fontFamily: 'var(--font-mono)',
-                fontSize: 'calc(12px * var(--font-scale))',
+                fontSize: 'calc(11px * var(--font-scale))',
                 fontWeight: isActive ? 700 : 500,
-                letterSpacing: '0.14em',
+                letterSpacing: '1.8px',
                 textTransform: 'uppercase',
-                // Active row: dark-brown rectangle with cream text (mock 1c).
-                // Inactive: dark text on the cream sidebar bg.
                 color: isActive ? 'var(--color-bg)' : 'var(--color-text)',
                 background: isActive ? 'var(--color-text)' : 'transparent',
+                borderBottom: isActive || itemIdx === visibleNavItems.length - 1
+                  ? 'none'
+                  : separator,
                 transition: 'color 0.15s ease, background 0.15s ease',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -176,23 +187,54 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
                 overflow: 'hidden',
               })}
             >
-              {paper ? (
+              {({ isActive }: { isActive: boolean }) => paper ? (
                 <>
-                  {!collapsed && <span>{item.label}</span>}
-                  <span style={{ fontSize: 'calc(15px * var(--font-scale))', width: '18px', textAlign: 'center', flexShrink: 0, opacity: 0.55 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, overflow: 'hidden' }}>
+                    {showRoman && (
+                      <span style={{
+                        width: '26px',
+                        fontFamily: 'var(--font-heading)',
+                        fontSize: 'calc(12px * var(--font-scale))',
+                        fontStyle: 'italic',
+                        fontWeight: 600,
+                        letterSpacing: '0',
+                        textTransform: 'none',
+                        color: isActive ? 'var(--color-bg)' : 'rgba(58, 45, 29, 0.84)',
+                        flexShrink: 0,
+                      }}>
+                        {ROMAN[itemIdx]}
+                      </span>
+                    )}
+                    {!collapsed && <span>{item.label}</span>}
+                  </span>
+                  <span style={{
+                    fontSize: 'calc(15px * var(--font-scale))',
+                    width: '18px',
+                    textAlign: 'center',
+                    flexShrink: 0,
+                    color: isActive ? 'var(--color-bg)' : (iconHue ?? 'var(--color-text)'),
+                    opacity: isActive ? 1 : (iconHue ? 1 : 0.55),
+                  }}>
                     {item.icon}
                   </span>
                 </>
               ) : (
                 <>
-                  <span style={{ fontSize: 'calc(16px * var(--font-scale))', width: '20px', textAlign: 'center', flexShrink: 0 }}>
+                  <span style={{
+                    fontSize: 'calc(16px * var(--font-scale))',
+                    width: '20px',
+                    textAlign: 'center',
+                    flexShrink: 0,
+                    color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                  }}>
                     {item.icon}
                   </span>
                   {!collapsed && <span>{item.label}</span>}
                 </>
               )}
             </NavLink>
-          ))}
+            );
+          })}
 
           {/* Reversible "N pages hidden" note — always render when the
               persona hides anything, so no page ever disappears
@@ -251,7 +293,17 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
         </nav>
 
         {/* About link — anchored at bottom */}
-        <div style={{ padding: paper ? '0' : '0 8px', marginTop: 'auto' }}>
+        <div style={{ padding: paper ? '0 14px' : '0 8px', marginTop: 'auto' }}>
+          {/* Mammoth's stripe ribbon above the About row: three equal
+              flex children, per the mock's `mammothNav`.  Themes that
+              omit `nav.ribbon` render nothing here. */}
+          {paper && theme.nav?.ribbon && theme.nav.ribbon.length > 0 && (
+            <div style={{ display: 'flex', height: '3px', marginBottom: '8px' }}>
+              {theme.nav.ribbon.map((c, i) => (
+                <span key={i} style={{ flex: 1, background: c }} />
+              ))}
+            </div>
+          )}
           <NavLink
             to="/about"
             onClick={onClose}
@@ -260,12 +312,12 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
               display: 'flex',
               alignItems: 'center',
               justifyContent: collapsed ? 'center' : 'space-between',
-              padding: collapsed ? '12px 0' : '11px 20px',
+              padding: collapsed ? '12px 0' : '11px 12px',
               textDecoration: 'none',
               fontFamily: 'var(--font-mono)',
-              fontSize: 'calc(12px * var(--font-scale))',
+              fontSize: 'calc(11px * var(--font-scale))',
               fontWeight: isActive ? 700 : 500,
-              letterSpacing: '0.14em',
+              letterSpacing: '1.8px',
               textTransform: 'uppercase',
               color: isActive ? 'var(--color-bg)' : 'var(--color-text)',
               background: isActive ? 'var(--color-text)' : 'transparent',
@@ -289,10 +341,34 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
               overflow: 'hidden',
             })}
           >
-            {paper ? (
+            {({ isActive }: { isActive: boolean }) => paper ? (
               <>
-                {!collapsed && <span>About</span>}
-                <span style={{ fontSize: 'calc(15px * var(--font-scale))', width: '18px', textAlign: 'center', flexShrink: 0, opacity: 0.55 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, overflow: 'hidden' }}>
+                  {theme.nav?.indexStyle === 'roman' && !collapsed && (
+                    <span style={{
+                      width: '26px',
+                      fontFamily: 'var(--font-heading)',
+                      fontSize: 'calc(12px * var(--font-scale))',
+                      fontStyle: 'italic',
+                      fontWeight: 600,
+                      letterSpacing: '0',
+                      textTransform: 'none',
+                      color: isActive ? 'var(--color-bg)' : 'rgba(58, 45, 29, 0.84)',
+                      flexShrink: 0,
+                    }}>
+                      {ROMAN[visibleNavItems.length]}
+                    </span>
+                  )}
+                  {!collapsed && <span>About</span>}
+                </span>
+                <span style={{
+                  fontSize: 'calc(15px * var(--font-scale))',
+                  width: '18px',
+                  textAlign: 'center',
+                  flexShrink: 0,
+                  color: isActive ? 'var(--color-bg)' : 'var(--color-text)',
+                  opacity: isActive ? 1 : 0.55,
+                }}>
                   {'ⓘ'}
                 </span>
               </>

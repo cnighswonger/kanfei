@@ -105,6 +105,13 @@ const glaisher: Theme = {
   },
   dial: { gradOuter: 0.967, gradInner: 0.887, numeral: 0.747, zone: 0.573, needle: 0.66, trendHand: 0.46 },
   gauge: { strokeWidth: 6, bgOpacity: 0.2, shadow: 'none', borderRadius: '0' },
+  nav: {
+    iconHues: {
+      '/': '#9a6e2b', '/history': '#6b4a7a', '/forecast': '#3f5d7a',
+      '/astronomy': '#7a5c14', '/map': '#4a6b34', '/nowcast': '#5c7f9a',
+      '/spray': '#4a6b34',
+    },
+  },
   fontScale: 1.0,
 };
 
