@@ -8,7 +8,7 @@ import { type ReactNode } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import ResizeHandle from "./ResizeHandle.tsx";
-import { GRID_COLUMNS } from "./tileRegistry.ts";
+import { GRID_COLUMNS, GAP } from "./tileRegistry.ts";
 
 interface SortableTileProps {
   id: string;
@@ -132,6 +132,11 @@ export default function SortableTile({
     position: "relative",
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 100 : undefined,
+    // Matches DashboardGrid's normal-mode wrapper: with rowGap:0 on
+    // the grid, the vertical gutter lives inside each cell so
+    // rowSpan × 8 is the true visual height.
+    paddingBottom: GAP,
+    boxSizing: "border-box",
   };
 
   return (
