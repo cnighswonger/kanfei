@@ -1,3 +1,71 @@
+kanfei (0.1.0~beta32) unstable; urgency=medium
+
+  * Fixes the private-station relay so pushed data actually populates
+    the remote droplet's dashboard.  The initial private → public
+    push flow was silently succeeding on both ends — the private
+    station's sender got 200 OK for every reading and identity push,
+    the droplet's ingest endpoints accepted every request — yet the
+    droplet showed nulls.  The two sides had been unit-tested
+    independently and disagreed on the JSON body shape: sender was
+    wrapping payloads in an extra ``{"snapshot": ...}`` / ``{"config":
+    ...}`` layer while the ingest endpoints expected a flat mirror of
+    the sensor snapshot / identity dict.  Every field got dropped on
+    decode and every push buffered an empty record.  The wire is now
+    flat, and a round-trip test stitches the sender's HTTP body
+    through the endpoint's parser and the daemon-side field filter
+    so a future re-wrap regression fails a test rather than shipping.
+
+  * Fixes three read-only-Settings gaps on the public droplet.  The
+    outer authentication guard was still redirecting unauthenticated
+    visitors to a login page that a droplet has no account to fill —
+    the guard now honours the read-only public-mode flag and lets
+    guests reach the read-only Settings pane directly.  The map view's
+    OpenStreetMap "Roads" base layer was 403'ing on the droplet
+    because OpenStreetMap's tile server refuses requests from public
+    production deployments; the Roads layer is now hidden in public
+    mode, and if the operator's saved default happened to be Roads
+    the map now falls back to the Carto layer (same OpenStreetMap
+    data, rendered by a policy-friendly CDN) so the map never starts
+    blank.  Finally, the location-picker map embedded in Settings has
+    been switched from OpenStreetMap's raw tile source to Carto for
+    the same reason.
+
+  * Verified end-to-end since 2026-08-14 on a private Vantage Vue
+    (vsits-02) pushing to a public droplet at kanfei.vsits.co:
+    dashboard, live tiles, history charts, forecast, and Settings all
+    render for unauthenticated guests, and every write returns 403 at
+    the middleware layer.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sat, 15 Aug 2026 01:03:33 +0000
+
+kanfei (0.1.0~beta31) unstable; urgency=medium
+
+  * Adds a public-facing droplet mode.  Kanfei can now run on a second
+    machine — a small cloud droplet, typically — that displays live
+    weather data pushed from a private station without exposing any
+    write surface.  The droplet runs the exact same package as the
+    private station; the only difference is a driver selection at
+    setup time.  Every write endpoint returns 403 except two
+    bearer-authenticated ingest paths that accept snapshot pushes from
+    the private station.  Guests browse the dashboard, live tiles, and
+    read-only Settings; nothing they do can change state or reach the
+    private station's hardware.  Full operator documentation lives at
+    docs/public-droplet.md, with a reference nginx recipe at
+    reference/nginx-public-droplet.conf.example that terminates TLS
+    and locks the ingest paths to the private station's outbound IP.
+
+  * Adds a Public Droplet Relay section to the Station settings tab on
+    the private station side.  Toggle it on, paste the droplet's URL
+    and the shared bearer secret you set on the droplet, and Save.
+    The relay task in kanfei-logger picks up the change on the next
+    poll cycle — no restart — and starts pushing every sensor snapshot
+    to the droplet's ingest endpoint alongside the existing Weather
+    Underground and CWOP uploads.  The panel surfaces a red banner
+    with the last push failure so an operator sees a stalled relay
+    without having to tail the systemd journal.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Fri, 14 Aug 2026 22:19:57 +0000
+
 kanfei (0.1.0~beta30) unstable; urgency=medium
 
   * Adds three new rows to the Solar & UV tile.  The first is the
