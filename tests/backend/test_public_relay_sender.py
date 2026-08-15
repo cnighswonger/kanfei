@@ -177,9 +177,14 @@ class TestPushShape:
         assert headers["Content-Type"] == "application/json"
 
         body = reading_call.kwargs["json"]
-        assert "snapshot" in body
-        assert body["snapshot"]["outside_temp"] == 22.5
-        assert body["snapshot"]["outside_humidity"] == 55
+        # Flat SensorSnapshot mirror — NOT wrapped in {"snapshot": ...}.
+        # The ingest endpoint's pydantic model would model_dump() a
+        # wrapped body back into {"snapshot": {...}} and re-wrap for
+        # IPC; the daemon's field filter then drops every real key.
+        # See PublicRelaySender._push_reading for the note.
+        assert "snapshot" not in body
+        assert body["outside_temp"] == 22.5
+        assert body["outside_humidity"] == 55
 
     def test_success_clears_last_error(self, clean_station_config):
         _enable_relay()
@@ -203,9 +208,13 @@ class TestIdentity:
 
         identity_call = mock.post.call_args_list[1]
         assert identity_call.args[0] == "https://droplet.example.com/api/ingest/config"
-        assert identity_call.kwargs["json"]["config"]["station_name"] == "Vantage Vue (fw 2.12)"
-        assert identity_call.kwargs["json"]["config"]["capabilities"] == ["archive_sync"]
-        assert identity_call.kwargs["json"]["config"]["station_type_code"] == 16
+        # Flat, not wrapped in {"config": ...} — same shape argument
+        # as the reading push above.
+        body = identity_call.kwargs["json"]
+        assert "config" not in body
+        assert body["station_name"] == "Vantage Vue (fw 2.12)"
+        assert body["capabilities"] == ["archive_sync"]
+        assert body["station_type_code"] == 16
 
     def test_identity_skipped_when_unchanged(self, clean_station_config):
         _enable_relay()
@@ -318,6 +327,81 @@ class TestFailureModes:
 
 
 # ---------------- Edge cases ----------------
+
+
+class TestRoundTripWireShape:
+    """End-to-end: what the sender POSTs must be what the ingest endpoint
+    can decode + forward through IPC to the daemon's push_snapshot /
+    push_config methods.
+
+    Regression: shipped Phase 3 with the sender wrapping bodies in
+    ``{"snapshot": ...}`` / ``{"config": ...}`` while the ingest endpoint
+    expects a flat mirror of ``SensorSnapshot``.  Sender unit tests
+    asserted the wrapped shape; endpoint unit tests asserted the flat
+    shape; neither round-tripped and the two disagreed silently for a
+    full deploy cycle.  This test class stitches both halves together
+    on a synthetic Starlette request.
+    """
+
+    def _endpoint_shape(self, body: dict) -> dict:
+        """Simulate what the ingest endpoint does with an incoming body.
+
+        Mirrors ``backend/app/api/ingest.py::ingest_reading`` /
+        ``ingest_config``: pydantic model with ``extra=allow`` → model_dump
+        → wrap under the IPC key.
+        """
+        from app.api.ingest import IngestReadingPayload
+        payload = IngestReadingPayload(**body)
+        return {"cmd": "ingest_reading", "snapshot": payload.model_dump(exclude_none=False)}
+
+    def test_reading_body_decodes_to_populated_snapshot(self, clean_station_config):
+        """The daemon-side field filter in ``_h_ingest_reading`` must be
+        able to pull SensorSnapshot fields directly out of the IPC
+        message the endpoint constructs from the sender's HTTP body."""
+        from dataclasses import fields
+        from app.protocol.base import SensorSnapshot
+
+        _enable_relay()
+        sender = PublicRelaySender()
+        mock = _install_mock_client(sender)
+        _run(sender.maybe_upload(_snapshot(), _FakeDriver()))
+
+        # First POST is the reading (identity is second on first cycle).
+        sent_body = mock.post.call_args_list[0].kwargs["json"]
+        ipc_msg = self._endpoint_shape(sent_body)
+
+        # Now replicate the daemon-side filter.
+        allowed = {f.name for f in fields(SensorSnapshot)}
+        cleaned = {k: v for k, v in ipc_msg["snapshot"].items() if k in allowed}
+        assert cleaned, (
+            "Daemon-side field filter would drop every key — the sender's "
+            "wire shape does not match the endpoint's flat SensorSnapshot "
+            "mirror. Almost certainly the sender is wrapping the body in "
+            "{'snapshot': ...}. See PublicRelaySender._push_reading."
+        )
+        snap = SensorSnapshot(**cleaned)
+        assert snap.outside_temp == 22.5
+        assert snap.outside_humidity == 55
+
+    def test_identity_body_decodes_to_populated_upstream_info(self, clean_station_config):
+        """Same round-trip check for the config push — a wrapped body
+        would leave ``PublicRelayDriver.station_name`` returning the
+        bare 'Public Relay' label because ``_upstream_info['station_name']``
+        would be missing."""
+        _enable_relay()
+        sender = PublicRelaySender()
+        mock = _install_mock_client(sender)
+        _run(sender.maybe_upload(_snapshot(), _FakeDriver()))
+
+        identity_body = mock.post.call_args_list[1].kwargs["json"]
+        # Endpoint side: pydantic (extra=allow) round-trip.
+        from app.api.ingest import IngestConfigPayload
+        parsed = IngestConfigPayload(**identity_body).model_dump(exclude_none=False)
+        assert parsed.get("station_name") == "Vantage Vue (fw 2.12)", (
+            "Endpoint-decoded body is missing station_name at top level. "
+            "The sender is almost certainly wrapping the identity payload "
+            "in {'config': ...}."
+        )
 
 
 class TestNoSnapshot:
