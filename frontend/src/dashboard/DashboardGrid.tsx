@@ -178,12 +178,11 @@ export default function DashboardGrid() {
     // is what lets a 300px dial sit beside a short 4-row table
     // without the table stretching to match the dial.
     gridAutoRows: `${GRID_ROW_UNIT_PX}px`,
-    // rowGap: 0 so a tile with ``rowSpan: 26`` is 208 px — not
-    // 26×8 + 25×16.  The tile-wrapper's ``paddingBottom: GAP``
-    // (border-box) carves the visible vertical gutter out of the
-    // top of each cell instead of stacking gap between every 8-px
-    // row line.  columnGap keeps horizontal spacing per Design's
-    // ``rowGap: 0, columnGap: GAP`` fix in REVIEW-03.
+    // rowGap: 0 so a tile with ``rowSpan: 26`` is 208 px, not
+    // 26×8 + 25×16 (grid ``gap`` applies between EVERY 8-px row
+    // line, not just visible tiles).  The tile wrapper's
+    // ``paddingBottom: GAP`` (border-box) carves the visible
+    // vertical gutter out of the cell.
     columnGap: `${GAP}px`,
     rowGap: 0,
   };

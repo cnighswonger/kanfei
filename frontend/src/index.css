@@ -202,10 +202,14 @@ a:hover {
     font-size: calc(16px * var(--font-scale, 1)) !important;
   }
 
-  /* Dashboard: two-column compact grid */
+  /* Dashboard: two-column compact grid.  Row-gap stays 0 so the
+     8-px auto-row unit isn't multiplied between every row line
+     (see DashboardGrid.tsx for the desktop version of this).  The
+     vertical gutter comes from the tile wrapper's paddingBottom. */
   .dashboard-grid {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
-    gap: 10px !important;
+    column-gap: 10px !important;
+    row-gap: 0 !important;
   }
 
   /* Mobile: always full-width sidebar, hide collapse button */

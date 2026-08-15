@@ -132,9 +132,8 @@ export default function SortableTile({
     position: "relative",
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 100 : undefined,
-    // Matches DashboardGrid's normal-mode wrapper: with rowGap:0 on
-    // the grid, the vertical gutter lives inside each cell so
-    // rowSpan × 8 is the true visual height.
+    // Matches normal-mode wrapper: rowGap:0 on the grid + tile
+    // paddingBottom carves the visible gutter inside the cell.
     paddingBottom: GAP,
     boxSizing: "border-box",
   };

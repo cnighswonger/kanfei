@@ -146,11 +146,9 @@ export default function BarometerDial({
             </text>
           ))}
 
-          {/* Trend hand (pale, 3 h behind).  Per Design REVIEW-03 the
-              hand is part of the dial idiom — always render whatever
-              gauges.ts returns; the primitive's frac - 0.12 offset is
-              intentional stylistic geometry rather than a strict
-              historical position. */}
+          {/* Trend hand: always rendered; the primitive's frac - 0.12
+              offset is stylistic dial geometry, not a strict historical
+              position, so it stays visible regardless of trend data. */}
           <line
             x1={d.cx} y1={d.cy}
             x2={d.trend.x} y2={d.trend.y}
