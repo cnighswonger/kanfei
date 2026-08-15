@@ -23,7 +23,7 @@ import {
   PERSONA_LAYOUTS,
 } from "./tileRegistry.ts";
 import { readUIPref, writeUIPref, syncUIPrefs } from "../utils/uiPrefs.ts";
-import { usePersona, DEFAULT_PERSONA } from "../context/PersonaContext.tsx";
+import { usePersona, DEFAULT_PERSONA, type Persona } from "../context/PersonaContext.tsx";
 
 const PERSONA_PREF_KEY = "ui_persona";
 
@@ -34,6 +34,32 @@ function readCurrentPersonaFromStorage(): string {
   // outside the component during first render's setup).
   return readUIPref(PERSONA_PREF_KEY, DEFAULT_PERSONA);
 }
+
+/**
+ * Per-persona storage key for the saved dashboard arrangement.  Each
+ * persona has its own slot so a user's Everyday arrangement is
+ * independent of their Agriculture arrangement — picking a persona
+ * loads that persona's saved layout (or its default if unsaved), and
+ * saving under one persona never touches another's.
+ */
+const PER_PERSONA_LAYOUT_KEY: Record<Persona, string> = {
+  everyday: "ui_dashboard_layout_everyday",
+  agriculture: "ui_dashboard_layout_agriculture",
+  weather_nerd: "ui_dashboard_layout_weather_nerd",
+};
+
+function layoutKeyFor(persona: string): string {
+  return PER_PERSONA_LAYOUT_KEY[persona as Persona]
+    ?? PER_PERSONA_LAYOUT_KEY[DEFAULT_PERSONA];
+}
+
+/**
+ * Legacy single-key layout from before the per-persona split.  Read
+ * once at load-time and migrated into the current-persona slot.  After
+ * migration, ``writeUIPref`` clears both localStorage and backend so
+ * the key doesn't come back on the next syncUIPrefs pass.
+ */
+const LEGACY_LAYOUT_KEY = "ui_dashboard_layout";
 
 // --- Types ---
 
@@ -55,10 +81,12 @@ const DashboardLayoutContext =
 
 // --- Persistence helpers ---
 
-const PREF_KEY = "ui_dashboard_layout";
 const OLD_COLUMNS_KEY = "davis-wx-dashboard-columns";
 
-function migrateV1(parsed: { version: number; tiles: { tileId: string; colSpan?: number }[] }): DashboardLayout {
+function migrateV1(
+  parsed: { version: number; tiles: { tileId: string; colSpan?: number }[] },
+  persona: string,
+): DashboardLayout {
   // Read old columns setting for span conversion
   let oldColumns = 3;
   try {
@@ -78,18 +106,22 @@ function migrateV1(parsed: { version: number; tiles: { tileId: string; colSpan?:
   try { localStorage.removeItem(OLD_COLUMNS_KEY); } catch {}
 
   const migrated: DashboardLayout = { version: LAYOUT_VERSION, tiles: migratedTiles };
-  saveLayout(migrated);
+  saveLayoutForPersona(persona, migrated);
   return migrated;
 }
 
-function parseLayout(raw: string, fallback: DashboardLayout): DashboardLayout {
+function parseLayout(
+  raw: string,
+  fallback: DashboardLayout,
+  persona: string,
+): DashboardLayout {
   if (!raw) return fallback;
   try {
     const parsed = JSON.parse(raw) as DashboardLayout;
 
     // Migrate v1 layouts
     if (parsed.version === 1) {
-      return migrateV1(parsed);
+      return migrateV1(parsed, persona);
     }
 
     // Version check — fall back if schema changed
@@ -107,68 +139,59 @@ function parseLayout(raw: string, fallback: DashboardLayout): DashboardLayout {
   }
 }
 
-function loadLayout(): DashboardLayout {
-  // The persona chosen at page-load time picks the first-visit default.
-  // A saved layout in localStorage still wins — parseLayout only falls
-  // back to the persona default when the stored value is empty or
-  // corrupt.  Users who arrived with a saved layout keep it exactly.
-  const personaDefault = getPersonaDefaultLayout(readCurrentPersonaFromStorage());
-  return parseLayout(readUIPref(PREF_KEY, ""), personaDefault);
+function loadLayoutForPersona(persona: string): DashboardLayout {
+  const raw = readUIPref(layoutKeyFor(persona), "");
+  return parseLayout(raw, getPersonaDefaultLayout(persona), persona);
+}
+
+function saveLayoutForPersona(persona: string, layout: DashboardLayout): void {
+  writeUIPref(layoutKeyFor(persona), JSON.stringify(layout));
 }
 
 /**
- * Serialized form of each built-in persona default layout.  Precomputed
- * once so hot-path callers just do string-equality checks.  Any layout
- * whose serialized form is in this set was not user-arranged — it's
- * one of the built-in defaults, most likely put in localStorage by
- * syncUIPrefs's backend-wins reconcile after the backend held onto a
- * default value from a prior install.
+ * Serialized form of each built-in persona default layout.  Used by
+ * the legacy-key migration to decide whether the pre-per-persona
+ * value was user-arranged (worth preserving) or just a built-in
+ * default (worth discarding so the persona system starts clean).
  */
 const PERSONA_DEFAULT_SERIALIZED = new Set(
   Object.values(PERSONA_LAYOUTS).map((d) => JSON.stringify(d)),
 );
 
 /**
- * True when the browser's localStorage carries a user-arranged layout
- * that must not be clobbered by a persona switch or backend seed.
+ * One-time migration from the pre-per-persona single ``ui_dashboard_layout``
+ * key into a persona-specific slot.  Runs on every mount but is idempotent
+ * after the first pass because ``writeUIPref(LEGACY_LAYOUT_KEY, "")``
+ * clears both local and backend, so subsequent reads see an empty legacy.
  *
- * "User-arranged" is the meaningful test, not "any layout is present."
- * syncUIPrefs's backend-wins pass will happily land a persona-default
- * layout into localStorage if the backend has one stored — and that
- * synced default is NOT a user's own arrangement; it's the same
- * built-in shape my persona effect would install itself.  Using bare
- * presence as the gate stopped a fresh incognito visitor from ever
- * getting a persona reseat on vsits-02 because the backend already
- * had the pre-refactor default layout persisted.
+ * Migration rules:
  *
- * Called once during the useState lazy initializer so the answer is
- * captured BEFORE syncUIPrefs's clobber pass runs (matters for the
- * local-only saved layout path — an anonymous user whose writeUIPref
- * PUT was 401/403'd keeps their arrangement in localStorage only).
- * Called again inside the persona-change effect so the ambient
- * localStorage state — which may reflect either a fresh user save or
- * a backend sync — is compared to the same defaults set.
+ * - Legacy empty → nothing to do.
+ * - Legacy equals any built-in persona default → discard.  It was never
+ *   customized (it's the shape a prior install seeded automatically), so
+ *   preserving it would spam every persona's slot with the same default.
+ * - Legacy is a real user arrangement → copy into weather_nerd's slot
+ *   (pre-persona clients only had the all-tiles default, so the natural
+ *   home for a customization is weather_nerd), but only if that slot is
+ *   currently unset.  A user who has already saved a per-persona
+ *   arrangement wins.
+ *
+ * Runs in the useState lazy initializer so it fires before any effect
+ * or the first render's ``loadLayoutForPersona`` call.
  */
-function hasLocalSavedLayout(): boolean {
-  const raw = readUIPref(PREF_KEY, "");
-  if (!raw) return false;
-  // A raw string that equals any built-in persona default is not a
-  // saved arrangement.  This is the fix for the vsits-02 smoke bug.
-  if (PERSONA_DEFAULT_SERIALIZED.has(raw)) return false;
+function migrateLegacyLayoutOnce(): void {
   try {
-    const p = JSON.parse(raw);
-    if (p.version === 1) return true;
-    if (p.version !== LAYOUT_VERSION) return false;
-    return Array.isArray(p.tiles) && p.tiles.some(
-      (t: { tileId: string }) => t.tileId in TILE_REGISTRY,
-    );
-  } catch {
-    return false;
-  }
-}
-
-function saveLayout(layout: DashboardLayout): void {
-  writeUIPref(PREF_KEY, JSON.stringify(layout));
+    const legacy = localStorage.getItem(LEGACY_LAYOUT_KEY);
+    if (!legacy) return;
+    if (!PERSONA_DEFAULT_SERIALIZED.has(legacy)) {
+      const target = layoutKeyFor("weather_nerd");
+      const existing = localStorage.getItem(target);
+      if (!existing) {
+        writeUIPref(target, legacy);
+      }
+    }
+    writeUIPref(LEGACY_LAYOUT_KEY, "");
+  } catch { /* localStorage unavailable */ }
 }
 
 // --- Provider ---
@@ -178,19 +201,23 @@ export function DashboardLayoutProvider({
 }: {
   children: ReactNode;
 }) {
-  const [layout, setLayoutState] = useState<DashboardLayout>(loadLayout);
-  const [editMode, setEditMode] = useState(false);
-  // Capture whether the browser had a valid local saved layout at
-  // render time (before syncUIPrefs's clobber pass); used below to
-  // avoid resetting a local-only saved arrangement when the backend
-  // has no dashboard layout of its own.
-  const [initialHadSavedLayout] = useState<boolean>(hasLocalSavedLayout);
   const { persona } = usePersona();
+  const [layout, setLayoutState] = useState<DashboardLayout>(() => {
+    // Legacy-key migration runs exactly once per app-load, in the
+    // useState initializer so it fires before any effect and before
+    // the first render reads a persona-specific slot.
+    migrateLegacyLayoutOnce();
+    return loadLayoutForPersona(readCurrentPersonaFromStorage());
+  });
+  const [editMode, setEditMode] = useState(false);
 
-  const updateLayout = useCallback((next: DashboardLayout) => {
-    setLayoutState(next);
-    saveLayout(next);
-  }, []);
+  const updateLayout = useCallback(
+    (next: DashboardLayout) => {
+      setLayoutState(next);
+      saveLayoutForPersona(persona, next);
+    },
+    [persona],
+  );
 
   const reorderTiles = useCallback(
     (fromIndex: number, toIndex: number) => {
@@ -199,11 +226,11 @@ export function DashboardLayoutProvider({
         const [moved] = tiles.splice(fromIndex, 1);
         tiles.splice(toIndex, 0, moved);
         const next = { ...prev, tiles };
-        saveLayout(next);
+        saveLayoutForPersona(persona, next);
         return next;
       });
     },
-    [],
+    [persona],
   );
 
   const addTile = useCallback(
@@ -215,23 +242,26 @@ export function DashboardLayoutProvider({
         const placement: TilePlacement = { tileId };
         if (colSpan) placement.colSpan = colSpan;
         const next = { ...prev, tiles: [...prev.tiles, placement] };
-        saveLayout(next);
+        saveLayoutForPersona(persona, next);
         return next;
       });
     },
-    [],
+    [persona],
   );
 
-  const removeTile = useCallback((tileId: string) => {
-    setLayoutState((prev) => {
-      const next = {
-        ...prev,
-        tiles: prev.tiles.filter((t) => t.tileId !== tileId),
-      };
-      saveLayout(next);
-      return next;
-    });
-  }, []);
+  const removeTile = useCallback(
+    (tileId: string) => {
+      setLayoutState((prev) => {
+        const next = {
+          ...prev,
+          tiles: prev.tiles.filter((t) => t.tileId !== tileId),
+        };
+        saveLayoutForPersona(persona, next);
+        return next;
+      });
+    },
+    [persona],
+  );
 
   const setTileColSpan = useCallback(
     (tileId: string, colSpan: number) => {
@@ -245,117 +275,83 @@ export function DashboardLayoutProvider({
             t.tileId === tileId ? { ...t, colSpan: clamped } : t,
           ),
         };
-        saveLayout(next);
+        saveLayoutForPersona(persona, next);
         return next;
       });
     },
-    [],
+    [persona],
   );
 
-  const setAllTilesSpan = useCallback((colSpan: number) => {
-    setLayoutState((prev) => {
-      const next = {
-        ...prev,
-        tiles: prev.tiles.map((t) => {
-          const def = TILE_REGISTRY[t.tileId];
-          const min = def?.minColSpan ?? 2;
-          return { ...t, colSpan: Math.max(min, Math.min(GRID_COLUMNS, colSpan)) };
-        }),
-      };
-      saveLayout(next);
-      return next;
-    });
-  }, []);
+  const setAllTilesSpan = useCallback(
+    (colSpan: number) => {
+      setLayoutState((prev) => {
+        const next = {
+          ...prev,
+          tiles: prev.tiles.map((t) => {
+            const def = TILE_REGISTRY[t.tileId];
+            const min = def?.minColSpan ?? 2;
+            return { ...t, colSpan: Math.max(min, Math.min(GRID_COLUMNS, colSpan)) };
+          }),
+        };
+        saveLayoutForPersona(persona, next);
+        return next;
+      });
+    },
+    [persona],
+  );
 
-  const setTileWindDisplay = useCallback((tileId: string, mode: "compass" | "rose") => {
-    setLayoutState((prev) => {
-      const next = {
-        ...prev,
-        tiles: prev.tiles.map((t) =>
-          t.tileId === tileId ? { ...t, windDisplay: mode === "compass" ? undefined : mode } : t,
-        ),
-      };
-      saveLayout(next);
-      return next;
-    });
-  }, []);
+  const setTileWindDisplay = useCallback(
+    (tileId: string, mode: "compass" | "rose") => {
+      setLayoutState((prev) => {
+        const next = {
+          ...prev,
+          tiles: prev.tiles.map((t) =>
+            t.tileId === tileId ? { ...t, windDisplay: mode === "compass" ? undefined : mode } : t,
+          ),
+        };
+        saveLayoutForPersona(persona, next);
+        return next;
+      });
+    },
+    [persona],
+  );
 
   const resetToDefault = useCallback(() => {
-    // Reset to the CURRENT persona's default, not the frozen
-    // pre-persona all-tiles default.  A user on Agriculture who hits
-    // "Reset" expects the agricultural tile set, not the nerd shape.
     updateLayout(getPersonaDefaultLayout(persona));
     setEditMode(false);
   }, [updateLayout, persona]);
 
-  // Reseat the dashboard when persona changes AND the user has no
-  // saved layout worth preserving.  This is the everyday case Chris
-  // hit on smoke: fresh incognito visit → click Agriculture → nothing
-  // happens.  Root cause was that the earlier no-clobber design left
-  // NO path from persona-change to layout-update, even when there was
-  // demonstrably nothing to clobber.
-  //
-  // ``hasLocalSavedLayout()`` checks localStorage AFTER syncUIPrefs
-  // has landed backend values into it (see uiPrefs.ts `_doSync`, the
-  // "backend wins" pass), so the check reflects the union of both
-  // sources.  If either side has a valid arrangement, this effect
-  // early-returns without touching state — the user's own layout is
-  // preserved across persona switches, exactly as before.
-  //
-  // The initial run (persona = the initial-render value) reseats to
-  // its own persona's default, which is what state already holds, so
-  // the JSON-stringify guard makes it a no-op.  No first-render
-  // flicker.
+  // Persona is authoritative: switching personas loads THAT persona's
+  // saved layout (or its default if that slot is unset).  A user's
+  // Everyday arrangement is preserved in its own slot when they visit
+  // Agriculture, and switching back restores it.  No layout is ever
+  // clobbered by a persona switch — each persona has an independent
+  // slot.  Also exits edit mode so a persona click during arrangement
+  // ends the arrangement session cleanly.
   useEffect(() => {
-    if (hasLocalSavedLayout()) return;
-    const next = getPersonaDefaultLayout(persona);
-    setLayoutState((cur) =>
-      JSON.stringify(cur) !== JSON.stringify(next) ? next : cur,
-    );
+    setLayoutState((cur) => {
+      const next = loadLayoutForPersona(persona);
+      return JSON.stringify(cur) !== JSON.stringify(next) ? next : cur;
+    });
+    setEditMode(false);
   }, [persona]);
 
-  // Reconcile with backend on mount.  Three cases, all fed by the same
-  // syncUIPrefs() promise so backend prefs land once and get used
-  // consistently:
-  //
-  //   1. Backend has a saved layout — it always wins over local.
-  //      parseLayout falls back to the persona default only if the
-  //      stored value is corrupt.
-  //
-  //   2. Backend has none but browser does — keep the local layout.
-  //      This is the anonymous-user path where writeUIPref's backend
-  //      PUT was 401/403'd; localStorage retained the user's own
-  //      arrangement and we must not clobber it just because backend
-  //      is empty.  `initialHadSavedLayout` was captured before
-  //      syncUIPrefs's "backend wins" clobber overwrote localStorage.
-  //
-  //   3. Nothing anywhere — seed from the backend-synced persona so a
-  //      fresh browser whose local `ui_persona` is still the default
-  //      but whose backend `ui_persona` is agriculture (set on another
-  //      device or by the setup wizard) lands on the agricultural
-  //      default rather than the local-persona everyday default.
-  //
-  // The effect intentionally does not depend on `persona`; a persona
-  // switch after mount MUST NOT reseat a saved layout.  The synced
-  // persona used below comes from the backend prefs snapshot, not
-  // from the live context value.
+  // Reconcile with backend on mount.  Wait for syncUIPrefs's
+  // backend-wins pass to land any backend-stored per-persona slot
+  // (and any backend-stored legacy key) into localStorage, then run
+  // the legacy migration a SECOND time so a customization that only
+  // lived in backend gets moved into its persona-specific slot, and
+  // finally reload the CURRENT persona's layout.  The useState-init
+  // migration only catches local-only legacy; this one catches the
+  // backend-only path.  Migration is idempotent.
   useEffect(() => {
     syncUIPrefs().then((prefs) => {
-      const raw = prefs[PREF_KEY];
+      migrateLegacyLayoutOnce();
       const syncedPersona = prefs[PERSONA_PREF_KEY] ?? persona;
-      const personaDefault = getPersonaDefaultLayout(syncedPersona);
-      let next: DashboardLayout;
-      if (raw) {
-        next = parseLayout(raw, personaDefault);
-      } else if (initialHadSavedLayout) {
-        return;
-      } else {
-        next = personaDefault;
-      }
-      setLayoutState((cur) => {
-        if (JSON.stringify(cur) !== JSON.stringify(next)) return next;
-        return cur;
-      });
+      const next = loadLayoutForPersona(syncedPersona);
+      setLayoutState((cur) =>
+        JSON.stringify(cur) !== JSON.stringify(next) ? next : cur,
+      );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
