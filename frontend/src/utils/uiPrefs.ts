@@ -22,6 +22,9 @@ const UI_DEFAULTS: Record<string, string> = {
   ui_weather_bg_intensity: "30",
   ui_weather_bg_transparency: "15",
   ui_dashboard_layout: "",
+  ui_dashboard_layout_everyday: "",
+  ui_dashboard_layout_agriculture: "",
+  ui_dashboard_layout_weather_nerd: "",
   ui_custom_theme: "",
 };
 

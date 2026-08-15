@@ -139,7 +139,18 @@ _DEFAULTS: dict[str, object] = {
     "ui_weather_bg_enabled": True,
     "ui_weather_bg_intensity": 30,
     "ui_weather_bg_transparency": 15,
+    # Legacy single-key dashboard layout — kept as an empty default so
+    # a client running pre-per-persona code still sees a key it knows.
+    # Per-persona code migrates any non-empty value into the
+    # ui_dashboard_layout_<persona> slot below on first load and clears
+    # this back to empty.
     "ui_dashboard_layout": "",
+    # Per-persona dashboard arrangements.  Each persona has its own
+    # slot so a user's Everyday arrangement is independent of their
+    # Agriculture or Weather-nerd arrangement.
+    "ui_dashboard_layout_everyday": "",
+    "ui_dashboard_layout_agriculture": "",
+    "ui_dashboard_layout_weather_nerd": "",
     # Telegram bot
     "bot_telegram_enabled": False,
     "bot_telegram_token": "",
