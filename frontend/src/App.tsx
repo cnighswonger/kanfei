@@ -23,11 +23,21 @@ import Login from './pages/Login';
 import SetupWizard from './components/setup/SetupWizard';
 import { fetchSetupStatus } from './api/client';
 
-/** Guard that redirects to /login if not authenticated, preserving intended destination. */
+/** Guard that redirects to /login if not authenticated, preserving intended destination.
+ *
+ * Public droplet mode (issue #336) bypasses the redirect: a droplet has
+ * no admin account by design (`require_admin` returns None to guests
+ * server-side, and every write is 403'd by the middleware).  Redirecting
+ * to `/login` on a page that has no login to accept would trap guests
+ * on a dead-end route.  With this bypass, guests reach the read-only
+ * Settings the Phase 4 audit was built to render.
+ */
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading, loggingOut } = useAuth();
+  const { flags, loading: flagsLoading } = useFeatureFlags();
   const location = useLocation();
-  if (loading || loggingOut) return null;
+  if (loading || loggingOut || flagsLoading) return null;
+  if (flags.publicModeActive) return <>{children}</>;
   if (!user?.authenticated) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   return <>{children}</>;
 }
