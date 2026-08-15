@@ -2,7 +2,14 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useWeatherData } from '../../context/WeatherDataContext';
 import { useAuth } from '../../context/AuthContext';
+import { usePersona, PERSONAS, type Persona } from '../../context/PersonaContext';
 import { themes } from '../../themes';
+
+const PERSONA_LABEL: Record<Persona, string> = {
+  everyday: 'Everyday',
+  agriculture: 'Agriculture',
+  weather_nerd: 'Weather nerd',
+};
 
 // --- Inline SVG weather icons (20x20, currentColor) ---
 
@@ -105,6 +112,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
   const { themeName, setThemeName } = useTheme();
   const { currentConditions, forecast } = useWeatherData();
   const { user, logout } = useAuth();
+  const { persona, setPersona } = usePersona();
   const navigate = useNavigate();
   const location = useLocation();
   const extremes = currentConditions?.daily_extremes;
@@ -238,6 +246,49 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
             }}
           />
           <span className="header-connected-label">{connected ? 'Connected' : 'Disconnected'}</span>
+        </div>
+
+        {/* Persona switch — 3 segments.  Mobile falls back to select
+            below the connected-status line via CSS media, but the
+            default rendering is a segmented button group so switching
+            personas is a single click, not a two-click open-and-pick. */}
+        <div
+          role="group"
+          aria-label="Persona"
+          className="header-persona-switch"
+          style={{
+            display: 'flex',
+            border: '1px solid var(--color-border)',
+            borderRadius: '6px',
+            overflow: 'hidden',
+            fontFamily: 'var(--font-body)',
+          }}
+        >
+          {PERSONAS.map((p, i) => {
+            const active = p === persona;
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPersona(p)}
+                aria-pressed={active}
+                title={PERSONA_LABEL[p]}
+                style={{
+                  background: active ? 'var(--color-accent-muted)' : 'transparent',
+                  color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                  border: 'none',
+                  borderLeft: i > 0 ? '1px solid var(--color-border)' : 'none',
+                  padding: '6px 10px',
+                  fontSize: 'calc(12px * var(--font-scale))',
+                  fontWeight: active ? 600 : 400,
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease, color 0.15s ease',
+                }}
+              >
+                {PERSONA_LABEL[p]}
+              </button>
+            );
+          })}
         </div>
 
         <select
