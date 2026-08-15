@@ -100,8 +100,9 @@ const flipBtnStyle: React.CSSProperties = {
   zIndex: 10,
 };
 
-// Passed through to the sortable wrapper's `style.gridRow` so tiles
-// occupy the number of GRID_ROW_UNIT_PX rows their layout specifies.
+// Applies the tile's ``minHeight`` floor on the sortable wrapper;
+// row height itself is content-driven via ``gridAutoRows: min-content``
+// on the grid container.
 export default function SortableTile({
   id,
   colSpan,
