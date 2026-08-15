@@ -251,13 +251,62 @@ def get_feature_flags(db: Session = Depends(get_db)):
     return result
 
 
+# Keys omitted from ``GET /api/config`` when the caller is a guest on a
+# public droplet.  These fields either
+#
+#   - identify third-party accounts the operator has connected (Discord
+#     guild / channel IDs, Telegram chat IDs, WU station ID, CWOP
+#     callsign, METAR station), or
+#
+#   - are ops metadata the read-only Settings UI doesn't render
+#     (``*_last_error``, ``backup_last_success``,
+#     ``nowcast_disclaimer_accepted``, backup ops fields).
+#
+# A real admin (same endpoint, authenticated) sees everything as
+# before.  Red-team finding #1, 2026-08-15.
+_PUBLIC_MODE_HIDDEN_KEYS = frozenset({
+    # Third-party account identifiers.
+    "wu_station_id",
+    "cwop_callsign",
+    "bot_telegram_chat_id",
+    "bot_discord_guild_id",
+    "bot_discord_channel_id",
+    "metar_station",
+    # Ops metadata / stale error surfaces.
+    "backup_enabled",
+    "backup_interval_hours",
+    "backup_retention_count",
+    "backup_schedule",
+    "backup_directory",
+    "backup_last_success",
+    "backup_last_error",
+    "bot_telegram_last_error",
+    "bot_discord_last_error",
+    "public_relay_last_error",
+    "nowcast_disclaimer_accepted",
+})
+
+
 @router.get("/config")
 def get_config(db: Session = Depends(get_db), _admin=Depends(require_admin)):
-    """Return all configuration key-value pairs, with defaults for unsaved keys."""
+    """Return all configuration key-value pairs, with defaults for unsaved keys.
+
+    On a public droplet (``require_admin`` bypass in effect for the
+    read-only Settings UI), ops-metadata and third-party-account keys
+    are dropped from the response — the read-only Settings surface
+    doesn't render them, and they're the kind of thing an
+    unauthenticated observer has no business seeing.  Real admins
+    keep the full view.  See ``_PUBLIC_MODE_HIDDEN_KEYS`` above.
+    """
+    from ..services.public_mode import is_public_mode
+
     saved = {item.key: item.value for item in db.query(StationConfigModel).all()}
+    hide = _PUBLIC_MODE_HIDDEN_KEYS if is_public_mode() else frozenset()
 
     result = []
     for key, default in _DEFAULTS.items():
+        if key in hide:
+            continue
         if key in saved:
             value = _coerce_value(saved[key])
         else:
