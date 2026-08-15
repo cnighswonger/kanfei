@@ -60,7 +60,7 @@ No authentication required.
     "timestamp": "2026-03-26T15:30:00+00:00",
     "station_type": "Davis Vantage Pro2",
     "software": "Kanfei",
-    "software_version": "0.1.0~beta30",
+    "software_version": "0.1.0~beta32",
     "api_version": "1"
   }
 }
