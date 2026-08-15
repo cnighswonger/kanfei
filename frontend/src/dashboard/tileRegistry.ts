@@ -193,54 +193,47 @@ export const TILE_REGISTRY: Record<string, TileDefinition> = {
 // dashboard for a user with no saved layout.  A saved layout — the
 // user's own arrangement — always wins over the persona default; the
 // persona only sets the starting point and provides a "Reset to
-// persona default" target.  Weather-nerd matches the pre-persona
-// default, so users who upgraded and never picked a persona see no
-// change in behaviour.
+// persona default" target.
+//
+// Row-span budget on the 8-px unit grid — the two column stacks each
+// sum to 102 units so left and right line up cleanly with no
+// auto-placement gaps:
+//
+//   left 8 columns          right 4 columns
+//   ─────────────────────   ─────────────────────
+//   hero + derived : 30     barometer      : 30
+//   history-chart  : 30     wind           : 30
+//   rain + solar   : 22     almanac        : 22
+//   rainfall-hourly: 20     station-status : 20
 
 export const LAYOUT_VERSION = 2;
 
+const MOCK_COMPOSITION: TilePlacement[] = [
+  { tileId: "outside-temp", colSpan: 3, rowSpan: 30 },
+  { tileId: "current-conditions", colSpan: 5, rowSpan: 30 },
+  { tileId: "barometer", colSpan: 4, rowSpan: 30 },
+  { tileId: "history-chart", colSpan: 8, rowSpan: 30 },
+  { tileId: "wind", colSpan: 4, rowSpan: 30 },
+  { tileId: "rain", colSpan: 4, rowSpan: 22 },
+  { tileId: "solar-uv", colSpan: 4, rowSpan: 22 },
+  { tileId: "almanac", colSpan: 4, rowSpan: 22 },
+  { tileId: "rainfall-hourly", colSpan: 8, rowSpan: 20 },
+  { tileId: "station-status", colSpan: 4, rowSpan: 20 },
+];
+
 const EVERYDAY_LAYOUT: DashboardLayout = {
   version: 2,
-  tiles: [
-    { tileId: "outside-temp" },
-    { tileId: "barometer" },
-    { tileId: "wind" },
-    { tileId: "outside-humidity" },
-    { tileId: "rain" },
-    { tileId: "solar-uv" },
-    { tileId: "current-conditions" },
-    { tileId: "station-status", colSpan: 12 },
-  ],
+  tiles: MOCK_COMPOSITION,
 };
 
 const AGRICULTURE_LAYOUT: DashboardLayout = {
   version: 2,
-  tiles: [
-    { tileId: "rain" },
-    { tileId: "outside-humidity" },
-    { tileId: "outside-temp" },
-    { tileId: "wind" },
-    { tileId: "solar-uv" },
-    { tileId: "barometer" },
-    { tileId: "current-conditions" },
-    { tileId: "station-status", colSpan: 12 },
-  ],
+  tiles: MOCK_COMPOSITION,
 };
 
 const WEATHER_NERD_LAYOUT: DashboardLayout = {
   version: 2,
-  tiles: [
-    { tileId: "outside-temp" },
-    { tileId: "inside-temp" },
-    { tileId: "barometer" },
-    { tileId: "wind" },
-    { tileId: "outside-humidity" },
-    { tileId: "inside-humidity" },
-    { tileId: "rain" },
-    { tileId: "solar-uv" },
-    { tileId: "current-conditions" },
-    { tileId: "station-status", colSpan: 12 },
-  ],
+  tiles: MOCK_COMPOSITION,
 };
 
 export const PERSONA_LAYOUTS: Record<string, DashboardLayout> = {

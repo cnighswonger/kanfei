@@ -18,6 +18,7 @@ import HistoryChartTile from "../components/tiles/HistoryChartTile.tsx";
 import RainHourlyTile from "../components/tiles/RainHourlyTile.tsx";
 import AlmanacTile from "../components/tiles/AlmanacTile.tsx";
 import ZambrettiTile from "../components/tiles/ZambrettiTile.tsx";
+import HeroTemperatureTile from "../components/tiles/HeroTemperatureTile.tsx";
 
 interface TileRendererProps {
   tileId: string;
@@ -30,17 +31,7 @@ export default function TileRenderer({ tileId, windDisplay }: TileRendererProps)
 
   switch (tileId) {
     case "outside-temp":
-      return (
-        <TemperatureGauge
-          value={cc?.temperature?.outside?.value ?? null}
-          unit={cc?.temperature?.outside?.unit ?? "F"}
-          high={cc?.daily_extremes?.outside_temp_hi?.value ?? null}
-          low={cc?.daily_extremes?.outside_temp_lo?.value ?? null}
-          highAt={cc?.daily_extremes?.outside_temp_hi?.at ?? null}
-          lowAt={cc?.daily_extremes?.outside_temp_lo?.at ?? null}
-          label="Outside"
-        />
-      );
+      return <HeroTemperatureTile />;
 
     case "inside-temp":
       return (
