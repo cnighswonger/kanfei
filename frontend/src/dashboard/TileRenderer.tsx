@@ -14,6 +14,10 @@ import RainGauge from "../components/gauges/RainGauge.tsx";
 import SolarUVGauge from "../components/gauges/SolarUVGauge.tsx";
 import CurrentConditions from "../components/panels/CurrentConditions.tsx";
 import StationStatus from "../components/panels/StationStatus.tsx";
+import HistoryChartTile from "../components/tiles/HistoryChartTile.tsx";
+import RainHourlyTile from "../components/tiles/RainHourlyTile.tsx";
+import AlmanacTile from "../components/tiles/AlmanacTile.tsx";
+import ZambrettiTile from "../components/tiles/ZambrettiTile.tsx";
 
 interface TileRendererProps {
   tileId: string;
@@ -156,6 +160,18 @@ export default function TileRenderer({ tileId, windDisplay }: TileRendererProps)
 
     case "station-status":
       return <StationStatus />;
+
+    case "history-chart":
+      return <HistoryChartTile />;
+
+    case "rainfall-hourly":
+      return <RainHourlyTile />;
+
+    case "almanac":
+      return <AlmanacTile />;
+
+    case "zambretti-forecast":
+      return <ZambrettiTile />;
 
     default:
       return null;
