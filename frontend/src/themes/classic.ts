@@ -1,5 +1,22 @@
-import type { Theme } from './index';
+import type { Theme, TypeRole } from './index';
 
+const role = (
+  family: string,
+  size: number,
+  weight: number,
+  extra: Partial<TypeRole> = {},
+): TypeRole => ({ family, size, weight, ...extra });
+
+const body = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const heading = "Georgia, 'Times New Roman', serif";
+const mono = "'JetBrains Mono', 'Fira Code', 'Consolas', monospace";
+const gaugeFont = "'Georgia', serif";
+
+/**
+ * Classic Instrumental — brass and cream analog aesthetic.  Colour,
+ * font and gauge values unchanged from the pre-refactor ``classic.ts``;
+ * only the new token groups added.
+ */
 const classic: Theme = {
   name: 'classic',
   label: 'Classic Instrumental',
@@ -31,19 +48,45 @@ const classic: Theme = {
     solarYellow: '#b8860b',
     headerBg: '#ede6d6',
     sidebarBg: '#ede6d6',
+    sky: '#3a6b8c',
+    surfaceSunken: '#e8e0d0',
   },
-  fonts: {
-    body: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    heading: "Georgia, 'Times New Roman', serif",
-    mono: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
-    gauge: "'Georgia', serif",
+  fonts: { body, heading, mono, gauge: gaugeFont, display: heading },
+  type: {
+    display: role(heading, 72, 700),
+    heading: role(heading, 24, 600),
+    title: role(heading, 18, 600),
+    body: role(body, 14, 400),
+    mono: role(mono, 13, 400),
+    sectionLabel: role(body, 11, 600, { tracking: 1.4, transform: 'uppercase' }),
   },
-  gauge: {
-    strokeWidth: 6,
-    bgOpacity: 0.2,
-    shadow: '0 2px 16px rgba(58,46,30,0.15)',
-    borderRadius: '8px',
+  rules: { hairline: 1, style: 'solid', strong: '#c9b88c', hair: '#d9cdaa' },
+  radius: { card: '8px', control: '6px' },
+  surface: { ownsBackground: false },
+  chart: {
+    series: {
+      temp: '#8b6914',
+      dew: '#3a6b8c',
+      baro: '#3a2e1e',
+      humidity: '#3f6b35',
+      wind: '#a0342e',
+      rain: '#5c7f9a',
+      solar: '#b8860b',
+      et: '#6b5d4a',
+    },
+    grid: '#c9b88c',
+    gridSoft: '#e8e0d0',
+    axis: '#6b5d4a',
+    trace: '#8b6914',
+    traceShadow: null,
+    traceFillOpacity: 0.15,
+    traceSecondary: '#3a6b8c',
+    gridMinor: 'rgba(58,46,30,0.14)',
+    gridMajor: 'rgba(58,46,30,0.28)',
+    surface: '#faf6ee',
   },
+  dial: { gradOuter: 0.967, gradInner: 0.887, numeral: 0.747, zone: 0.573, needle: 0.66, trendHand: 0.46 },
+  gauge: { strokeWidth: 6, bgOpacity: 0.2, shadow: '0 2px 16px rgba(58,46,30,0.15)', borderRadius: '8px' },
   fontScale: 1.0,
 };
 

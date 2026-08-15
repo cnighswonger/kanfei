@@ -5,6 +5,7 @@ import { WeatherBackgroundProvider } from './context/WeatherBackgroundContext';
 import { WeatherDataProvider, useWeatherData } from './context/WeatherDataContext';
 import { AlertProvider } from './context/AlertContext';
 import { FeatureFlagsProvider, useFeatureFlags } from './context/FeatureFlagsContext';
+import { PersonaProvider } from './context/PersonaContext';
 import { DashboardLayoutProvider } from './dashboard/DashboardLayoutContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AlertToast from './components/AlertToast';
@@ -17,7 +18,6 @@ import Settings from './pages/Settings';
 import Nowcast from './pages/Nowcast';
 import Spray from './pages/Spray';
 import MapView from './pages/MapView';
-import PressureField from './pages/PressureField';
 import About from './pages/About';
 import Login from './pages/Login';
 import SetupWizard from './components/setup/SetupWizard';
@@ -61,7 +61,6 @@ function AppContent() {
             <Route path="/forecast" element={<Forecast />} />
             <Route path="/astronomy" element={<Astronomy />} />
             <Route path="/map" element={flags.mapEnabled ? <MapView /> : flagsLoading ? null : <Navigate to="/" replace />} />
-            <Route path="/pressure" element={flags.mapEnabled ? <PressureField /> : flagsLoading ? null : <Navigate to="/" replace />} />
             <Route path="/nowcast" element={flags.nowcastEnabled ? <Nowcast /> : flagsLoading ? null : <Navigate to="/" replace />} />
             <Route path="/spray" element={flags.sprayEnabled ? <Spray /> : flagsLoading ? null : <Navigate to="/" replace />} />
             <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
@@ -133,11 +132,13 @@ function App() {
           <AuthProvider>
             <WeatherDataProvider>
               <FeatureFlagsProvider>
-                <AlertProvider>
-                  <DashboardLayoutProvider>
-                    <AppContent />
-                  </DashboardLayoutProvider>
-                </AlertProvider>
+                <PersonaProvider>
+                  <AlertProvider>
+                    <DashboardLayoutProvider>
+                      <AppContent />
+                    </DashboardLayoutProvider>
+                  </AlertProvider>
+                </PersonaProvider>
               </FeatureFlagsProvider>
             </WeatherDataProvider>
           </AuthProvider>
