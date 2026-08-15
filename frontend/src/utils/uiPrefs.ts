@@ -15,7 +15,7 @@ import { fetchConfig, updateConfig } from "../api/client.ts";
 
 const UI_DEFAULTS: Record<string, string> = {
   ui_sidebar_collapsed: "false",
-  ui_theme: "dark",
+  ui_theme: "mammoth",
   ui_persona: "everyday",
   ui_timezone: "auto",
   ui_weather_bg_enabled: "true",
