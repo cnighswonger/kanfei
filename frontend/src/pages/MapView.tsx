@@ -18,6 +18,7 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useTheme } from "../context/ThemeContext.tsx";
+import { useFeatureFlags } from "../context/FeatureFlagsContext.tsx";
 import { API_BASE } from "../utils/constants.ts";
 
 // ---------------------------------------------------------------------------
@@ -239,18 +240,32 @@ function RadarFrame({ layer, radarTs, active, opacity }: { layer: string; radarT
 
 function BaseLayers({ defaultLayer, radarTs, radarOpacity, radarFrame }: { defaultLayer: string; radarTs: number; radarOpacity: number; radarFrame: number }) {
   const { themeName } = useTheme();
+  const { flags } = useFeatureFlags();
   const defaultMap = themeName === "dark"
     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
     : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
+
+  // Roads pulls from tile.openstreetmap.org directly.  OSM's tile
+  // usage policy rejects requests from public production deployments
+  // (referer check + explicit no-heavy-use rule), so the layer 404s
+  // on the droplet while working fine from a private-station IP.
+  // Hide it in public mode rather than ship a visibly-broken layer;
+  // the Carto-rendered "Map" default is OSM data anyway.
+  //
+  // Issue #336; see docs/public-droplet.md for the operational
+  // rationale.
+  const showOsmRoads = !flags.publicModeActive;
 
   return (
     <LayersControl position="topright">
       <LayersControl.BaseLayer checked={defaultLayer === "Map"} name="Map">
         <TileLayer key={`map-${themeName}`} url={defaultMap} attribution={TILE_CARTO_ATTR} subdomains="abcd" maxZoom={19} />
       </LayersControl.BaseLayer>
-      <LayersControl.BaseLayer checked={defaultLayer === "Roads"} name="Roads">
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution={TILE_OSM_ATTR} maxZoom={19} />
-      </LayersControl.BaseLayer>
+      {showOsmRoads && (
+        <LayersControl.BaseLayer checked={defaultLayer === "Roads"} name="Roads">
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution={TILE_OSM_ATTR} maxZoom={19} />
+        </LayersControl.BaseLayer>
+      )}
       <LayersControl.BaseLayer checked={defaultLayer === "Satellite"} name="Satellite">
         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution={TILE_ESRI_ATTR} maxZoom={19} />
       </LayersControl.BaseLayer>
