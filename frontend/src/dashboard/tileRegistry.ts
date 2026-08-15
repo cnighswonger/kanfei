@@ -21,45 +21,30 @@ export interface TileDefinition {
   chartUnit?: string;
 }
 
-/**
- * Row unit for the dashboard grid.  Each 1u = 8px, so a tile with
- * ``rowSpan: 40`` occupies a 320px-tall cell.  Small enough to allow
- * fine-grained composition (a 4-row ledger vs a 300px dial can sit
- * side by side at their own natural heights); large enough that
- * layouts don't need three-digit spans.
- *
- * Per REVIEW-02: the pre-refactor grid had no ``rowSpan`` at all, so
- * every tile in a row was stretched to the tallest cell's height.
- * This unit + ``TilePlacement.rowSpan`` gives layouts an explicit
- * height axis to compose against.
- */
-export const GRID_ROW_UNIT_PX = 8;
-
 export interface TilePlacement {
   tileId: string;
   colSpan?: number;
   /**
-   * Height in ``GRID_ROW_UNIT_PX``-multiples.  Optional — tiles that
-   * omit this get ``DEFAULT_ROW_SPAN`` (36u = 288px), which is a
-   * reasonable size for most single-metric gauge tiles.  Layouts that
-   * need a taller dial or a shorter table override explicitly.
+   * Floor height in pixels.  DashboardGrid applies ``minHeight``
+   * on the cell and lets the row size to content, so a tile never
+   * clips (content > minHeight → cell grows) and never leaves a void
+   * (content < minHeight → cell holds its floor).  Rows are auto-
+   * flowing (``gridAutoRows: min-content``); a tile that omits this
+   * defaults to no floor.
+   */
+  minHeight?: number;
+  /** Explicit grid-column start (1-based).  Absent = auto-placement. */
+  gridColStart?: number;
+  /**
+   * Deprecated legacy fields — pre-PR-28 saved layouts may still
+   * carry them.  Kept in the type so ``parseLayout`` doesn't strip
+   * them, but ignored by DashboardGrid.
    */
   rowSpan?: number;
-  /**
-   * Explicit grid-column start (1-based).  When set alongside
-   * ``colSpan``/``rowSpan``, DashboardGrid pins the tile with
-   * ``grid-column: N / span M`` / ``grid-row: N / span M`` in normal
-   * mode.  Persona defaults use this to compose the mock layout; user
-   * edits (reorder / resize / add / remove) drop it so drag falls back
-   * to auto-placement.  Absent = auto-placement.
-   */
-  gridColStart?: number;
   gridRowStart?: number;
   /** Wind tile display mode: compass (default) or rose. */
   windDisplay?: "compass" | "rose";
 }
-
-export const DEFAULT_ROW_SPAN = 36;
 
 export interface DashboardLayout {
   version: number;
@@ -218,25 +203,22 @@ export const TILE_REGISTRY: Record<string, TileDefinition> = {
 
 export const LAYOUT_VERSION = 2;
 
-// Explicit positioning eliminates the auto-placement gap that made
-// hero and derived-conditions stretch to match barometer's height.
-// Row bands (8-px units):
-//   rows 1-26   hero + derived (208 px)
-//   rows 27-56  history-chart (240 px) | barometer spans 1-56 (448 px)
-//   rows 57-78  rain + solar + wind (176 px)
-//   rows 79-98  rainfall-hourly + almanac (160 px)
-//   rows 99-108 station-status footer (80 px, full width)
+// Column spans + floor heights per Design REVIEW-04 (mock 1c).  Rows
+// auto-flow (no pinned row starts); ``minHeight`` is a floor, not a
+// target — a tile with more content takes more room, and a shorter
+// one still holds its floor so the composition proportions survive.
+// Column bands: 3 / 5 / 4 across the 12-col grid.
 const MOCK_COMPOSITION: TilePlacement[] = [
-  { tileId: "outside-temp",       colSpan: 3,  rowSpan: 26, gridColStart: 1, gridRowStart: 1  },
-  { tileId: "current-conditions", colSpan: 5,  rowSpan: 26, gridColStart: 4, gridRowStart: 1  },
-  { tileId: "barometer",          colSpan: 4,  rowSpan: 56, gridColStart: 9, gridRowStart: 1  },
-  { tileId: "history-chart",      colSpan: 8,  rowSpan: 30, gridColStart: 1, gridRowStart: 27 },
-  { tileId: "rain",               colSpan: 4,  rowSpan: 22, gridColStart: 1, gridRowStart: 57 },
-  { tileId: "solar-uv",           colSpan: 4,  rowSpan: 22, gridColStart: 5, gridRowStart: 57 },
-  { tileId: "wind",               colSpan: 4,  rowSpan: 22, gridColStart: 9, gridRowStart: 57 },
-  { tileId: "rainfall-hourly",    colSpan: 8,  rowSpan: 20, gridColStart: 1, gridRowStart: 79 },
-  { tileId: "almanac",            colSpan: 4,  rowSpan: 20, gridColStart: 9, gridRowStart: 79 },
-  { tileId: "station-status",     colSpan: 12, rowSpan: 10, gridColStart: 1, gridRowStart: 99 },
+  { tileId: "outside-temp",       colSpan: 3, minHeight: 208, gridColStart: 1 },
+  { tileId: "current-conditions", colSpan: 5, minHeight: 208, gridColStart: 4 },
+  { tileId: "barometer",          colSpan: 4, minHeight: 448, gridColStart: 9 },
+  { tileId: "history-chart",      colSpan: 8, minHeight: 240, gridColStart: 1 },
+  { tileId: "rain",               colSpan: 4, minHeight: 170, gridColStart: 1 },
+  { tileId: "solar-uv",           colSpan: 4, minHeight: 170, gridColStart: 5 },
+  { tileId: "wind",               colSpan: 4, minHeight: 225, gridColStart: 9 },
+  { tileId: "rainfall-hourly",    colSpan: 8, minHeight: 125, gridColStart: 1 },
+  { tileId: "almanac",            colSpan: 4, minHeight: 165, gridColStart: 9 },
+  { tileId: "station-status",     colSpan: 12, minHeight: 155, gridColStart: 1 },
 ];
 
 const EVERYDAY_LAYOUT: DashboardLayout = {

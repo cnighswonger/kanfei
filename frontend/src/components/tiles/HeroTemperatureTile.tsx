@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useWeatherData } from '../../context/WeatherDataContext.tsx';
+import { useTheme } from '../../context/ThemeContext.tsx';
 import { useCompact } from '../../dashboard/CompactContext.tsx';
 import CompactCard from '../common/CompactCard.tsx';
 import TileLabel from '../common/TileLabel.tsx';
@@ -16,6 +17,7 @@ import type { LocalForecast } from '../../api/types.ts';
 
 export default function HeroTemperatureTile() {
   const { currentConditions: cc } = useWeatherData();
+  const { theme } = useTheme();
   const isMobile = useCompact();
 
   const value = cc?.temperature?.outside?.value ?? null;
@@ -62,6 +64,15 @@ export default function HeroTemperatureTile() {
     );
   }
 
+  // Read theme.type roles directly rather than via CSS custom
+  // properties.  Previous CSS-var path resolved but the italic
+  // fontStyle wasn't applying on paper (rendered upright 72 px
+  // instead of italic 104 px per REVIEW-04) — going through the
+  // theme object bypasses whatever was intercepting the vars.
+  const display = theme.type.display;
+  const title = theme.type.title;
+  const sectionLabel = theme.type.sectionLabel;
+
   return (
     <div style={{
       display: 'flex',
@@ -83,21 +94,24 @@ export default function HeroTemperatureTile() {
         margin: '2px 0 8px 0',
         lineHeight: 1,
       }}>
-        <span style={{
-          fontFamily: 'var(--type-display-family)',
-          fontSize: 'var(--type-display-size)',
-          fontWeight: 'var(--type-display-weight)',
-          fontStyle: 'var(--type-display-style)',
-          color: 'var(--color-text)',
-          lineHeight: 1,
-        }}>
+        <span
+          data-role="hero-value"
+          style={{
+            fontFamily: display.family,
+            fontSize: `calc(${display.size}px * var(--font-scale))`,
+            fontWeight: display.weight,
+            fontStyle: display.italic ? 'italic' : 'normal',
+            color: 'var(--color-text)',
+            lineHeight: 1,
+          }}
+        >
           {value != null ? value.toFixed(1) : '—'}
         </span>
         <span style={{
-          fontFamily: 'var(--type-display-family)',
-          fontSize: 'calc(28px * var(--font-scale))',
-          fontWeight: 'var(--type-display-weight)',
-          fontStyle: 'var(--type-display-style)',
+          fontFamily: display.family,
+          fontSize: `calc(${Math.round(display.size * 0.35)}px * var(--font-scale))`,
+          fontWeight: display.weight,
+          fontStyle: display.italic ? 'italic' : 'normal',
           color: 'var(--color-text-secondary)',
           marginTop: '6px',
         }}>
@@ -108,10 +122,10 @@ export default function HeroTemperatureTile() {
       {forecast && (
         <>
           <div style={{
-            fontFamily: 'var(--type-heading-family)',
-            fontSize: 'calc(18px * var(--font-scale))',
-            fontWeight: 'var(--type-heading-weight)',
-            fontStyle: 'var(--type-heading-style)',
+            fontFamily: title.family,
+            fontSize: `calc(${title.size}px * var(--font-scale))`,
+            fontWeight: title.weight,
+            fontStyle: title.italic ? 'italic' : 'normal',
             color: 'var(--color-text)',
             lineHeight: 1.3,
             marginBottom: '4px',
@@ -119,10 +133,11 @@ export default function HeroTemperatureTile() {
             {forecast.text}
           </div>
           <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'calc(10px * var(--font-scale))',
-            letterSpacing: '2px',
-            textTransform: 'uppercase',
+            fontFamily: sectionLabel.family,
+            fontSize: `calc(${sectionLabel.size}px * var(--font-scale))`,
+            fontWeight: sectionLabel.weight,
+            letterSpacing: sectionLabel.tracking != null ? `${sectionLabel.tracking}px` : undefined,
+            textTransform: sectionLabel.transform ?? 'uppercase',
             color: 'var(--color-text-muted)',
           }}>
             Zambretti &middot; {forecast.confidence}% confidence

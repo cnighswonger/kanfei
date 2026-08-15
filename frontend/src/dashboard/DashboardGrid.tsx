@@ -26,7 +26,7 @@ import {
 
 import { useDashboardLayout } from "./DashboardLayoutContext.tsx";
 import { CompactProvider } from "./CompactContext.tsx";
-import { TILE_REGISTRY, GRID_COLUMNS, DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN, GRID_ROW_UNIT_PX, GAP } from "./tileRegistry.ts";
+import { TILE_REGISTRY, GRID_COLUMNS, DEFAULT_COL_SPAN, GAP } from "./tileRegistry.ts";
 import TileRenderer from "./TileRenderer.tsx";
 import SortableTile from "./SortableTile.tsx";
 import TileCatalogModal from "./TileCatalogModal.tsx";
@@ -172,19 +172,14 @@ export default function DashboardGrid() {
   const gridStyle: React.CSSProperties = {
     display: "grid",
     gridTemplateColumns: `repeat(${GRID_COLUMNS}, 1fr)`,
-    // GRID_ROW_UNIT_PX per row.  Each TilePlacement declares
-    // ``rowSpan: N`` for an N×unit-tall cell.  Cells with no
-    // explicit rowSpan get DEFAULT_ROW_SPAN.  Small unit + span
-    // is what lets a 300px dial sit beside a short 4-row table
-    // without the table stretching to match the dial.
-    gridAutoRows: `${GRID_ROW_UNIT_PX}px`,
-    // rowGap: 0 so a tile with ``rowSpan: 26`` is 208 px, not
-    // 26×8 + 25×16 (grid ``gap`` applies between EVERY 8-px row
-    // line, not just visible tiles).  The tile wrapper's
-    // ``paddingBottom: GAP`` (border-box) carves the visible
-    // vertical gutter out of the cell.
-    columnGap: `${GAP}px`,
-    rowGap: 0,
+    // Content-driven rows: every tile sizes to its own content
+    // (with an optional ``minHeight`` floor from the layout), so
+    // tiles cannot clip and adjacent cells cannot overlap.  Rows
+    // grow individually rather than sharing the tallest cell's
+    // height, and neither can leave dead space below the last row.
+    gridAutoRows: "min-content",
+    alignItems: "start",
+    gap: `${GAP}px`,
   };
 
   const hasSolar =
@@ -257,7 +252,7 @@ export default function DashboardGrid() {
         <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: isMobile ? "0 12px 12px" : "0 24px 24px" }}>
         {flags.nowcastEnabled && <NowcastBanner />}
 
-        <div ref={gridRef} className="dashboard-grid" style={gridStyle}>
+        <div ref={gridRef} className="dashboard-grid" data-dashboard-grid style={gridStyle}>
           {layout.tiles.map((placement) => {
             const def = TILE_REGISTRY[placement.tileId];
             if (!def) return null;
@@ -292,32 +287,30 @@ export default function DashboardGrid() {
               content
             );
 
-            const rowSpan = placement.rowSpan ?? DEFAULT_ROW_SPAN;
-            const useExplicit = !isMobile && placement.gridColStart != null && placement.gridRowStart != null;
+            const useExplicit = !isMobile && placement.gridColStart != null;
+            const minHeight = !isMobile ? placement.minHeight : undefined;
             return (
               <div
                 key={placement.tileId}
+                data-tile-id={placement.tileId}
                 style={{
                   gridColumn: useExplicit
                     ? `${placement.gridColStart} / span ${span}`
                     : `span ${span}`,
-                  gridRow: useExplicit
-                    ? `${placement.gridRowStart} / span ${rowSpan}`
-                    : `span ${rowSpan}`,
-                  paddingBottom: GAP,
+                  minHeight: minHeight != null ? `${minHeight}px` : undefined,
                   boxSizing: "border-box",
+                  // Content-only clip: prevents an oversized tile
+                  // component (e.g. SolarUVGauge's flex-centered arc)
+                  // from spilling into the neighbouring cell if it
+                  // insists on rendering taller than the floor + the
+                  // row's auto height.  Almost always a no-op now
+                  // that rows are content-sized.
+                  overflow: "hidden",
                 }}
               >
-                {/* Content-only clip: prevents an oversized tile
-                    component (e.g. SolarUVGauge's flex-centered arc)
-                    from spilling into the neighbouring cell, without
-                    clipping any external chrome the outer wrapper
-                    might carry. */}
-                <div style={{ height: "100%", overflow: "hidden" }}>
-                  <CompactProvider value={compact}>
-                    {wrapped}
-                  </CompactProvider>
-                </div>
+                <CompactProvider value={compact}>
+                  {wrapped}
+                </CompactProvider>
               </div>
             );
           })}
@@ -390,7 +383,7 @@ export default function DashboardGrid() {
           items={tileIds}
           strategy={rectSortingStrategy}
         >
-          <div ref={gridRef} className="dashboard-grid" style={gridStyle}>
+          <div ref={gridRef} className="dashboard-grid" data-dashboard-grid style={gridStyle}>
             {layout.tiles.map((placement) => {
               const def = TILE_REGISTRY[placement.tileId];
               if (!def) return null;
@@ -418,7 +411,7 @@ export default function DashboardGrid() {
                   key={placement.tileId}
                   id={placement.tileId}
                   colSpan={span}
-                  rowSpan={placement.rowSpan ?? DEFAULT_ROW_SPAN}
+                  minHeight={placement.minHeight}
                   minSpan={def.minColSpan}
                   gridWidth={gridWidth}
                   onRemove={() => removeTile(placement.tileId)}
