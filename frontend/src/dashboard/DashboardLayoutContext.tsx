@@ -262,6 +262,32 @@ export function DashboardLayoutProvider({
     setEditMode(false);
   }, [updateLayout, persona]);
 
+  // Reseat the dashboard when persona changes AND the user has no
+  // saved layout worth preserving.  This is the everyday case Chris
+  // hit on smoke: fresh incognito visit → click Agriculture → nothing
+  // happens.  Root cause was that the earlier no-clobber design left
+  // NO path from persona-change to layout-update, even when there was
+  // demonstrably nothing to clobber.
+  //
+  // ``hasLocalSavedLayout()`` checks localStorage AFTER syncUIPrefs
+  // has landed backend values into it (see uiPrefs.ts `_doSync`, the
+  // "backend wins" pass), so the check reflects the union of both
+  // sources.  If either side has a valid arrangement, this effect
+  // early-returns without touching state — the user's own layout is
+  // preserved across persona switches, exactly as before.
+  //
+  // The initial run (persona = the initial-render value) reseats to
+  // its own persona's default, which is what state already holds, so
+  // the JSON-stringify guard makes it a no-op.  No first-render
+  // flicker.
+  useEffect(() => {
+    if (hasLocalSavedLayout()) return;
+    const next = getPersonaDefaultLayout(persona);
+    setLayoutState((cur) =>
+      JSON.stringify(cur) !== JSON.stringify(next) ? next : cur,
+    );
+  }, [persona]);
+
   // Reconcile with backend on mount.  Three cases, all fed by the same
   // syncUIPrefs() promise so backend prefs land once and get used
   // consistently:
