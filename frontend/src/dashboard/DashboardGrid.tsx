@@ -306,16 +306,18 @@ export default function DashboardGrid() {
                     : `span ${rowSpan}`,
                   paddingBottom: GAP,
                   boxSizing: "border-box",
-                  // Clip oversized tile content so a component whose
-                  // natural height exceeds its rowSpan can't spill into
-                  // the neighbouring cell (e.g. SolarUVGauge's flex-
-                  // centered arc leaking upward into the chart tile).
-                  overflow: "hidden",
                 }}
               >
-                <CompactProvider value={compact}>
-                  {wrapped}
-                </CompactProvider>
+                {/* Content-only clip: prevents an oversized tile
+                    component (e.g. SolarUVGauge's flex-centered arc)
+                    from spilling into the neighbouring cell, without
+                    clipping any external chrome the outer wrapper
+                    might carry. */}
+                <div style={{ height: "100%", overflow: "hidden" }}>
+                  <CompactProvider value={compact}>
+                    {wrapped}
+                  </CompactProvider>
+                </div>
               </div>
             );
           })}

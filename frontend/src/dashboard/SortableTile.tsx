@@ -134,9 +134,11 @@ export default function SortableTile({
     zIndex: isDragging ? 100 : undefined,
     // Matches normal-mode wrapper: rowGap:0 on the grid + tile
     // paddingBottom carves the visible gutter inside the cell.
+    // Outer wrapper stays overflow:visible so the ResizeHandle
+    // (positioned at right: -4) isn't clipped; the tile content is
+    // clipped by an inner wrapper further down.
     paddingBottom: GAP,
     boxSizing: "border-box",
-    overflow: "hidden",
   };
 
   return (
@@ -207,7 +209,13 @@ export default function SortableTile({
         {colSpan}/{GRID_COLUMNS}
       </div>
 
-      {children}
+      {/* Content-only clip: prevents an oversized tile component from
+          spilling into a neighbouring cell without clipping the
+          absolutely-positioned edit chrome (ResizeHandle protrudes at
+          right: -4, drag handle / remove button sit at top corners). */}
+      <div style={{ height: "100%", overflow: "hidden" }}>
+        {children}
+      </div>
     </div>
   );
 }
