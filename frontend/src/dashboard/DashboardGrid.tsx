@@ -26,7 +26,7 @@ import {
 
 import { useDashboardLayout } from "./DashboardLayoutContext.tsx";
 import { CompactProvider } from "./CompactContext.tsx";
-import { TILE_REGISTRY, GRID_COLUMNS, DEFAULT_COL_SPAN, GAP } from "./tileRegistry.ts";
+import { TILE_REGISTRY, GRID_COLUMNS, DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN, GRID_ROW_UNIT_PX, GAP } from "./tileRegistry.ts";
 import TileRenderer from "./TileRenderer.tsx";
 import SortableTile from "./SortableTile.tsx";
 import TileCatalogModal from "./TileCatalogModal.tsx";
@@ -172,6 +172,12 @@ export default function DashboardGrid() {
   const gridStyle: React.CSSProperties = {
     display: "grid",
     gridTemplateColumns: `repeat(${GRID_COLUMNS}, 1fr)`,
+    // GRID_ROW_UNIT_PX per row.  Each TilePlacement declares
+    // ``rowSpan: N`` for an N×unit-tall cell.  Cells with no
+    // explicit rowSpan get DEFAULT_ROW_SPAN.  Small unit + span
+    // is what lets a 300px dial sit beside a short 4-row table
+    // without the table stretching to match the dial.
+    gridAutoRows: `${GRID_ROW_UNIT_PX}px`,
     gap: `${GAP}px`,
   };
 
@@ -280,11 +286,13 @@ export default function DashboardGrid() {
               content
             );
 
+            const rowSpan = placement.rowSpan ?? DEFAULT_ROW_SPAN;
             return (
               <div
                 key={placement.tileId}
                 style={{
                   gridColumn: `span ${span}`,
+                  gridRow: `span ${rowSpan}`,
                 }}
               >
                 <CompactProvider value={compact}>
@@ -390,6 +398,7 @@ export default function DashboardGrid() {
                   key={placement.tileId}
                   id={placement.tileId}
                   colSpan={span}
+                  rowSpan={placement.rowSpan ?? DEFAULT_ROW_SPAN}
                   minSpan={def.minColSpan}
                   gridWidth={gridWidth}
                   onRemove={() => removeTile(placement.tileId)}

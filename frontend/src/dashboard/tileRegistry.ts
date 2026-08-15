@@ -21,12 +21,35 @@ export interface TileDefinition {
   chartUnit?: string;
 }
 
+/**
+ * Row unit for the dashboard grid.  Each 1u = 8px, so a tile with
+ * ``rowSpan: 40`` occupies a 320px-tall cell.  Small enough to allow
+ * fine-grained composition (a 4-row ledger vs a 300px dial can sit
+ * side by side at their own natural heights); large enough that
+ * layouts don't need three-digit spans.
+ *
+ * Per REVIEW-02: the pre-refactor grid had no ``rowSpan`` at all, so
+ * every tile in a row was stretched to the tallest cell's height.
+ * This unit + ``TilePlacement.rowSpan`` gives layouts an explicit
+ * height axis to compose against.
+ */
+export const GRID_ROW_UNIT_PX = 8;
+
 export interface TilePlacement {
   tileId: string;
   colSpan?: number;
+  /**
+   * Height in ``GRID_ROW_UNIT_PX``-multiples.  Optional — tiles that
+   * omit this get ``DEFAULT_ROW_SPAN`` (36u = 288px), which is a
+   * reasonable size for most single-metric gauge tiles.  Layouts that
+   * need a taller dial or a shorter table override explicitly.
+   */
+  rowSpan?: number;
   /** Wind tile display mode: compass (default) or rose. */
   windDisplay?: "compass" | "rose";
 }
+
+export const DEFAULT_ROW_SPAN = 36;
 
 export interface DashboardLayout {
   version: number;
