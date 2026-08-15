@@ -152,9 +152,16 @@ class PublicRelaySender:
         if now - self._last_upload < self._effective_interval:
             return
 
+        # Ingest endpoint expects a FLAT SensorSnapshot mirror; do not
+        # wrap in {"snapshot": ...}.  Wrapping causes the endpoint's
+        # pydantic model (extra=allow) to model_dump() back into
+        # {"snapshot": {...}}, then wrap AGAIN for IPC — the daemon's
+        # field filter then drops every key and buffers an empty
+        # SensorSnapshot.  Caught on the vsits-02 → droplet smoke test
+        # 2026-08-14.
         payload = asdict(snapshot)
         url = f"{self._target_url}/api/ingest/reading"
-        ok, detail = await self._post(url, {"snapshot": payload})
+        ok, detail = await self._post(url, payload)
         if ok:
             self._last_upload = now
             self._on_success()
@@ -211,8 +218,10 @@ class PublicRelaySender:
         if self._effective_interval and now - self._last_upload < self._effective_interval:
             return
 
+        # Ingest endpoint expects a flat config dict, same shape reason
+        # as the reading push above.
         url = f"{self._target_url}/api/ingest/config"
-        ok, _ = await self._post(url, {"config": payload})
+        ok, _ = await self._post(url, payload)
         if ok:
             self._last_identity_hash = digest
             logger.info(
