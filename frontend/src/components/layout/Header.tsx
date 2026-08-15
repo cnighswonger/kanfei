@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useWeatherData } from '../../context/WeatherDataContext';
@@ -121,25 +122,33 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
   const local = forecast?.local ?? null;
 
   // Paper themes render the header per the Design Agent's Glaisher
-  // mock (`1c-dashboard-glaisher-notebook.png`): dark-brown bar with
+  // mock (`1c-dashboard-glaisher-notebook.png`): CREAM bar with
   // italic-serif "Kanfei" wordmark, tracked mono "· NOTEBOOK · STATION"
-  // subtitle, three persona pills, date/time on the right, and a
-  // "VUE · RUNNING" status pill.  Hi/lo, forecast pill, and connected
-  // label are absent from the mock and hidden for paper themes.
+  // subtitle, three persona pills (active segment DARK-FILLED cream-text),
+  // date/time on the right, and a "VUE · RUNNING" status pill.  Hi/lo,
+  // forecast pill, and connected label are absent from the mock and
+  // hidden for paper themes.
   const paper = theme.surface.ownsBackground;
-  const paperInk = 'var(--color-bg)';                    // cream on brown
-  const paperInkDim = 'rgba(237, 226, 196, 0.60)';       // dim cream
-  const themeTag = theme.label
-    .replace(/^The /, '')
-    .replace(/'s (Log|Notebook)$/, '')
-    .toUpperCase();
+  const paperInk = 'var(--color-text)';                  // dark on cream
+  const paperInkDim = 'var(--color-text-secondary)';     // dimmer dark
+  // Theme tag: last word of theme.label ("Glaisher's Notebook" →
+  // "NOTEBOOK", "The Mammoth's Log" → "LOG").  Matches the mocks'
+  // subtitle text after the "·" separator.
+  const themeTag = theme.label.split(/\s+/).pop()?.toUpperCase() ?? '';
 
-  // Current wall-clock time for the paper header display.
-  const now = new Date();
-  const dateStr = now
+  // Wall-clock ticker.  useState + setInterval so the header time
+  // updates every 30 s without a full page reload; without this, the
+  // date/time on paper themes would freeze at initial-render time.
+  const [clockNow, setClockNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!paper) return;
+    const id = setInterval(() => setClockNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, [paper]);
+  const dateStr = clockNow
     .toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
     .toUpperCase();
-  const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const timeStr = clockNow.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 
   const stationTypeShort = (currentConditions?.station_type ?? 'STATION')
     .replace(/^Davis /i, '')
@@ -305,7 +314,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
           style={{
             display: 'flex',
             border: paper
-              ? '1px solid rgba(237, 226, 196, 0.28)'
+              ? '1px solid var(--color-border)'
               : '1px solid var(--color-border)',
             borderRadius: paper ? '2px' : '6px',
             overflow: 'hidden',
@@ -322,10 +331,10 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
                 aria-pressed={active}
                 title={PERSONA_LABEL[p]}
                 style={paper ? {
-                  background: active ? 'var(--color-bg)' : 'transparent',
-                  color: active ? 'var(--color-text)' : paperInkDim,
+                  background: active ? 'var(--color-text)' : 'transparent',
+                  color: active ? 'var(--color-bg)' : paperInk,
                   border: 'none',
-                  borderLeft: i > 0 ? '1px solid rgba(237, 226, 196, 0.28)' : 'none',
+                  borderLeft: i > 0 ? '1px solid var(--color-border)' : 'none',
                   padding: '7px 16px',
                   fontFamily: 'var(--font-heading)',
                   fontSize: 'calc(13px * var(--font-scale))',
@@ -401,7 +410,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
           style={paper ? {
             background: 'transparent',
             color: paperInk,
-            border: '1px solid rgba(237, 226, 196, 0.28)',
+            border: '1px solid var(--color-border)',
             borderRadius: '2px',
             padding: '6px 10px',
             fontSize: 'calc(11px * var(--font-scale))',
@@ -422,7 +431,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
           }}
         >
           {Object.values(themes).map((t) => (
-            <option key={t.name} value={t.name} style={{ color: 'var(--color-text)', background: 'var(--color-bg-card)' }}>
+            <option key={t.name} value={t.name}>
               {t.label}
             </option>
           ))}
@@ -432,7 +441,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
           onClick={user?.authenticated ? logout : () => navigate("/login", { state: { from: location.pathname } })}
           style={paper ? {
             background: 'none',
-            border: '1px solid rgba(237, 226, 196, 0.28)',
+            border: '1px solid var(--color-border)',
             borderRadius: '2px',
             padding: '6px 12px',
             fontSize: 'calc(11px * var(--font-scale))',

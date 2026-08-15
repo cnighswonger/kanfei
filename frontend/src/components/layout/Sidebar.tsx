@@ -151,14 +151,11 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
                 fontWeight: isActive ? 700 : 500,
                 letterSpacing: '0.14em',
                 textTransform: 'uppercase',
-                color: isActive
-                  ? 'var(--color-bg)'
-                  : 'rgba(237, 226, 196, 0.60)',
-                background: 'transparent',
-                borderLeft: isActive
-                  ? '3px solid var(--color-accent)'
-                  : '3px solid transparent',
-                transition: 'color 0.15s ease',
+                // Active row: dark-brown rectangle with cream text (mock 1c).
+                // Inactive: dark text on the cream sidebar bg.
+                color: isActive ? 'var(--color-bg)' : 'var(--color-text)',
+                background: isActive ? 'var(--color-text)' : 'transparent',
+                transition: 'color 0.15s ease, background 0.15s ease',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
               } : {
@@ -181,7 +178,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
               {paper ? (
                 <>
                   {!collapsed && <span>{item.label}</span>}
-                  <span style={{ fontSize: 'calc(15px * var(--font-scale))', width: '18px', textAlign: 'center', flexShrink: 0, opacity: 0.75 }}>
+                  <span style={{ fontSize: 'calc(15px * var(--font-scale))', width: '18px', textAlign: 'center', flexShrink: 0, opacity: 0.55 }}>
                     {item.icon}
                   </span>
                 </>
@@ -269,14 +266,9 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
               fontWeight: isActive ? 700 : 500,
               letterSpacing: '0.14em',
               textTransform: 'uppercase',
-              color: isActive
-                ? 'var(--color-bg)'
-                : 'rgba(237, 226, 196, 0.60)',
-              background: 'transparent',
-              borderLeft: isActive
-                ? '3px solid var(--color-accent)'
-                : '3px solid transparent',
-              transition: 'color 0.15s ease',
+              color: isActive ? 'var(--color-bg)' : 'var(--color-text)',
+              background: isActive ? 'var(--color-text)' : 'transparent',
+              transition: 'color 0.15s ease, background 0.15s ease',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
             } : {
@@ -299,7 +291,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
             {paper ? (
               <>
                 {!collapsed && <span>About</span>}
-                <span style={{ fontSize: 'calc(15px * var(--font-scale))', width: '18px', textAlign: 'center', flexShrink: 0, opacity: 0.75 }}>
+                <span style={{ fontSize: 'calc(15px * var(--font-scale))', width: '18px', textAlign: 'center', flexShrink: 0, opacity: 0.55 }}>
                   {'ⓘ'}
                 </span>
               </>
