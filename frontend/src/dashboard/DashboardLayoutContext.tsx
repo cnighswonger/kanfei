@@ -20,6 +20,7 @@ import {
   LAYOUT_VERSION,
   GRID_COLUMNS,
   getPersonaDefaultLayout,
+  PERSONA_LAYOUTS,
 } from "./tileRegistry.ts";
 import { readUIPref, writeUIPref, syncUIPrefs } from "../utils/uiPrefs.ts";
 import { usePersona, DEFAULT_PERSONA } from "../context/PersonaContext.tsx";
@@ -116,19 +117,44 @@ function loadLayout(): DashboardLayout {
 }
 
 /**
- * True when the browser's localStorage carries a valid, current-schema
- * saved layout at the moment this call runs.  Called once during the
- * useState lazy initializer so the answer is captured BEFORE
- * syncUIPrefs() overwrites localStorage with backend-reconciled values
- * (see uiPrefs.ts `_doSync`, the "backend wins" pass).  Without this
- * pre-capture, an anonymous user whose \`writeUIPref\` PUT was 401/403'd
- * would look indistinguishable from a fresh visitor after sync, and
- * the mount-time reconcile would clobber their local-only saved
- * arrangement.
+ * Serialized form of each built-in persona default layout.  Precomputed
+ * once so hot-path callers just do string-equality checks.  Any layout
+ * whose serialized form is in this set was not user-arranged — it's
+ * one of the built-in defaults, most likely put in localStorage by
+ * syncUIPrefs's backend-wins reconcile after the backend held onto a
+ * default value from a prior install.
+ */
+const PERSONA_DEFAULT_SERIALIZED = new Set(
+  Object.values(PERSONA_LAYOUTS).map((d) => JSON.stringify(d)),
+);
+
+/**
+ * True when the browser's localStorage carries a user-arranged layout
+ * that must not be clobbered by a persona switch or backend seed.
+ *
+ * "User-arranged" is the meaningful test, not "any layout is present."
+ * syncUIPrefs's backend-wins pass will happily land a persona-default
+ * layout into localStorage if the backend has one stored — and that
+ * synced default is NOT a user's own arrangement; it's the same
+ * built-in shape my persona effect would install itself.  Using bare
+ * presence as the gate stopped a fresh incognito visitor from ever
+ * getting a persona reseat on vsits-02 because the backend already
+ * had the pre-refactor default layout persisted.
+ *
+ * Called once during the useState lazy initializer so the answer is
+ * captured BEFORE syncUIPrefs's clobber pass runs (matters for the
+ * local-only saved layout path — an anonymous user whose writeUIPref
+ * PUT was 401/403'd keeps their arrangement in localStorage only).
+ * Called again inside the persona-change effect so the ambient
+ * localStorage state — which may reflect either a fresh user save or
+ * a backend sync — is compared to the same defaults set.
  */
 function hasLocalSavedLayout(): boolean {
   const raw = readUIPref(PREF_KEY, "");
   if (!raw) return false;
+  // A raw string that equals any built-in persona default is not a
+  // saved arrangement.  This is the fix for the vsits-02 smoke bug.
+  if (PERSONA_DEFAULT_SERIALIZED.has(raw)) return false;
   try {
     const p = JSON.parse(raw);
     if (p.version === 1) return true;
