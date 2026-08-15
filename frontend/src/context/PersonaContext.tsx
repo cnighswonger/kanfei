@@ -1,22 +1,15 @@
 /**
  * Persona persistence + selection.
  *
- * UI refactor PR 3.  Persona drives:
- *   - the dashboard tile set (everyday / agriculture / weather_nerd)
- *   - the sidebar filter (order + hidden pages)
+ * Persona is the coarse audience-shape control that drives the
+ * dashboard tile set and the sidebar filter (order + hidden pages).
  *
- * Both wire up in PR 4 (shell + Settings restructuring); this PR
- * lands the plumbing so the shell can consume ``usePersona()``
- * without a follow-up context introduction.
- *
- * Two-tier persistence matches ``ThemeContext``:
+ * Two-tier persistence, same shape as ``ThemeContext``:
  *   - Signed-in admin's change: localStorage + PUT ``/api/config``
- *     (via ``writeUIPref`` in ``utils/uiPrefs``).
+ *     via ``writeUIPref``.
  *   - Anonymous visitor's change: localStorage only.  The PUT will
- *     401/403 and ``writeUIPref`` swallows those at debug level.
- *     This is the Design-Agent-decided "browser-local anonymous
- *     prefs" contract — a passer-by on a public droplet can't
- *     re-skin the installation for everyone.
+ *     401/403 and ``writeUIPref`` swallows those — a passer-by on a
+ *     public droplet can't re-skin the installation for everyone.
  *
  * Precedence on load: localStorage → backend default → 'everyday'.
  */

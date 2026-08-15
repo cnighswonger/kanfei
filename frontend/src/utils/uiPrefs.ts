@@ -16,9 +16,6 @@ import { fetchConfig, updateConfig } from "../api/client.ts";
 const UI_DEFAULTS: Record<string, string> = {
   ui_sidebar_collapsed: "false",
   ui_theme: "dark",
-  // UI refactor PR 3: persona drives the dashboard tile set and the
-  // sidebar filter.  Valid: 'everyday' (default), 'agriculture',
-  // 'weather_nerd'.
   ui_persona: "everyday",
   ui_timezone: "auto",
   ui_weather_bg_enabled: "true",
@@ -67,14 +64,12 @@ export function readUIPref(key: string, defaultValue: string): string {
 
 /** Write to localStorage (sync) + fire-and-forget PUT to backend.
  *
- * The PUT is admin-only (``/api/config`` requires ``require_admin``
- * unless on a public droplet where the bypass allows GET but writes
- * still 403 via the middleware).  For anonymous visitors the PUT
- * fails; that's expected and by design — anonymous pref changes are
- * browser-local only per the UI refactor's read-only-droplet
- * decision.  We swallow the 401/403 at debug level to keep the
- * console clean on the public droplet.  Any other error still warns
- * so a real backend problem doesn't hide.
+ * The backend PUT is admin-only.  Anonymous visitors are expected
+ * to fail it and keep their change in localStorage only — a passer-by
+ * on a public droplet can't reskin the installation for everyone.
+ * 401/403 responses are logged at debug level so the console stays
+ * clean for that (intended) path; any other error still warns so a
+ * real backend problem doesn't hide.
  */
 export function writeUIPref(key: string, value: string): void {
   try {
@@ -83,9 +78,10 @@ export function writeUIPref(key: string, value: string): void {
     /* localStorage unavailable */
   }
   updateConfig([{ key, value }]).catch((err) => {
-    const msg = String(err?.message ?? err ?? "");
-    if (msg.includes("401") || msg.includes("403")) {
-      // Anonymous visitor — pref is browser-local only, as designed.
+    // The API client throws ApiError with a structured .status.
+    // A raw fetch failure won't have one, so fall through to warn.
+    const status = (err as { status?: number } | null | undefined)?.status;
+    if (status === 401 || status === 403) {
       console.debug(`[uiPrefs] ${key} kept browser-local (not authenticated)`);
       return;
     }
