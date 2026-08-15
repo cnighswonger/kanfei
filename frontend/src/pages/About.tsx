@@ -1,9 +1,56 @@
 import { useIsMobile } from "../hooks/useIsMobile.ts";
+import { useTheme } from "../context/ThemeContext.tsx";
 import RxDiagnostics from "../components/panels/RxDiagnostics.tsx";
 
 // --- About-specific overrides ---
 // The supercell background blends with default muted grays — use a brighter tone.
 const MUTED = "#abb4ca";
+
+/**
+ * Per-theme full-page hero behind the About cards, per the Design
+ * Agent's SCREENS.md ("About — replaces the weather background with
+ * its own full-page plate") + ASSETS.md treatment table.
+ *
+ * ``scrim`` is a translucent rgba overlay painted on top of the
+ * image so the cards' contrast stays legible — dark themes get a
+ * navy dim, paper themes get a cream veil.
+ *
+ * mammoth / classic aren't in the About row of the table: mammoth
+ * inherits the paper theme's plate via ``.app-plate`` already, and
+ * classic ships without a hero.  For both, ``AboutHero`` returns
+ * null and the cards render over the normal shell background.
+ */
+interface AboutHeroConfig {
+  image: string;
+  opacity: number;
+  position?: string;
+  filter?: string;
+  blend?: string;
+  scrim?: string;
+}
+
+const ABOUT_HERO: Record<string, AboutHeroConfig | null> = {
+  dark: {
+    image: "/about-hero.jpg",
+    opacity: 1.0,
+    position: "center 40%",
+    scrim: "rgba(10, 13, 20, 0.42)",
+  },
+  light: {
+    image: "/about-hero.jpg",
+    opacity: 1.0,
+    position: "center 40%",
+    scrim: "rgba(10, 13, 20, 0.42)",
+  },
+  glaisher: {
+    image: "/glaisher-ascent-1862.jpg",
+    opacity: 0.34,
+    position: "center",
+    scrim: "rgba(237, 226, 196, 0.34)",
+  },
+  mammoth: null,
+  classic: null,
+};
 
 // --- Shared styles ---
 
@@ -123,19 +170,45 @@ function SupportCard({ isMobile }: { isMobile: boolean }) {
 
 export default function About() {
   const isMobile = useIsMobile();
+  const { themeName } = useTheme();
   const pad = isMobile ? "12px" : "20px";
+  const hero = ABOUT_HERO[themeName] ?? null;
 
   return (
     <>
-      {/* Full-page supercell background — replaces the weather background on this view */}
-      <div style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 0,
-        backgroundImage: "url(/about-hero.jpg)",
-        backgroundSize: "cover",
-        backgroundPosition: "center 40%",
-      }} />
+      {hero && (
+        <>
+          {/* Full-page hero background per the active theme. */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 0,
+              backgroundImage: `url(${hero.image})`,
+              backgroundSize: "cover",
+              backgroundPosition: hero.position ?? "center",
+              backgroundRepeat: "no-repeat",
+              opacity: hero.opacity,
+              filter: hero.filter,
+              mixBlendMode: (hero.blend ?? "normal") as React.CSSProperties["mixBlendMode"],
+              pointerEvents: "none",
+            }}
+          />
+          {hero.scrim && (
+            <div
+              aria-hidden="true"
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 0,
+                background: hero.scrim,
+                pointerEvents: "none",
+              }}
+            />
+          )}
+        </>
+      )}
 
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0, maxWidth: "860px", margin: "0 auto", padding: isMobile ? "0 12px 12px" : pad, position: "relative", zIndex: 1 }}>
       {/* Name + Description */}
