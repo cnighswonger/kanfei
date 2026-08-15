@@ -457,8 +457,6 @@ def _marching_squares(
 
 _isobar_cache: dict[str, _StationCache] = {}
 _ISOBAR_CACHE_TTL = 300  # 5 minutes
-_PGRID_CACHE_TTL = 300  # 5 minutes
-_pgrid_cache: dict[str, _StationCache] = {}
 
 
 def _get_best_station_cache(
@@ -649,32 +647,6 @@ def _collect_pressure_points(
     return pressure_points
 
 
-def _filter_pressure_outliers(
-    points: list[tuple[float, float, float]],
-    max_sigma: float = 2.5,
-) -> list[tuple[float, float, float]]:
-    """Remove pressure readings that are statistical outliers.
-
-    Stations at elevation sometimes report uncorrected station pressure
-    (vs sea-level altimeter setting), producing values far outside the
-    normal range.  Remove anything beyond max_sigma standard deviations.
-    """
-    if len(points) < 5:
-        return points
-    pressures = [p[2] for p in points]
-    mean = sum(pressures) / len(pressures)
-    variance = sum((p - mean) ** 2 for p in pressures) / len(pressures)
-    std = variance ** 0.5
-    if std < 0.1:
-        return points  # all nearly identical — nothing to filter
-    filtered = [p for p in points if abs(p[2] - mean) <= max_sigma * std]
-    removed = len(points) - len(filtered)
-    if removed:
-        logger.info("Map: filtered %d pressure outliers (mean=%.1f, std=%.2f)",
-                    removed, mean, std)
-    return filtered
-
-
 def _build_idw_grid(
     pressure_points: list[tuple[float, float, float]],
     grid_size: int,
@@ -714,73 +686,6 @@ def _build_idw_grid(
             grid = arr.tolist()
         except ImportError:
             pass  # scipy not available — skip smoothing
-
-    return grid, lat_min, lat_max, lon_min, lon_max
-
-
-def _build_smooth_grid(
-    pressure_points: list[tuple[float, float, float]],
-    grid_size: int,
-    margin: float = 0.2,
-    blur_sigma: float = 2.0,
-) -> tuple[list[list[float]], float, float, float, float]:
-    """Build smooth pressure grid using cubic Clough-Tocher interpolation.
-
-    Uses scipy.interpolate.griddata with method='cubic' — a local C1
-    interpolation based on Delaunay triangulation.  No global oscillations
-    (unlike thin-plate spline RBF).  Areas outside the convex hull of
-    data points are filled with nearest-neighbor values.
-
-    A light Gaussian blur is applied for extra smoothness.
-    Falls back to IDW if scipy is unavailable.
-    """
-    import numpy as np
-    all_lats = [p[0] for p in pressure_points]
-    all_lons = [p[1] for p in pressure_points]
-    lat_min = min(all_lats) - margin
-    lat_max = max(all_lats) + margin
-    lon_min = min(all_lons) - margin
-    lon_max = max(all_lons) + margin
-
-    try:
-        from scipy.interpolate import griddata
-        from scipy.ndimage import gaussian_filter
-
-        coords = np.array([[p[0], p[1]] for p in pressure_points])
-        values = np.array([p[2] for p in pressure_points])
-
-        # Build evaluation grid
-        lat_vals = np.linspace(lat_min, lat_max, grid_size)
-        lon_vals = np.linspace(lon_min, lon_max, grid_size)
-        mesh_lat, mesh_lon = np.meshgrid(lat_vals, lon_vals, indexing="ij")
-        grid_points = np.column_stack([mesh_lat.ravel(), mesh_lon.ravel()])
-
-        # Cubic interpolation — smooth C1 surface within convex hull
-        arr = griddata(coords, values, grid_points, method="cubic")
-
-        # Fill NaN (outside convex hull) with nearest-neighbor
-        nan_mask = np.isnan(arr)
-        if nan_mask.any():
-            nearest = griddata(coords, values, grid_points, method="nearest")
-            arr[nan_mask] = nearest[nan_mask]
-
-        arr = arr.reshape(grid_size, grid_size)
-
-        if blur_sigma > 0:
-            arr = gaussian_filter(arr, sigma=blur_sigma)
-
-        grid = arr.tolist()
-
-    except ImportError:
-        logger.warning("scipy not available — falling back to IDW for pressure grid")
-        grid = []
-        for r in range(grid_size):
-            row = []
-            g_lat = lat_min + (r / (grid_size - 1)) * (lat_max - lat_min)
-            for c in range(grid_size):
-                g_lon = lon_min + (c / (grid_size - 1)) * (lon_max - lon_min)
-                row.append(_idw_interpolate(pressure_points, g_lat, g_lon, power=1.5))
-            grid.append(row)
 
     return grid, lat_min, lat_max, lon_min, lon_max
 
@@ -863,90 +768,3 @@ async def get_isobars(db: Session = Depends(get_db)):
     return result
 
 
-@router.get("/pressure-grid")
-async def get_pressure_grid(db: Session = Depends(get_db)):
-    """Return high-resolution IDW pressure grid for 3D visualization.
-
-    Cached for 5 minutes.  Grid is 120x120 interpolated from the best
-    available nearby-station cache.
-    """
-    cfg = get_effective_config(db)
-    lat = float(cfg.get("latitude", 0))
-    lon = float(cfg.get("longitude", 0))
-
-    if lat == 0 and lon == 0:
-        return {"grid": [], "rows": 0, "cols": 0, "station_count": 0}
-
-    # Self-seed station cache if needed (pressure page may load before map)
-    best = await _ensure_station_cache(db, lat, lon)
-    if not best:
-        return {"grid": [], "rows": 0, "cols": 0, "station_count": 0}
-    stations = best.data.get("stations", [])
-    pressure_points = _collect_pressure_points(stations, db, lat, lon)
-    pressure_points = _filter_pressure_outliers(pressure_points)
-    if len(pressure_points) < 5:
-        return {"grid": [], "rows": 0, "cols": 0, "station_count": len(pressure_points)}
-
-    cache_key = f"pgrid:{round(lat, 2)}:{round(lon, 2)}:{len(pressure_points)}"
-    cached = _pgrid_cache.get(cache_key)
-    if cached and time.time() < cached.expires_at:
-        return cached.data
-
-    GRID = 120
-    grid, lat_min, lat_max, lon_min, lon_max = _build_smooth_grid(
-        pressure_points, GRID, blur_sigma=5.0,
-    )
-
-    all_p = [p for _, _, p in pressure_points]
-
-    # Build station summary for frontend markers (include extra fields for detail panel)
-    station_markers = []
-    for pt_lat, pt_lon, pt_p in pressure_points:
-        is_home = abs(pt_lat - lat) < 0.001 and abs(pt_lon - lon) < 0.001
-        marker: dict = {
-            "lat": pt_lat, "lon": pt_lon,
-            "pressure_hpa": round(pt_p, 1), "name": "",
-            "is_home": is_home,
-        }
-        if stations:
-            for s in stations:
-                if (s.get("lat") is not None
-                        and abs(s["lat"] - pt_lat) < 0.001
-                        and abs(s["lon"] - pt_lon) < 0.001):
-                    marker["name"] = s.get("name", s.get("id", ""))
-                    marker["id"] = s.get("id", "")
-                    marker["source"] = s.get("source", "")
-                    marker["temp_f"] = s.get("temp_f")
-                    marker["wind_mph"] = s.get("wind_mph")
-                    marker["wind_dir"] = s.get("wind_dir")
-                    marker["pressure_inhg"] = s.get("pressure_inhg")
-                    marker["updated"] = s.get("updated")
-                    break
-        station_markers.append(marker)
-
-    result = {
-        "grid": [[round(v, 2) for v in row] for row in grid],
-        "rows": GRID,
-        "cols": GRID,
-        "lat_min": round(lat_min, 4),
-        "lat_max": round(lat_max, 4),
-        "lon_min": round(lon_min, 4),
-        "lon_max": round(lon_max, 4),
-        "pressure_min": round(min(all_p), 1),
-        "pressure_max": round(max(all_p), 1),
-        "station_count": len(pressure_points),
-        "stations": station_markers,
-        "pressure_unit": cfg.get("pressure_unit", "inHg"),
-        "temp_unit": cfg.get("temp_unit", "F"),
-        "wind_unit": cfg.get("wind_unit", "mph"),
-    }
-
-    _pgrid_cache[cache_key] = _StationCache(
-        data=result,
-        expires_at=time.time() + _PGRID_CACHE_TTL,
-    )
-
-    logger.info("Map: computed %dx%d pressure grid from %d points",
-                GRID, GRID, len(pressure_points))
-
-    return result

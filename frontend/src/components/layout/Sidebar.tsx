@@ -22,7 +22,6 @@ const navItems: NavItem[] = [
   { to: '/forecast', label: 'Forecast', icon: '☁' },
   { to: '/astronomy', label: 'Astronomy', icon: '☽' },
   { to: '/map', label: 'Map', icon: '⦿' },
-  { to: '/pressure', label: 'Pressure', icon: '∥' },
   { to: '/nowcast', label: 'Nowcast', icon: '⛅' },
   { to: '/spray', label: 'Spray', icon: '☘' },
   { to: '/settings', label: 'Settings', icon: '⚙' },
@@ -42,7 +41,7 @@ const PERSONA_NAV: Record<Persona, { order: string[]; hide: string[] }> = {
   everyday: { order: [], hide: [] },
   agriculture: {
     order: ['/', '/spray', '/forecast', '/nowcast', '/history', '/map', '/astronomy', '/settings'],
-    hide: ['/pressure'],
+    hide: [],
   },
   weather_nerd: {
     order: [],
@@ -73,7 +72,6 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
   // Feature-flag filter always applies (see NavItem hide/order note above).
   const flagFiltered = navItems.filter((item) => {
     if (item.to === '/map') return flags.mapEnabled;
-    if (item.to === '/pressure') return flags.mapEnabled;
     if (item.to === '/nowcast') return flags.nowcastEnabled;
     if (item.to === '/spray') return flags.sprayEnabled;
     return true;
