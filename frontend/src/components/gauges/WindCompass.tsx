@@ -1,24 +1,29 @@
 /**
- * SVG compass rose with direction arrow and speed display.
- * 16-point compass with animated direction arrow and speed in center.
+ * Wind compass per Design REVIEW-02: 16-point compass from ``compass()``
+ * with rose petals from ``rosePetals()`` inside the ring, needle overlay,
+ * speed + cardinal read out to the right of the ring, gust/peak/bearing
+ * on a footer rule.
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
 import TileLabel from "../common/TileLabel.tsx";
 import { formatTimestamp } from "../../utils/formatting.ts";
+import { compass, rosePetals } from "../../utils/gauges.ts";
 
 interface WindCompassProps {
-  direction: number | null;  // 0-359 degrees
-  speed: number | null;      // mph (or display unit)
+  direction: number | null;
+  speed: number | null;
   gust?: number | null;
-  peak?: number | null;      // Today's peak wind speed
-  peakAt?: string | null;    // ISO-8601 UTC timestamp of today's peak
-  unit: string;              // 'mph', 'kph', 'knots'
-  cardinal?: string | null;  // e.g. 'NNE'
+  peak?: number | null;
+  peakAt?: string | null;
+  unit: string;
+  cardinal?: string | null;
 }
 
 const CARDINALS_16 = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
                        'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+
+const RING_SIZE = 200;
 
 export default function WindCompass({ direction, speed, gust, peak, peakAt, unit, cardinal }: WindCompassProps) {
   const isMobile = useCompact();
@@ -43,158 +48,156 @@ export default function WindCompass({ direction, speed, gust, peak, peakAt, unit
     );
   }
 
-  const cx = 130;
-  const cy = 130;
-  const outerR = 110;
-  const innerR = 85;
-  const arrowLen = 75;
+  const cx = RING_SIZE / 2;
+  const cy = RING_SIZE / 2;
+  const outerR = 74;
+  const labelR = 92;
+  const petalMaxR = outerR - 4;
 
-  // Arrow rotation
+  const c = compass(cx, cy, outerR, labelR);
+  // Decorative for now — passes no ``weights``, so ``rosePetals`` uses
+  // its built-in demo distribution.  Wiring the live 4 h WindHistory
+  // distribution is scope for the next composition PR; the petals are
+  // a visual placeholder until then.
+  const petals = rosePetals(cx, cy, petalMaxR);
+
+  const arrowLen = outerR - 4;
   const arrowAngle = direction ?? 0;
+  const derivedCardinal = cardinal ?? (direction != null ? CARDINALS_16[Math.round(direction / 22.5) % 16] : null);
 
   return (
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '12px',
+      padding: '16px',
       background: 'var(--color-bg-card)',
       borderRadius: 'var(--gauge-border-radius, 16px)',
       boxShadow: 'var(--gauge-shadow, 0 4px 24px rgba(0,0,0,0.4))',
       border: '1px solid var(--color-border)',
       height: '100%',
       boxSizing: 'border-box',
+      overflow: 'hidden',
     }}>
       <TileLabel>Wind</TileLabel>
 
-      <svg width="260" height="260" viewBox="0 0 260 260">
-        {/* Outer ring */}
-        <circle cx={cx} cy={cy} r={outerR} fill="none" stroke="var(--color-border)" strokeWidth="1.5" />
-        <circle cx={cx} cy={cy} r={innerR} fill="none" stroke="var(--color-border)" strokeWidth="0.5" opacity="0.5" />
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, alignItems: 'center', gap: '12px' }}>
+        <svg
+          width={RING_SIZE}
+          height={RING_SIZE}
+          viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+          style={{ flexShrink: 0, maxWidth: '100%', maxHeight: '100%' }}
+        >
+          {/* Rose petals under the compass ring */}
+          {petals.map((p, i) => (
+            <path key={`p${i}`} d={p.d} fill="var(--color-wind-arrow)" opacity={p.op} />
+          ))}
 
-        {/* 16-point cardinal markers */}
-        {CARDINALS_16.map((label, i) => {
-          const angle = i * 22.5;
-          const rad = (angle - 90) * (Math.PI / 180);
-          const major = i % 4 === 0; // N, E, S, W
-          const minor = i % 2 === 0; // NE, SE, SW, NW
-          const tickOuter = outerR + 2;
-          const tickInner = major ? outerR - 14 : minor ? outerR - 10 : outerR - 6;
-          const labelR = outerR + 14;
-
-          return (
-            <g key={label}>
-              <line
-                x1={cx + tickInner * Math.cos(rad)}
-                y1={cy + tickInner * Math.sin(rad)}
-                x2={cx + tickOuter * Math.cos(rad)}
-                y2={cy + tickOuter * Math.sin(rad)}
-                stroke="var(--color-text-secondary)"
-                strokeWidth={major ? 2 : 1}
-              />
-              {(major || minor) && (
-                <text
-                  x={cx + labelR * Math.cos(rad)}
-                  y={cy + labelR * Math.sin(rad) + 3}
-                  style={{ fontSize: `calc(${major ? 12 : 8}px * var(--font-scale))` }}
-                  fontFamily="var(--font-body)"
-                  fontWeight={major ? 'bold' : 'normal'}
-                  fill={major ? 'var(--color-text)' : 'var(--color-text-muted)'}
-                  textAnchor="middle"
-                >
-                  {label}
-                </text>
-              )}
-            </g>
-          );
-        })}
-
-        {/* Direction arrow */}
-        {direction !== null && (
-          <g
-            style={{
-              transform: `rotate(${arrowAngle}deg)`,
-              transformOrigin: `${cx}px ${cy}px`,
-              transition: 'transform 0.8s ease',
-            }}
-          >
-            {/* Arrow shaft */}
+          {/* Compass ticks */}
+          {c.ticks.map((t, i) => (
             <line
-              x1={cx}
-              y1={cy + 30}
-              x2={cx}
-              y2={cy - arrowLen}
-              stroke="var(--color-wind-arrow, #3b82f6)"
-              strokeWidth="3"
-              strokeLinecap="round"
+              key={`t${i}`}
+              x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
+              stroke="var(--color-text-secondary)"
+              strokeWidth={t.sw ?? 1}
             />
-            {/* Arrowhead */}
-            <polygon
-              points={`${cx},${cy - arrowLen - 8} ${cx - 7},${cy - arrowLen + 5} ${cx + 7},${cy - arrowLen + 5}`}
-              fill="var(--color-wind-arrow, #3b82f6)"
-            />
-            {/* Tail */}
-            <circle cx={cx} cy={cy + 30} r="3" fill="var(--color-wind-arrow, #3b82f6)" opacity="0.5" />
-          </g>
-        )}
+          ))}
 
-        {/* Center hub */}
-        <circle cx={cx} cy={cy} r="28" fill="var(--color-bg-card-solid, var(--color-bg-card))" stroke="var(--color-border)" strokeWidth="1" />
+          {/* Cardinal labels */}
+          {c.labels.map((lbl, i) => (
+            <text
+              key={`l${i}`}
+              x={lbl.x} y={lbl.y}
+              fontFamily="var(--font-mono)"
+              fontSize="calc(11px * var(--font-scale))"
+              fill="var(--color-text)"
+              textAnchor="middle"
+            >
+              {lbl.label}
+            </text>
+          ))}
 
-        {/* Speed in center */}
-        <text
-          x={cx}
-          y={cy + 2}
-          style={{ fontSize: "calc(22px * var(--font-scale))" }}
-          fontFamily="var(--font-gauge)"
-          fontWeight="bold"
-          fill="var(--color-text)"
-          textAnchor="middle"
-          dominantBaseline="middle"
-        >
-          {speed !== null ? speed.toFixed(0) : '--'}
-        </text>
-        <text
-          x={cx}
-          y={cy + 16}
-          style={{ fontSize: "calc(8px * var(--font-scale))" }}
-          fontFamily="var(--font-body)"
-          fill="var(--color-text-muted)"
-          textAnchor="middle"
-        >
-          {unit}
-        </text>
-      </svg>
+          {/* Direction needle */}
+          {direction != null && (
+            <g
+              style={{
+                transform: `rotate(${arrowAngle}deg)`,
+                transformOrigin: `${cx}px ${cy}px`,
+                transition: 'transform 0.8s ease',
+              }}
+            >
+              <line
+                x1={cx} y1={cy}
+                x2={cx} y2={cy - arrowLen}
+                stroke="var(--color-wind-arrow)"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <polygon
+                points={`${cx},${cy - arrowLen - 6} ${cx - 5},${cy - arrowLen + 3} ${cx + 5},${cy - arrowLen + 3}`}
+                fill="var(--color-wind-arrow)"
+              />
+            </g>
+          )}
 
-      {/* Bottom readout */}
-      <div style={{
-        display: 'flex',
-        gap: '16px',
-        fontSize: 'calc(13px * var(--font-scale))',
-        fontFamily: 'var(--font-gauge)',
-        color: 'var(--color-text-secondary)',
-        marginTop: '-4px',
-      }}>
-        <span>
-          {cardinal ?? (direction !== null ? CARDINALS_16[Math.round(direction / 22.5) % 16] : '--')}
-          {direction !== null ? ` ${direction}°` : ''}
-        </span>
-        {gust != null && (
-          <span style={{ color: 'var(--color-warning)' }}>
-            G {gust.toFixed(0)} {unit}
-          </span>
-        )}
-        {peak != null && (
-          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
-            <span>Peak {peak.toFixed(0)} {unit}</span>
-            {peakAt && (
-              <span style={{ fontSize: 'calc(10px * var(--font-scale))', color: 'var(--color-text-muted)' }}>
-                at {formatTimestamp(peakAt)}
-              </span>
-            )}
-          </span>
-        )}
+          {/* Hub cap */}
+          <circle cx={cx} cy={cy} r="4" fill="var(--color-wind-arrow)" />
+          <circle cx={cx} cy={cy} r="1.5" fill="var(--color-bg-card)" />
+        </svg>
+
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minWidth: 0,
+          gap: '6px',
+        }}>
+          <div>
+            <span style={{
+              fontFamily: 'var(--font-gauge)',
+              fontSize: 'calc(34px * var(--font-scale))',
+              fontWeight: 600,
+              color: 'var(--color-text)',
+            }}>
+              {speed != null ? speed.toFixed(0) : '--'}
+            </span>
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'calc(12px * var(--font-scale))',
+              letterSpacing: '1.5px',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-secondary)',
+              marginLeft: '6px',
+            }}>
+              {unit} {derivedCardinal ?? ''}
+            </span>
+          </div>
+
+          {(gust != null || peak != null) && (
+            <div style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: 'calc(11px * var(--font-scale))',
+              color: 'var(--color-text-secondary)',
+              lineHeight: 1.4,
+            }}>
+              {gust != null && <span>Gusting {gust.toFixed(0)}</span>}
+              {gust != null && peak != null && '. '}
+              {peak != null && <span>Peak {peak.toFixed(0)} {peakAt ? `at ${formatTimestamp(peakAt)}` : ''}</span>}
+              {(gust != null || peak != null) && '.'}
+            </div>
+          )}
+
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 'calc(10px * var(--font-scale))',
+            letterSpacing: '1px',
+            color: 'var(--color-text-muted)',
+            marginTop: 'auto',
+            paddingTop: '8px',
+            borderTop: `var(--rule-width, 1px) var(--rule-style, solid) var(--rule-hair)`,
+          }}>
+            {direction != null ? `${direction}°` : '--'}
+          </div>
+        </div>
       </div>
     </div>
   );

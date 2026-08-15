@@ -45,6 +45,16 @@ export interface TilePlacement {
    * need a taller dial or a shorter table override explicitly.
    */
   rowSpan?: number;
+  /**
+   * Explicit grid-column start (1-based).  When set alongside
+   * ``colSpan``/``rowSpan``, DashboardGrid pins the tile with
+   * ``grid-column: N / span M`` / ``grid-row: N / span M`` in normal
+   * mode.  Persona defaults use this to compose the mock layout; user
+   * edits (reorder / resize / add / remove) drop it so drag falls back
+   * to auto-placement.  Absent = auto-placement.
+   */
+  gridColStart?: number;
+  gridRowStart?: number;
   /** Wind tile display mode: compass (default) or rose. */
   windDisplay?: "compass" | "rose";
 }
@@ -208,17 +218,25 @@ export const TILE_REGISTRY: Record<string, TileDefinition> = {
 
 export const LAYOUT_VERSION = 2;
 
+// Explicit positioning eliminates the auto-placement gap that made
+// hero and derived-conditions stretch to match barometer's height.
+// Row bands (8-px units):
+//   rows 1-26   hero + derived (208 px)
+//   rows 27-56  history-chart (240 px) | barometer spans 1-56 (448 px)
+//   rows 57-78  rain + solar + wind (176 px)
+//   rows 79-98  rainfall-hourly + almanac (160 px)
+//   rows 99-108 station-status footer (80 px, full width)
 const MOCK_COMPOSITION: TilePlacement[] = [
-  { tileId: "outside-temp", colSpan: 3, rowSpan: 30 },
-  { tileId: "current-conditions", colSpan: 5, rowSpan: 30 },
-  { tileId: "barometer", colSpan: 4, rowSpan: 30 },
-  { tileId: "history-chart", colSpan: 8, rowSpan: 30 },
-  { tileId: "wind", colSpan: 4, rowSpan: 30 },
-  { tileId: "rain", colSpan: 4, rowSpan: 22 },
-  { tileId: "solar-uv", colSpan: 4, rowSpan: 22 },
-  { tileId: "almanac", colSpan: 4, rowSpan: 22 },
-  { tileId: "rainfall-hourly", colSpan: 8, rowSpan: 20 },
-  { tileId: "station-status", colSpan: 4, rowSpan: 20 },
+  { tileId: "outside-temp",       colSpan: 3,  rowSpan: 26, gridColStart: 1, gridRowStart: 1  },
+  { tileId: "current-conditions", colSpan: 5,  rowSpan: 26, gridColStart: 4, gridRowStart: 1  },
+  { tileId: "barometer",          colSpan: 4,  rowSpan: 56, gridColStart: 9, gridRowStart: 1  },
+  { tileId: "history-chart",      colSpan: 8,  rowSpan: 30, gridColStart: 1, gridRowStart: 27 },
+  { tileId: "rain",               colSpan: 4,  rowSpan: 22, gridColStart: 1, gridRowStart: 57 },
+  { tileId: "solar-uv",           colSpan: 4,  rowSpan: 22, gridColStart: 5, gridRowStart: 57 },
+  { tileId: "wind",               colSpan: 4,  rowSpan: 22, gridColStart: 9, gridRowStart: 57 },
+  { tileId: "rainfall-hourly",    colSpan: 8,  rowSpan: 20, gridColStart: 1, gridRowStart: 79 },
+  { tileId: "almanac",            colSpan: 4,  rowSpan: 20, gridColStart: 9, gridRowStart: 79 },
+  { tileId: "station-status",     colSpan: 12, rowSpan: 10, gridColStart: 1, gridRowStart: 99 },
 ];
 
 const EVERYDAY_LAYOUT: DashboardLayout = {
