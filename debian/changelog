@@ -1,3 +1,46 @@
+kanfei (0.1.0~beta33) unstable; urgency=medium
+
+  * Security: fixes a critical information-disclosure hole introduced
+    by beta31's public-droplet mode.  An unauthenticated visitor on a
+    public droplet could reach `GET /api/db-admin/export/backup` and
+    receive a full SQLite dump of the running database — including
+    the plaintext `public_mode_ingest_secret` from `station_config`
+    that the masking in `GET /api/config` never sees.  Two curls
+    yielded indefinite write access to the ingest endpoints
+    (impersonating the operator's private-station relay); a
+    concurrent handful of the same call also DoS'd the small droplet
+    that ships with the reference deployment because the copy runs
+    synchronously and holds a temp file until the response completes.
+    A new strict admin-only dependency (no public-mode bypass) now
+    gates every admin GET whose response streams data an operator
+    was trusted with privately: the SQLite dump, per-table JSON
+    exports, DB stats, backup list and download, log stream, and API
+    key listing.  Everything else remains browsable so the read-only
+    Settings UI keeps rendering.  Verified live on
+    `https://kanfei.vsits.co`.  Operators running beta31 or beta32 as
+    a public droplet should upgrade immediately.
+
+  * Security: tightens the guest-readable payload of `GET /api/config`
+    on public droplets to drop ops metadata (`*_last_error`,
+    `backup_last_success`, backup schedule/directory) and third-party
+    account identifiers (Discord guild/channel IDs, Telegram chat ID,
+    Weather Underground station ID, CWOP callsign, METAR station).
+    The read-only Settings UI does not render those fields; a real
+    admin on a private station still sees the full view.  A per-key
+    seeded regression test would fail if a future edit introduces a
+    typo in the hidden-key list (the class of bug that shipped in
+    round one of this fix, caught by review).
+
+  * Operational note for droplet operators: with these fixes in place,
+    an nginx / Caddy-level shim that was blocking `/api/db-admin*`,
+    `/api/backup*`, `/api/logs*`, and `/api/auth/api-keys*` at the
+    reverse proxy is no longer required.  The application refuses
+    those routes directly for unauthenticated callers on a public
+    droplet.  Leaving the reverse-proxy shim in place is harmless
+    (defense in depth); removing it is safe.
+
+ -- Chris Nighswonger <dev@veritassuperaitsolutions.com>  Sat, 15 Aug 2026 11:38:31 +0000
+
 kanfei (0.1.0~beta32) unstable; urgency=medium
 
   * Fixes the private-station relay so pushed data actually populates
