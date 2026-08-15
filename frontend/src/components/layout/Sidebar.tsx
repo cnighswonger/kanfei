@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useFeatureFlags } from '../../context/FeatureFlagsContext';
 import { usePersona, type Persona } from '../../context/PersonaContext';
+import { useTheme } from '../../context/ThemeContext';
 
 interface SidebarProps {
   open: boolean;
@@ -67,7 +68,15 @@ function applyPersonaOrder(items: NavItem[], order: string[]): NavItem[] {
 export default function Sidebar({ open, onClose, collapsed = false, onToggleCollapse }: SidebarProps) {
   const { flags } = useFeatureFlags();
   const { persona } = usePersona();
+  const { theme } = useTheme();
   const [showAll, setShowAll] = useState(false);
+
+  // Paper themes render a fundamentally different sidebar per the
+  // Design Agent's `1c-dashboard-glaisher-notebook.png` mock: same
+  // cream shell background, but small-caps mono item labels, icons
+  // on the RIGHT, no rounded-pill active state — the active row is
+  // a full-width dark rectangle instead.
+  const paper = theme.surface.ownsBackground;
 
   // Feature-flag filter always applies (see NavItem hide/order note above).
   const flagFiltered = navItems.filter((item) => {
@@ -113,7 +122,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
           bottom: 0,
           width: collapsed ? '56px' : '220px',
           background: 'var(--color-sidebar-bg)',
-          borderRight: '1px solid var(--color-border)',
+          borderRight: paper ? 'none' : '1px solid var(--color-border)',
           display: 'flex',
           flexDirection: 'column',
           padding: '12px 0',
@@ -124,7 +133,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
           transition: 'transform 0.2s ease, width 0.2s ease',
         }}
       >
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '0 8px', flex: 1 }}>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: paper ? '0' : '2px', padding: paper ? '0' : '0 8px', flex: 1 }}>
           {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
@@ -132,7 +141,25 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
               end={item.to === '/'}
               onClick={onClose}
               title={collapsed ? item.label : undefined}
-              style={({ isActive }) => ({
+              style={({ isActive }) => (paper ? {
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: collapsed ? 'center' : 'space-between',
+                padding: collapsed ? '12px 0' : '11px 20px',
+                textDecoration: 'none',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'calc(12px * var(--font-scale))',
+                fontWeight: isActive ? 700 : 500,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                // Active row: dark-brown rectangle with cream text (mock 1c).
+                // Inactive: dark text on the cream sidebar bg.
+                color: isActive ? 'var(--color-bg)' : 'var(--color-text)',
+                background: isActive ? 'var(--color-text)' : 'transparent',
+                transition: 'color 0.15s ease, background 0.15s ease',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+              } : {
                 display: 'flex',
                 alignItems: 'center',
                 gap: collapsed ? '0' : '10px',
@@ -149,10 +176,21 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
                 overflow: 'hidden',
               })}
             >
-              <span style={{ fontSize: 'calc(16px * var(--font-scale))', width: '20px', textAlign: 'center', flexShrink: 0 }}>
-                {item.icon}
-              </span>
-              {!collapsed && <span>{item.label}</span>}
+              {paper ? (
+                <>
+                  {!collapsed && <span>{item.label}</span>}
+                  <span style={{ fontSize: 'calc(15px * var(--font-scale))', width: '18px', textAlign: 'center', flexShrink: 0, opacity: 0.55 }}>
+                    {item.icon}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: 'calc(16px * var(--font-scale))', width: '20px', textAlign: 'center', flexShrink: 0 }}>
+                    {item.icon}
+                  </span>
+                  {!collapsed && <span>{item.label}</span>}
+                </>
+              )}
             </NavLink>
           ))}
 
@@ -213,12 +251,28 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
         </nav>
 
         {/* About link — anchored at bottom */}
-        <div style={{ padding: '0 8px', marginTop: 'auto' }}>
+        <div style={{ padding: paper ? '0' : '0 8px', marginTop: 'auto' }}>
           <NavLink
             to="/about"
             onClick={onClose}
             title={collapsed ? 'About' : undefined}
-            style={({ isActive }) => ({
+            style={({ isActive }) => (paper ? {
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: collapsed ? 'center' : 'space-between',
+              padding: collapsed ? '12px 0' : '11px 20px',
+              textDecoration: 'none',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'calc(12px * var(--font-scale))',
+              fontWeight: isActive ? 700 : 500,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: isActive ? 'var(--color-bg)' : 'var(--color-text)',
+              background: isActive ? 'var(--color-text)' : 'transparent',
+              transition: 'color 0.15s ease, background 0.15s ease',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+            } : {
               display: 'flex',
               alignItems: 'center',
               gap: collapsed ? '0' : '10px',
@@ -235,15 +289,26 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
               overflow: 'hidden',
             })}
           >
-            <span style={{ fontSize: 'calc(16px * var(--font-scale))', width: '20px', textAlign: 'center', flexShrink: 0 }}>
-              {'ⓘ'}
-            </span>
-            {!collapsed && <span>About</span>}
+            {paper ? (
+              <>
+                {!collapsed && <span>About</span>}
+                <span style={{ fontSize: 'calc(15px * var(--font-scale))', width: '18px', textAlign: 'center', flexShrink: 0, opacity: 0.55 }}>
+                  {'ⓘ'}
+                </span>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: 'calc(16px * var(--font-scale))', width: '20px', textAlign: 'center', flexShrink: 0 }}>
+                  {'ⓘ'}
+                </span>
+                {!collapsed && <span>About</span>}
+              </>
+            )}
           </NavLink>
         </div>
 
-        {/* Collapse toggle (desktop only) */}
-        {onToggleCollapse && (
+        {/* Collapse toggle (desktop only) — hidden on paper themes per mock */}
+        {onToggleCollapse && !paper && (
           <div style={{ padding: '8px', borderTop: '1px solid var(--color-border)' }}>
             <button
               className="sidebar-collapse-btn"

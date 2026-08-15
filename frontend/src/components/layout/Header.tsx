@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useWeatherData } from '../../context/WeatherDataContext';
@@ -109,7 +110,7 @@ interface HeaderProps {
 }
 
 export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = false }: HeaderProps) {
-  const { themeName, setThemeName } = useTheme();
+  const { themeName, setThemeName, theme } = useTheme();
   const { currentConditions, forecast } = useWeatherData();
   const { user, logout } = useAuth();
   const { persona, setPersona } = usePersona();
@@ -120,6 +121,40 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
   const lo = extremes?.outside_temp_lo?.value;
   const local = forecast?.local ?? null;
 
+  // Paper themes render the header per the Design Agent's Glaisher
+  // mock (`1c-dashboard-glaisher-notebook.png`): CREAM bar with
+  // italic-serif "Kanfei" wordmark, tracked mono "· NOTEBOOK · STATION"
+  // subtitle, three persona pills (active segment DARK-FILLED cream-text),
+  // date/time on the right, and a "VUE · RUNNING" status pill.  Hi/lo,
+  // forecast pill, and connected label are absent from the mock and
+  // hidden for paper themes.
+  const paper = theme.surface.ownsBackground;
+  const paperInk = 'var(--color-text)';                  // dark on cream
+  const paperInkDim = 'var(--color-text-secondary)';     // dimmer dark
+  // Theme tag: last word of theme.label ("Glaisher's Notebook" →
+  // "NOTEBOOK", "The Mammoth's Log" → "LOG").  Matches the mocks'
+  // subtitle text after the "·" separator.
+  const themeTag = theme.label.split(/\s+/).pop()?.toUpperCase() ?? '';
+
+  // Wall-clock ticker.  useState + setInterval so the header time
+  // updates every 30 s without a full page reload; without this, the
+  // date/time on paper themes would freeze at initial-render time.
+  const [clockNow, setClockNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!paper) return;
+    const id = setInterval(() => setClockNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, [paper]);
+  const dateStr = clockNow
+    .toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+    .toUpperCase();
+  const timeStr = clockNow.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  const stationTypeShort = (currentConditions?.station_type ?? 'STATION')
+    .replace(/^Davis /i, '')
+    .replace(/^Vantage /i, '')
+    .toUpperCase();
+
   return (
     <header
       style={{
@@ -129,13 +164,14 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
         right: 0,
         height: '56px',
         background: 'var(--color-header-bg)',
-        borderBottom: '1px solid var(--color-border)',
+        borderBottom: paper ? 'none' : '1px solid var(--color-border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 20px',
         zIndex: 100,
         fontFamily: 'var(--font-body)',
+        color: paper ? paperInk : undefined,
         transform: hidden ? 'translateY(-100%)' : 'translateY(0)',
         transition: 'transform 0.3s ease',
       }}
@@ -163,16 +199,32 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
           className="header-title"
           style={{
             margin: 0,
-            fontSize: 'calc(18px * var(--font-scale))',
-            fontWeight: 600,
-            color: 'var(--color-text)',
+            fontSize: paper ? 'calc(22px * var(--font-scale))' : 'calc(18px * var(--font-scale))',
+            fontWeight: paper ? 400 : 600,
+            fontStyle: paper ? 'italic' : 'normal',
+            color: paper ? paperInk : 'var(--color-text)',
             fontFamily: 'var(--font-heading)',
-            letterSpacing: '-0.01em',
+            letterSpacing: paper ? '0' : '-0.01em',
           }}
         >
           Kanfei
         </h1>
-        {local && (() => {
+        {paper && (
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'calc(10px * var(--font-scale))',
+              fontWeight: 500,
+              letterSpacing: '0.20em',
+              color: paperInkDim,
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {`· ${themeTag} · STATION`}
+          </span>
+        )}
+        {!paper && local && (() => {
           const { icon, color } = mapForecastIcon(local.text);
           return (
             <div
@@ -206,60 +258,67 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <div
-          className="header-hilo"
-          style={{
-            fontSize: 'calc(13px * var(--font-scale))',
-            fontFamily: 'var(--font-gauge)',
-            color: 'var(--color-text-secondary)',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          <span style={{ color: 'var(--color-temp-hot, #ef4444)' }}>
-            H {hi != null ? `${hi.toFixed(1)}°` : '--'}
-          </span>
-          {' / '}
-          <span style={{ color: 'var(--color-temp-cold, #3b82f6)' }}>
-            L {lo != null ? `${lo.toFixed(1)}°` : '--'}
-          </span>
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            fontSize: 'calc(13px * var(--font-scale))',
-            color: 'var(--color-text-secondary)',
-          }}
-        >
-          <span
+        {!paper && (
+          <div
+            className="header-hilo"
             style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: connected ? 'var(--color-success)' : 'var(--color-danger)',
-              display: 'inline-block',
-              boxShadow: connected
-                ? '0 0 6px var(--color-success)'
-                : '0 0 6px var(--color-danger)',
+              fontSize: 'calc(13px * var(--font-scale))',
+              fontFamily: 'var(--font-gauge)',
+              color: 'var(--color-text-secondary)',
+              whiteSpace: 'nowrap',
             }}
-          />
-          <span className="header-connected-label">{connected ? 'Connected' : 'Disconnected'}</span>
-        </div>
+          >
+            <span style={{ color: 'var(--color-temp-hot, #ef4444)' }}>
+              H {hi != null ? `${hi.toFixed(1)}°` : '--'}
+            </span>
+            {' / '}
+            <span style={{ color: 'var(--color-temp-cold, #3b82f6)' }}>
+              L {lo != null ? `${lo.toFixed(1)}°` : '--'}
+            </span>
+          </div>
+        )}
 
-        {/* Persona switch — 3 segments.  Segmented button group so
-            switching personas is one click rather than open-and-pick. */}
+        {!paper && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: 'calc(13px * var(--font-scale))',
+              color: 'var(--color-text-secondary)',
+            }}
+          >
+            <span
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: connected ? 'var(--color-success)' : 'var(--color-danger)',
+                display: 'inline-block',
+                boxShadow: connected
+                  ? '0 0 6px var(--color-success)'
+                  : '0 0 6px var(--color-danger)',
+              }}
+            />
+            <span className="header-connected-label">{connected ? 'Connected' : 'Disconnected'}</span>
+          </div>
+        )}
+
+        {/* Persona switch — 3 segments.  Paper themes render the pills
+            as an outlined group with cream-on-brown active state; other
+            themes keep the pre-refactor accent-tinted background. */}
         <div
           role="group"
           aria-label="Persona"
           className="header-persona-switch"
           style={{
             display: 'flex',
-            border: '1px solid var(--color-border)',
-            borderRadius: '6px',
+            border: paper
+              ? '1px solid var(--color-border)'
+              : '1px solid var(--color-border)',
+            borderRadius: paper ? '2px' : '6px',
             overflow: 'hidden',
-            fontFamily: 'var(--font-body)',
+            fontFamily: paper ? 'var(--font-heading)' : 'var(--font-body)',
           }}
         >
           {PERSONAS.map((p, i) => {
@@ -271,7 +330,19 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
                 onClick={() => setPersona(p)}
                 aria-pressed={active}
                 title={PERSONA_LABEL[p]}
-                style={{
+                style={paper ? {
+                  background: active ? 'var(--color-text)' : 'transparent',
+                  color: active ? 'var(--color-bg)' : paperInk,
+                  border: 'none',
+                  borderLeft: i > 0 ? '1px solid var(--color-border)' : 'none',
+                  padding: '7px 16px',
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: 'calc(13px * var(--font-scale))',
+                  fontStyle: 'italic',
+                  fontWeight: active ? 600 : 400,
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease, color 0.15s ease',
+                } : {
                   background: active ? 'var(--color-accent-muted)' : 'transparent',
                   color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                   border: 'none',
@@ -289,11 +360,65 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
           })}
         </div>
 
+        {paper && (
+          <>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'calc(11px * var(--font-scale))',
+                letterSpacing: '0.14em',
+                color: paperInk,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {`${dateStr} · ${timeStr}`}
+            </span>
+            <span
+              aria-label={connected ? 'connected' : 'disconnected'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'calc(11px * var(--font-scale))',
+                letterSpacing: '0.14em',
+                color: paperInk,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <span
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: connected ? 'var(--color-success)' : 'var(--color-danger)',
+                  boxShadow: connected
+                    ? '0 0 6px var(--color-success)'
+                    : '0 0 6px var(--color-danger)',
+                  flexShrink: 0,
+                }}
+              />
+              {`${stationTypeShort} · ${connected ? 'RUNNING' : 'OFFLINE'}`}
+            </span>
+          </>
+        )}
+
         <select
           className="header-theme-select"
           value={themeName}
           onChange={(e) => setThemeName(e.target.value)}
-          style={{
+          style={paper ? {
+            background: 'transparent',
+            color: paperInk,
+            border: '1px solid var(--color-border)',
+            borderRadius: '2px',
+            padding: '6px 10px',
+            fontSize: 'calc(11px * var(--font-scale))',
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.10em',
+            cursor: 'pointer',
+            outline: 'none',
+          } : {
             background: 'var(--color-bg-secondary)',
             color: 'var(--color-text)',
             border: '1px solid var(--color-border)',
@@ -314,7 +439,18 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
 
         <button
           onClick={user?.authenticated ? logout : () => navigate("/login", { state: { from: location.pathname } })}
-          style={{
+          style={paper ? {
+            background: 'none',
+            border: '1px solid var(--color-border)',
+            borderRadius: '2px',
+            padding: '6px 12px',
+            fontSize: 'calc(11px * var(--font-scale))',
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: paperInkDim,
+            cursor: 'pointer',
+          } : {
             background: 'none',
             border: '1px solid var(--color-border)',
             borderRadius: '6px',
