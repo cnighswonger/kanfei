@@ -219,10 +219,17 @@ export function DashboardLayoutProvider({
     [persona],
   );
 
+  // A user modification means "I don't want the composed default anymore";
+  // drop explicit grid positioning from every tile so auto-placement flows
+  // naturally around the change.  ``resetToDefault`` restores the default
+  // (with its explicit positions) intact.
+  const stripPins = (tiles: TilePlacement[]): TilePlacement[] =>
+    tiles.map(({ gridColStart: _c, gridRowStart: _r, ...rest }) => rest);
+
   const reorderTiles = useCallback(
     (fromIndex: number, toIndex: number) => {
       setLayoutState((prev) => {
-        const tiles = [...prev.tiles];
+        const tiles = stripPins(prev.tiles);
         const [moved] = tiles.splice(fromIndex, 1);
         tiles.splice(toIndex, 0, moved);
         const next = { ...prev, tiles };
@@ -241,7 +248,7 @@ export function DashboardLayoutProvider({
         if (prev.tiles.some((t) => t.tileId === tileId)) return prev;
         const placement: TilePlacement = { tileId };
         if (colSpan) placement.colSpan = colSpan;
-        const next = { ...prev, tiles: [...prev.tiles, placement] };
+        const next = { ...prev, tiles: [...stripPins(prev.tiles), placement] };
         saveLayoutForPersona(persona, next);
         return next;
       });
@@ -254,7 +261,7 @@ export function DashboardLayoutProvider({
       setLayoutState((prev) => {
         const next = {
           ...prev,
-          tiles: prev.tiles.filter((t) => t.tileId !== tileId),
+          tiles: stripPins(prev.tiles).filter((t) => t.tileId !== tileId),
         };
         saveLayoutForPersona(persona, next);
         return next;
@@ -271,7 +278,7 @@ export function DashboardLayoutProvider({
       setLayoutState((prev) => {
         const next = {
           ...prev,
-          tiles: prev.tiles.map((t) =>
+          tiles: stripPins(prev.tiles).map((t) =>
             t.tileId === tileId ? { ...t, colSpan: clamped } : t,
           ),
         };
@@ -287,7 +294,7 @@ export function DashboardLayoutProvider({
       setLayoutState((prev) => {
         const next = {
           ...prev,
-          tiles: prev.tiles.map((t) => {
+          tiles: stripPins(prev.tiles).map((t) => {
             const def = TILE_REGISTRY[t.tileId];
             const min = def?.minColSpan ?? 2;
             return { ...t, colSpan: Math.max(min, Math.min(GRID_COLUMNS, colSpan)) };
