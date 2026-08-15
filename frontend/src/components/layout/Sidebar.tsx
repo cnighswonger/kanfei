@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useFeatureFlags } from '../../context/FeatureFlagsContext';
+import { usePersona, type Persona } from '../../context/PersonaContext';
 
 interface SidebarProps {
   open: boolean;
@@ -15,27 +17,76 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: '\u25A3' },
-  { to: '/history', label: 'History', icon: '\u25F7' },
-  { to: '/forecast', label: 'Forecast', icon: '\u2601' },
-  { to: '/astronomy', label: 'Astronomy', icon: '\u263D' },
-  { to: '/map', label: 'Map', icon: '\u29BF' },
-  { to: '/pressure', label: 'Pressure', icon: '\u2225' },
-  { to: '/nowcast', label: 'Nowcast', icon: '\u26C5' },
-  { to: '/spray', label: 'Spray', icon: '\u2618' },
-  { to: '/settings', label: 'Settings', icon: '\u2699' },
+  { to: '/', label: 'Dashboard', icon: '▣' },
+  { to: '/history', label: 'History', icon: '◷' },
+  { to: '/forecast', label: 'Forecast', icon: '☁' },
+  { to: '/astronomy', label: 'Astronomy', icon: '☽' },
+  { to: '/map', label: 'Map', icon: '⦿' },
+  { to: '/pressure', label: 'Pressure', icon: '∥' },
+  { to: '/nowcast', label: 'Nowcast', icon: '⛅' },
+  { to: '/spray', label: 'Spray', icon: '☘' },
+  { to: '/settings', label: 'Settings', icon: '⚙' },
 ];
+
+/**
+ * Persona-specific overlays on top of the feature-flag filter.
+ *
+ * ``order`` lists nav paths the persona reorders to the front — items
+ * not named keep their original order behind them.  ``hide`` removes
+ * paths from the persona view.  Both are additive to the
+ * ``mapEnabled`` / ``nowcastEnabled`` / ``sprayEnabled`` flag filter
+ * (which is checked first): a page hidden by feature flag stays
+ * hidden regardless of persona.
+ */
+const PERSONA_NAV: Record<Persona, { order: string[]; hide: string[] }> = {
+  everyday: { order: [], hide: [] },
+  agriculture: {
+    order: ['/', '/spray', '/forecast', '/nowcast', '/history', '/map', '/astronomy', '/settings'],
+    hide: ['/pressure'],
+  },
+  weather_nerd: {
+    order: [],
+    hide: ['/spray'],
+  },
+};
+
+function applyPersonaOrder(items: NavItem[], order: string[]): NavItem[] {
+  if (order.length === 0) return items;
+  const byPath = new Map(items.map((n) => [n.to, n]));
+  const ordered: NavItem[] = [];
+  const seen = new Set<string>();
+  for (const path of order) {
+    const n = byPath.get(path);
+    if (n) { ordered.push(n); seen.add(path); }
+  }
+  for (const n of items) {
+    if (!seen.has(n.to)) ordered.push(n);
+  }
+  return ordered;
+}
 
 export default function Sidebar({ open, onClose, collapsed = false, onToggleCollapse }: SidebarProps) {
   const { flags } = useFeatureFlags();
+  const { persona } = usePersona();
+  const [showAll, setShowAll] = useState(false);
 
-  const visibleNavItems = navItems.filter((item) => {
+  // Feature-flag filter always applies (see NavItem hide/order note above).
+  const flagFiltered = navItems.filter((item) => {
     if (item.to === '/map') return flags.mapEnabled;
     if (item.to === '/pressure') return flags.mapEnabled;
     if (item.to === '/nowcast') return flags.nowcastEnabled;
     if (item.to === '/spray') return flags.sprayEnabled;
     return true;
   });
+
+  const { order, hide } = PERSONA_NAV[persona];
+  const personaHiddenPaths = showAll ? [] : hide;
+  const afterPersonaHide = flagFiltered.filter((n) => !personaHiddenPaths.includes(n.to));
+  const visibleNavItems = applyPersonaOrder(afterPersonaHide, order);
+
+  // Count items the persona is hiding right now (from the flag-passing
+  // set only — a page killed by a feature flag isn't a persona hide).
+  const hiddenByPersona = flagFiltered.filter((n) => hide.includes(n.to)).length;
 
   return (
     <>
@@ -106,6 +157,61 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
               {!collapsed && <span>{item.label}</span>}
             </NavLink>
           ))}
+
+          {/* Reversible "N pages hidden" note — always render when the
+              persona hides anything, so no page ever disappears
+              silently.  Clicking Show/Hide re-includes them without
+              changing the stored persona. */}
+          {!collapsed && hiddenByPersona > 0 && (
+            <div style={{
+              marginTop: '12px',
+              padding: '8px 12px',
+              fontSize: 'calc(11px * var(--font-scale))',
+              color: 'var(--color-text-muted)',
+              fontFamily: 'var(--font-body)',
+              lineHeight: 1.4,
+            }}>
+              {showAll ? (
+                <>
+                  Showing all pages.{' '}
+                  <button
+                    type="button"
+                    onClick={() => setShowAll(false)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: 'var(--color-accent)',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      font: 'inherit',
+                    }}
+                  >
+                    Hide {hiddenByPersona} again
+                  </button>
+                </>
+              ) : (
+                <>
+                  {hiddenByPersona} page{hiddenByPersona === 1 ? '' : 's'} hidden by this persona.{' '}
+                  <button
+                    type="button"
+                    onClick={() => setShowAll(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: 'var(--color-accent)',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      font: 'inherit',
+                    }}
+                  >
+                    Show all pages
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </nav>
 
         {/* About link — anchored at bottom */}
@@ -132,7 +238,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
             })}
           >
             <span style={{ fontSize: 'calc(16px * var(--font-scale))', width: '20px', textAlign: 'center', flexShrink: 0 }}>
-              {'\u24D8'}
+              {'ⓘ'}
             </span>
             {!collapsed && <span>About</span>}
           </NavLink>
