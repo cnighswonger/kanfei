@@ -1750,7 +1750,7 @@ export default function Settings() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [reconnectMsg, setReconnectMsg] = useState<string | null>(null);
   const [ports, setPorts] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<"station" | "display" | "services" | "bots" | "alerts" | "nowcast" | "spray" | "usage" | "database" | "backup" | "system">("station");
+  const [activeTab, setActiveTab] = useState<"station" | "site_units" | "appearance" | "services" | "bots" | "alerts" | "nowcast" | "spray" | "usage" | "database" | "backup" | "system">("station");
   const [telegramTesting, setTelegramTesting] = useState(false);
   const [telegramTestResult, setTelegramTestResult] = useState<string | null>(null);
   const [discordTesting, setDiscordTesting] = useState(false);
@@ -2186,44 +2186,120 @@ export default function Settings() {
         Settings
       </h2>
 
+      {/* 5-group navigation.  Row 1 is the group buttons; row 2 shows
+          the group's sub-tabs (hidden when the group has only one).  A
+          single flat 11-button strip was the pre-refactor shape; this
+          two-level nav collects related settings under audience-oriented
+          groups so the sidebar scan is 5 items instead of 11.
+          Feature-flag filtering runs on the sub-tab list, so a disabled
+          feature still drops its tab entirely rather than showing an
+          empty group. */}
+      {(() => {
+        const groups = [
+          { key: "station", label: "Station", tabs: [["station", "Station"]] as const },
+          { key: "site_units", label: "Site & Units", tabs: [["site_units", "Site & Units"]] as const },
+          { key: "appearance", label: "Appearance", tabs: [["appearance", "Appearance"]] as const },
+          {
+            key: "integrations", label: "Integrations", tabs: [
+              ["services", "Services"] as const,
+              ["bots", "Bots"] as const,
+              ["alerts", "Alerts"] as const,
+              ...(flags.nowcastEnabled ? [["nowcast", "Nowcast"] as const] : []),
+              ...(flags.sprayEnabled ? [["spray", "Spray"] as const] : []),
+              ...(flags.nowcastEnabled ? [["usage", "Usage"] as const] : []),
+            ] as ReadonlyArray<readonly [string, string]>,
+          },
+          {
+            key: "data", label: "Data", tabs: [
+              ["database", "Database"] as const,
+              ["backup", "Backup"] as const,
+              ["system", "System"] as const,
+            ] as ReadonlyArray<readonly [string, string]>,
+          },
+        ] as const;
+
+        const tabToGroup: Record<string, string> = {};
+        for (const g of groups) for (const [k] of g.tabs) tabToGroup[k] = g.key;
+        const activeGroupKey = tabToGroup[activeTab] ?? "station";
+        const activeGroup = groups.find((g) => g.key === activeGroupKey)!;
+        return (
+          <>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              flexWrap: "wrap",
+            }}>
+              {groups.map((g) => (
+                <button
+                  key={g.key}
+                  onClick={() => {
+                    const first = g.tabs[0]?.[0];
+                    if (first) setActiveTab(first as typeof activeTab);
+                  }}
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: "calc(14px * var(--font-scale))",
+                    padding: isMobile ? "8px 14px" : "8px 20px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--color-border)",
+                    background: activeGroupKey === g.key ? "var(--color-accent)" : "var(--color-bg-secondary)",
+                    color: activeGroupKey === g.key ? "#fff" : "var(--color-text-secondary)",
+                    cursor: "pointer",
+                    transition: "background 0.15s ease, color 0.15s ease",
+                  }}
+                >
+                  {g.label}
+                </button>
+              ))}
+
+              <span style={{ flex: 1 }} />
+              {/* save-status + save-buttons block continues below */}
+            </div>
+
+            {activeGroup.tabs.length > 1 && (
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                flexWrap: "wrap",
+                marginTop: "8px",
+                paddingLeft: "4px",
+              }}>
+                {activeGroup.tabs.map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setActiveTab(key as typeof activeTab)}
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      fontSize: "calc(13px * var(--font-scale))",
+                      padding: "6px 14px",
+                      borderRadius: "14px",
+                      border: "1px solid var(--color-border)",
+                      background: activeTab === key ? "var(--color-accent-muted)" : "transparent",
+                      color: activeTab === key ? "var(--color-accent)" : "var(--color-text-secondary)",
+                      fontWeight: activeTab === key ? 600 : 400,
+                      cursor: "pointer",
+                      transition: "background 0.15s ease, color 0.15s ease",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        );
+      })()}
+
       <div style={{
         display: "flex",
         alignItems: "center",
         gap: "6px",
         flexWrap: "wrap",
+        marginTop: "8px",
+        justifyContent: "flex-end",
       }}>
-        {([
-          ["station", "Station"],
-          ["display", "Display"],
-          ["services", "Services"],
-          ["bots", "Bots"],
-          ["alerts", "Alerts"],
-          ...(flags.nowcastEnabled ? [["nowcast", "Nowcast"] as const] : []),
-          ...(flags.sprayEnabled ? [["spray", "Spray"] as const] : []),
-          ...(flags.nowcastEnabled ? [["usage", "Usage"] as const] : []),
-          ["database", "Database"],
-          ["backup", "Backup"],
-          ["system", "System"],
-        ] as const).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: "calc(14px * var(--font-scale))",
-              padding: isMobile ? "8px 14px" : "8px 20px",
-              borderRadius: "6px",
-              border: "1px solid var(--color-border)",
-              background: activeTab === key ? "var(--color-accent)" : "var(--color-bg-secondary)",
-              color: activeTab === key ? "#fff" : "var(--color-text-secondary)",
-              cursor: "pointer",
-              transition: "background 0.15s ease, color 0.15s ease",
-            }}
-          >
-            {label}
-          </button>
-        ))}
-
         <span style={{ flex: 1 }} />
 
         {saveSuccess && (
@@ -2961,7 +3037,15 @@ export default function Settings() {
         isMobile={isMobile}
       />
 
-      {/* Location section */}
+      </>)}
+
+      {activeTab === "site_units" && (<>
+      {/* Location section — moved out of Station in the 5-group nav
+          rework so site coordinates live with unit preferences instead
+          of buried under station calibration.  StepLocation is the same
+          component the setup wizard uses; ConsoleLocation mirrors the
+          same lat/lon back to the console for its own sunrise/sunset
+          and pressure correction (#261). */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Location</h3>
         <StepLocation
@@ -2974,25 +3058,20 @@ export default function Settings() {
             if (partial.elevation !== undefined) updateField("elevation", partial.elevation);
           }}
         />
-        {/* The console keeps its own copy of these coordinates and uses
-            them for its sunrise/sunset and pressure correction (#261). */}
         <ConsoleLocation
           supported={wlConfig?.supported?.location ?? false}
           latitude={Number(val("latitude")) || 0}
           longitude={Number(val("longitude")) || 0}
         />
       </div>
-      {/* Yearly-rain-reset month.  Sits outside the Location card because
-          the two are logically independent — Location involves an active
-          reconcile against the config value, RainSeason is a plain console
-          setting mirror. */}
+      {/* Yearly-rain-reset month.  Independent of Location — Location
+          reconciles against the config value; RainSeason is a plain
+          console-setting mirror. */}
       <RainSeason
         supported={wlConfig?.supported?.rain_season ?? false}
         isMobile={isMobile}
       />
-      </>)}
 
-      {activeTab === "display" && (<>
       {/* Units section */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Units</h3>
@@ -3112,7 +3191,9 @@ export default function Settings() {
           </select>
         </div>
       </div>
+      </>)}
 
+      {activeTab === "appearance" && (<>
       {/* Display section */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Display</h3>
