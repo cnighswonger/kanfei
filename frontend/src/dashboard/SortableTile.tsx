@@ -136,6 +136,7 @@ export default function SortableTile({
     // paddingBottom carves the visible gutter inside the cell.
     paddingBottom: GAP,
     boxSizing: "border-box",
+    overflow: "hidden",
   };
 
   return (

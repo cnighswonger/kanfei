@@ -306,6 +306,11 @@ export default function DashboardGrid() {
                     : `span ${rowSpan}`,
                   paddingBottom: GAP,
                   boxSizing: "border-box",
+                  // Clip oversized tile content so a component whose
+                  // natural height exceeds its rowSpan can't spill into
+                  // the neighbouring cell (e.g. SolarUVGauge's flex-
+                  // centered arc leaking upward into the chart tile).
+                  overflow: "hidden",
                 }}
               >
                 <CompactProvider value={compact}>
