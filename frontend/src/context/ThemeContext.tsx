@@ -50,10 +50,15 @@ export function applyThemeToDOM(theme: Theme) {
   root.style.setProperty('--font-display', theme.fonts.display);
 
   // Type roles.  One triplet per role (family / size / weight) plus
-  // tracking + transform when set.  Consumers pull like
+  // tracking + transform + style when set.  Consumers pull like
   // ``font-family: var(--type-heading-family)``.
+  //
+  // Role names are kebab-cased so ``sectionLabel`` publishes as
+  // ``--type-section-label-*``, matching the ``--color-bg-secondary``
+  // and ``--dial-grad-outer`` conventions elsewhere in this mapper.
   for (const [roleName, r] of Object.entries(theme.type)) {
-    const p = `--type-${roleName}`;
+    const kebab = roleName.replace(/([A-Z])/g, '-$1').toLowerCase();
+    const p = `--type-${kebab}`;
     root.style.setProperty(`${p}-family`, r.family);
     root.style.setProperty(`${p}-size`, `calc(${r.size}px * var(--font-scale))`);
     root.style.setProperty(`${p}-weight`, String(r.weight));

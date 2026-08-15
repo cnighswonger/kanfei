@@ -235,7 +235,14 @@ export const themes: Record<string, Theme> = { dark, light, classic, glaisher, m
 export const defaultTheme = 'dark';
 export { dark, light, classic, glaisher, mammoth };
 
-/** Deep-merge overrides onto a base preset to create a custom theme. */
+/** Deep-merge overrides onto a base preset to create a custom theme.
+ *
+ * Groups whose fields the ThemeEditor may edit piecemeal deep-merge:
+ * a caller passing ``{ chart: { series: { temp: '#…' } } }`` gets a
+ * single-series override, not a chart with only one series and every
+ * other field blown away.  Same pattern as ``deserializeCustomTheme``
+ * uses for legacy custom themes loaded from localStorage.
+ */
 export function createCustomTheme(
   base: Theme,
   overrides: Partial<{
@@ -245,7 +252,7 @@ export function createCustomTheme(
     rules: Partial<Theme['rules']>;
     radius: Partial<Theme['radius']>;
     surface: Partial<Theme['surface']>;
-    chart: Partial<Theme['chart']>;
+    chart: Partial<Theme['chart']> & { series?: Partial<Theme['chart']['series']> };
     dial: Partial<Theme['dial']>;
     gauge: Partial<Theme['gauge']>;
     fontScale: number;
@@ -260,7 +267,11 @@ export function createCustomTheme(
     rules: { ...base.rules, ...overrides.rules },
     radius: { ...base.radius, ...overrides.radius },
     surface: { ...base.surface, ...overrides.surface },
-    chart: { ...base.chart, ...overrides.chart },
+    chart: {
+      ...base.chart,
+      ...overrides.chart,
+      series: { ...base.chart.series, ...(overrides.chart?.series ?? {}) },
+    },
     dial: { ...base.dial, ...overrides.dial },
     gauge: { ...base.gauge, ...overrides.gauge },
     fontScale: overrides.fontScale ?? base.fontScale,

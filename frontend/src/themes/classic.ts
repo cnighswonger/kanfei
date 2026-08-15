@@ -31,7 +31,7 @@ const classic: Theme = {
     accent: '#8b6914',
     accentHover: '#73570f',
     accentMuted: 'rgba(139,105,20,0.12)',
-    success: '#3f6b35',
+    success: '#4a7c3f',
     warning: '#b8860b',
     danger: '#a0342e',
     border: '#c9b88c',
