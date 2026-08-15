@@ -73,8 +73,14 @@ export default function Dashboard() {
             position: "fixed",
             right: 0,
             bottom: 0,
-            width: `${hero.corner.width}px`,
-            height: `${hero.corner.height}px`,
+            // Cap at 400x280 on desktop; scale down proportionally on
+            // narrow viewports so the plate never extends off-screen
+            // or clips (Codex round 1 fix on PR #359).  aspect-ratio
+            // keeps the intended 400:280 shape once width is
+            // constrained by min(...).
+            width: `min(${hero.corner.width}px, 100vw)`,
+            aspectRatio: `${hero.corner.width} / ${hero.corner.height}`,
+            maxHeight: `${hero.corner.height}px`,
             zIndex: 0,
             backgroundImage: `url(${hero.corner.image})`,
             backgroundSize: "contain",
