@@ -4,6 +4,7 @@
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
+import TileLabel from "../common/TileLabel.tsx";
 
 interface ValueWithUnit {
   value: number;
@@ -37,11 +38,18 @@ function uvLabel(uv: number): string {
 }
 
 function solarIntensity(wr: number): { label: string; color: string } {
-  if (wr === 0) return { label: 'None', color: 'var(--color-text-muted)' };
-  if (wr < 200) return { label: 'Low', color: 'var(--color-solar-low, var(--color-solar-yellow, #f59e0b))' };
-  if (wr < 600) return { label: 'Moderate', color: 'var(--color-solar-moderate, #f97316)' };
-  if (wr < 1000) return { label: 'High', color: 'var(--color-solar-high, var(--color-danger, #ef4444))' };
-  return { label: 'Very High', color: 'var(--color-solar-extreme, #dc2626)' };
+  // Design REVIEW-02: the previous ramp coloured 200–1000 W/m² with
+  // `--color-danger` red, so a routine bright-sun reading of 881 read
+  // as an alarm.  Design's spec: colour stays `--color-solar-yellow`
+  // regardless of magnitude; the LABEL carries the intensity signal.
+  const label =
+    wr === 0 ? 'None' :
+    wr < 200 ? 'Low' :
+    wr < 600 ? 'Moderate' :
+    wr < 1000 ? 'High' :
+    'Very High';
+  const color = wr === 0 ? 'var(--color-text-muted)' : 'var(--color-solar-yellow)';
+  return { label, color };
 }
 
 function formatEnergyValue(v: ValueWithUnit | null | undefined): string {
@@ -138,14 +146,7 @@ export default function SolarUVGauge({
       boxSizing: 'border-box',
     }}>
       {/* UV Index section */}
-      <div style={{
-        fontSize: 'calc(12px * var(--font-scale))',
-        fontFamily: 'var(--font-body)',
-        color: 'var(--color-text-secondary)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-        marginBottom: '4px',
-      }}>UV Index</div>
+      <TileLabel>UV Index</TileLabel>
 
       <svg width="200" height="80" viewBox="0 0 200 80">
         {/* Background arc */}
@@ -204,14 +205,7 @@ export default function SolarUVGauge({
       }} />
 
       {/* Solar Radiation section */}
-      <div style={{
-        fontSize: 'calc(12px * var(--font-scale))',
-        fontFamily: 'var(--font-body)',
-        color: 'var(--color-text-secondary)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-        marginBottom: '8px',
-      }}>Solar Radiation</div>
+      <TileLabel>Solar Radiation</TileLabel>
 
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
         <span style={{

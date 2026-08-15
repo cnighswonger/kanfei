@@ -3,6 +3,7 @@
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
+import TileLabel from "../common/TileLabel.tsx";
 import { formatTimestamp } from "../../utils/formatting.ts";
 
 interface BarometerDialProps {
@@ -114,14 +115,7 @@ export default function BarometerDial({ value, unit, trend, high, low, highAt, l
       height: '100%',
       boxSizing: 'border-box',
     }}>
-      <div style={{
-        fontSize: 'calc(12px * var(--font-scale))',
-        fontFamily: 'var(--font-body)',
-        color: 'var(--color-text-secondary)',
-        marginBottom: '4px',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-      }}>Barometer</div>
+      <TileLabel>Barometer</TileLabel>
 
       <svg width="260" height="200" viewBox="0 0 260 200">
         {/* Dial face background */}
