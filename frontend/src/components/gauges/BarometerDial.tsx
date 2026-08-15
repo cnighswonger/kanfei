@@ -111,10 +111,10 @@ export default function BarometerDial({
 
           {/* Minor ticks then major (render order per gauges.ts docstring) */}
           {d.minor.map((t, i) => (
-            <line key={`m${i}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={inkSecondary} strokeWidth={t.sw ?? 1} />
+            <line key={`m${i}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={inkMuted} strokeWidth={t.sw ?? 1} />
           ))}
           {d.major.map((t, i) => (
-            <line key={`M${i}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={ink} strokeWidth={t.sw ?? 2} />
+            <line key={`M${i}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={inkSecondary} strokeWidth={t.sw ?? 2} />
           ))}
 
           {/* Numerals */}
@@ -146,21 +146,17 @@ export default function BarometerDial({
             </text>
           ))}
 
-          {/* Trend hand (pale, 3 h behind).  wheelDial's primitive puts
-              it at frac - 0.12, i.e. LOWER on the dial than the live
-              value — meaningful only when pressure has actually been
-              rising.  Hide it otherwise so a null / steady / falling
-              trend doesn't imply a fake historical position. */}
-          {trend === 'rising' && (
-            <line
-              x1={d.cx} y1={d.cy}
-              x2={d.trend.x} y2={d.trend.y}
-              stroke={needleColor}
-              strokeWidth="2"
-              strokeLinecap="round"
-              opacity="0.35"
-            />
-          )}
+          {/* Trend hand: always rendered; the primitive's frac - 0.12
+              offset is stylistic dial geometry, not a strict historical
+              position, so it stays visible regardless of trend data. */}
+          <line
+            x1={d.cx} y1={d.cy}
+            x2={d.trend.x} y2={d.trend.y}
+            stroke={needleColor}
+            strokeWidth="2"
+            strokeLinecap="round"
+            opacity="0.35"
+          />
 
           {/* Live needle */}
           <line
