@@ -4,6 +4,7 @@
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
+import TileLabel from "../common/TileLabel.tsx";
 import { formatTimestamp } from "../../utils/formatting.ts";
 
 interface TemperatureGaugeProps {
@@ -154,16 +155,7 @@ export default function TemperatureGauge({
       height: '100%',
       boxSizing: 'border-box',
     }}>
-      {label && (
-        <div style={{
-          fontSize: 'calc(12px * var(--font-scale))',
-          fontFamily: 'var(--font-body)',
-          color: 'var(--color-text-secondary)',
-          marginBottom: '4px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-        }}>{label}</div>
-      )}
+      {label && <TileLabel>{label}</TileLabel>}
 
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
         <defs>
