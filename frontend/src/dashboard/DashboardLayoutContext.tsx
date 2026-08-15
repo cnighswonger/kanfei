@@ -231,25 +231,38 @@ export function DashboardLayoutProvider({
     setEditMode(false);
   }, [updateLayout, persona]);
 
-  // Reconcile with backend on mount.  The backend may have a saved
-  // layout that beats what we loaded from localStorage; fall back to
-  // the current persona's default only if the backend value is also
-  // absent or corrupt.
+  // Reconcile with backend on mount.  Two paths, both fed by the same
+  // syncUIPrefs() promise so backend prefs land once and get used
+  // consistently:
+  //
+  //   1. Saved layout branch — the backend has a stored
+  //      ui_dashboard_layout.  It always wins; parseLayout falls back
+  //      to the persona default only if the stored value is corrupt.
+  //
+  //   2. No-saved-layout branch — nothing stored on either side.  The
+  //      pre-mount loadLayout() seeded state from the LOCAL persona
+  //      (everyday when localStorage is fresh), but the backend may
+  //      have ui_persona=agriculture from a different browser or the
+  //      setup wizard.  Re-seat using the synced persona so a fresh
+  //      browser lands on the persona-appropriate default instead of
+  //      the local-only fallback.  This is not a clobber: there is no
+  //      saved layout to overwrite.
+  //
+  // The effect intentionally does not depend on `persona`; a persona
+  // switch after mount MUST NOT reseat a saved layout.  The synced
+  // persona used below comes from the backend prefs snapshot, not
+  // from the live context value.
   useEffect(() => {
     syncUIPrefs().then((prefs) => {
       const raw = prefs[PREF_KEY];
-      if (raw) {
-        const synced = parseLayout(raw, getPersonaDefaultLayout(persona));
-        setLayoutState((cur) => {
-          if (JSON.stringify(cur) !== JSON.stringify(synced)) return synced;
-          return cur;
-        });
-      }
+      const syncedPersona = prefs[PERSONA_PREF_KEY] ?? persona;
+      const personaDefault = getPersonaDefaultLayout(syncedPersona);
+      const next = raw ? parseLayout(raw, personaDefault) : personaDefault;
+      setLayoutState((cur) => {
+        if (JSON.stringify(cur) !== JSON.stringify(next)) return next;
+        return cur;
+      });
     });
-    // Intentionally not depending on persona: this fires once on mount
-    // to reconcile the initial load.  Persona changes do NOT re-fire
-    // this effect because a persona switch must never clobber a saved
-    // layout — the user's arrangement is theirs to keep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
