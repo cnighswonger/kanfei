@@ -72,9 +72,10 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
   const [showAll, setShowAll] = useState(false);
 
   // Paper themes render a fundamentally different sidebar per the
-  // Design Agent's `1c-dashboard-glaisher-notebook.png` mock:
-  // dark-brown background, small-caps mono item labels, icons on
-  // the RIGHT, no rounded-pill active state.
+  // Design Agent's `1c-dashboard-glaisher-notebook.png` mock: same
+  // cream shell background, but small-caps mono item labels, icons
+  // on the RIGHT, no rounded-pill active state — the active row is
+  // a full-width dark rectangle instead.
   const paper = theme.surface.ownsBackground;
 
   // Feature-flag filter always applies (see NavItem hide/order note above).
