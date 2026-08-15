@@ -77,9 +77,27 @@ export function applyThemeToDOM(theme: Theme) {
   root.style.setProperty('--radius-card', theme.radius.card);
   root.style.setProperty('--radius-control', theme.radius.control);
 
-  // Surface texture (empty on non-paper themes is a no-op — the
-  // shell will pick this up in PR 4).
+  // Surface texture — a subtle radial-gradient warmth layer wired
+  // into `body { background-image: ... }` in index.css.  Non-paper
+  // themes ship 'none', so the CSS rule is invisible there.
   root.style.setProperty('--surface-texture', theme.surface.texture ?? 'none');
+
+  // Surface plate — the ornamental engraving that gives paper themes
+  // their identity.  Rendered as a fixed-position layer inside
+  // AppShell via a companion `app-plate` element that reads these
+  // custom properties.  Non-paper themes ship `--plate-image: none`,
+  // which makes the layer invisible even though the element still
+  // renders.  `--plate-owns-background` is a numeric 0/1 flag other
+  // shell CSS uses to know whether to leave the app-shell background
+  // transparent so this plate shows through.
+  const plate = theme.surface.plate;
+  root.style.setProperty('--plate-image', plate ? `url("${plate.src}")` : 'none');
+  root.style.setProperty('--plate-opacity', plate ? String(plate.opacity) : '0');
+  root.style.setProperty('--plate-filter', plate?.filter ?? 'none');
+  root.style.setProperty('--plate-blend', plate?.blend ?? 'normal');
+  root.style.setProperty('--plate-position', plate?.position ?? 'center');
+  root.style.setProperty('--plate-size', plate?.size ?? 'contain');
+  root.style.setProperty('--surface-owns-background', theme.surface.ownsBackground ? '1' : '0');
 
   // Chart tokens.  Series colours as one var each so Highcharts
   // callers can pick them by role rather than by index.

@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 import Footer from './Footer';
 import WeatherBackground from '../WeatherBackground';
 import { useWeatherBackground } from '../../context/WeatherBackgroundContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useWeatherData } from '../../context/WeatherDataContext';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useMuteStatus } from '../../hooks/useMuteStatus';
@@ -40,6 +41,8 @@ export default function AppShell({
     () => readUIPref("ui_sidebar_collapsed", "false") === "true",
   );
   const { enabled } = useWeatherBackground();
+  const { theme } = useTheme();
+  const themeOwnsBackground = theme.surface.ownsBackground;
   const { nowcastWarning, dismissNowcastWarning } = useWeatherData();
   const isMobile = useIsMobile();
   const channelMuted = useMuteStatus();
@@ -74,9 +77,22 @@ export default function AppShell({
   const hideHeader = isAbout && !isMobile;
   const sidebarWidth = sidebarCollapsed ? '56px' : '220px';
 
+  // A paper theme owns the page background: body's texture layer
+  // and the plate below both need to show through, so the shell
+  // renders transparent.  Non-paper themes only go transparent when
+  // WeatherBackground is active (unchanged from pre-refactor
+  // behaviour).
+  const shellTransparent = enabled || themeOwnsBackground;
+
   return (
     <>
       <WeatherBackground />
+      {/* Ornamental plate layer.  Reads --plate-* custom properties
+          published by applyThemeToDOM.  Non-paper themes ship
+          --plate-image: none, so the element still exists but paints
+          nothing — safe to leave permanently mounted rather than
+          conditionally rendering. */}
+      <div className="app-plate" aria-hidden="true" />
       <div
         style={{
           display: 'grid',
@@ -87,7 +103,7 @@ export default function AppShell({
             "sidebar main"
           `,
           height: '100vh',
-          background: enabled ? 'transparent' : 'var(--color-bg)',
+          background: shellTransparent ? 'transparent' : 'var(--color-bg)',
           position: 'relative',
           zIndex: 3,
           transition: 'background-color 0.3s ease, grid-template-columns 0.2s ease',
