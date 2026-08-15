@@ -115,6 +115,32 @@ function loadLayout(): DashboardLayout {
   return parseLayout(readUIPref(PREF_KEY, ""), personaDefault);
 }
 
+/**
+ * True when the browser's localStorage carries a valid, current-schema
+ * saved layout at the moment this call runs.  Called once during the
+ * useState lazy initializer so the answer is captured BEFORE
+ * syncUIPrefs() overwrites localStorage with backend-reconciled values
+ * (see uiPrefs.ts `_doSync`, the "backend wins" pass).  Without this
+ * pre-capture, an anonymous user whose \`writeUIPref\` PUT was 401/403'd
+ * would look indistinguishable from a fresh visitor after sync, and
+ * the mount-time reconcile would clobber their local-only saved
+ * arrangement.
+ */
+function hasLocalSavedLayout(): boolean {
+  const raw = readUIPref(PREF_KEY, "");
+  if (!raw) return false;
+  try {
+    const p = JSON.parse(raw);
+    if (p.version === 1) return true;
+    if (p.version !== LAYOUT_VERSION) return false;
+    return Array.isArray(p.tiles) && p.tiles.some(
+      (t: { tileId: string }) => t.tileId in TILE_REGISTRY,
+    );
+  } catch {
+    return false;
+  }
+}
+
 function saveLayout(layout: DashboardLayout): void {
   writeUIPref(PREF_KEY, JSON.stringify(layout));
 }
@@ -128,6 +154,11 @@ export function DashboardLayoutProvider({
 }) {
   const [layout, setLayoutState] = useState<DashboardLayout>(loadLayout);
   const [editMode, setEditMode] = useState(false);
+  // Capture whether the browser had a valid local saved layout at
+  // render time (before syncUIPrefs's clobber pass); used below to
+  // avoid resetting a local-only saved arrangement when the backend
+  // has no dashboard layout of its own.
+  const [initialHadSavedLayout] = useState<boolean>(hasLocalSavedLayout);
   const { persona } = usePersona();
 
   const updateLayout = useCallback((next: DashboardLayout) => {
@@ -231,22 +262,26 @@ export function DashboardLayoutProvider({
     setEditMode(false);
   }, [updateLayout, persona]);
 
-  // Reconcile with backend on mount.  Two paths, both fed by the same
+  // Reconcile with backend on mount.  Three cases, all fed by the same
   // syncUIPrefs() promise so backend prefs land once and get used
   // consistently:
   //
-  //   1. Saved layout branch — the backend has a stored
-  //      ui_dashboard_layout.  It always wins; parseLayout falls back
-  //      to the persona default only if the stored value is corrupt.
+  //   1. Backend has a saved layout — it always wins over local.
+  //      parseLayout falls back to the persona default only if the
+  //      stored value is corrupt.
   //
-  //   2. No-saved-layout branch — nothing stored on either side.  The
-  //      pre-mount loadLayout() seeded state from the LOCAL persona
-  //      (everyday when localStorage is fresh), but the backend may
-  //      have ui_persona=agriculture from a different browser or the
-  //      setup wizard.  Re-seat using the synced persona so a fresh
-  //      browser lands on the persona-appropriate default instead of
-  //      the local-only fallback.  This is not a clobber: there is no
-  //      saved layout to overwrite.
+  //   2. Backend has none but browser does — keep the local layout.
+  //      This is the anonymous-user path where writeUIPref's backend
+  //      PUT was 401/403'd; localStorage retained the user's own
+  //      arrangement and we must not clobber it just because backend
+  //      is empty.  `initialHadSavedLayout` was captured before
+  //      syncUIPrefs's "backend wins" clobber overwrote localStorage.
+  //
+  //   3. Nothing anywhere — seed from the backend-synced persona so a
+  //      fresh browser whose local `ui_persona` is still the default
+  //      but whose backend `ui_persona` is agriculture (set on another
+  //      device or by the setup wizard) lands on the agricultural
+  //      default rather than the local-persona everyday default.
   //
   // The effect intentionally does not depend on `persona`; a persona
   // switch after mount MUST NOT reseat a saved layout.  The synced
@@ -257,7 +292,14 @@ export function DashboardLayoutProvider({
       const raw = prefs[PREF_KEY];
       const syncedPersona = prefs[PERSONA_PREF_KEY] ?? persona;
       const personaDefault = getPersonaDefaultLayout(syncedPersona);
-      const next = raw ? parseLayout(raw, personaDefault) : personaDefault;
+      let next: DashboardLayout;
+      if (raw) {
+        next = parseLayout(raw, personaDefault);
+      } else if (initialHadSavedLayout) {
+        return;
+      } else {
+        next = personaDefault;
+      }
       setLayoutState((cur) => {
         if (JSON.stringify(cur) !== JSON.stringify(next)) return next;
         return cur;
