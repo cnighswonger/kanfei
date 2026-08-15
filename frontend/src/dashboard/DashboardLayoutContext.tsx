@@ -17,11 +17,22 @@ import {
   type DashboardLayout,
   type TilePlacement,
   TILE_REGISTRY,
-  DEFAULT_LAYOUT,
   LAYOUT_VERSION,
   GRID_COLUMNS,
+  getPersonaDefaultLayout,
 } from "./tileRegistry.ts";
 import { readUIPref, writeUIPref, syncUIPrefs } from "../utils/uiPrefs.ts";
+import { usePersona, DEFAULT_PERSONA } from "../context/PersonaContext.tsx";
+
+const PERSONA_PREF_KEY = "ui_persona";
+
+function readCurrentPersonaFromStorage(): string {
+  // Synchronous read for the initial layout — matches how ThemeContext
+  // resolves themeName before the React tree mounts (context reads only
+  // work inside components, but the initial useState computation is
+  // outside the component during first render's setup).
+  return readUIPref(PERSONA_PREF_KEY, DEFAULT_PERSONA);
+}
 
 // --- Types ---
 
@@ -70,8 +81,8 @@ function migrateV1(parsed: { version: number; tiles: { tileId: string; colSpan?:
   return migrated;
 }
 
-function parseLayout(raw: string): DashboardLayout {
-  if (!raw) return DEFAULT_LAYOUT;
+function parseLayout(raw: string, fallback: DashboardLayout): DashboardLayout {
+  if (!raw) return fallback;
   try {
     const parsed = JSON.parse(raw) as DashboardLayout;
 
@@ -80,23 +91,28 @@ function parseLayout(raw: string): DashboardLayout {
       return migrateV1(parsed);
     }
 
-    // Version check — fall back to default if schema changed
-    if (parsed.version !== LAYOUT_VERSION) return DEFAULT_LAYOUT;
+    // Version check — fall back if schema changed
+    if (parsed.version !== LAYOUT_VERSION) return fallback;
 
     // Validate: strip tiles with unknown IDs
     const validTiles = parsed.tiles.filter(
       (t) => t.tileId in TILE_REGISTRY,
     );
-    if (validTiles.length === 0) return DEFAULT_LAYOUT;
+    if (validTiles.length === 0) return fallback;
 
     return { version: LAYOUT_VERSION, tiles: validTiles };
   } catch {
-    return DEFAULT_LAYOUT;
+    return fallback;
   }
 }
 
 function loadLayout(): DashboardLayout {
-  return parseLayout(readUIPref(PREF_KEY, ""));
+  // The persona chosen at page-load time picks the first-visit default.
+  // A saved layout in localStorage still wins — parseLayout only falls
+  // back to the persona default when the stored value is empty or
+  // corrupt.  Users who arrived with a saved layout keep it exactly.
+  const personaDefault = getPersonaDefaultLayout(readCurrentPersonaFromStorage());
+  return parseLayout(readUIPref(PREF_KEY, ""), personaDefault);
 }
 
 function saveLayout(layout: DashboardLayout): void {
@@ -112,6 +128,7 @@ export function DashboardLayoutProvider({
 }) {
   const [layout, setLayoutState] = useState<DashboardLayout>(loadLayout);
   const [editMode, setEditMode] = useState(false);
+  const { persona } = usePersona();
 
   const updateLayout = useCallback((next: DashboardLayout) => {
     setLayoutState(next);
@@ -207,22 +224,33 @@ export function DashboardLayoutProvider({
   }, []);
 
   const resetToDefault = useCallback(() => {
-    updateLayout(DEFAULT_LAYOUT);
+    // Reset to the CURRENT persona's default, not the frozen
+    // pre-persona all-tiles default.  A user on Agriculture who hits
+    // "Reset" expects the agricultural tile set, not the nerd shape.
+    updateLayout(getPersonaDefaultLayout(persona));
     setEditMode(false);
-  }, [updateLayout]);
+  }, [updateLayout, persona]);
 
-  // Reconcile with backend on mount
+  // Reconcile with backend on mount.  The backend may have a saved
+  // layout that beats what we loaded from localStorage; fall back to
+  // the current persona's default only if the backend value is also
+  // absent or corrupt.
   useEffect(() => {
     syncUIPrefs().then((prefs) => {
       const raw = prefs[PREF_KEY];
       if (raw) {
-        const synced = parseLayout(raw);
+        const synced = parseLayout(raw, getPersonaDefaultLayout(persona));
         setLayoutState((cur) => {
           if (JSON.stringify(cur) !== JSON.stringify(synced)) return synced;
           return cur;
         });
       }
     });
+    // Intentionally not depending on persona: this fires once on mount
+    // to reconcile the initial load.  Persona changes do NOT re-fire
+    // this effect because a persona switch must never clobber a saved
+    // layout — the user's arrangement is theirs to keep.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

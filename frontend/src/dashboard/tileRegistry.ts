@@ -133,11 +133,47 @@ export const TILE_REGISTRY: Record<string, TileDefinition> = {
   },
 };
 
-// --- Default layout (matches the current hardcoded Dashboard.tsx) ---
+// --- Default layouts ---
+//
+// Personas each carry a default tile set that shapes the FIRST-visit
+// dashboard for a user with no saved layout.  A saved layout — the
+// user's own arrangement — always wins over the persona default; the
+// persona only sets the starting point and provides a "Reset to
+// persona default" target.  Weather-nerd matches the pre-persona
+// default, so users who upgraded and never picked a persona see no
+// change in behaviour.
 
 export const LAYOUT_VERSION = 2;
 
-export const DEFAULT_LAYOUT: DashboardLayout = {
+const EVERYDAY_LAYOUT: DashboardLayout = {
+  version: 2,
+  tiles: [
+    { tileId: "outside-temp" },
+    { tileId: "barometer" },
+    { tileId: "wind" },
+    { tileId: "outside-humidity" },
+    { tileId: "rain" },
+    { tileId: "solar-uv" },
+    { tileId: "current-conditions" },
+    { tileId: "station-status", colSpan: 12 },
+  ],
+};
+
+const AGRICULTURE_LAYOUT: DashboardLayout = {
+  version: 2,
+  tiles: [
+    { tileId: "rain" },
+    { tileId: "outside-humidity" },
+    { tileId: "outside-temp" },
+    { tileId: "wind" },
+    { tileId: "solar-uv" },
+    { tileId: "barometer" },
+    { tileId: "current-conditions" },
+    { tileId: "station-status", colSpan: 12 },
+  ],
+};
+
+const WEATHER_NERD_LAYOUT: DashboardLayout = {
   version: 2,
   tiles: [
     { tileId: "outside-temp" },
@@ -152,3 +188,26 @@ export const DEFAULT_LAYOUT: DashboardLayout = {
     { tileId: "station-status", colSpan: 12 },
   ],
 };
+
+export const PERSONA_LAYOUTS: Record<string, DashboardLayout> = {
+  everyday: EVERYDAY_LAYOUT,
+  agriculture: AGRICULTURE_LAYOUT,
+  weather_nerd: WEATHER_NERD_LAYOUT,
+};
+
+/**
+ * Return the default layout for a persona.  Falls back to the
+ * weather-nerd (all-tiles) layout for an unrecognised persona so a
+ * bad ``ui_persona`` value never leaves the dashboard empty.
+ */
+export function getPersonaDefaultLayout(personaKey: string): DashboardLayout {
+  return PERSONA_LAYOUTS[personaKey] ?? WEATHER_NERD_LAYOUT;
+}
+
+/**
+ * Backwards-compatible export for pre-persona callers.  Same shape as
+ * the pre-persona default — the all-tiles weather-nerd layout — so
+ * any code path that still imports ``DEFAULT_LAYOUT`` behaves exactly
+ * as it did.
+ */
+export const DEFAULT_LAYOUT: DashboardLayout = WEATHER_NERD_LAYOUT;
