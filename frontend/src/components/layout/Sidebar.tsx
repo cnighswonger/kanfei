@@ -383,14 +383,34 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
           </NavLink>
         </div>
 
-        {/* Collapse toggle (desktop only) — hidden on paper themes per mock */}
-        {onToggleCollapse && !paper && (
-          <div style={{ padding: '8px', borderTop: '1px solid var(--color-border)' }}>
+        {/* Collapse toggle (desktop only).  Kept on paper themes too —
+            the mock omits it, but operators need a way to collapse the
+            sidebar on narrow desktop windows.  Styled flat on paper to
+            fit the cream shell instead of the boxed non-paper look. */}
+        {onToggleCollapse && (
+          <div style={{
+            padding: paper ? '10px 14px' : '8px',
+            borderTop: paper
+              ? `${theme.rules.hairline}px ${theme.rules.style} ${theme.rules.strong}`
+              : '1px solid var(--color-border)',
+          }}>
             <button
               className="sidebar-collapse-btn"
               onClick={onToggleCollapse}
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              style={{
+              style={paper ? {
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--color-text)',
+                cursor: 'pointer',
+                padding: '4px 0',
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: 0.65,
+                transition: 'opacity 0.15s ease',
+              } : {
                 background: 'var(--color-bg-secondary)',
                 border: '1px solid var(--color-border)',
                 borderRadius: '6px',
