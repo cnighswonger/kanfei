@@ -4,12 +4,61 @@
  * When no admin account exists yet (upgrade from a pre-auth beta), this page
  * detects the `setup_required` flag from /api/auth/me and shows an account
  * creation form instead, calling POST /api/auth/setup-admin.
+ *
+ * Renders a per-theme hero background behind the auth card per the Design
+ * Agent's Sign-in / first-run spec:
+ *   - dark / light: about-hero.jpg photo at 0.30 opacity
+ *   - glaisher:     the Adieu-1867 engraving with sepia+multiply
+ *   - mammoth:      the Flammarion engraving with sepia+multiply
+ *   - classic:      no hero, plain background (matches the theme's spartan tone)
  */
 
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { fetchCurrentUser, setupAdmin } from "../api/client";
+
+/**
+ * Per-theme background for the auth screen.  Kept local to this page for
+ * now; if a second screen wants the same per-theme treatment we can lift
+ * this into a shared config or onto the theme shape itself.
+ */
+interface AuthBackground {
+  image: string;
+  opacity: number;
+  filter?: string;
+  blend?: string;
+  position?: string;
+}
+
+const AUTH_BACKGROUNDS: Record<string, AuthBackground | null> = {
+  dark: {
+    image: "/about-hero.jpg",
+    opacity: 0.30,
+    position: "center 40%",
+  },
+  light: {
+    image: "/about-hero.jpg",
+    opacity: 0.30,
+    position: "center 40%",
+  },
+  glaisher: {
+    image: "/glaisher-adieu-1867.png",
+    opacity: 0.5,
+    filter: "sepia(0.62) contrast(1.02) saturate(0.85)",
+    blend: "multiply",
+    position: "center 42%",
+  },
+  mammoth: {
+    image: "/glaisher-flammarion.png",
+    opacity: 0.13,
+    filter: "sepia(0.62) contrast(1.05) saturate(0.85)",
+    blend: "multiply",
+    position: "center 30%",
+  },
+  classic: null,
+};
 
 const containerStyle: React.CSSProperties = {
   display: "flex",
@@ -17,6 +66,8 @@ const containerStyle: React.CSSProperties = {
   alignItems: "center",
   height: "100vh",
   background: "var(--color-bg)",
+  position: "relative",
+  overflow: "hidden",
 };
 
 const cardStyle: React.CSSProperties = {
@@ -26,6 +77,8 @@ const cardStyle: React.CSSProperties = {
   padding: "32px",
   width: "100%",
   maxWidth: "380px",
+  position: "relative",
+  zIndex: 1,
 };
 
 const inputStyle: React.CSSProperties = {
@@ -55,6 +108,7 @@ const btnStyle: React.CSSProperties = {
 
 export default function Login() {
   const { login, refresh } = useAuth();
+  const { themeName } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string })?.from || "/";
@@ -123,8 +177,29 @@ export default function Login() {
   // Still checking — show nothing.
   if (setupRequired === null) return null;
 
+  const bg = AUTH_BACKGROUNDS[themeName] ?? null;
+
   return (
     <div style={containerStyle}>
+      {bg && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 0,
+            backgroundImage: `url(${bg.image})`,
+            backgroundSize: "cover",
+            backgroundPosition: bg.position ?? "center",
+            backgroundRepeat: "no-repeat",
+            opacity: bg.opacity,
+            filter: bg.filter,
+            mixBlendMode: (bg.blend ?? "normal") as React.CSSProperties["mixBlendMode"],
+            pointerEvents: "none",
+          }}
+        />
+      )}
+
       <div style={cardStyle}>
         <h2 style={{
           margin: "0 0 4px 0",
@@ -136,7 +211,7 @@ export default function Login() {
           Kanfei
         </h2>
         <p style={{
-          margin: "0 0 24px 0",
+          margin: "0 0 8px 0",
           fontSize: "calc(13px * var(--font-scale))",
           fontFamily: "var(--font-body)",
           color: "var(--color-text-muted)",
@@ -146,6 +221,19 @@ export default function Login() {
             ? "Create an admin account to continue"
             : "Sign in to continue"}
         </p>
+        {!setupRequired && (
+          <p style={{
+            margin: "0 0 24px 0",
+            fontSize: "calc(11px * var(--font-scale))",
+            fontFamily: "var(--font-body)",
+            color: "var(--color-text-muted)",
+            textAlign: "center",
+            fontStyle: "italic",
+          }}>
+            Reading the dashboard doesn't require an account.
+          </p>
+        )}
+        {setupRequired && <div style={{ marginBottom: "16px" }} />}
 
         {setupRequired ? (
           <form onSubmit={handleCreateAccount}>
