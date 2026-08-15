@@ -13,6 +13,7 @@ import { GRID_COLUMNS } from "./tileRegistry.ts";
 interface SortableTileProps {
   id: string;
   colSpan: number;
+  rowSpan: number;
   minSpan: number;
   gridWidth: number;
   onRemove: () => void;
@@ -99,9 +100,12 @@ const flipBtnStyle: React.CSSProperties = {
   zIndex: 10,
 };
 
+// Passed through to the sortable wrapper's `style.gridRow` so tiles
+// occupy the number of GRID_ROW_UNIT_PX rows their layout specifies.
 export default function SortableTile({
   id,
   colSpan,
+  rowSpan,
   minSpan,
   gridWidth,
   onRemove,
@@ -124,6 +128,7 @@ export default function SortableTile({
     transform: CSS.Transform.toString(transform),
     transition,
     gridColumn: colSpan > 1 ? `span ${colSpan}` : undefined,
+    gridRow: `span ${rowSpan}`,
     position: "relative",
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 100 : undefined,
