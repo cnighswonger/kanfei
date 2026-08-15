@@ -94,6 +94,23 @@ export default function HistoryChartTile() {
         gridLineColor: grid,
         gridLineWidth: 1,
         labels: { style: { color: axis, fontSize: 'calc(9px * var(--font-scale))' } },
+        // Domain across BOTH series so the dew line (lower than temp
+        // by ~10 °F on humid days) never falls below the plot floor.
+        // Highcharts auto-computes when min/max are unset; the
+        // softMin/softMax pad the extremes without hard-clamping the
+        // trace when a series briefly leaves the padded range.
+        softMin: (() => {
+          const all = [...tempPts, ...dewPts]
+            .map((p) => p.value)
+            .filter((v): v is number => v != null && Number.isFinite(v));
+          return all.length ? Math.floor(Math.min(...all) - 2) : undefined;
+        })(),
+        softMax: (() => {
+          const all = [...tempPts, ...dewPts]
+            .map((p) => p.value)
+            .filter((v): v is number => v != null && Number.isFinite(v));
+          return all.length ? Math.ceil(Math.max(...all) + 2) : undefined;
+        })(),
       },
       tooltip: { xDateFormat: '%a %H:%M', valueSuffix: ' °F', valueDecimals: 1 },
       plotOptions: {

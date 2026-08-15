@@ -8,12 +8,12 @@ import { type ReactNode } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import ResizeHandle from "./ResizeHandle.tsx";
-import { GRID_COLUMNS, GAP } from "./tileRegistry.ts";
+import { GRID_COLUMNS } from "./tileRegistry.ts";
 
 interface SortableTileProps {
   id: string;
   colSpan: number;
-  rowSpan: number;
+  minHeight?: number;
   minSpan: number;
   gridWidth: number;
   onRemove: () => void;
@@ -100,12 +100,13 @@ const flipBtnStyle: React.CSSProperties = {
   zIndex: 10,
 };
 
-// Passed through to the sortable wrapper's `style.gridRow` so tiles
-// occupy the number of GRID_ROW_UNIT_PX rows their layout specifies.
+// Applies the tile's ``minHeight`` floor on the sortable wrapper;
+// row height itself is content-driven via ``gridAutoRows: min-content``
+// on the grid container.
 export default function SortableTile({
   id,
   colSpan,
-  rowSpan,
+  minHeight,
   minSpan,
   gridWidth,
   onRemove,
@@ -128,21 +129,18 @@ export default function SortableTile({
     transform: CSS.Transform.toString(transform),
     transition,
     gridColumn: colSpan > 1 ? `span ${colSpan}` : undefined,
-    gridRow: `span ${rowSpan}`,
+    minHeight: minHeight != null ? `${minHeight}px` : undefined,
     position: "relative",
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 100 : undefined,
-    // Matches normal-mode wrapper: rowGap:0 on the grid + tile
-    // paddingBottom carves the visible gutter inside the cell.
+    boxSizing: "border-box",
     // Outer wrapper stays overflow:visible so the ResizeHandle
     // (positioned at right: -4) isn't clipped; the tile content is
     // clipped by an inner wrapper further down.
-    paddingBottom: GAP,
-    boxSizing: "border-box",
   };
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} data-tile-id={id} style={style}>
       {/* Edit mode overlay */}
       <div
         style={{
