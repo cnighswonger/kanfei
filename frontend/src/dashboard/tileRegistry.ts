@@ -195,16 +195,9 @@ export const TILE_REGISTRY: Record<string, TileDefinition> = {
 // persona only sets the starting point and provides a "Reset to
 // persona default" target.
 //
-// PR 24 collapses all three persona defaults onto the mock's 8/4
-// composition (per Design REVIEW-02): a wide left column of hero +
-// derived + chart + ledgers + hourly, and a narrow right column of
-// barometer + wind + almanac + status.  Individual personas can be
-// re-differentiated later; the fixed-per-persona + user-custom
-// approach is Chris's parked fallback if drag-to-arrange proves to
-// be the wrong lever.
-//
-// Row-height budget (in ``GRID_ROW_UNIT_PX`` = 8-px units), so the
-// two columns line up cleanly with no CSS-grid gaps:
+// Row-span budget on the 8-px unit grid — the two column stacks each
+// sum to 102 units so left and right line up cleanly with no
+// auto-placement gaps:
 //
 //   left 8 columns          right 4 columns
 //   ─────────────────────   ─────────────────────
@@ -212,7 +205,6 @@ export const TILE_REGISTRY: Record<string, TileDefinition> = {
 //   history-chart  : 30     wind           : 30
 //   rain + solar   : 22     almanac        : 22
 //   rainfall-hourly: 20     station-status : 20
-//   total: 102 units × 8px  total: 102 units × 8px
 
 export const LAYOUT_VERSION = 2;
 

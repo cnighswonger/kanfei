@@ -1,17 +1,9 @@
 /**
- * Hero outside-air tile per Design REVIEW-02.
- *
- * The outside temperature is the anchor of the whole dashboard, and
- * the mock treats it typographically, not as a gauge: big italic-serif
- * numeral in ``type.display`` (104px on paper themes), Zambretti
- * sentence in italic serif below with a mono-caps confidence footer,
- * then two bordered H/L chips at the bottom.
- *
- * Replaces the vertical thermometer for outside-temp — Design's note:
- * "the vertical thermometer bar isn't in the mock at all… it's the one
- * metric that doesn't need a gauge, because the number IS the reading."
- * TemperatureGauge stays around for inside-temp, which the user can
- * still add from the tile catalog.
+ * Typographic outside-air tile.  Big display-role numeral, Zambretti
+ * sentence + confidence footer, two H/L chips at the tile bottom.
+ * Consumes ``--type-display-*`` CSS variables emitted by ThemeContext;
+ * paper themes carry an italic serif display role, non-paper themes a
+ * heading sans.
  */
 import { useEffect, useState } from 'react';
 import { useWeatherData } from '../../context/WeatherDataContext.tsx';
@@ -39,7 +31,7 @@ export default function HeroTemperatureTile() {
     const load = () => {
       fetchForecast()
         .then((r) => { if (!cancelled) setForecast(r.local ?? null); })
-        .catch(() => { /* hero shows temperature with or without a forecast */ });
+        .catch(() => { /* forecast is optional; hero still renders the temperature */ });
     };
     load();
     const id = setInterval(load, 5 * 60_000);
@@ -84,7 +76,6 @@ export default function HeroTemperatureTile() {
     }}>
       <TileLabel>Outside Air</TileLabel>
 
-      {/* Numeral + unit — display type role carries the italic serif on paper. */}
       <div style={{
         display: 'flex',
         alignItems: 'flex-start',
@@ -114,7 +105,6 @@ export default function HeroTemperatureTile() {
         </span>
       </div>
 
-      {/* Zambretti sentence */}
       {forecast && (
         <>
           <div style={{
@@ -140,7 +130,6 @@ export default function HeroTemperatureTile() {
         </>
       )}
 
-      {/* H/L chips at the bottom of the tile */}
       {(high != null || low != null) && (
         <div style={{
           display: 'flex',
