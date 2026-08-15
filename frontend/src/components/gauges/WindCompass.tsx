@@ -23,7 +23,8 @@ interface WindCompassProps {
 const CARDINALS_16 = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
                        'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 
-const RING_SIZE = 200;
+// 220 px ring with compass(110, 110, 80, 98); petals fill outerR - 4.
+const RING_SIZE = 220;
 
 export default function WindCompass({ direction, speed, gust, peak, peakAt, unit, cardinal }: WindCompassProps) {
   const isMobile = useCompact();
@@ -50,8 +51,8 @@ export default function WindCompass({ direction, speed, gust, peak, peakAt, unit
 
   const cx = RING_SIZE / 2;
   const cy = RING_SIZE / 2;
-  const outerR = 74;
-  const labelR = 92;
+  const outerR = 80;
+  const labelR = 98;
   const petalMaxR = outerR - 4;
 
   const c = compass(cx, cy, outerR, labelR);
