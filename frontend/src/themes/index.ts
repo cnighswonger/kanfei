@@ -222,6 +222,26 @@ export interface Theme {
     shadow: string;
     borderRadius: string;
   };
+  /**
+   * Sidebar/nav ornament configuration per the Design Agent's paper-shell
+   * mocks (`1c-dashboard-glaisher-notebook.png`, `1d-dashboard-mammoths-log.png`).
+   *
+   * - ``iconHues`` maps a nav path (e.g. ``/`` for Dashboard, ``/history``,
+   *   …) to the hex the icon renders in.  Utility items (Settings, About)
+   *   omit an entry and inherit ``text``.  On an active row the icon
+   *   takes the row's cream (``bg``) instead of its hue so it doesn't
+   *   vibrate against the dark ground.
+   * - ``indexStyle`` — ``'roman'`` prefixes each nav row with a Roman
+   *   numeral (I–IX) per Mammoth's mock; ``'none'`` renders no index.
+   * - ``ribbon`` — an array of hex colours rendered as a thin flexed
+   *   stripe above the About row.  Mammoth's mock ships three stripes
+   *   (``#a64333`` / ``#d6bd7e`` / ``#3f5d7a``); Glaisher omits it.
+   */
+  nav?: {
+    iconHues?: Record<string, string>;
+    indexStyle?: 'none' | 'roman';
+    ribbon?: string[];
+  };
   /** Global font-size multiplier via ``--font-scale``.  Editor clamps 0.85-1.75. */
   fontScale: number;
 }
@@ -278,6 +298,7 @@ export function createCustomTheme(
     },
     dial: { ...base.dial, ...overrides.dial },
     gauge: { ...base.gauge, ...overrides.gauge },
+    nav: base.nav ? { ...base.nav } : undefined,
     fontScale: overrides.fontScale ?? base.fontScale,
   };
 }

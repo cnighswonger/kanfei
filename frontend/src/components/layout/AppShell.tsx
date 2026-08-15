@@ -96,7 +96,7 @@ export default function AppShell({
       <div
         style={{
           display: 'grid',
-          gridTemplateRows: hideHeader ? '0px 1fr' : '56px 1fr',
+          gridTemplateRows: hideHeader ? '0px 1fr' : (themeOwnsBackground ? '60px 1fr' : '56px 1fr'),
           gridTemplateColumns: `${sidebarWidth} 1fr`,
           gridTemplateAreas: `
             "header header"
@@ -130,7 +130,7 @@ export default function AppShell({
         <main
           style={{
             gridArea: 'main',
-            marginTop: isMobile ? '10px' : hideHeader ? '56px' : '5px',
+            marginTop: isMobile ? '10px' : hideHeader ? (themeOwnsBackground ? '60px' : '56px') : '5px',
             display: 'flex',
             flexDirection: 'column',
             minHeight: 0,
