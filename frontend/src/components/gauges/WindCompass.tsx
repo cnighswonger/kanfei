@@ -4,6 +4,7 @@
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
+import TileLabel from "../common/TileLabel.tsx";
 import { formatTimestamp } from "../../utils/formatting.ts";
 
 interface WindCompassProps {
@@ -65,14 +66,7 @@ export default function WindCompass({ direction, speed, gust, peak, peakAt, unit
       height: '100%',
       boxSizing: 'border-box',
     }}>
-      <div style={{
-        fontSize: 'calc(12px * var(--font-scale))',
-        fontFamily: 'var(--font-body)',
-        color: 'var(--color-text-secondary)',
-        marginBottom: '4px',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-      }}>Wind</div>
+      <TileLabel>Wind</TileLabel>
 
       <svg width="260" height="260" viewBox="0 0 260 260">
         {/* Outer ring */}

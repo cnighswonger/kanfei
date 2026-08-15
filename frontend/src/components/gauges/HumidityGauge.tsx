@@ -5,6 +5,7 @@
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
+import TileLabel from "../common/TileLabel.tsx";
 import { formatTimestamp } from "../../utils/formatting.ts";
 
 interface HumidityGaugeProps {
@@ -81,20 +82,13 @@ function generateTicks(min: number, max: number): number[] {
   return ticks;
 }
 
-function humidityColor(pct: number): string {
-  if (pct < 30) {
-    // Dry: yellow-orange
-    const t = pct / 30;
-    return `rgb(${Math.round(230 - 30 * t)}, ${Math.round(180 + 20 * t)}, ${Math.round(40 + 20 * t)})`;
-  } else if (pct < 60) {
-    // Comfortable: green
-    const t = (pct - 30) / 30;
-    return `rgb(${Math.round(50 - 16 * t)}, ${Math.round(200 + 10 * t)}, ${Math.round(60 + 80 * t)})`;
-  } else {
-    // Humid: blue
-    const t = (pct - 60) / 40;
-    return `rgb(${Math.round(34 - 10 * t)}, ${Math.round(150 + 50 * t)}, ${Math.round(200 + 40 * t)})`;
-  }
+function humidityColor(): string {
+  // Design REVIEW-02: the arc was a bright cyan on paper themes because
+  // this function returned rgb(24, 200, 240) at high humidity — hardcoded
+  // ramp with no theme awareness.  Design's spec is a single theme-sourced
+  // colour; the dry/comfortable/humid semantic hint still exists via the
+  // text label beside the value.
+  return 'var(--color-humidity-green)';
 }
 
 export default function HumidityGauge({ value, label, high, low, highAt, lowAt }: HumidityGaugeProps) {
@@ -130,7 +124,7 @@ export default function HumidityGauge({ value, label, high, low, highAt, lowAt }
   const frac = value !== null
     ? Math.max(0, Math.min(1, (value - range.min) / rangeSpan))
     : 0;
-  const color = value !== null ? humidityColor(value) : 'var(--color-text-muted)';
+  const color = value !== null ? humidityColor() : 'var(--color-text-muted)';
 
   // Helper: convert a 0..1 fraction to SVG coordinates on the arc
   const fracToXY = (f: number, radius: number) => {
@@ -172,16 +166,7 @@ export default function HumidityGauge({ value, label, high, low, highAt, lowAt }
       height: '100%',
       boxSizing: 'border-box',
     }}>
-      {label && (
-        <div style={{
-          fontSize: 'calc(12px * var(--font-scale))',
-          fontFamily: 'var(--font-body)',
-          color: 'var(--color-text-secondary)',
-          marginBottom: '4px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-        }}>{label} Humidity</div>
-      )}
+      {label && <TileLabel>{label} Humidity</TileLabel>}
 
       <svg width="240" height="145" viewBox="0 0 240 145">
         {/* Background arc (full semicircle) */}

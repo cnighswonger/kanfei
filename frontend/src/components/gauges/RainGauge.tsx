@@ -3,6 +3,7 @@
  */
 import { useCompact } from "../../dashboard/CompactContext.tsx";
 import CompactCard from "../common/CompactCard.tsx";
+import TileLabel from "../common/TileLabel.tsx";
 import { formatTimestamp } from "../../utils/formatting.ts";
 
 interface RainGaugeProps {
@@ -67,14 +68,7 @@ export default function RainGauge({ rate, daily, yesterday, yearly, unit, peakRa
       height: '100%',
       boxSizing: 'border-box',
     }}>
-      <div style={{
-        fontSize: 'calc(12px * var(--font-scale))',
-        fontFamily: 'var(--font-body)',
-        color: 'var(--color-text-secondary)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-        marginBottom: '8px',
-      }}>Rain</div>
+      <TileLabel>Rain</TileLabel>
 
       {/* Rain rate - large display */}
       <div style={{
