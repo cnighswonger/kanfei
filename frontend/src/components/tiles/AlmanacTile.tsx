@@ -20,11 +20,18 @@ export default function AlmanacTile() {
   const [station, setStation] = useState<StationStatus | null>(null);
 
   useEffect(() => {
-    Promise.allSettled([fetchAstronomy(), fetchStationStatus()])
-      .then(([a, s]) => {
-        if (a.status === 'fulfilled') setAstro(a.value);
-        if (s.status === 'fulfilled') setStation(s.value);
-      });
+    let cancelled = false;
+    const load = () => {
+      Promise.allSettled([fetchAstronomy(), fetchStationStatus()])
+        .then(([a, s]) => {
+          if (cancelled) return;
+          if (a.status === 'fulfilled') setAstro(a.value);
+          if (s.status === 'fulfilled') setStation(s.value);
+        });
+    };
+    load();
+    const id = setInterval(load, 5 * 60_000);
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   return (

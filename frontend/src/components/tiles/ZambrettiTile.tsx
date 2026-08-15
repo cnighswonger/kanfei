@@ -18,14 +18,13 @@ export default function ZambrettiTile() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchForecast()
-      .then((r) => { if (!cancelled) setLocal(r.local ?? null); })
-      .catch((e) => { if (!cancelled) setError(String(e)); });
-    const id = setInterval(() => {
+    const load = () => {
       fetchForecast()
-        .then((r) => setLocal(r.local ?? null))
-        .catch(() => {});
-    }, 5 * 60_000);
+        .then((r) => { if (!cancelled) setLocal(r.local ?? null); })
+        .catch((e) => { if (!cancelled) setError(String(e)); });
+    };
+    load();
+    const id = setInterval(load, 5 * 60_000);
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
