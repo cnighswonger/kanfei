@@ -12,7 +12,7 @@ export const GAP = 16;
 export interface TileDefinition {
   id: string;
   label: string;
-  category: "temperature" | "atmosphere" | "wind" | "rain" | "solar" | "status";
+  category: "temperature" | "atmosphere" | "wind" | "rain" | "solar" | "status" | "forecast" | "almanac";
   minColSpan: number;
   requiresSolar?: boolean;
   hasFlipTile: boolean;
@@ -152,6 +152,37 @@ export const TILE_REGISTRY: Record<string, TileDefinition> = {
     label: "Station Status",
     category: "status",
     minColSpan: 4,
+    hasFlipTile: false,
+  },
+  // Four new tiles per Design's REVIEW-02.  Registered so persona
+  // layouts can place them; not yet added to any default layout in
+  // this PR — that belongs to PR 24 (persona-default layout rewrite).
+  "history-chart": {
+    id: "history-chart",
+    label: "24 h temperature & dew point",
+    category: "temperature",
+    minColSpan: 6,
+    hasFlipTile: false,
+  },
+  "rainfall-hourly": {
+    id: "rainfall-hourly",
+    label: "Rainfall by hour",
+    category: "rain",
+    minColSpan: 6,
+    hasFlipTile: false,
+  },
+  "almanac": {
+    id: "almanac",
+    label: "Almanac",
+    category: "almanac",
+    minColSpan: 3,
+    hasFlipTile: false,
+  },
+  "zambretti-forecast": {
+    id: "zambretti-forecast",
+    label: "Zambretti forecast",
+    category: "forecast",
+    minColSpan: 3,
     hasFlipTile: false,
   },
 };
