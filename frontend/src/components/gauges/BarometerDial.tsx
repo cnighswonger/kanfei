@@ -24,6 +24,14 @@ interface BarometerDialProps {
 
 const DIAL_SIZE = 300;
 
+// wheelDial's sweep is fixed to inHg 28.5-31.0.  Metric users see the
+// same dial with their live value converted for needle placement + the
+// zone sentence; the readout beside the dial keeps their original unit.
+const HPA_PER_INHG = 33.8639;
+function toInHg(value: number, unit: string): number {
+  return unit === 'inHg' ? value : value / HPA_PER_INHG;
+}
+
 function zoneFor(inHg: number): string {
   if (inHg < 28.9) return 'stormy';
   if (inHg < 29.4) return 'rain';
@@ -65,10 +73,10 @@ export default function BarometerDial({
     );
   }
 
-  // wheelDial's fixed range is inHg (28.5–31.0); pass through when unit
-  // matches, fall back to dial-midpoint when the value is null.
-  const dialValue = value ?? 29.92;
-  const d = wheelDial(dialValue, DIAL_SIZE, theme.dial ?? DEFAULT_DIAL);
+  // Feed wheelDial and zoneFor in inHg regardless of the user's display
+  // unit; readouts below still render in the user's chosen unit.
+  const inHgValue = value != null ? toInHg(value, unit) : 29.92;
+  const d = wheelDial(inHgValue, DIAL_SIZE, theme.dial ?? DEFAULT_DIAL);
   const rimStroke = 'var(--color-border)';
   const ink = 'var(--color-text)';
   const inkSecondary = 'var(--color-text-secondary)';
@@ -138,15 +146,21 @@ export default function BarometerDial({
             </text>
           ))}
 
-          {/* Trend hand (pale, 3 h behind) */}
-          <line
-            x1={d.cx} y1={d.cy}
-            x2={d.trend.x} y2={d.trend.y}
-            stroke={needleColor}
-            strokeWidth="2"
-            strokeLinecap="round"
-            opacity="0.35"
-          />
+          {/* Trend hand (pale, 3 h behind).  wheelDial's primitive puts
+              it at frac - 0.12, i.e. LOWER on the dial than the live
+              value — meaningful only when pressure has actually been
+              rising.  Hide it otherwise so a null / steady / falling
+              trend doesn't imply a fake historical position. */}
+          {trend === 'rising' && (
+            <line
+              x1={d.cx} y1={d.cy}
+              x2={d.trend.x} y2={d.trend.y}
+              stroke={needleColor}
+              strokeWidth="2"
+              strokeLinecap="round"
+              opacity="0.35"
+            />
+          )}
 
           {/* Live needle */}
           <line
@@ -209,7 +223,7 @@ export default function BarometerDial({
             color: inkSecondary,
             lineHeight: 1.4,
           }}>
-            Zone: {zoneFor(value ?? 29.92)}.
+            Zone: {zoneFor(inHgValue)}.
           </div>
 
           {(high != null || low != null) && (

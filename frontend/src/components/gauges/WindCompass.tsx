@@ -55,6 +55,10 @@ export default function WindCompass({ direction, speed, gust, peak, peakAt, unit
   const petalMaxR = outerR - 4;
 
   const c = compass(cx, cy, outerR, labelR);
+  // Decorative for now — passes no ``weights``, so ``rosePetals`` uses
+  // its built-in demo distribution.  Wiring the live 4 h WindHistory
+  // distribution is scope for the next composition PR; the petals are
+  // a visual placeholder until then.
   const petals = rosePetals(cx, cy, petalMaxR);
 
   const arrowLen = outerR - 4;
