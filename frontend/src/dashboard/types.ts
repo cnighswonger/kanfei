@@ -111,4 +111,46 @@ export interface DashboardData {
     sampleCount: number | null;
     avgTempF: number | null;
   };
+
+  /**
+   * Agriculture persona only (mock 3c). Omit for Everyday and Weather nerd —
+   * `AgricultureDashboard` renders an em-dash state when it's absent.
+   *
+   * Field names follow backend/app/models/spray.py so the UI can show the same
+   * reason strings the API returns.
+   */
+  spray?: {
+    product: { name: string; category: string } | null;
+    /** Verdict from spray_engine.py: all checks pass, some fail, or near a limit. */
+    verdict: 'go' | 'marginal' | 'nogo' | null;
+    verdictNote: string | null;      // 'All four checks pass right now'
+    caution: string | null;          // 'Window closes 6:40 PM — wind rising'
+    /** One row per check. `name` matches the backend: wind|temperature|humidity|rain_free */
+    checks: {
+      name: string;
+      label: string;                 // 'Wind'
+      value: string;                 // '7.0'
+      limit: string;                 // '≤ 10 mph'
+      pass: boolean;
+    }[];
+    /** 24 hourly cells, from scoreSprayHours() in utils/gauges.ts */
+    window: { hour: number; label: string; state: 'go' | 'marginal' | 'nogo' }[];
+    bestWindowToday: string | null;  // '2:40 – 6:40 PM'
+    nextWindow: string | null;       // 'Tomorrow 7:10 AM'
+    /** Gust frequency histogram, 2 mph bins, last 4 h. */
+    gustBins: number[];
+    water: {
+      balanceIn: number | null;      // rain − ET over 7 days, signed
+      rainTodayIn: number | null;
+      rainWeekIn: number | null;
+      etTodayIn: number | null;
+      etWeekIn: number | null;
+      etMonthIn: number | null;
+      etYearIn: number | null;
+      seasonRainIn: number | null;
+    };
+    schedule: { product: string; when: string; status: 'go' | 'pending' | 'nogo' }[];
+    applications: { product: string; date: string; stars: number; note: string | null }[];
+    driftRatePct: number | null;
+  };
 }

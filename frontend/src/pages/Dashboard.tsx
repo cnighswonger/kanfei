@@ -12,6 +12,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import EverydayDashboard from "../dashboard/EverydayDashboard.tsx";
+import { AgricultureDashboard } from "../dashboard/AgricultureDashboard.tsx";
 import type { DashboardData } from "../dashboard/types.ts";
 import { useTheme } from "../context/ThemeContext.tsx";
 import { usePersona } from "../context/PersonaContext.tsx";
@@ -358,11 +359,11 @@ export default function Dashboard() {
     [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName],
   );
 
-  // Agriculture + Weather Nerd land as their own compositions later.
-  void persona;
-
-  // Design's EverydayDashboard renders the plate itself, reading the
-  // engraving URL from ``--surface-plate`` (emitted per theme by
-  // ThemeContext).  No wrapper needed here.
+  // Persona dispatch — Weather Nerd lands as its own composition later.
+  // Each layout owns its plate, its scale unit, and its own composition;
+  // they share primitives, tokens, and the DashboardData contract.
+  if (persona === "agriculture") {
+    return <AgricultureDashboard d={data} themeLabel={THEME_LABEL[themeName]} />;
+  }
   return <EverydayDashboard d={data} themeLabel={THEME_LABEL[themeName]} />;
 }
