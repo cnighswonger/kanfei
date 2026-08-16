@@ -1,3 +1,35 @@
+kanfei (0.1.0~beta35) unstable; urgency=medium
+
+  * UI refactor: personas + paper themes + Settings restructuring.
+    Introduces a persona switch in the header (Everyday / Agriculture
+    / Weather nerd) that reorders the sidebar and drives the first-
+    visit dashboard tile set.  Switching persona now reseats the
+    dashboard live for users with no saved layout (smoke fix on top
+    of beta34); users with a saved layout keep their arrangement
+    across persona switches.  Settings collapses from 11 flat tabs
+    to five audience-oriented groups (Station, Site & Units,
+    Appearance, Integrations, Data) with sub-tabs under Integrations
+    and Data.  Ships two new themes -- "The Mammoth's Log" and
+    "Glaisher's Notebook" -- both paper themes that own the page
+    background; Mammoth is the new default for first-visit users
+    (existing users keep their saved theme).  Suppresses the weather
+    background compositor while a paper theme is active so the
+    theme's warmth-gradient texture renders cleanly.  Removes the
+    experimental 3D pressure-field page and its dead-only-consumer
+    backend endpoint (math salvaged to docs/salvage/); net -2308
+    lines from that alone.  Second test beta of the ui/refactor
+    branch; ships beta34's smoke-fix and is not tagged.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Fri, 15 Aug 2026 14:30:00 +0000
+
+kanfei (0.1.0~beta34) unstable; urgency=medium
+
+  * UI refactor (first-cut smoke): as beta35 above, minus the persona
+    live-swap fix.  Persona switching updated the sidebar but not the
+    dashboard.  Superseded — upgrade to beta35.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Fri, 15 Aug 2026 14:00:00 +0000
+
 kanfei (0.1.0~beta33) unstable; urgency=medium
 
   * Security: fixes a critical information-disclosure hole introduced

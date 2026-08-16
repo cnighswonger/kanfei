@@ -698,4 +698,18 @@ export function setRainSeason(
   });
 }
 
+/**
+ * Quick-check a product against current conditions (POST /api/spray/evaluate).
+ * The existing ``evaluateSpraySchedule`` above takes a schedule_id;
+ * this takes a bare product_id — same underlying backend endpoint that
+ * the Dashboard's Spray Verdict tile drives.
+ */
+export function evaluateSprayProduct(productId: number): Promise<import("./types.ts").SprayEvaluation> {
+  return request<import("./types.ts").SprayEvaluation>("/api/spray/evaluate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ product_id: productId }),
+  });
+}
+
 export { ApiError };
