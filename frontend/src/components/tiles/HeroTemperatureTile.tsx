@@ -77,13 +77,14 @@ export default function HeroTemperatureTile() {
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      padding: '16px',
+      padding: '10px 14px',
       background: 'var(--color-bg-card)',
       borderRadius: 'var(--gauge-border-radius, 16px)',
       border: '1px solid var(--color-border)',
       boxShadow: 'var(--gauge-shadow)',
       height: '100%',
       boxSizing: 'border-box',
+      overflow: 'hidden',
     }}>
       <TileLabel>Outside Air</TileLabel>
 
@@ -91,7 +92,7 @@ export default function HeroTemperatureTile() {
         display: 'flex',
         alignItems: 'flex-start',
         gap: '4px',
-        margin: '2px 0 8px 0',
+        margin: '-4px 0 4px 0',
         lineHeight: 1,
       }}>
         <span
@@ -127,8 +128,11 @@ export default function HeroTemperatureTile() {
             fontWeight: title.weight,
             fontStyle: title.italic ? 'italic' : 'normal',
             color: 'var(--color-text)',
-            lineHeight: 1.3,
-            marginBottom: '4px',
+            lineHeight: 1.2,
+            marginBottom: '2px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}>
             {forecast.text}
           </div>
@@ -148,9 +152,9 @@ export default function HeroTemperatureTile() {
       {(high != null || low != null) && (
         <div style={{
           display: 'flex',
-          gap: '8px',
+          gap: '6px',
           marginTop: 'auto',
-          paddingTop: '12px',
+          paddingTop: '6px',
           flexWrap: 'wrap',
         }}>
           {high != null && (
@@ -173,7 +177,7 @@ function Chip({ children, color }: { children: React.ReactNode; color: string })
   return (
     <span style={{
       display: 'inline-block',
-      padding: '4px 10px',
+      padding: '2px 8px',
       border: `1px solid ${color}`,
       borderRadius: '4px',
       fontFamily: 'var(--font-gauge)',

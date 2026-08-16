@@ -187,29 +187,14 @@ a:hover {
     padding: 12px !important;
   }
 
-  /* Dashboard edit toolbar: allow wrapping */
-  .dashboard-toolbar {
-    flex-wrap: wrap !important;
-  }
-
   /* Header: hide station name on mobile */
   .header-title {
     display: none !important;
   }
 
-  /* Dashboard heading: shrink so edit button stays inline */
+  /* Page heading responsiveness (used by Dashboard, History, etc.) */
   .dashboard-heading {
     font-size: calc(16px * var(--font-scale, 1)) !important;
-  }
-
-  /* Dashboard: two-column compact grid.  Row-gap stays 0 so the
-     8-px auto-row unit isn't multiplied between every row line
-     (see DashboardGrid.tsx for the desktop version of this).  The
-     vertical gutter comes from the tile wrapper's paddingBottom. */
-  .dashboard-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
-    column-gap: 10px !important;
-    row-gap: 0 !important;
   }
 
   /* Mobile: always full-width sidebar, hide collapse button */
