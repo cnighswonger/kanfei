@@ -1,37 +1,29 @@
 /**
- * Almanac tile: sunrise/sunset, day length, moon phase, station type.
- * Backend returns pre-formatted display strings for sun times and a
- * ``moon.illumination`` already expressed as a percentage — pass both
- * straight through.
+ * Almanac tile: sunrise/sunset, day length, moon phase.  Backend
+ * returns pre-formatted display strings for sun times and
+ * ``moon.illumination`` already as a percentage — pass both through.
+ * Station type / firmware live in the station-status footer strip
+ * per Design's REVIEW-05 P3.
  */
 import { useEffect, useState } from 'react';
-import { fetchAstronomy, fetchStationStatus } from '../../api/client.ts';
-import type { AstronomyResponse, StationStatus } from '../../api/types.ts';
+import { fetchAstronomy } from '../../api/client.ts';
+import type { AstronomyResponse } from '../../api/types.ts';
 import TileLabel from '../common/TileLabel.tsx';
 
 export default function AlmanacTile() {
   const [astro, setAstro] = useState<AstronomyResponse | null>(null);
-  const [station, setStation] = useState<StationStatus | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const load = () => {
-      Promise.allSettled([fetchAstronomy(), fetchStationStatus()])
-        .then(([a, s]) => {
-          if (cancelled) return;
-          if (a.status === 'fulfilled') setAstro(a.value);
-          if (s.status === 'fulfilled') setStation(s.value);
-        });
+      fetchAstronomy()
+        .then((a) => { if (!cancelled) setAstro(a); })
+        .catch(() => { /* astronomy is optional; tile renders "—" placeholders */ });
     };
     load();
     const id = setInterval(load, 5 * 60_000);
     return () => { cancelled = true; clearInterval(id); };
   }, []);
-
-  // Voiding ``station`` — Design's REVIEW-05 P3 moves station type +
-  // firmware into the station-status footer strip; almanac is three
-  // rows only (sunrise/sunset, day length, moon).
-  void station;
 
   return (
     <div style={{
