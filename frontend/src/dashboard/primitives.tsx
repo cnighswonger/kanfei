@@ -10,6 +10,34 @@
 import React from 'react';
 
 /**
+ * ── SCALE ────────────────────────────────────────────────────────────────────
+ *
+ * The mock is a 1600×1180 composition — main content 1318×1120. Pinning it in
+ * absolute px means that on a bigger screen the type reads small AND the fixed
+ * heights stop short of the viewport, leaving dead space under the footer. Two
+ * symptoms, one cause.
+ *
+ * `s(n)` expresses every size as n × `--k`, a px-valued scale unit derived from the
+ * container's HEIGHT against the mock's 1120px:
+ *
+ *     --k: clamp(0.92px, calc(100cqh / 1120), 1.5px)
+ *
+ * Height-based, not width-based: the vertical budget is what must fit exactly, and
+ * scaling by width on a wide window overshoots into a scrollbar. Widths stay fluid
+ * (`fr`, `100%`), so the page fills horizontally while type and vertical rhythm
+ * keep the mock's proportions.
+ *
+ * Dividing a length by a number yields a length, so `--k` is a px value and
+ * `calc(14 * var(--k))` resolves — the sizes below are unitless multipliers.
+ */
+export const s = (n: number): string => `calc(${n} * var(--k, 1px))`;
+
+/** Put on the scaling wrapper inside a `container-type: size` parent. */
+export const SCALE_VAR: React.CSSProperties = {
+  ['--k' as string]: 'clamp(0.92px, calc(100cqh / 1120), 1.5px)',
+};
+
+/**
  * ⚠ EVERY token has a hard fallback.
  *
  * `var(--x)` with no fallback is INVALID when --x isn't published: the property
@@ -76,23 +104,23 @@ export const v = {
  */
 export type Role = 'display' | 'heading' | 'title' | 'body' | 'mono' | 'sectionLabel';
 
-/** Measured from mock 1d. These ARE the design; the vars only allow overrides. */
+/** Measured from mock 1d. Sizes are unitless multipliers of `--k` (see `s`). */
 const ROLE: Record<Role, {
-  family: string; size: string; weight: number; style: string; tracking: string; transform: string;
+  family: string; size: number; weight: number; style: string; tracking: string; transform: string;
 }> = {
-  display:      { family: "'Source Serif 4', Georgia, serif", size: '104px', weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
-  heading:      { family: "'Source Serif 4', Georgia, serif", size: '30px',  weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
-  title:        { family: "'Source Serif 4', Georgia, serif", size: '17px',  weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
-  body:         { family: "'Inter', sans-serif",              size: '14px',  weight: 400, style: 'normal', tracking: 'normal', transform: 'none' },
-  mono:         { family: "'JetBrains Mono', monospace",      size: '14px',  weight: 400, style: 'normal', tracking: 'normal', transform: 'none' },
-  sectionLabel: { family: "'JetBrains Mono', monospace",      size: '10px',  weight: 400, style: 'normal', tracking: '2px',    transform: 'uppercase' },
+  display:      { family: "'Source Serif 4', Georgia, serif", size: 104, weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
+  heading:      { family: "'Source Serif 4', Georgia, serif", size: 30,  weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
+  title:        { family: "'Source Serif 4', Georgia, serif", size: 17,  weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
+  body:         { family: "'Inter', sans-serif",              size: 14,  weight: 400, style: 'normal', tracking: 'normal', transform: 'none' },
+  mono:         { family: "'JetBrains Mono', monospace",      size: 14,  weight: 400, style: 'normal', tracking: 'normal', transform: 'none' },
+  sectionLabel: { family: "'JetBrains Mono', monospace",      size: 10,  weight: 400, style: 'normal', tracking: '0.2em',  transform: 'uppercase' },
 };
 
 export const type = (role: Role, overrides: React.CSSProperties = {}): React.CSSProperties => {
   const f = ROLE[role];
   return {
     fontFamily: `var(--type-${role}-family, ${f.family})`,
-    fontSize: `var(--type-${role}-size, ${f.size})`,
+    fontSize: `var(--type-${role}-size, ${s(f.size)})`,
     fontWeight: `var(--type-${role}-weight, ${f.weight})` as unknown as number,
     fontStyle: `var(--type-${role}-style, ${f.style})`,
     letterSpacing: `var(--type-${role}-tracking, ${f.tracking})`,
@@ -100,6 +128,9 @@ export const type = (role: Role, overrides: React.CSSProperties = {}): React.CSS
     ...overrides,
   };
 };
+
+/** Scaled font-size override, for the handful of one-off sizes in the mock. */
+export const fs = (n: number): React.CSSProperties => ({ fontSize: s(n) });
 
 /** Tabular figures — mandatory on any value that updates live, or rows jitter. */
 export const tnum: React.CSSProperties = { fontVariantNumeric: 'tabular-nums' };
@@ -151,7 +182,7 @@ export const Tile: React.FC<{
       height,
       display: 'flex',
       flexDirection: 'column',
-      gap: 8,
+      gap: s(8),
       minWidth: 0,
       padding: 'var(--tile-padding, 0)',
       background: 'var(--tile-bg, transparent)',
@@ -181,7 +212,7 @@ export const TileHeading: React.FC<{
     style={{
       ...type('title'),
       color: v.text,
-      paddingBottom: 5,
+      paddingBottom: s(5),
       borderBottom: `${v.ruleHairWidth} solid ${v.rule}`,
       ...style,
     }}
@@ -217,8 +248,8 @@ export const Row: React.FC<{
       display: 'flex',
       alignItems: 'baseline',
       justifyContent: 'space-between',
-      gap: 12,
-      padding: '7px 0',
+      gap: s(12),
+      padding: `${s(7)} 0`,
       borderBottom: last ? 'none' : `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
     }}
   >
