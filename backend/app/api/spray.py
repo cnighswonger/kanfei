@@ -606,6 +606,53 @@ async def evaluate_schedule(schedule_id: int, db: Session = Depends(get_db), _ad
 # Current conditions summary
 # ---------------------------------------------------------------------------
 
+@router.get("/forecast")
+async def get_spray_forecast(
+    hours: int = 24,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    """Normalised hourly forecast rows for the dashboard's 24 h spray window.
+
+    Proxies Open-Meteo via ``fetch_hourly_forecast()`` (server-side cache,
+    same feed spray_engine.py uses for ``evaluate``) and reduces it to the
+    minimum shape ``scoreSprayHours()`` in ``frontend/utils/gauges.ts``
+    consumes.  Score / marginal classification stays client-side so a
+    tweak to the "within 1.5 mph of the limit" band doesn't need a
+    backend deploy.
+    """
+    lat, lon, tz = _get_location(db)
+    if lat == 0.0 and lon == 0.0:
+        return {"rows": []}
+    hourly = await fetch_hourly_forecast(lat, lon, hours=max(1, min(72, hours)))
+    times = hourly.get("time", []) or []
+    temps = hourly.get("temperature_2m", []) or []
+    rhs = hourly.get("relative_humidity_2m", []) or []
+    precips = hourly.get("precipitation", []) or []
+    winds = hourly.get("wind_speed_10m", []) or []
+    gusts = hourly.get("wind_gusts_10m", []) or []
+    n = min(len(times), max(len(temps), len(winds)))
+    rows = []
+    for i in range(n):
+        t = times[i]
+        # Open-Meteo `time` is ISO-8601 in the station's local tz —
+        # slice hour (positions 11-12) rather than parsing.
+        try:
+            hour = int(t[11:13])
+        except (ValueError, IndexError):
+            continue
+        rows.append({
+            "iso": t,
+            "hour": hour,
+            "temp": temps[i] if i < len(temps) else None,
+            "wind": winds[i] if i < len(winds) else None,
+            "gust": gusts[i] if i < len(gusts) else None,
+            "rh": rhs[i] if i < len(rhs) else None,
+            "precip": precips[i] if i < len(precips) else None,
+        })
+    return {"rows": rows, "timezone": tz}
+
+
 @router.get("/conditions")
 async def get_spray_conditions(db: Session = Depends(get_db), _admin=Depends(require_admin)):
     """Return spray-relevant current conditions summary."""

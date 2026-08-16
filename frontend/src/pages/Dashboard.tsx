@@ -26,7 +26,10 @@ import {
   fetchSpraySchedules,
   fetchSprayOutcomes,
   evaluateSprayProduct,
+  fetchSprayForecast,
 } from "../api/client.ts";
+import type { SprayForecastRow } from "../api/client.ts";
+import { scoreSprayHours, type SprayConstraints } from "../utils/gauges.ts";
 import type {
   CurrentConditions,
   ForecastResponse,
@@ -166,6 +169,7 @@ interface SprayAdapterInputs {
   evaluation: SprayEvaluation | null;
   schedules: SpraySchedule[];
   outcomes: SprayOutcome[];
+  forecast: SprayForecastRow[];
 }
 
 /** wind|temperature|humidity|rain_free → human label */
@@ -402,8 +406,9 @@ function buildSprayBlock(
     evaluation: null,
     schedules: [],
     outcomes: [],
+    forecast: [],
   };
-  const { product, evaluation, schedules, outcomes } = sp ?? empty;
+  const { product, evaluation, schedules, outcomes, forecast } = sp ?? empty;
 
   const verdict: "go" | "marginal" | "nogo" | null = evaluation
     ? evaluation.go
@@ -435,6 +440,58 @@ function buildSprayBlock(
     status: SCHEDULE_STATUS[s.status] ?? "pending",
   }));
 
+  // Score the next 24 h forecast rows against this product's
+  // constraints — the 24 h Spray Window strip.  Design's contract:
+  // ``scoreSprayHours()`` (in utils/gauges.ts) owns the go/marginal/
+  // nogo classification so the "within 1.5 mph of the limit" band
+  // stays a UI tuning knob.
+  const constraints: SprayConstraints | null = product
+    ? {
+        maxWind: product.max_wind_mph ?? 999,
+        minTemp: product.min_temp_f ?? -100,
+        maxTemp: product.max_temp_f ?? 200,
+        minRh: product.min_humidity_pct ?? null,
+        rainFreeHours: product.rain_free_hours ?? 0,
+      }
+    : null;
+  const rainFreeHours = product?.rain_free_hours ?? 0;
+  const window = constraints
+    ? scoreSprayHours(
+        forecast.slice(0, 24).map((r, i) => {
+          // Rain within the required rain-free window ahead: look at the
+          // next ``rainFreeHours`` forecast rows starting at row i and
+          // sum precipitation.  If any is > 0, this cell fails rain-free.
+          const ahead = forecast.slice(i, i + Math.max(1, rainFreeHours));
+          const rainWithinWindow = ahead.some((row) => (row.precip ?? 0) > 0);
+          return {
+            hour: r.hour,
+            temp: r.temp ?? 0,
+            wind: Math.max(r.wind ?? 0, r.gust ?? 0),
+            rh: r.rh ?? 0,
+            rainWithinWindow,
+          };
+        }),
+        constraints,
+      ).map((c) => ({ hour: c.hour, label: c.label, state: c.state }))
+    : [];
+
+  // First contiguous run of ``go`` cells after today's cells.  The
+  // adapter passes the label like ``"7a Wed"`` — Design's tile formats
+  // it further with fmtRange if needed.
+  const nextWindow = (() => {
+    if (!window.length) return null;
+    // Skip today (assume first ~24 cells are today) — find first go cell
+    // where hour resets past 0 or a full day has passed.  Simple pass:
+    // find first ``go`` after any ``nogo`` sequence, only if that ``go``
+    // block starts after row 8 (rough heuristic for "not right now").
+    for (let i = 8; i < window.length; i++) {
+      if (window[i].state === "go" && (i === 0 || window[i - 1].state !== "go")) {
+        return window[i].label;
+      }
+    }
+    return null;
+  })();
+
   const applications = outcomes.slice(0, 4).map((o) => ({
     product: o.product_name,
     date: o.logged_at
@@ -460,11 +517,11 @@ function buildSprayBlock(
     verdictNote,
     caution: null,
     checks,
-    window: [],
+    window,
     bestWindowToday: evaluation?.optimal_window
       ? `${evaluation.optimal_window.start} – ${evaluation.optimal_window.end}`
       : null,
-    nextWindow: null,
+    nextWindow,
     gustBins: [],
     water: {
       balanceIn:
@@ -562,22 +619,25 @@ export default function Dashboard() {
       let evaluation: SprayEvaluation | null = null;
       let schedules: SpraySchedule[] = [];
       let outcomes: SprayOutcome[] = [];
+      let forecastRows: SprayForecastRow[] = [];
       try {
         products = await fetchSprayProducts();
       } catch {
         return; // 401 or offline; leave spray null
       }
       const product = products.find((p) => p.is_preset) ?? products[0] ?? null;
-      const [ev, sch, out] = await Promise.allSettled([
+      const [ev, sch, out, fc] = await Promise.allSettled([
         product ? evaluateSprayProduct(product.id) : Promise.resolve(null),
         fetchSpraySchedules(),
         fetchSprayOutcomes(5),
+        fetchSprayForecast(24),
       ]);
       if (cancelled) return;
       if (ev.status === "fulfilled") evaluation = ev.value;
       if (sch.status === "fulfilled") schedules = sch.value;
       if (out.status === "fulfilled") outcomes = out.value;
-      setSpray({ product, evaluation, schedules, outcomes });
+      if (fc.status === "fulfilled") forecastRows = fc.value.rows;
+      setSpray({ product, evaluation, schedules, outcomes, forecast: forecastRows });
     };
     load();
     const id = setInterval(load, 5 * 60_000);
