@@ -284,9 +284,9 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
 
 /* ────────────────────────────────────────────────────────────────── 6. rain */
 
-export const RainTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
+export const RainTile: React.FC<{ d: DashboardData; title?: string; style?: React.CSSProperties }> = ({ d, title = 'Rain', style }) => (
   <Tile id="rain" style={style}>
-    <SectionLabel>Rain</SectionLabel>
+    <SectionLabel>{title}</SectionLabel>
     <Rule strong />
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
       <span style={{ ...type('mono', { fontSize: 30 }), ...tnum, color: v.sky, lineHeight: 1 }}>
@@ -356,9 +356,16 @@ export const AlmanacTile: React.FC<{ d: DashboardData; style?: React.CSSProperti
 
 /* ────────────────────────────────────────────────────── 9. rainfall by hour */
 
-export const RainfallByHourTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
+/**
+ * 1d labels this axis '24h ago · <peak> in peak, <time> · now' — three marks, not
+ * six hour ticks. Set `relativeAxis` false for the 12a/4a/8a… form.
+ */
+export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boolean; style?: React.CSSProperties }> = ({ d, relativeAxis = true, style }) => {
   const bars = d.rain.hourlyIn ?? [];
   const max = Math.max(0.05, ...bars.map((n) => n ?? 0));
+  const peakIdx = bars.findIndex((n) => (n ?? 0) === max);
+  const peakLabel =
+    peakIdx < 0 ? null : peakIdx === 0 ? '12 AM' : peakIdx < 12 ? `${peakIdx} AM` : peakIdx === 12 ? '12 PM' : `${peakIdx - 12} PM`;
   const W = 700, H = 74;
 
   return (
@@ -391,11 +398,21 @@ export const RainfallByHourTile: React.FC<{ d: DashboardData; style?: React.CSSP
         <line x1={0} y1={H - 0.4} x2={W} y2={H - 0.4} stroke={v.rule} strokeWidth={0.8} />
       </svg>
       <div style={{ display: 'flex', ...type('sectionLabel'), color: v.chart.axis }}>
-        {Array.from({ length: 6 }, (_, k) => (
-          <span key={k} style={{ flex: 1, textAlign: k === 0 ? 'left' : 'center' }}>
-            {k * 4 === 0 ? '12a' : k * 4 < 12 ? `${k * 4}a` : k * 4 === 12 ? '12p' : `${k * 4 - 12}p`}
-          </span>
-        ))}
+        {relativeAxis ? (
+          <>
+            <span style={{ flex: 1, textAlign: 'left' }}>24h ago</span>
+            <span style={{ flex: 2, textAlign: 'center' }}>
+              {max > 0.001 ? `${fmt(max, 2)} in peak${peakLabel ? `, ${peakLabel}` : ''}` : 'no rain recorded'}
+            </span>
+            <span style={{ flex: 1, textAlign: 'right' }}>now</span>
+          </>
+        ) : (
+          Array.from({ length: 6 }, (_, k) => (
+            <span key={k} style={{ flex: 1, textAlign: k === 0 ? 'left' : 'center' }}>
+              {k * 4 === 0 ? '12a' : k * 4 < 12 ? `${k * 4}a` : k * 4 === 12 ? '12p' : `${k * 4 - 12}p`}
+            </span>
+          ))
+        )}
       </div>
     </Tile>
   );

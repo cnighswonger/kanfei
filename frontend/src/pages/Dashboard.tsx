@@ -30,27 +30,22 @@ import type {
   HistoryPoint,
 } from "../api/types.ts";
 
-interface DashboardHeroConfig {
-  /**
-   * Corner plate scoped to the main content area (never ``position: fixed``),
-   * so it doesn't run under the sidebar or fill the space below the last
-   * tile.  ``glaisher-adieu-1867.jpg`` at ``cover`` belongs to the auth /
-   * first-run screens only per Design REVIEW-11 ADAPTER.md.
-   */
-  corner?: { image: string; opacity: number; width: number; height: number };
-}
-
-const DASHBOARD_HERO: Record<string, DashboardHeroConfig | null> = {
-  glaisher: {
-    corner: { image: "/glaisher-instruments.png", opacity: 0.1, width: 400, height: 280 },
-  },
-  mammoth: {
-    corner: { image: "/glaisher-instruments.png", opacity: 0.09, width: 400, height: 280 },
-  },
-  dark: null,
-  light: null,
-  classic: null,
+/**
+ * Theme → dashboard title-row label.  Paper themes lead the title row
+ * with the theme name ("The Mammoth's Log · Sanford, NC · 412 ft");
+ * non-paper themes just use the station name.  Design REVIEW-12.
+ */
+const THEME_LABEL: Record<string, string | undefined> = {
+  glaisher: "Glaisher's Notebook",
+  mammoth: "The Mammoth's Log",
 };
+
+// Package version for the footer strip ("Kanfei v1.0.0 · …").  Same
+// value the backend reads from ``backend/app/VERSION``; injected at
+// build time via ``define`` in vite.config.ts as ``__KANFEI_VERSION__``.
+declare const __KANFEI_VERSION__: string | undefined;
+const APP_VERSION =
+  typeof __KANFEI_VERSION__ === "string" && __KANFEI_VERSION__ ? __KANFEI_VERSION__ : "0.1.0";
 
 /**
  * ISO timestamp → ``5:09 PM`` clock display.  Every ``…At`` field on
@@ -154,6 +149,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       crcErrors: status?.crc_errors ?? 0,
       timeouts: status?.timeouts ?? 0,
       archiveRecords: status?.archive_records ?? null,
+      appVersion: APP_VERSION,
     },
     outside: {
       tempF: outsideTempF,
@@ -296,41 +292,11 @@ export default function Dashboard() {
     [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, hourlyRain, siteName],
   );
 
-  const hero = DASHBOARD_HERO[themeName] ?? null;
   // Agriculture + Weather Nerd land as their own compositions later.
   void persona;
 
-  // Corner plate scoped to the dashboard container — never fixed to the
-  // viewport, so it doesn't run under the sidebar or fill the empty space
-  // below the last tile.  ``position: absolute`` inside the wrapper
-  // anchors it to the bottom-right of the content area only.
-  return (
-    <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-      {hero?.corner && (
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            right: 0,
-            bottom: 0,
-            width: `min(${hero.corner.width}px, 100%)`,
-            aspectRatio: `${hero.corner.width} / ${hero.corner.height}`,
-            maxHeight: `${hero.corner.height}px`,
-            zIndex: 0,
-            backgroundImage: `url(${hero.corner.image})`,
-            backgroundSize: "contain",
-            backgroundPosition: "right bottom",
-            backgroundRepeat: "no-repeat",
-            opacity: hero.corner.opacity,
-            filter: "sepia(0.55) contrast(1.05) saturate(0.9)",
-            mixBlendMode: "multiply",
-            pointerEvents: "none",
-          }}
-        />
-      )}
-      <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        <EverydayDashboard d={data} />
-      </div>
-    </div>
-  );
+  // Design's EverydayDashboard renders the plate itself, reading the
+  // engraving URL from ``--surface-plate`` (emitted per theme by
+  // ThemeContext).  No wrapper needed here.
+  return <EverydayDashboard d={data} themeLabel={THEME_LABEL[themeName]} />;
 }

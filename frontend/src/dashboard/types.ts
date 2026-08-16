@@ -31,6 +31,8 @@ export interface DashboardData {
     crcErrors: number;
     timeouts: number;
     archiveRecords: number | null;
+    /** App version for the footer, e.g. '1.0.0'. */
+    appVersion?: string | null;
   };
 
   outside: {

@@ -1,85 +1,112 @@
 /**
- * Everyday dashboard — the composition, transcribed from the mock's measured DOM.
+ * The Mammoth's Log — Everyday dashboard, mock 1d.
  *
- * This file IS the layout spec. Every number here was read off the rendered mock
- * (see TILE-CONTRACT.md); none of it is computed, and nothing decides a height at
- * runtime. If a height needs to change, it changes here, visibly, in one place.
+ * Measured from the mock DOM. The composition is IDENTICAL to 1c (Glaisher's
+ * Notebook) — Outside Air top-left, barometer top-right — because the paper themes
+ * were deliberately synced to the Almanac arrangement. Only the token table and
+ * four labelled details differ, all of them below.
  *
- * Structure (frame 1600×1180, header 60):
- *   title row              48
- *   band A   739 / 547     795
- *   band B   739 / 547     145
- *   footer                  26
+ * So: one layout component serves both paper themes. Do NOT fork this file per
+ * theme; the theme supplies the fonts, rules, and inks.
+ *
+ * Geometry (frame 1600×1180, header 60, main padding 24px 30px 20px, gap 20):
+ *   title row              51
+ *   band A   739 / 547    787     left gap 20, right gap 18
+ *   band B   739 / 547    150
+ *   footer                 27
  */
 import React from 'react';
-import { v, type, SectionLabel, tnum, fmtTime } from './primitives';
+import { v, type, SectionLabel, Row, Rule, Tile, tnum, fmt, fmtInt, fmtTime } from './primitives';
 import type { DashboardData } from './types';
 import {
   HeroTemperatureTile, DerivedConditionsTile, HistoryChartTile, BarometerTile,
-  WindTile, RainTile, SolarUvTile, AlmanacTile, RainfallByHourTile, StationStatusTile,
+  WindTile, RainTile, SolarUvTile, AlmanacTile, RainfallByHourTile,
 } from './tiles';
 
-/** Column ratio, as fr so it scales below 1600 while holding 739:547. */
 const BAND_COLS = '739fr 547fr';
 const BAND_GAP = 32;
 
-export const EverydayDashboard: React.FC<{ d: DashboardData }> = ({ d }) => (
+export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string }> = ({
+  d,
+  themeLabel = "The Mammoth's Log",
+}) => (
   <main
     data-dashboard="everyday"
     style={{
-      padding: '22px 28px 20px',
+      padding: '24px 30px 20px',
       display: 'flex',
       flexDirection: 'column',
       gap: 20,
-      // The plate is a page background owned by the theme; the dashboard must not
-      // reserve space for it. Content ends where content ends.
       position: 'relative',
       isolation: 'isolate',
       minWidth: 0,
     }}
   >
-    {/* ── title row, 48 ───────────────────────────────────────────────────── */}
+    {/* Corner plate — 400×280, bottom-right of MAIN, behind content.
+        Not full-bleed, not on body, not position:fixed. Exact values from the
+        mock; see ADAPTER.md if the page currently shows a page-sized engraving. */}
+    <div
+      aria-hidden
+      style={{
+        position: 'absolute',
+        right: 0,
+        bottom: 60,
+        width: 400,
+        height: 280,
+        zIndex: -1,
+        backgroundImage: 'var(--surface-plate)',
+        backgroundSize: 'contain',
+        backgroundPosition: 'right bottom',
+        backgroundRepeat: 'no-repeat',
+        opacity: 0.09,
+        filter: 'sepia(0.62) contrast(1.05) saturate(0.85)',
+        mixBlendMode: 'multiply',
+      }}
+    />
+
+    {/* ── title row, 51 ───────────────────────────────────────────────────── */}
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 24 }}>
-      <h2 style={{ ...type('heading'), color: v.text, margin: 0 }}>Current conditions</h2>
+      <h2 style={{ ...type('heading'), color: v.text, margin: 0 }}>Current Conditions</h2>
+      {/* The theme name leads this line, then station and elevation. The render
+          was showing only '· every 10 s' because station.name was null. */}
       <SectionLabel>
-        {d.station.name}
+        {themeLabel}
+        {d.station.name && ` · ${d.station.name}`}
         {d.station.elevationFt != null && ` · ${Math.round(d.station.elevationFt)} ft`}
-        {d.station.intervalSeconds != null && ` · every ${d.station.intervalSeconds} s`}
       </SectionLabel>
     </div>
 
-    {/* ── band A, 795 ─────────────────────────────────────────────────────── */}
+    {/* ── band A, 787 ─────────────────────────────────────────────────────── */}
     <div data-band="a" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: BAND_GAP, alignItems: 'start' }}>
-      {/* left column — gap 20 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-        <div style={{ display: 'flex', gap: 28, height: 204 }}>
+        <div style={{ display: 'flex', gap: 28, height: 205 }}>
           <HeroTemperatureTile d={d} style={{ width: 340, flexShrink: 0 }} />
           <DerivedConditionsTile d={d} style={{ flex: 1, minWidth: 0 }} />
         </div>
 
-        <HistoryChartTile d={d} style={{ height: 268 }} />
+        <HistoryChartTile d={d} style={{ height: 269 }} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, height: 157 }}>
-          <RainTile d={d} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, height: 159 }}>
+          {/* 1d titles this 'Rain ledger', not 'Rain' */}
+          <RainTile d={d} title="Rain ledger" />
           <SolarUvTile d={d} />
         </div>
       </div>
 
-      {/* right column — gap 18, and the taller of the two: 280+220+157 sets band A */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
         <BarometerTile d={d} style={{ height: 280 }} />
         <WindTile d={d} style={{ height: 220 }} />
-        <AlmanacTile d={d} style={{ height: 157 }} />
+        <AlmanacTile d={d} style={{ height: 159 }} />
       </div>
     </div>
 
-    {/* ── band B, 145 ─────────────────────────────────────────────────────── */}
-    <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: BAND_GAP, height: 145 }}>
+    {/* ── band B, 150 ─────────────────────────────────────────────────────── */}
+    <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: BAND_GAP, height: 150 }}>
       <RainfallByHourTile d={d} />
-      <StationStatusTile d={d} />
+      <ConsoleAndLinkTile d={d} />
     </div>
 
-    {/* ── footer strip, 26 ────────────────────────────────────────────────── */}
+    {/* ── footer strip, 27 ────────────────────────────────────────────────── */}
     <div
       style={{
         display: 'flex',
@@ -90,16 +117,47 @@ export const EverydayDashboard: React.FC<{ d: DashboardData }> = ({ d }) => (
       }}
     >
       <SectionLabel>
-        {d.station.console} {d.station.model} · FW {d.station.firmware} ·{' '}
-        <span style={{ color: d.station.transmittersOk ? v.success : v.danger }}>
-          TX {d.station.transmittersOk ? 'ok' : 'fault'}
-        </span>
+        Kanfei v{d.station.appVersion ?? '1.0.0'} · {themeLabel}
+        {d.station.intervalSeconds != null && ` · logged every ${d.station.intervalSeconds} s`}
       </SectionLabel>
       <span style={{ ...type('sectionLabel'), ...tnum, color: v.textMuted }}>
-        Clock {d.station.clock} · last poll {fmtTime(d.station.lastPoll)}
+        Last update {fmtTime(d.station.lastPoll)}
       </span>
     </div>
   </main>
 );
+
+/**
+ * Console & link — 1d's station tile.
+ *
+ * A TWO-COLUMN ruled table (261.7px each, 24px column gap), eight labelled rows,
+ * NOT the single flowing strip that shipped. Its own title is 'Console & link'.
+ * The clock and last poll are rows here; the footer carries 'Last update' only.
+ */
+export const ConsoleAndLinkTile: React.FC<{ d: DashboardData }> = ({ d }) => {
+  const s = d.station;
+  const rows: [string, React.ReactNode][] = [
+    ['Firmware', s.firmware],
+    ['Product', s.model],
+    ['Transmitters', <span style={{ color: s.transmittersOk ? v.success : v.danger }}>{s.transmittersOk ? 'OK' : 'FAULT'}</span>],
+    ['Console battery', fmt(s.batteryVolts, 2, ' V')],
+    ['CRC / timeouts', `${s.crcErrors} / ${s.timeouts}`],
+    ['Archive records', fmtInt(s.archiveRecords)],
+    ['Console clock', s.clock ?? '—'],
+    ['Last poll', fmtTime(s.lastPoll)],
+  ];
+
+  return (
+    <Tile id="station-status">
+      <SectionLabel>Console &amp; link</SectionLabel>
+      <Rule strong />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 24, rowGap: 0 }}>
+        {rows.map(([label, value], i) => (
+          <Row key={label} label={label} value={value} last={i >= rows.length - 2} />
+        ))}
+      </div>
+    </Tile>
+  );
+};
 
 export default EverydayDashboard;
