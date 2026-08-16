@@ -164,7 +164,33 @@ export const Tile: React.FC<{
   </section>
 );
 
-/** Tracked mono caps. Every tile heading and every unit caption is one of these. */
+/**
+ * Tile heading — serif italic, sentence case, with its OWN 0.8px solid underline.
+ *
+ * ⚠ This is the default for a tile, NOT <SectionLabel>. In mock 1d every tile
+ * heading is the `title` role in sentence case: 'Rain ledger', 'Almanac for
+ * today', 'Console & link'. Mono caps are for KICKERS only — the small label above
+ * the hero numeral, unit captions, and axis labels. Using SectionLabel for tile
+ * headings makes the whole page read as a machine readout instead of a log.
+ */
+export const TileHeading: React.FC<{
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}> = ({ children, style }) => (
+  <div
+    style={{
+      ...type('title'),
+      color: v.text,
+      paddingBottom: 5,
+      borderBottom: `${v.ruleHairWidth} solid ${v.rule}`,
+      ...style,
+    }}
+  >
+    {children}
+  </div>
+);
+
+/** Tracked mono caps — kickers, unit captions, axis labels. Not tile headings. */
 export const SectionLabel: React.FC<{
   children: React.ReactNode;
   color?: string;

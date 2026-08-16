@@ -16,7 +16,7 @@
  *   footer                 27
  */
 import React from 'react';
-import { v, type, SectionLabel, Row, Rule, Tile, tnum, fmt, fmtInt, fmtTime } from './primitives';
+import { v, type, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, fmtTime } from './primitives';
 import type { DashboardData } from './types';
 import {
   HeroTemperatureTile, DerivedConditionsTile, HistoryChartTile, BarometerTile,
@@ -64,8 +64,17 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
       }}
     />
 
-    {/* ── title row, 51 ───────────────────────────────────────────────────── */}
-    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 24 }}>
+    {/* ── title row, 51 — carries a solid 1.6px rule beneath it ───────────── */}
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'baseline',
+        justifyContent: 'space-between',
+        gap: 24,
+        paddingBottom: 8,
+        borderBottom: `${v.ruleWidth} solid ${v.rule}`,
+      }}
+    >
       <h2 style={{ ...type('heading'), color: v.text, margin: 0 }}>Current Conditions</h2>
       {/* The theme name leads this line, then station and elevation. The render
           was showing only '· every 10 s' because station.name was null. */}
@@ -149,8 +158,7 @@ export const ConsoleAndLinkTile: React.FC<{ d: DashboardData }> = ({ d }) => {
 
   return (
     <Tile id="station-status">
-      <SectionLabel>Console &amp; link</SectionLabel>
-      <Rule strong />
+      <TileHeading>Console &amp; link</TileHeading>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 24, rowGap: 0 }}>
         {rows.map(([label, value], i) => (
           <Row key={label} label={label} value={value} last={i >= rows.length - 2} />
