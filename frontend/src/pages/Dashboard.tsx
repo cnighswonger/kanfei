@@ -31,13 +31,17 @@ import type {
 } from "../api/types.ts";
 
 interface DashboardHeroConfig {
-  cover?: { image: string; opacity: number; position?: string };
+  /**
+   * Corner plate scoped to the main content area (never ``position: fixed``),
+   * so it doesn't run under the sidebar or fill the space below the last
+   * tile.  ``glaisher-adieu-1867.jpg`` at ``cover`` belongs to the auth /
+   * first-run screens only per Design REVIEW-11 ADAPTER.md.
+   */
   corner?: { image: string; opacity: number; width: number; height: number };
 }
 
 const DASHBOARD_HERO: Record<string, DashboardHeroConfig | null> = {
   glaisher: {
-    cover: { image: "/glaisher-ascent-1862.jpg", opacity: 0.12, position: "center" },
     corner: { image: "/glaisher-instruments.png", opacity: 0.1, width: 400, height: 280 },
   },
   mammoth: {
@@ -47,6 +51,20 @@ const DASHBOARD_HERO: Record<string, DashboardHeroConfig | null> = {
   light: null,
   classic: null,
 };
+
+/**
+ * ISO timestamp → ``5:09 PM`` clock display.  Every ``…At`` field on
+ * ``DashboardData`` is a display string, never an ISO — a raw ISO is
+ * ~28 chars and breaks chip / row layouts.  ``primitives.fmtTime()`` in
+ * the view is a defensive backstop; this is the primary formatter.
+ */
+function clock(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
 
 // Integrate 5-min rain rate samples into hourly totals (rate × dt, capped
 // at 1 h per sample so a gap doesn't inflate one bar).  24 buckets,
@@ -100,13 +118,31 @@ function toDashboardData(s: AdapterSources): DashboardData {
     ? Math.round((finiteTemps.reduce((a, b) => a + b, 0) / finiteTemps.length) * 10) / 10
     : null;
 
+  // Suppress derived readings the backend fills in but that are meaningless at
+  // the current conditions.  All three per Design REVIEW-11 ADAPTER.md:
+  //   - heatIndex identical to feelsLike (the same call twice)
+  //   - windChill above ~50 °F (undefined at warm temperatures)
+  //   - gust below wind speed (either not wired or a stale window)
+  const outsideTempF = cc?.temperature?.outside?.value ?? null;
+  const feelsLikeRaw = cc?.derived?.feels_like?.value ?? null;
+  const heatIndexRaw = cc?.derived?.heat_index?.value ?? null;
+  const windChillRaw = cc?.derived?.wind_chill?.value ?? null;
+  const heatIndexF =
+    feelsLikeRaw != null && heatIndexRaw != null && Math.abs(feelsLikeRaw - heatIndexRaw) < 0.5
+      ? null
+      : heatIndexRaw;
+  const windChillF = outsideTempF != null && outsideTempF > 50 ? null : windChillRaw;
+  const speedMph = cc?.wind?.speed?.value ?? null;
+  const gustRaw = cc?.wind?.gust?.value ?? null;
+  const gustMph = speedMph != null && gustRaw != null && gustRaw <= speedMph ? null : gustRaw;
+
   return {
     station: {
       name: s.siteName ?? "",
       elevationFt: null,
       intervalSeconds: status?.poll_interval ?? null,
       clock: status?.station_time ?? "",
-      lastPoll: status?.last_poll ?? "",
+      lastPoll: clock(status?.last_poll) ?? "",
       console: status?.type_name ?? "",
       model: status?.product_sku ?? "",
       firmware: status?.firmware_version ?? status?.firmware_date ?? "",
@@ -120,19 +156,19 @@ function toDashboardData(s: AdapterSources): DashboardData {
       archiveRecords: status?.archive_records ?? null,
     },
     outside: {
-      tempF: cc?.temperature?.outside?.value ?? null,
-      feelsLikeF: cc?.derived?.feels_like?.value ?? null,
-      heatIndexF: cc?.derived?.heat_index?.value ?? null,
-      windChillF: cc?.derived?.wind_chill?.value ?? null,
+      tempF: outsideTempF,
+      feelsLikeF: feelsLikeRaw,
+      heatIndexF,
+      windChillF,
       dewPointF: cc?.derived?.dew_point?.value ?? null,
       thetaEK: cc?.derived?.theta_e?.value ?? null,
       humidityPct: cc?.humidity?.outside?.value ?? null,
       insideTempF: cc?.temperature?.inside?.value ?? null,
       insideHumidityPct: cc?.humidity?.inside?.value ?? null,
       highF: cc?.daily_extremes?.outside_temp_hi?.value ?? null,
-      highAt: cc?.daily_extremes?.outside_temp_hi?.at ?? null,
+      highAt: clock(cc?.daily_extremes?.outside_temp_hi?.at),
       lowF: cc?.daily_extremes?.outside_temp_lo?.value ?? null,
-      lowAt: cc?.daily_extremes?.outside_temp_lo?.at ?? null,
+      lowAt: clock(cc?.daily_extremes?.outside_temp_lo?.at),
     },
     barometer: {
       inHg: cc?.barometer?.value ?? null,
@@ -140,17 +176,17 @@ function toDashboardData(s: AdapterSources): DashboardData {
       trendInHgPer3h: cc?.barometer?.trend_rate ?? null,
       zone: null,
       todayHigh: cc?.daily_extremes?.barometer_hi?.value ?? null,
-      todayHighAt: cc?.daily_extremes?.barometer_hi?.at ?? null,
+      todayHighAt: clock(cc?.daily_extremes?.barometer_hi?.at),
       todayLow: cc?.daily_extremes?.barometer_lo?.value ?? null,
-      todayLowAt: cc?.daily_extremes?.barometer_lo?.at ?? null,
+      todayLowAt: clock(cc?.daily_extremes?.barometer_lo?.at),
     },
     wind: {
-      speedMph: cc?.wind?.speed?.value ?? null,
+      speedMph,
       directionDeg: cc?.wind?.direction?.value ?? null,
       directionLabel: cc?.wind?.cardinal ?? null,
-      gustMph: cc?.wind?.gust?.value ?? null,
+      gustMph,
       peakMph: cc?.daily_extremes?.wind_speed_hi?.value ?? null,
-      peakAt: cc?.daily_extremes?.wind_speed_hi?.at ?? null,
+      peakAt: clock(cc?.daily_extremes?.wind_speed_hi?.at),
     },
     rain: {
       rateInPerHr: cc?.rain?.rate?.value ?? null,
@@ -264,32 +300,20 @@ export default function Dashboard() {
   // Agriculture + Weather Nerd land as their own compositions later.
   void persona;
 
+  // Corner plate scoped to the dashboard container — never fixed to the
+  // viewport, so it doesn't run under the sidebar or fill the empty space
+  // below the last tile.  ``position: absolute`` inside the wrapper
+  // anchors it to the bottom-right of the content area only.
   return (
-    <>
-      {hero?.cover && (
-        <div
-          aria-hidden="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 0,
-            backgroundImage: `url(${hero.cover.image})`,
-            backgroundSize: "cover",
-            backgroundPosition: hero.cover.position ?? "center",
-            backgroundRepeat: "no-repeat",
-            opacity: hero.cover.opacity,
-            pointerEvents: "none",
-          }}
-        />
-      )}
+    <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       {hero?.corner && (
         <div
           aria-hidden="true"
           style={{
-            position: "fixed",
+            position: "absolute",
             right: 0,
             bottom: 0,
-            width: `min(${hero.corner.width}px, 100vw)`,
+            width: `min(${hero.corner.width}px, 100%)`,
             aspectRatio: `${hero.corner.width} / ${hero.corner.height}`,
             maxHeight: `${hero.corner.height}px`,
             zIndex: 0,
@@ -298,11 +322,15 @@ export default function Dashboard() {
             backgroundPosition: "right bottom",
             backgroundRepeat: "no-repeat",
             opacity: hero.corner.opacity,
+            filter: "sepia(0.55) contrast(1.05) saturate(0.9)",
+            mixBlendMode: "multiply",
             pointerEvents: "none",
           }}
         />
       )}
-      <EverydayDashboard d={data} />
-    </>
+      <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <EverydayDashboard d={data} />
+      </div>
+    </div>
   );
 }

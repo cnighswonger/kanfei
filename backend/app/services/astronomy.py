@@ -147,13 +147,24 @@ def _compute_day_length(
         target_date: Date to compute for.
 
     Returns:
-        Day length in seconds, or None if sun never rises/sets.
+        Day length in seconds (always non-negative), or None if the sun
+        never rises or never sets on this date.
     """
     try:
         s = sun(location.observer, date=target_date)
         sunrise = s["sunrise"]
         sunset = s["sunset"]
-        return (sunset - sunrise).total_seconds()
+        diff = (sunset - sunrise).total_seconds()
+        # LocationInfo is hardcoded to UTC, so at longitudes far from
+        # Greenwich astral can return the sunset that precedes the
+        # queried sunrise (both tagged UTC on the same calendar date)
+        # and the raw diff goes negative.  The true day_length is the
+        # distance to the NEXT sunset, i.e. diff + 24 h.  Standing bug
+        # note: passing the station's local tz to LocationInfo is the
+        # architecturally cleaner fix and would remove this workaround.
+        if diff < 0:
+            diff += 86_400
+        return diff
     except ValueError:
         # Polar day/night: sun never rises or never sets
         return None

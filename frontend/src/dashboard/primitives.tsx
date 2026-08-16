@@ -70,6 +70,24 @@ export const fmt = (n: number | null | undefined, digits = 1, suffix = ''): stri
 export const fmtInt = (n: number | null | undefined, suffix = ''): string =>
   n == null || Number.isNaN(n) ? '—' : `${Math.round(n).toLocaleString()}${suffix}`;
 
+/**
+ * Clock time only, from either a display string or an ISO timestamp.
+ *
+ * Defensive on purpose: the API returns full ISO strings
+ * ('2026-08-16T17:09:15.978925Z') and a raw one is ~28 characters, which blows
+ * every chip and status row out of its tile. Formatting belongs in the adapter,
+ * but a display component must never be the reason a layout breaks — so any
+ * ISO-looking value gets reduced to '5:09 PM' here as well.
+ */
+export const fmtTime = (s: string | null | undefined): string => {
+  if (!s) return '—';
+  if (!/\d{4}-\d{2}-\d{2}T/.test(s)) return s;   // already display-formatted
+  const d = new Date(s);
+  return Number.isNaN(d.getTime())
+    ? s
+    : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+};
+
 /* ──────────────────────────────────────────────────────────────── components */
 
 /**

@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..ipc.dependencies import get_ipc_client
+from ..models.archive_record import ArchiveRecordModel
 from ..models.database import SessionLocal, get_db
 from ..models.sensor_reading import SensorReadingModel
 from ..services.barometer_aggregation import (
@@ -208,6 +209,14 @@ async def get_station():
         except Exception as exc:
             logger.warning("Failed to read station time via IPC: %s", exc)
 
+    # archive_records ships as a diagnostic row on the dashboard station-
+    # status strip; total row count of the archive-record table.  Cheap
+    # enough not to cache — single indexed COUNT(*) against SQLite.
+    try:
+        archive_records = db.query(ArchiveRecordModel).count()
+    except Exception:
+        archive_records = None
+
     return {
         "type_code": data.get("type_code", -1),
         "type_name": data.get("type_name", "Unknown"),
@@ -225,6 +234,7 @@ async def get_station():
         "station_time_components": station_time_components,
         "server_epoch_ms_at_read": server_epoch_ms_at_read,
         "battery": _read_battery_from_latest_reading(),
+        "archive_records": archive_records,
     }
 
 
