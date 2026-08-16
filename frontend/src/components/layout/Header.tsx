@@ -131,10 +131,12 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
   const paper = theme.surface.ownsBackground;
   const paperInk = 'var(--color-text)';                  // dark on cream
   const paperInkDim = 'var(--color-text-secondary)';     // dimmer dark
-  // Theme tag: last word of theme.label ("Glaisher's Notebook" →
-  // "NOTEBOOK", "The Mammoth's Log" → "LOG").  Matches the mocks'
-  // subtitle text after the "·" separator.
-  const themeTag = theme.label.split(/\s+/).pop()?.toUpperCase() ?? '';
+  // Wordmark tag: the active theme's full ``label`` field, uppercased
+  // via CSS (``text-transform``) so the raw label stays presentable
+  // wherever else it's used (theme picker, dashboard title, footer).
+  // Per Design REVIEW-17 HEADER.md — "LOG · STATION" was a placeholder
+  // that read as one.
+  const themeTag = theme.label;
 
   // Wall-clock ticker.  useState + setInterval so the header time
   // updates every 30 s without a full page reload; without this, the
@@ -145,14 +147,21 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
     const id = setInterval(() => setClockNow(new Date()), 30_000);
     return () => clearInterval(id);
   }, [paper]);
+  // Per Design REVIEW-17: drop the weekday; the mock reads
+  // "14 AUG 2026 · 14:41" not "SUN, AUG 16, 2026".
   const dateStr = clockNow
-    .toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+    .toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
     .toUpperCase();
   const timeStr = clockNow.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+  // Status pill: one word for the model, then one word for state.
+  // Design REVIEW-17: drop the parenthetical firmware ("VUE · RUNNING",
+  // not "VUE (FW 4.33) · RUNNING") — firmware already appears in the
+  // Console & link tile.
   const stationTypeShort = (currentConditions?.station_type ?? 'STATION')
     .replace(/^Davis /i, '')
     .replace(/^Vantage /i, '')
+    .replace(/\s*\(.*\)\s*/g, '')
     .toUpperCase();
 
   return (
@@ -223,7 +232,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
               whiteSpace: 'nowrap',
             }}
           >
-            {`${themeTag} · STATION`}
+            {themeTag}
           </span>
         )}
         {!paper && local && (() => {
