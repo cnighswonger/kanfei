@@ -712,4 +712,19 @@ export function evaluateSprayProduct(productId: number): Promise<import("./types
   });
 }
 
+/** Hourly forecast row, one per hour, for the dashboard's 24 h spray window. */
+export interface SprayForecastRow {
+  iso: string;
+  hour: number;
+  temp: number | null;
+  wind: number | null;
+  gust: number | null;
+  rh: number | null;
+  precip: number | null;
+}
+
+export function fetchSprayForecast(hours = 24): Promise<{ rows: SprayForecastRow[]; timezone: string }> {
+  return request(`/api/spray/forecast?hours=${hours}`);
+}
+
 export { ApiError };
