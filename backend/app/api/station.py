@@ -123,7 +123,7 @@ def _read_battery_from_latest_reading() -> dict | None:
 
 
 @router.get("/station")
-async def get_station():
+async def get_station(db: Session = Depends(get_db)):
     """Return station information and diagnostics."""
     try:
         client = get_ipc_client()
