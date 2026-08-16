@@ -10,9 +10,10 @@
  *  - Heights come from the parent layout (TILE-CONTRACT.md), never from content.
  */
 import React from 'react';
-import { Tile, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt, fmtTime } from './primitives';
+import { Tile, TileHeading, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt, fmtTime } from './primitives';
 import type { DashboardData } from './types';
 import { wheelDial, compass, rosePetals, pathFor, ledgerGrid } from '../utils/gauges';
+
 
 /* ───────────────────────────────────────────────────── 1. hero temperature */
 
@@ -76,8 +77,7 @@ const Chip: React.FC<{ label: string; value: string; at?: string | null; tone: s
 
 export const DerivedConditionsTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
   <Tile id="derived-conditions" style={style}>
-    <SectionLabel>Derived conditions</SectionLabel>
-    <Rule strong />
+    <TileHeading>Derived conditions</TileHeading>
     {/* A left-aligned ruled table. Five rows, ~30px each — NOT a centred 2-up grid. */}
     <div>
       <Row label="Feels like" value={fmt(d.outside.feelsLikeF, 1, ' °F')} />
@@ -100,8 +100,7 @@ export const HistoryChartTile: React.FC<{ d: DashboardData; style?: React.CSSPro
   if (!temps.length) {
     return (
       <Tile id="history-chart" style={style}>
-        <SectionLabel>Temperature &amp; dew point, 24 hours</SectionLabel>
-        <Rule strong />
+        <TileHeading>Temperature &amp; dew point, 24 hours</TileHeading>
         <Empty>No history yet</Empty>
       </Tile>
     );
@@ -120,17 +119,16 @@ export const HistoryChartTile: React.FC<{ d: DashboardData; style?: React.CSSPro
 
   return (
     <Tile id="history-chart" style={style}>
-      {/* The header line carries what a legend and a y-axis would: series names
-          left, range right. No legend pills, no y-axis column. */}
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16 }}>
-        <SectionLabel>Temperature &amp; dew point, 24 hours</SectionLabel>
+      {/* Heading is serif italic sentence case; the range line is mono, to its
+          right. No legend pills, no y-axis column. */}
+      <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16 }}>
+        <span>Temperature &amp; dew point, 24 hours</span>
         <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>
           {fmt(Math.min(...temps))}–{fmt(Math.max(...temps))} °F
           {d.history.avgTempF != null && ` · avg ${fmt(d.history.avgTempF)}°`}
           {d.history.sampleCount != null && ` · ${fmtInt(d.history.sampleCount)} samples`}
         </span>
-      </div>
-      <Rule strong />
+      </TileHeading>
 
       <div style={{ background: v.chart.surface, flex: 1, minHeight: 0 }}>
         <svg
@@ -177,9 +175,9 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
 
   return (
     <Tile id="barometer" style={style}>
-      <SectionLabel>Barometer</SectionLabel>
-      <Rule strong />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 20, flex: 1, minHeight: 0 }}>
+      {/* ⚠ No heading above the gauge. In 1d the dial comes first and the title
+          lives at the top of the readout column beside it. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minHeight: 0 }}>
         {dial && (
           <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
             <circle cx={dial.cx} cy={dial.cy} r={dial.rimOuter} fill="none" stroke={v.rule} strokeWidth={1.2} />
@@ -209,21 +207,28 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
           </svg>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+          <div style={{ ...type('title'), color: v.text }}>Barometer</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
             <span style={{ ...type('mono', { fontSize: 34 }), ...tnum, color: v.text, lineHeight: 1 }}>
               {fmt(d.barometer.inHg, 2)}
             </span>
             <SectionLabel>inHg</SectionLabel>
           </div>
-          <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>{fmt(d.barometer.hPa, 1, ' hPa')}</span>
           <SectionLabel color={v.accent}>
             {arrow}{trend != null && ` · ${trend > 0 ? '+' : ''}${trend.toFixed(3)} in / 3h`}
           </SectionLabel>
-          {d.barometer.zone && <SectionLabel>Zone · {d.barometer.zone}</SectionLabel>}
-          <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
-            <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>
-              H {fmt(d.barometer.todayHigh, 2)} {fmtTime(d.barometer.todayHighAt)} · L {fmt(d.barometer.todayLow, 2)} {fmtTime(d.barometer.todayLowAt)}
+          {/* The log's voice: a sentence, not a stack of labelled numbers. */}
+          <div style={{ ...type('body', { fontSize: 12.5 }), color: v.textSecondary, lineHeight: 1.4, textWrap: 'pretty' }}>
+            {d.barometer.zone && `Zone: ${d.barometer.zone.toLowerCase()}. `}
+            {d.barometer.hPa != null && `${fmt(d.barometer.hPa, 1)} hPa, compensated for elevation.`}
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginTop: 'auto', paddingTop: 8, borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
+            <span style={{ ...type('mono', { fontSize: 11 }), ...tnum, color: v.textSecondary }}>
+              H {fmt(d.barometer.todayHigh, 2)} {fmtTime(d.barometer.todayHighAt)}
+            </span>
+            <span style={{ ...type('mono', { fontSize: 11 }), ...tnum, color: v.textSecondary }}>
+              L {fmt(d.barometer.todayLow, 2)} {fmtTime(d.barometer.todayLowAt)}
             </span>
           </div>
         </div>
@@ -244,9 +249,9 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
 
   return (
     <Tile id="wind" style={style}>
-      <SectionLabel>Wind</SectionLabel>
-      <Rule strong />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18, flex: 1, minHeight: 0 }}>
+      {/* Compass first, title inside the readout column — same pattern as the
+          barometer. No heading above the gauge. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minHeight: 0 }}>
         <svg width={SIZE} height={SIZE} viewBox="0 0 300 300" style={{ flexShrink: 0 }}>
           <circle cx={150} cy={150} r={110} fill={v.chart.surface} stroke={v.rule} strokeWidth={1} />
           <circle cx={150} cy={150} r={82} fill="none" stroke={v.ruleHair} strokeWidth={0.6} />
@@ -267,28 +272,49 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
         </svg>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+          <div style={{ ...type('title'), color: v.text }}>Wind</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
             <span style={{ ...type('mono', { fontSize: 34 }), ...tnum, color: v.text, lineHeight: 1 }}>
               {fmt(d.wind.speedMph, 0)}
             </span>
             <SectionLabel>mph {d.wind.directionLabel ?? ''}</SectionLabel>
           </div>
-          <SectionLabel>
-            Gust {fmt(d.wind.gustMph, 0)} · peak {fmt(d.wind.peakMph, 0)}{d.wind.peakAt ? ` at ${fmtTime(d.wind.peakAt)}` : ''}
-          </SectionLabel>
-          {d.wind.directionDeg != null && <SectionLabel>{Math.round(d.wind.directionDeg)}°</SectionLabel>}
+          <div style={{ ...type('body', { fontSize: 12.5 }), color: v.textSecondary, lineHeight: 1.4, textWrap: 'pretty' }}>
+            {d.wind.directionLabel && (COMPASS_NAME[d.wind.directionLabel] ?? d.wind.directionLabel)}
+            {d.wind.gustMph != null && `, gusting ${fmt(d.wind.gustMph, 0)}`}
+            {(d.wind.directionLabel || d.wind.gustMph != null) && '. '}
+            {d.wind.peakMph != null && `Peak ${fmt(d.wind.peakMph, 0)} mph${d.wind.peakAt ? ` at ${fmtTime(d.wind.peakAt)}` : ''}.`}
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginTop: 'auto', paddingTop: 8, borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
+            {d.wind.directionDeg != null && (
+              <span style={{ ...type('mono', { fontSize: 11 }), ...tnum, color: v.textSecondary }}>
+                {Math.round(d.wind.directionDeg)}°
+              </span>
+            )}
+            <span style={{ ...type('mono', { fontSize: 11 }), ...tnum, color: v.textSecondary }}>
+              Humidity {fmt(d.outside.humidityPct, 0, '%')}
+              {d.outside.insideHumidityPct != null && ` · inside ${fmt(d.outside.insideHumidityPct, 0, '%')}`}
+            </span>
+          </div>
         </div>
       </div>
     </Tile>
   );
 };
 
+/** Full compass names for the log's prose line. */
+const COMPASS_NAME: Record<string, string> = {
+  N: 'North', NNE: 'North-northeast', NE: 'Northeast', ENE: 'East-northeast',
+  E: 'East', ESE: 'East-southeast', SE: 'Southeast', SSE: 'South-southeast',
+  S: 'South', SSW: 'South-southwest', SW: 'Southwest', WSW: 'West-southwest',
+  W: 'West', WNW: 'West-northwest', NW: 'Northwest', NNW: 'North-northwest',
+};
+
 /* ────────────────────────────────────────────────────────────────── 6. rain */
 
 export const RainTile: React.FC<{ d: DashboardData; title?: string; style?: React.CSSProperties }> = ({ d, title = 'Rain', style }) => (
   <Tile id="rain" style={style}>
-    <SectionLabel>{title}</SectionLabel>
-    <Rule strong />
+    <TileHeading>{title}</TileHeading>
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
       <span style={{ ...type('mono', { fontSize: 30 }), ...tnum, color: v.sky, lineHeight: 1 }}>
         {fmt(d.rain.rateInPerHr, 2)}
@@ -310,8 +336,7 @@ export const RainTile: React.FC<{ d: DashboardData; title?: string; style?: Reac
 
 export const SolarUvTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
   <Tile id="solar-uv" style={style}>
-    <SectionLabel>Sun &amp; water</SectionLabel>
-    <Rule strong />
+    <TileHeading>Sun &amp; water</TileHeading>
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
       <span style={{ ...type('mono', { fontSize: 30 }), ...tnum, color: v.warning, lineHeight: 1 }}>
         {fmtInt(d.solar.wm2)}
@@ -332,8 +357,7 @@ export const SolarUvTile: React.FC<{ d: DashboardData; style?: React.CSSProperti
 
 export const AlmanacTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
   <Tile id="almanac" style={style}>
-    <SectionLabel>Almanac for today</SectionLabel>
-    <Rule strong />
+    <TileHeading>Almanac for today</TileHeading>
     {/* Three rows. Station diagnostics are their own tile — don't merge them here. */}
     <div>
       <Row label="Sunrise / sunset" value={`${d.almanac.sunrise ?? '—'} · ${d.almanac.sunset ?? '—'}`} />
@@ -371,13 +395,12 @@ export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boo
 
   return (
     <Tile id="rainfall-hourly" style={style}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <SectionLabel>Rainfall by hour</SectionLabel>
+      <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <span>Rainfall by hour</span>
         <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>
           {fmt(d.rain.todayIn, 2)} in today · peak {fmt(max, 2)} in/hr
         </span>
-      </div>
-      <Rule strong />
+      </TileHeading>
       {/* Always render the 24 slots. An empty axis reads as "no rain today";
           an empty tile reads as broken.
 
