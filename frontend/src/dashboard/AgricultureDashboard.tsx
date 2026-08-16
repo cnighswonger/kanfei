@@ -17,12 +17,11 @@
  */
 import React from 'react';
 import {
-  v, type, s, scaleVar, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, fs,
+  v, type, s, scaleVar, FILL_HEIGHT, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile,
+  tnum, fmt, fmtInt, fmtTime, fs,
 } from './primitives';
 import type { DashboardData } from './types';
 import { compass, rosePetals } from '../utils/gauges';
-
-const DESIGN_HEIGHT = 928;
 
 export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel?: string }> = ({
   d,
@@ -31,7 +30,8 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel?: str
   <main data-dashboard="agriculture" style={{ minWidth: 0, overflow: 'hidden' }}>
     <div
       style={{
-        ...scaleVar(DESIGN_HEIGHT),
+        ...scaleVar(),
+        ...FILL_HEIGHT,
         padding: `${s(22)} ${s(28)} ${s(20)}`,
         display: 'flex',
         flexDirection: 'column',
@@ -70,6 +70,7 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel?: str
           gap: s(24),
           paddingBottom: s(8),
           borderBottom: `${v.ruleWidth} solid ${v.rule}`,
+          ...CONTENT_CAP,
         }}
       >
         <h2 style={{ ...type('heading'), color: v.text, margin: 0 }}>Spray Advisory</h2>
@@ -81,13 +82,15 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel?: str
       </div>
 
       {/* ── band A, 287 ───────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '694fr 604fr', gap: s(24), height: s(287) }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '694fr 604fr', gap: s(24), height: s(287), ...CONTENT_CAP }}>
         <SprayVerdictTile d={d} />
         <SprayWindowTile d={d} />
       </div>
 
       {/* ── band B, 478 ───────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: s(24), height: s(478) }}>
+      {/* flex:1 + minHeight: this band takes the leftover vertical space, so a
+          shorter composition fills the viewport without inflating its type. */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: s(24), flex: 1, minHeight: s(478), ...CONTENT_CAP }}>
         <DriftRiskTile d={d} />
         <WaterBalanceTile d={d} />
         <FieldScheduleTile d={d} />
@@ -101,6 +104,7 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel?: str
           justifyContent: 'space-between',
           borderTop: `${v.ruleWidth} solid ${v.rule}`,
           paddingTop: s(8),
+          ...CONTENT_CAP,
         }}
       >
         <SectionLabel>
@@ -111,12 +115,24 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel?: str
           </span>
         </SectionLabel>
         <span style={{ ...type('sectionLabel'), ...tnum, color: v.textMuted }}>
-          Last update {d.station.lastPoll ?? '—'}
+          Last update {fmtTime(d.station.lastPoll)}
         </span>
       </div>
     </div>
   </main>
 );
+
+/**
+ * A window is a range of two times. The API hands back
+ * '2026-08-16T19:00:00-04:00 – 2026-08-16T20:00:00-04:00' (60 characters), which
+ * wraps to two lines and dwarfs its own label. Reduce each end to clock time.
+ * Formatting belongs in the adapter; this is the guard.
+ */
+const fmtRange = (r: string | null | undefined): string => {
+  if (!r) return '—';
+  const parts = r.split(/\s*[–—-]\s*(?=\d{4}-)/);
+  return parts.length === 2 ? `${fmtTime(parts[0])} – ${fmtTime(parts[1])}` : fmtTime(r);
+};
 
 /* ──────────────────────────────────────────────────── 1. verdict + checks */
 
@@ -214,11 +230,11 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(14), marginTop: 'auto', paddingTop: s(10), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
         <div>
           <SectionLabel>Best window today</SectionLabel>
-          <div style={{ ...type('mono', fs(17)), ...tnum, color: v.success }}>{d.spray?.bestWindowToday ?? '—'}</div>
+          <div style={{ ...type('mono', fs(17)), ...tnum, color: v.success }}>{fmtRange(d.spray?.bestWindowToday)}</div>
         </div>
         <div>
           <SectionLabel>Next window</SectionLabel>
-          <div style={{ ...type('mono', fs(17)), ...tnum, color: v.text }}>{d.spray?.nextWindow ?? '—'}</div>
+          <div style={{ ...type('mono', fs(17)), ...tnum, color: v.text }}>{fmtRange(d.spray?.nextWindow)}</div>
         </div>
       </div>
     </Tile>

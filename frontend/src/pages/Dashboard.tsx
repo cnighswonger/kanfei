@@ -176,6 +176,35 @@ const SPRAY_CHECK_LABEL: Record<string, string> = {
   rain_free: "Rain-free",
 };
 
+/**
+ * Extract the leading number from a backend check ``current_value``
+ * string (e.g. ``"9 mph (gust)"`` → ``"9"``, ``"78.4°F"`` → ``"78.4"``).
+ * Design REVIEW-19: the tile pairs ``value`` (bare reading) with
+ * ``limit`` (constraint + unit); baking units into ``value`` duplicates
+ * them and makes the column ragged.  Falls back to the raw string when
+ * no leading number matches so we never blank a real display value.
+ */
+function sprayCheckValue(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  const m = raw.match(/^[+\-]?\d+(?:\.\d+)?/);
+  return m ? m[0] : raw;
+}
+
+/**
+ * Preset product categories arrive as backend enum strings
+ * (``fungicide_protectant``, ``insecticide_contact``, ``pgr``).  The
+ * mock renders a humanised tail (``protectant`` / ``contact`` / ``pgr``);
+ * strip the leading kind prefix and title-case what's left.
+ */
+function sprayCategoryLabel(raw: string): string {
+  const tail = raw.replace(/^(fungicide|herbicide|insecticide)_/, "");
+  if (!tail) return raw;
+  return tail
+    .split("_")
+    .map((w) => (w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)))
+    .join(" ");
+}
+
 /** Format a check's limit line ("≤ 10 mph", "40 – 90 °F", etc.). */
 function sprayCheckLimit(name: string, product: SprayProduct | null): string {
   if (!product) return "";
@@ -386,7 +415,7 @@ function buildSprayBlock(
     ? evaluation.constraints.map((c) => ({
         name: c.name,
         label: SPRAY_CHECK_LABEL[c.name] ?? c.name,
-        value: c.current_value || "—",
+        value: sprayCheckValue(c.current_value),
         limit: sprayCheckLimit(c.name, product),
         pass: c.passed,
       }))
@@ -424,7 +453,9 @@ function buildSprayBlock(
   const etYearIn = cc?.et_yearly?.value ?? null;
 
   return {
-    product: product ? { name: product.name, category: product.category } : null,
+    product: product
+      ? { name: product.name, category: sprayCategoryLabel(product.category) }
+      : null,
     verdict,
     verdictNote,
     caution: null,
