@@ -70,7 +70,7 @@ const glaisher: Theme = {
   surface: {
     ownsBackground: true,
     plate: {
-      src: '/glaisher-adieu-1867.png',
+      src: '/glaisher-instruments.png',
       opacity: 0.14,
       filter: 'sepia(0.55) contrast(1.05) saturate(0.9)',
       blend: 'multiply',
