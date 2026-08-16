@@ -11,10 +11,10 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..ipc.dependencies import get_ipc_client
-from ..models.archive_record import ArchiveRecordModel
 from ..models.database import SessionLocal, get_db
 from ..models.sensor_reading import SensorReadingModel
 from ..services.barometer_aggregation import (
@@ -210,12 +210,28 @@ async def get_station():
             logger.warning("Failed to read station time via IPC: %s", exc)
 
     # archive_records ships as a diagnostic row on the dashboard station-
-    # status strip; total row count of the archive-record table.  Cheap
-    # enough not to cache — single indexed COUNT(*) against SQLite.
+    # status strip; total row count of the archive-record table.  Raw
+    # SQL (not ORM) avoids the ORM ``select … FROM (SELECT …)`` subquery
+    # shape that SQLite complained about when driven from the request
+    # scope with only-recently-touched migrations.  Warns (rather than
+    # silently returning null) so a real error surfaces in the log
+    # instead of vanishing.
     try:
-        archive_records = db.query(ArchiveRecordModel).count()
-    except Exception:
+        row = db.execute(text("SELECT COUNT(*) FROM archive_records")).scalar()
+        archive_records = int(row) if row is not None else None
+    except Exception as exc:
+        logger.warning("archive_records count failed: %s", exc)
         archive_records = None
+
+    # Site name for the dashboard title row ("Sanford, NC") + elevation
+    # from settings.  Both public so the anonymous dashboard render can
+    # populate the title without an admin round-trip.
+    cfg_effective = get_effective_config(db)
+    station_name = str(cfg_effective.get("station_name", "") or "")
+    try:
+        elevation_ft = float(cfg_effective.get("elevation", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        elevation_ft = None
 
     return {
         "type_code": data.get("type_code", -1),
@@ -235,6 +251,8 @@ async def get_station():
         "server_epoch_ms_at_read": server_epoch_ms_at_read,
         "battery": _read_battery_from_latest_reading(),
         "archive_records": archive_records,
+        "station_name": station_name,
+        "elevation_ft": elevation_ft,
     }
 
 

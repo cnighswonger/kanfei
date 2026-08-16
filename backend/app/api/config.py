@@ -87,6 +87,7 @@ _DEFAULTS: dict[str, object] = {
     "channel_mute_solar_radiation": False,
     "channel_mute_uv_index": False,
     "station_timezone": "",
+    "station_name": "",  # Display name for the dashboard title row ("Sanford, NC")
     "nowcast_enabled": False,
     "nowcast_disclaimer_accepted": False,
     "nowcast_mode": "local",  # "local" = in-process engine, "remote" = HTTP endpoint
