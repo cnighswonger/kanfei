@@ -138,6 +138,16 @@ a:hover {
   to   { transform: translateX(0); opacity: 1; }
 }
 
+/* Vertical chrome the dashboard doesn't own (header + main marginTop).
+   Read by ``--k`` in Design's SCALE.md to size the dashboard against
+   the remaining viewport.  Paper themes: 60 px header + 5 px main
+   marginTop = 65 px.  Non-paper: 56 + 5 = 61 px.  One value here
+   matches paper (the near-worst case) — a 4 px overallocation on
+   dark themes renders the composition negligibly smaller. */
+.app-shell {
+  --chrome-height: 65px;
+}
+
 /* Responsive: mobile sidebar behavior */
 @media (max-width: 768px) {
   .app-shell {

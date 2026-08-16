@@ -18,23 +18,31 @@ import React from 'react';
  * symptoms, one cause.
  *
  * `s(n)` expresses every size as n × `--k`, a px-valued scale unit derived from the
- * container's HEIGHT against the mock's 1120px:
+ * viewport height against the mock's 1120px of main content:
  *
- *     --k: clamp(0.92px, calc(100cqh / 1120), 1.5px)
+ *     --k: clamp(0.92px, calc((100vh - var(--chrome-height, 94px)) / 1120), 1.5px)
  *
- * Height-based, not width-based: the vertical budget is what must fit exactly, and
- * scaling by width on a wide window overshoots into a scrollbar. Widths stay fluid
- * (`fr`, `100%`), so the page fills horizontally while type and vertical rhythm
- * keep the mock's proportions.
+ * ⚠ Deliberately `vh`, NOT `cqh`. Container query units need a definite height on
+ * the container; the app shell's <main> is content-sized, so `100cqh` was invalid,
+ * the whole clamp() collapsed, and `--k` silently fell back to 1px — which is
+ * precisely the dead space that was left under the footer. `vh` is always definite.
+ *
+ * `--chrome-height` is everything vertical the dashboard does NOT own: the 60px
+ * header plus the ~34px status bar. The shell should set it; 94px is the default.
+ *
+ * Height-based, not width-based: the vertical budget must fit exactly, and scaling
+ * by width on a wide monitor overshoots into a scrollbar. Widths stay fluid (`fr`,
+ * `100%`), so the page still fills horizontally.
  *
  * Dividing a length by a number yields a length, so `--k` is a px value and
  * `calc(14 * var(--k))` resolves — the sizes below are unitless multipliers.
  */
 export const s = (n: number): string => `calc(${n} * var(--k, 1px))`;
 
-/** Put on the scaling wrapper inside a `container-type: size` parent. */
+/** Put on the dashboard's scaling wrapper. No container-type required. */
 export const SCALE_VAR: React.CSSProperties = {
-  ['--k' as string]: 'clamp(0.92px, calc(100cqh / 1120), 1.5px)',
+  ['--k' as string]:
+    'clamp(0.92px, calc((100vh - var(--chrome-height, 94px)) / 1120), 1.5px)',
 };
 
 /**

@@ -33,10 +33,8 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
   <main
     data-dashboard="everyday"
     style={{
-      // container-type: size makes 100cqh available to --k below, so the whole
-      // composition scales to the real viewport instead of stopping short of it.
-      containerType: 'size',
-      height: '100%',
+      // No container-type: --k is derived from vh, which is always definite.
+      // main just must not clip or stretch its child.
       minWidth: 0,
       overflow: 'hidden',
     }}
@@ -44,7 +42,6 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
     <div
       style={{
         ...SCALE_VAR,
-        height: '100%',
         padding: `${s(24)} ${s(30)} ${s(20)}`,
         display: 'flex',
         flexDirection: 'column',
@@ -158,8 +155,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
  * The clock and last poll are rows here; the footer carries 'Last update' only.
  */
 export const ConsoleAndLinkTile: React.FC<{ d: DashboardData }> = ({ d }) => {
-  // Named ``st`` (not ``s``) so it doesn't shadow the scale helper ``s(n)``
-  // imported from primitives.
+  // Named ``st`` so it doesn't shadow the ``s(n)`` scale helper.
   const st = d.station;
   const rows: [string, React.ReactNode][] = [
     ['Firmware', st.firmware],
