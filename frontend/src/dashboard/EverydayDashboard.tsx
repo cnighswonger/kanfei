@@ -16,7 +16,7 @@
  *   footer                 27
  */
 import React from 'react';
-import { v, type, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, fmtTime } from './primitives';
+import { v, type, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, fmtTime, s, SCALE_VAR } from './primitives';
 import type { DashboardData } from './types';
 import {
   HeroTemperatureTile, DerivedConditionsTile, HistoryChartTile, BarometerTile,
@@ -33,15 +33,28 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
   <main
     data-dashboard="everyday"
     style={{
-      padding: '24px 30px 20px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 20,
-      position: 'relative',
-      isolation: 'isolate',
+      // container-type: size makes 100cqh available to --k below, so the whole
+      // composition scales to the real viewport instead of stopping short of it.
+      containerType: 'size',
+      height: '100%',
       minWidth: 0,
+      overflow: 'hidden',
     }}
   >
+    <div
+      style={{
+        ...SCALE_VAR,
+        height: '100%',
+        padding: `${s(24)} ${s(30)} ${s(20)}`,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: s(20),
+        position: 'relative',
+        isolation: 'isolate',
+        minWidth: 0,
+        boxSizing: 'border-box',
+      }}
+    >
     {/* Corner plate — 400×280, bottom-right of MAIN, behind content.
         Not full-bleed, not on body, not position:fixed. Exact values from the
         mock; see ADAPTER.md if the page currently shows a page-sized engraving. */}
@@ -50,9 +63,9 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
       style={{
         position: 'absolute',
         right: 0,
-        bottom: 60,
-        width: 400,
-        height: 280,
+        bottom: s(60),
+        width: s(400),
+        height: s(280),
         zIndex: -1,
         backgroundImage: 'var(--surface-plate)',
         backgroundSize: 'contain',
@@ -70,8 +83,8 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
         display: 'flex',
         alignItems: 'baseline',
         justifyContent: 'space-between',
-        gap: 24,
-        paddingBottom: 8,
+        gap: s(24),
+        paddingBottom: s(8),
         borderBottom: `${v.ruleWidth} solid ${v.rule}`,
       }}
     >
@@ -86,31 +99,31 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
     </div>
 
     {/* ── band A, 787 ─────────────────────────────────────────────────────── */}
-    <div data-band="a" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: BAND_GAP, alignItems: 'start' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-        <div style={{ display: 'flex', gap: 28, height: 205 }}>
-          <HeroTemperatureTile d={d} style={{ width: 340, flexShrink: 0 }} />
+    <div data-band="a" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), alignItems: 'start' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: s(20), minWidth: 0 }}>
+        <div style={{ display: 'flex', gap: s(28), height: s(205) }}>
+          <HeroTemperatureTile d={d} style={{ width: s(340), flexShrink: 0 }} />
           <DerivedConditionsTile d={d} style={{ flex: 1, minWidth: 0 }} />
         </div>
 
-        <HistoryChartTile d={d} style={{ height: 269 }} />
+        <HistoryChartTile d={d} style={{ height: s(269) }} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, height: 159 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(24), height: s(159) }}>
           {/* 1d titles this 'Rain ledger', not 'Rain' */}
           <RainTile d={d} title="Rain ledger" />
           <SolarUvTile d={d} />
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
-        <BarometerTile d={d} style={{ height: 280 }} />
-        <WindTile d={d} style={{ height: 220 }} />
-        <AlmanacTile d={d} style={{ height: 159 }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: s(18), minWidth: 0 }}>
+        <BarometerTile d={d} style={{ height: s(280) }} />
+        <WindTile d={d} style={{ height: s(220) }} />
+        <AlmanacTile d={d} style={{ height: s(159) }} />
       </div>
     </div>
 
     {/* ── band B, 150 ─────────────────────────────────────────────────────── */}
-    <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: BAND_GAP, height: 150 }}>
+    <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), height: s(150) }}>
       <RainfallByHourTile d={d} />
       <ConsoleAndLinkTile d={d} />
     </div>
@@ -122,7 +135,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
         alignItems: 'center',
         justifyContent: 'space-between',
         borderTop: `${v.ruleWidth} solid ${v.rule}`,
-        paddingTop: 8,
+        paddingTop: s(8),
       }}
     >
       <SectionLabel>
@@ -132,6 +145,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
       <span style={{ ...type('sectionLabel'), ...tnum, color: v.textMuted }}>
         Last update {fmtTime(d.station.lastPoll)}
       </span>
+    </div>
     </div>
   </main>
 );
@@ -144,22 +158,24 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
  * The clock and last poll are rows here; the footer carries 'Last update' only.
  */
 export const ConsoleAndLinkTile: React.FC<{ d: DashboardData }> = ({ d }) => {
-  const s = d.station;
+  // Named ``st`` (not ``s``) so it doesn't shadow the scale helper ``s(n)``
+  // imported from primitives.
+  const st = d.station;
   const rows: [string, React.ReactNode][] = [
-    ['Firmware', s.firmware],
-    ['Product', s.model],
-    ['Transmitters', <span style={{ color: s.transmittersOk ? v.success : v.danger }}>{s.transmittersOk ? 'OK' : 'FAULT'}</span>],
-    ['Console battery', fmt(s.batteryVolts, 2, ' V')],
-    ['CRC / timeouts', `${s.crcErrors} / ${s.timeouts}`],
-    ['Archive records', fmtInt(s.archiveRecords)],
-    ['Console clock', s.clock ?? '—'],
-    ['Last poll', fmtTime(s.lastPoll)],
+    ['Firmware', st.firmware],
+    ['Product', st.model],
+    ['Transmitters', <span style={{ color: st.transmittersOk ? v.success : v.danger }}>{st.transmittersOk ? 'OK' : 'FAULT'}</span>],
+    ['Console battery', fmt(st.batteryVolts, 2, ' V')],
+    ['CRC / timeouts', `${st.crcErrors} / ${st.timeouts}`],
+    ['Archive records', fmtInt(st.archiveRecords)],
+    ['Console clock', st.clock ?? '—'],
+    ['Last poll', fmtTime(st.lastPoll)],
   ];
 
   return (
     <Tile id="station-status">
       <TileHeading>Console &amp; link</TileHeading>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 24, rowGap: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: s(24), rowGap: 0 }}>
         {rows.map(([label, value], i) => (
           <Row key={label} label={label} value={value} last={i >= rows.length - 2} />
         ))}
