@@ -1,0 +1,433 @@
+/**
+ * The ten dashboard tiles, finished. Drop in as-is.
+ *
+ * Rules these encode, so they can't drift again:
+ *  - Content is TOP-LEFT aligned. Nothing is centred. Centring is what made the
+ *    last three renders look like a settings form instead of an instrument panel.
+ *  - Labels are <SectionLabel> (mono caps). Values are mono, tabular. Prose and
+ *    the one hero numeral are serif italic via their type roles.
+ *  - Every colour is a token from `v`. No literal hex anywhere in this file.
+ *  - Heights come from the parent layout (TILE-CONTRACT.md), never from content.
+ */
+import React from 'react';
+import { Tile, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt } from './primitives';
+import type { DashboardData } from './types';
+import { wheelDial, compass, rosePetals, pathFor, ledgerGrid } from '../utils/gauges';
+
+/* ───────────────────────────────────────────────────── 1. hero temperature */
+
+export const HeroTemperatureTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
+  <Tile id="outside-temp" style={style}>
+    <SectionLabel>Outside air</SectionLabel>
+    {/* baseline-aligned value + unit; unit is the display role at 36px, not a caption */}
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: -6 }}>
+      <span style={{ ...type('display'), ...tnum, color: v.text, lineHeight: 0.88 }}>
+        {fmt(d.outside.tempF)}
+      </span>
+      <span style={{ ...type('display', { fontSize: 'calc(var(--type-display-size) * 0.35)' }), color: v.accent }}>
+        °F
+      </span>
+    </div>
+
+    {d.forecast.zambretti && (
+      <div style={{ ...type('title'), color: v.text, lineHeight: 1.25, textWrap: 'pretty' }}>
+        {d.forecast.zambretti}
+      </div>
+    )}
+    <SectionLabel>
+      Zambretti{d.forecast.confidencePct != null && ` · ${Math.round(d.forecast.confidencePct)}% confidence`}
+    </SectionLabel>
+
+    {/* high/low chips sit directly under the confidence label — not pushed to the
+        bottom of the tile. No margin-top:auto here. */}
+    <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+      <Chip label="High" value={fmt(d.outside.highF, 1, '°')} at={d.outside.highAt} tone={v.danger} />
+      <Chip label="Low" value={fmt(d.outside.lowF, 1, '°')} at={d.outside.lowAt} tone={v.sky} />
+    </div>
+  </Tile>
+);
+
+const Chip: React.FC<{ label: string; value: string; at?: string | null; tone: string }> = ({ label, value, at, tone }) => (
+  <span
+    style={{
+      ...type('mono'),
+      ...tnum,
+      display: 'inline-flex',
+      alignItems: 'baseline',
+      gap: 6,
+      padding: '3px 8px',
+      color: tone,
+      border: `1px solid ${v.ruleHair}`,
+      borderRadius: 'var(--radius-control)',
+      whiteSpace: 'nowrap',
+    }}
+  >
+    <span style={{ ...type('sectionLabel'), color: v.textSecondary }}>{label}</span>
+    {value}
+    {at && <span style={{ color: v.textMuted }}>{at}</span>}
+  </span>
+);
+
+/* ────────────────────────────────────────────────── 2. derived conditions */
+
+export const DerivedConditionsTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
+  <Tile id="derived-conditions" style={style}>
+    <SectionLabel>Derived conditions</SectionLabel>
+    <Rule strong />
+    {/* A left-aligned ruled table. Five rows, ~30px each — NOT a centred 2-up grid. */}
+    <div>
+      <Row label="Feels like" value={fmt(d.outside.feelsLikeF, 1, ' °F')} />
+      <Row label="Heat index" value={fmt(d.outside.heatIndexF, 1, ' °F')} />
+      <Row label="Dew point" value={fmt(d.outside.dewPointF, 1, ' °F')} valueColor={v.sky} />
+      <Row label="Wind chill" value={fmt(d.outside.windChillF, 1, ' °F')} />
+      <Row label="Theta-e" value={fmt(d.outside.thetaEK, 1, ' K')} last />
+    </div>
+  </Tile>
+);
+
+/* ─────────────────────────────────────────────────────── 3. history chart */
+
+const CHART_W = 700;
+const CHART_H = 196;
+
+export const HistoryChartTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
+  const temps = d.history.tempF.filter((n): n is number => n != null);
+  const dews = d.history.dewPointF.filter((n): n is number => n != null);
+  if (!temps.length) {
+    return (
+      <Tile id="history-chart" style={style}>
+        <SectionLabel>Temperature &amp; dew point, 24 hours</SectionLabel>
+        <Rule strong />
+        <Empty>No history yet</Empty>
+      </Tile>
+    );
+  }
+
+  // ⚠ Domain spans BOTH series, then pads. Computing it from temperature alone is
+  // what pushed the dew-point line off the bottom of the plot.
+  const all = [...temps, ...dews];
+  const pad = Math.max(2, (Math.max(...all) - Math.min(...all)) * 0.12);
+  const lo = Math.min(...all) - pad;
+  const hi = Math.max(...all) + pad;
+
+  const t = pathFor(temps, 0, CHART_W, 6, CHART_H - 6, lo, hi);
+  const dew = dews.length ? pathFor(dews, 0, CHART_W, 6, CHART_H - 6, lo, hi) : null;
+  const grid = ledgerGrid(CHART_W, CHART_H);
+
+  return (
+    <Tile id="history-chart" style={style}>
+      {/* The header line carries what a legend and a y-axis would: series names
+          left, range right. No legend pills, no y-axis column. */}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16 }}>
+        <SectionLabel>Temperature &amp; dew point, 24 hours</SectionLabel>
+        <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>
+          {fmt(Math.min(...temps))}–{fmt(Math.max(...temps))} °F
+          {d.history.avgTempF != null && ` · avg ${fmt(d.history.avgTempF)}°`}
+          {d.history.sampleCount != null && ` · ${fmtInt(d.history.sampleCount)} samples`}
+        </span>
+      </div>
+      <Rule strong />
+
+      <div style={{ background: v.chart.surface, flex: 1, minHeight: 0 }}>
+        <svg
+          viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+          preserveAspectRatio="none"
+          style={{ display: 'block', width: '100%', height: '100%' }}
+        >
+          {grid.hRules.map((g, i) => (
+            <line key={`h${i}`} x1={0} y1={g.y} x2={CHART_W} y2={g.y}
+                  stroke={g.op > 0.25 ? v.chart.gridMajor : v.chart.gridMinor} strokeWidth={0.6} />
+          ))}
+          {grid.vRules.map((g, i) => (
+            <line key={`v${i}`} x1={g.x} y1={0} x2={g.x} y2={CHART_H}
+                  stroke={g.op > 0.1 ? v.chart.gridMajor : v.chart.gridMinor} strokeWidth={0.4} />
+          ))}
+
+          {/* dew point: solid, secondary trace colour. Not dashed, not saturated. */}
+          {dew && <path d={dew.line} fill="none" stroke={v.chart.traceSecondary} strokeWidth={1.6} />}
+
+          {/* temperature drawn twice — ink shadow under accent. This doubling is
+              what makes it read as ink on paper rather than a line on a screen. */}
+          <path d={t.line} fill="none" stroke={v.chart.traceShadow} strokeWidth={2.4} strokeLinecap="round" />
+          <path d={t.line} fill="none" stroke={v.chart.trace} strokeWidth={1.8} strokeLinecap="round" />
+
+          <circle cx={t.last.x} cy={t.last.y} r={3.5} fill={v.chart.surface} stroke={v.chart.trace} strokeWidth={1.8} />
+        </svg>
+      </div>
+
+      {/* Five relative labels. Not eleven absolute datetimes. */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', ...type('sectionLabel'), color: v.chart.axis }}>
+        <span>−24h</span><span>−18</span><span>−12</span><span>−6</span><span>now</span>
+      </div>
+    </Tile>
+  );
+};
+
+/* ─────────────────────────────────────────────────────────── 4. barometer */
+
+export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
+  const size = 260;
+  const dial = d.barometer.inHg != null ? wheelDial(d.barometer.inHg, size) : null;
+  const trend = d.barometer.trendInHgPer3h;
+  const arrow = trend == null ? '' : trend > 0.005 ? '↑ rising' : trend < -0.005 ? '↓ falling' : '→ steady';
+
+  return (
+    <Tile id="barometer" style={style}>
+      <SectionLabel>Barometer</SectionLabel>
+      <Rule strong />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, flex: 1, minHeight: 0 }}>
+        {dial && (
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
+            <circle cx={dial.cx} cy={dial.cy} r={dial.rimOuter} fill="none" stroke={v.rule} strokeWidth={1.2} />
+            <circle cx={dial.cx} cy={dial.cy} r={dial.rimInner} fill="none" stroke={v.ruleHair} strokeWidth={0.6} />
+
+            {dial.minor.map((k, i) => (
+              <line key={`m${i}`} x1={k.x1} y1={k.y1} x2={k.x2} y2={k.y2} stroke={v.text} strokeOpacity={0.55} strokeWidth={0.8} strokeLinecap="round" />
+            ))}
+            {dial.major.map((k, i) => (
+              <line key={`M${i}`} x1={k.x1} y1={k.y1} x2={k.x2} y2={k.y2} stroke={v.text} strokeWidth={1.6} strokeLinecap="round" />
+            ))}
+            {dial.numerals.map((n, i) => (
+              <text key={`n${i}`} x={n.x} y={n.y} textAnchor="middle"
+                    style={{ ...type('sectionLabel'), letterSpacing: 0 }} fill={v.textSecondary}>{n.label}</text>
+            ))}
+            {dial.zones.map((z, i) => (
+              <text key={`z${i}`} x={z.x} y={z.y} textAnchor="middle"
+                    style={{ ...type('sectionLabel'), fontSize: 8 }} fill={v.textMuted}>{z.label}</text>
+            ))}
+
+            {/* pale trend hand 3 h back, THEN the live needle — movement, not just value */}
+            <line x1={dial.cx} y1={dial.cy} x2={dial.trend.x} y2={dial.trend.y}
+                  stroke={v.text} strokeOpacity={0.3} strokeWidth={1.6} strokeLinecap="round" />
+            <line x1={dial.cx} y1={dial.cy} x2={dial.tip.x} y2={dial.tip.y}
+                  stroke={v.needle} strokeWidth={2.4} strokeLinecap="round" />
+            <circle cx={dial.cx} cy={dial.cy} r={4} fill={v.needle} />
+          </svg>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ ...type('mono', { fontSize: 46 }), ...tnum, color: v.text, lineHeight: 1 }}>
+              {fmt(d.barometer.inHg, 2)}
+            </span>
+            <SectionLabel>inHg</SectionLabel>
+          </div>
+          <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>{fmt(d.barometer.hPa, 1, ' hPa')}</span>
+          <SectionLabel color={v.accent}>
+            {arrow}{trend != null && ` · ${trend > 0 ? '+' : ''}${trend.toFixed(3)} in / 3h`}
+          </SectionLabel>
+          {d.barometer.zone && <SectionLabel>Zone · {d.barometer.zone}</SectionLabel>}
+          <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: `1px ${v.ruleStyle} ${v.ruleHair}` }}>
+            <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>
+              H {fmt(d.barometer.todayHigh, 2)} {d.barometer.todayHighAt} · L {fmt(d.barometer.todayLow, 2)} {d.barometer.todayLowAt}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Tile>
+  );
+};
+
+/* ────────────────────────────────────────────────────────────────── 5. wind */
+
+export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
+  const SIZE = 220;
+  const c = compass(110, 110, 80, 98);
+  const petals = rosePetals(110, 110, 72, d.wind.roseWeights);
+  // A needle at calm implies a direction the station isn't reporting.
+  const showNeedle = (d.wind.speedMph ?? 0) >= 1 && d.wind.directionDeg != null;
+
+  return (
+    <Tile id="wind" style={style}>
+      <SectionLabel>Wind</SectionLabel>
+      <Rule strong />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, flex: 1, minHeight: 0 }}>
+        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} style={{ flexShrink: 0 }}>
+          <circle cx={110} cy={110} r={80} fill={v.chart.surface} stroke={v.rule} strokeWidth={1} />
+          <circle cx={110} cy={110} r={60} fill="none" stroke={v.ruleHair} strokeWidth={0.6} />
+          {petals.map((p, i) => <path key={i} d={p.d} fill={v.accent} opacity={p.op} />)}
+          {c.ticks.map((k, i) => (
+            <line key={i} x1={k.x1} y1={k.y1} x2={k.x2} y2={k.y2} stroke={v.text} strokeOpacity={0.6} strokeWidth={k.sw} />
+          ))}
+          {c.labels.map((l, i) => (
+            <text key={i} x={l.x} y={l.y} textAnchor="middle" style={type('sectionLabel')} fill={v.textSecondary}>{l.label}</text>
+          ))}
+          {showNeedle && (
+            <g style={{ transform: `rotate(${d.wind.directionDeg}deg)`, transformOrigin: '110px 110px' }}>
+              <line x1={110} y1={128} x2={110} y2={52} stroke={v.needle} strokeWidth={2.2} strokeLinecap="round" />
+              <polygon points="110,44 103,60 117,60" fill={v.needle} />
+            </g>
+          )}
+          <circle cx={110} cy={110} r={3} fill={v.needle} />
+        </svg>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ ...type('mono', { fontSize: 34 }), ...tnum, color: v.text, lineHeight: 1 }}>
+              {fmt(d.wind.speedMph, 0)}
+            </span>
+            <SectionLabel>mph {d.wind.directionLabel ?? ''}</SectionLabel>
+          </div>
+          <SectionLabel>
+            Gust {fmt(d.wind.gustMph, 0)} · peak {fmt(d.wind.peakMph, 0)}{d.wind.peakAt ? ` at ${d.wind.peakAt}` : ''}
+          </SectionLabel>
+          {d.wind.directionDeg != null && <SectionLabel>{Math.round(d.wind.directionDeg)}°</SectionLabel>}
+        </div>
+      </div>
+    </Tile>
+  );
+};
+
+/* ────────────────────────────────────────────────────────────────── 6. rain */
+
+export const RainTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
+  <Tile id="rain" style={style}>
+    <SectionLabel>Rain</SectionLabel>
+    <Rule strong />
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+      <span style={{ ...type('mono', { fontSize: 30 }), ...tnum, color: v.sky, lineHeight: 1 }}>
+        {fmt(d.rain.rateInPerHr, 2)}
+      </span>
+      <SectionLabel>in/hr</SectionLabel>
+      <SectionLabel style={{ marginLeft: 'auto' }}>
+        {(d.rain.rateInPerHr ?? 0) > 0 ? 'Raining' : 'Not raining'}
+      </SectionLabel>
+    </div>
+    <div style={{ marginTop: 'auto' }}>
+      <Row label="Today" value={fmt(d.rain.todayIn, 2, ' in')} />
+      <Row label="Yesterday" value={fmt(d.rain.yesterdayIn, 2, ' in')} />
+      <Row label="Year" value={fmt(d.rain.yearIn, 2, ' in')} last />
+    </div>
+  </Tile>
+);
+
+/* ──────────────────────────────────────────────────────────── 7. solar & uv */
+
+export const SolarUvTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
+  <Tile id="solar-uv" style={style}>
+    <SectionLabel>Sun &amp; water</SectionLabel>
+    <Rule strong />
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+      <span style={{ ...type('mono', { fontSize: 30 }), ...tnum, color: v.warning, lineHeight: 1 }}>
+        {fmtInt(d.solar.wm2)}
+      </span>
+      <SectionLabel>W/m²</SectionLabel>
+      <span style={{ ...type('mono'), ...tnum, color: v.textSecondary, marginLeft: 'auto' }}>
+        UV {fmt(d.solar.uvIndex)}
+      </span>
+    </div>
+    <div style={{ marginTop: 'auto' }}>
+      <Row label="Energy today" value={fmt(d.solar.energyMJ, 2, ' MJ/m²')} />
+      <Row label="Evapotranspiration" value={fmt(d.solar.etIn, 3, ' in')} last />
+    </div>
+  </Tile>
+);
+
+/* ─────────────────────────────────────────────────────────────── 8. almanac */
+
+export const AlmanacTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
+  <Tile id="almanac" style={style}>
+    <SectionLabel>Almanac for today</SectionLabel>
+    <Rule strong />
+    {/* Three rows. Station diagnostics are their own tile — don't merge them here. */}
+    <div>
+      <Row label="Sunrise / sunset" value={`${d.almanac.sunrise ?? '—'} · ${d.almanac.sunset ?? '—'}`} />
+      <Row
+        label="Day length"
+        value={
+          <>
+            {d.almanac.dayLength ?? '—'}
+            {d.almanac.dayLengthDelta && <span style={{ color: v.danger }}> {d.almanac.dayLengthDelta}</span>}
+          </>
+        }
+      />
+      <Row
+        label="Moon"
+        value={`${d.almanac.moonPhase ?? '—'}${d.almanac.moonIlluminationPct != null ? ` ${Math.round(d.almanac.moonIlluminationPct)}%` : ''}`}
+        last
+      />
+    </div>
+  </Tile>
+);
+
+/* ────────────────────────────────────────────────────── 9. rainfall by hour */
+
+export const RainfallByHourTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
+  const bars = d.rain.hourlyIn ?? [];
+  const max = Math.max(0.05, ...bars.map((n) => n ?? 0));
+  const W = 700, H = 74;
+
+  return (
+    <Tile id="rainfall-hourly" style={style}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <SectionLabel>Rainfall by hour</SectionLabel>
+        <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>
+          {fmt(d.rain.todayIn, 2)} in today · peak {fmt(max, 2)} in/hr
+        </span>
+      </div>
+      <Rule strong />
+      {/* Always render the 24 slots. An empty axis reads as "no rain today";
+          an empty tile reads as broken. */}
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', flex: 1, minHeight: 0 }}>
+        {Array.from({ length: 24 }, (_, i) => {
+          const val = bars[i] ?? 0;
+          const h = val > 0 ? Math.max(2, (val / max) * (H - 16)) : 0;
+          const w = W / 24;
+          return (
+            <g key={i}>
+              <rect x={i * w + 2} y={H - 12 - h} width={w - 4} height={h} fill={v.chart.rain} />
+              {i % 4 === 0 && (
+                <text x={i * w + w / 2} y={H - 2} textAnchor="middle" style={type('sectionLabel')} fill={v.chart.axis}>
+                  {i === 0 ? '12a' : i < 12 ? `${i}a` : i === 12 ? '12p' : `${i - 12}p`}
+                </text>
+              )}
+            </g>
+          );
+        })}
+        <line x1={0} y1={H - 12} x2={W} y2={H - 12} stroke={v.rule} strokeWidth={0.8} />
+      </svg>
+    </Tile>
+  );
+};
+
+/* ──────────────────────────────────────────────────────── 10. station status */
+
+export const StationStatusTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
+  const s = d.station;
+  const items: [string, React.ReactNode][] = [
+    ['Console', `${s.console} ${s.model}`],
+    ['Firmware', s.firmware],
+    ['Transmitters', <span style={{ color: s.transmittersOk ? v.success : v.danger }}>{s.transmittersOk ? 'ok' : 'fault'}</span>],
+    ['Battery', fmt(s.batteryVolts, 2, ' V')],
+    ['CRC / timeouts', `${s.crcErrors} / ${s.timeouts}`],
+    ['Archive', fmtInt(s.archiveRecords, ' records')],
+  ];
+
+  return (
+    <Tile id="station-status" style={style}>
+      <SectionLabel>Station status</SectionLabel>
+      <Rule strong />
+      {/* A diagnostics STRIP: label + value pairs flowing on two lines, separated
+          by rules. Not a 16-field form, and no Sync button — that lives in
+          Settings › Station, which is sign-in gated. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 18px', alignItems: 'baseline' }}>
+        {items.map(([label, value]) => (
+          <span key={label} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, whiteSpace: 'nowrap' }}>
+            <span style={{ ...type('sectionLabel'), color: v.textMuted }}>{label}</span>
+            <span style={{ ...type('mono'), ...tnum, color: v.text }}>{value}</span>
+          </span>
+        ))}
+      </div>
+      <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: `1px ${v.ruleStyle} ${v.ruleHair}` }}>
+        <SectionLabel>
+          Clock {s.clock} · last poll {s.lastPoll}
+          {s.intervalSeconds != null && ` · every ${s.intervalSeconds}s`}
+        </SectionLabel>
+      </div>
+    </Tile>
+  );
+};
+
+const Empty: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div style={{ ...type('body'), color: v.textMuted, display: 'flex', alignItems: 'center', flex: 1 }}>{children}</div>
+);
