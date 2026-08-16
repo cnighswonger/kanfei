@@ -39,11 +39,18 @@ import React from 'react';
  */
 export const s = (n: number): string => `calc(${n} * var(--k, 1px))`;
 
-/** Put on the dashboard's scaling wrapper. No container-type required. */
-export const SCALE_VAR: React.CSSProperties = {
+/**
+ * Scale wrapper for a layout whose design height is `designHeight` px of main
+ * content. Everyday (mock 1d) is 1120; Agriculture (mock 3c) is 928 — the frames
+ * differ, so a single hardcoded divisor would render one of them at the wrong size.
+ */
+export const scaleVar = (designHeight: number): React.CSSProperties => ({
   ['--k' as string]:
-    'clamp(0.92px, calc((100vh - var(--chrome-height, 94px)) / 1120), 1.5px)',
-};
+    `clamp(0.92px, calc((100vh - var(--chrome-height, 94px)) / ${designHeight}), 1.5px)`,
+});
+
+/** Everyday's wrapper — main content 1120px tall. */
+export const SCALE_VAR: React.CSSProperties = scaleVar(1120);
 
 /**
  * ⚠ EVERY token has a hard fallback.
