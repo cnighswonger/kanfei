@@ -89,10 +89,12 @@ export default function AppShell({
       <WeatherBackground />
       {/* Ornamental plate layer.  Reads --plate-* custom properties
           published by applyThemeToDOM.  Non-paper themes ship
-          --plate-image: none, so the element still exists but paints
-          nothing — safe to leave permanently mounted rather than
-          conditionally rendering. */}
-      <div className="app-plate" aria-hidden="true" />
+          --plate-image: none, so the element paints nothing — safe
+          to leave permanently mounted.  Suppressed on the dashboard
+          route: the dashboard renders its own scoped corner plate
+          via --surface-plate, and painting both duplicates the
+          engraving across the page. */}
+      {location.pathname !== '/' && <div className="app-plate" aria-hidden="true" />}
       <div
         style={{
           display: 'grid',

@@ -53,12 +53,15 @@ export function applyThemeToDOM(theme: Theme) {
   // tracking + transform + style when set.  Consumers pull like
   // ``font-family: var(--type-heading-family)``.
   //
-  // Role names are kebab-cased so ``sectionLabel`` publishes as
-  // ``--type-section-label-*``, matching the ``--color-bg-secondary``
-  // and ``--dial-grad-outer`` conventions elsewhere in this mapper.
+  // Role names keep their camelCase form (``sectionLabel`` publishes
+  // as ``--type-sectionLabel-*``, not kebab-case) so Design's
+  // ``primitives.tsx`` ``type(role)`` helper — which templates the
+  // role name straight into the var — resolves.  The earlier
+  // kebab-case emission was the "fonts are off" root cause: every
+  // ``var(--type-sectionLabel-family)`` lookup missed the published
+  // ``--type-section-label-family`` and silently inherited body sans.
   for (const [roleName, r] of Object.entries(theme.type)) {
-    const kebab = roleName.replace(/([A-Z])/g, '-$1').toLowerCase();
-    const p = `--type-${kebab}`;
+    const p = `--type-${roleName}`;
     root.style.setProperty(`${p}-family`, r.family);
     root.style.setProperty(`${p}-size`, `calc(${r.size}px * var(--font-scale))`);
     root.style.setProperty(`${p}-weight`, String(r.weight));
