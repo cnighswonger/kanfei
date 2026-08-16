@@ -40,17 +40,46 @@ import React from 'react';
 export const s = (n: number): string => `calc(${n} * var(--k, 1px))`;
 
 /**
- * Scale wrapper for a layout whose design height is `designHeight` px of main
- * content. Everyday (mock 1d) is 1120; Agriculture (mock 3c) is 928 — the frames
- * differ, so a single hardcoded divisor would render one of them at the wrong size.
+ * ⚠ ONE scale factor for every persona.
+ *
+ * An earlier version derived `--k` from each layout's own design height — 1120 for
+ * Everyday, 928 for Agriculture. That makes body text render 16px on one persona
+ * and 19px on the other in the same window, and inflates the shorter composition's
+ * type by ~20%: the blown-up look on Agriculture.
+ *
+ * Type and spacing must be identical across personas, so `--k` always comes from
+ * the CANONICAL 1120px frame. A shorter composition absorbs its residual height in
+ * whichever band carries slack (`flex: 1`), never in its font sizes.
  */
-export const scaleVar = (designHeight: number): React.CSSProperties => ({
+const CANONICAL_HEIGHT = 1120;
+
+export const scaleVar = (): React.CSSProperties => ({
   ['--k' as string]:
-    `clamp(0.92px, calc((100vh - var(--chrome-height, 94px)) / ${designHeight}), 1.5px)`,
+    `clamp(0.92px, calc((100vh - var(--chrome-height, 94px)) / ${CANONICAL_HEIGHT}), 1.5px)`,
 });
 
-/** Everyday's wrapper — main content 1120px tall. */
-export const SCALE_VAR: React.CSSProperties = scaleVar(1120);
+export const SCALE_VAR: React.CSSProperties = scaleVar();
+
+/**
+ * Fill the available height without needing a definite parent height, so a layout
+ * can distribute residual space into its flexible bands.
+ */
+export const FILL_HEIGHT: React.CSSProperties = {
+  minHeight: 'calc(100vh - var(--chrome-height, 94px))',
+};
+
+/**
+ * Content width cap. The mock is a ~1320px-wide composition; much past that,
+ * `space-between` rows push their label and value to opposite ends of a very wide
+ * column and stop reading as rows at all. Capping preserves the mock's proportions
+ * at any window width.
+ */
+export const CONTENT_CAP: React.CSSProperties = {
+  maxWidth: s(1600),
+  marginLeft: 'auto',
+  marginRight: 'auto',
+  width: '100%',
+};
 
 /**
  * ⚠ EVERY token has a hard fallback.
