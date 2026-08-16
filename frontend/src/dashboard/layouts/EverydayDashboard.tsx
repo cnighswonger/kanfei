@@ -24,6 +24,8 @@ import RainGauge from "../../components/gauges/RainGauge.tsx";
 import SolarUVGauge from "../../components/gauges/SolarUVGauge.tsx";
 import CurrentConditions from "../../components/panels/CurrentConditions.tsx";
 import StationStatus from "../../components/panels/StationStatus.tsx";
+import { CompactProvider } from "../CompactContext.tsx";
+import { useIsMobile } from "../../hooks/useIsMobile.ts";
 
 const BAND_GRID: React.CSSProperties = {
   display: "grid",
@@ -31,9 +33,10 @@ const BAND_GRID: React.CSSProperties = {
   gap: 32,
 };
 
-// Wraps a tile so the JSX below stays as close to Design's spec as
-// possible — every tile is a slot: a fixed height plus the tile-id
-// attribute the verify script and any future review query.
+// Every tile is a Slot: fixed height + tile-id attribute + a strict
+// overflow contract so a tile that renders taller than its budget
+// can't paint into the neighbouring slot (Design's fixed-height
+// composition depends on the tile ending where the layout says).
 function Slot({
   id,
   height,
@@ -46,7 +49,15 @@ function Slot({
   style?: React.CSSProperties;
 }) {
   return (
-    <div data-tile-id={id} style={{ height, minWidth: 0, ...style }}>
+    <div
+      data-tile-id={id}
+      style={{
+        height,
+        minWidth: 0,
+        overflow: "hidden",
+        ...style,
+      }}
+    >
       {children}
     </div>
   );
@@ -54,8 +65,10 @@ function Slot({
 
 export default function EverydayDashboard() {
   const { currentConditions: cc } = useWeatherData();
+  const isMobile = useIsMobile();
 
   return (
+    <CompactProvider value={isMobile}>
     <main
       data-dashboard-grid
       style={{
@@ -149,5 +162,6 @@ export default function EverydayDashboard() {
         </Slot>
       </div>
     </main>
+    </CompactProvider>
   );
 }

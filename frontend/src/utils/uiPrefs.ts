@@ -21,10 +21,6 @@ const UI_DEFAULTS: Record<string, string> = {
   ui_weather_bg_enabled: "true",
   ui_weather_bg_intensity: "30",
   ui_weather_bg_transparency: "15",
-  ui_dashboard_layout: "",
-  ui_dashboard_layout_everyday: "",
-  ui_dashboard_layout_agriculture: "",
-  ui_dashboard_layout_weather_nerd: "",
   ui_custom_theme: "",
 };
 
@@ -47,7 +43,6 @@ const MIGRATION_MAP: Record<string, MigrationEntry> = {
   },
   "davis-wx-weather-bg-intensity": { newKey: "ui_weather_bg_intensity" },
   "davis-wx-weather-bg-transparency": { newKey: "ui_weather_bg_transparency" },
-  "davis-wx-dashboard-layout": { newKey: "ui_dashboard_layout" },
 };
 
 // ---------------------------------------------------------------------------

@@ -52,11 +52,12 @@ export default function Dashboard() {
   const { persona } = usePersona();
   const hero = DASHBOARD_HERO[themeName] ?? null;
 
-  // Agriculture and Weather Nerd land as their own layouts; the
-  // Everyday composition is the reference implementation for now.
-  const Layout = persona === "everyday" || persona === "agriculture" || persona === "weather_nerd"
-    ? EverydayDashboard
-    : EverydayDashboard;
+  // Agriculture and Weather Nerd get their own literal-JSX layouts in
+  // a follow-up; for now every persona lands on the Everyday
+  // composition.  ``persona`` is intentionally destructured so the
+  // switch site is obvious once Agriculture/WeatherNerd exist.
+  void persona;
+  const Layout = EverydayDashboard;
 
   return (
     <>

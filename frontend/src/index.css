@@ -192,6 +192,11 @@ a:hover {
     display: none !important;
   }
 
+  /* Page heading responsiveness (used by Dashboard, History, etc.) */
+  .dashboard-heading {
+    font-size: calc(16px * var(--font-scale, 1)) !important;
+  }
+
   /* Mobile: always full-width sidebar, hide collapse button */
   .sidebar {
     width: 220px !important;
