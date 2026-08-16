@@ -1,16 +1,19 @@
 /**
- * Dashboard page — renders the configurable tile grid.
+ * Dashboard page — renders the fixed persona composition.
  *
- * Paper themes overlay two ornamental layers behind the grid per the
- * Design Agent's ASSETS.md Dashboard row:
+ * Paper themes overlay two ornamental layers behind the composition
+ * per Design's ASSETS.md Dashboard row:
  *   - Glaisher gets a full-cover balloon-ascent photo at 0.12 opacity
  *   - Both paper themes (mammoth + glaisher) get an instruments corner
  *     plate anchored bottom-right at ~0.09-0.10 opacity
- * Dark, light, classic ship with no dashboard-specific background —
- * they use whatever the shell has (weather background or plain).
+ * Dark, light, classic ship with no dashboard-specific background.
+ *
+ * Persona switch lives here — Agriculture and Weather Nerd land as
+ * their own literal-JSX layouts in a follow-up PR.
  */
-import DashboardGrid from "../dashboard/DashboardGrid.tsx";
+import EverydayDashboard from "../dashboard/layouts/EverydayDashboard.tsx";
 import { useTheme } from "../context/ThemeContext.tsx";
+import { usePersona } from "../context/PersonaContext.tsx";
 
 interface DashboardHeroConfig {
   cover?: { image: string; opacity: number; position?: string };
@@ -46,7 +49,14 @@ const DASHBOARD_HERO: Record<string, DashboardHeroConfig | null> = {
 
 export default function Dashboard() {
   const { themeName } = useTheme();
+  const { persona } = usePersona();
   const hero = DASHBOARD_HERO[themeName] ?? null;
+
+  // Agriculture and Weather Nerd land as their own layouts; the
+  // Everyday composition is the reference implementation for now.
+  const Layout = persona === "everyday" || persona === "agriculture" || persona === "weather_nerd"
+    ? EverydayDashboard
+    : EverydayDashboard;
 
   return (
     <>
@@ -73,11 +83,6 @@ export default function Dashboard() {
             position: "fixed",
             right: 0,
             bottom: 0,
-            // Cap at 400x280 on desktop; scale down proportionally on
-            // narrow viewports so the plate never extends off-screen
-            // or clips (Codex round 1 fix on PR #359).  aspect-ratio
-            // keeps the intended 400:280 shape once width is
-            // constrained by min(...).
             width: `min(${hero.corner.width}px, 100vw)`,
             aspectRatio: `${hero.corner.width} / ${hero.corner.height}`,
             maxHeight: `${hero.corner.height}px`,
@@ -91,7 +96,7 @@ export default function Dashboard() {
           }}
         />
       )}
-      <DashboardGrid />
+      <Layout />
     </>
   );
 }
