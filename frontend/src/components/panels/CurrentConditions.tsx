@@ -35,12 +35,15 @@ export default function CurrentConditions() {
       style={{
         display: "flex",
         flexDirection: "column",
-        padding: isMobile ? "8px" : "16px",
+        padding: isMobile ? "8px" : "10px 14px",
         background: "var(--color-bg-card)",
         borderRadius: "var(--gauge-border-radius, 16px)",
         boxShadow: "var(--gauge-shadow, 0 4px 24px rgba(0,0,0,0.4))",
         border: "1px solid var(--color-border)",
         minWidth: "160px",
+        height: "100%",
+        boxSizing: "border-box",
+        overflow: "hidden",
       }}
     >
       <div
@@ -50,7 +53,7 @@ export default function CurrentConditions() {
           color: "var(--color-text-secondary)",
           textTransform: "uppercase",
           letterSpacing: "0.5px",
-          marginBottom: "12px",
+          marginBottom: "8px",
           textAlign: "center",
         }}
       >
@@ -61,7 +64,7 @@ export default function CurrentConditions() {
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
-          gap: isMobile ? "6px 8px" : "12px 16px",
+          gap: isMobile ? "6px 8px" : "8px 16px",
         }}
       >
         {items.map((item) => (

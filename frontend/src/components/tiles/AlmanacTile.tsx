@@ -28,23 +28,29 @@ export default function AlmanacTile() {
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
+  // Voiding ``station`` — Design's REVIEW-05 P3 moves station type +
+  // firmware into the station-status footer strip; almanac is three
+  // rows only (sunrise/sunset, day length, moon).
+  void station;
+
   return (
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      padding: '16px',
+      padding: '10px 14px',
       background: 'var(--color-bg-card)',
       borderRadius: 'var(--gauge-border-radius, 16px)',
       border: '1px solid var(--color-border)',
       height: '100%',
       boxSizing: 'border-box',
+      overflow: 'hidden',
     }}>
       <TileLabel>Almanac for today</TileLabel>
       <table style={{
         width: '100%',
         borderCollapse: 'collapse',
         fontFamily: 'var(--font-gauge)',
-        fontSize: 'calc(13px * var(--font-scale))',
+        fontSize: 'calc(12px * var(--font-scale))',
         color: 'var(--color-text)',
       }}>
         <tbody>
@@ -63,11 +69,6 @@ export default function AlmanacTile() {
               ? `${astro.moon.phase} ${Math.round(astro.moon.illumination)}%`
               : '—'
           } />
-          <Row label="Station" value={
-            station
-              ? `${station.type_name}${station.firmware_version ? ' · FW ' + station.firmware_version : ''}`
-              : '—'
-          } />
         </tbody>
       </table>
     </div>
@@ -78,12 +79,12 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <tr style={{ borderBottom: `var(--rule-width, 1px) var(--rule-style, solid) var(--rule-hair, rgba(0,0,0,0.1))` }}>
       <td style={{
-        padding: '10px 0',
+        padding: '6px 0',
         color: 'var(--color-text-secondary)',
         fontFamily: 'var(--font-body)',
-        fontSize: 'calc(13px * var(--font-scale))',
+        fontSize: 'calc(12px * var(--font-scale))',
       }}>{label}</td>
-      <td style={{ padding: '10px 0', textAlign: 'right' }}>{value}</td>
+      <td style={{ padding: '6px 0', textAlign: 'right' }}>{value}</td>
     </tr>
   );
 }
