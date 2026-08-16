@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useWeatherData } from '../../context/WeatherDataContext';
@@ -11,6 +11,14 @@ const PERSONA_LABEL: Record<Persona, string> = {
   agriculture: 'Agriculture',
   weather_nerd: 'Weather nerd',
 };
+
+// Theme picker: two shipping defaults surfaced from the wordmark tag
+// (mocks 13a / 13b).  Descriptors are ``ground · accent · face`` and
+// live here because the theme tokens don't carry a display descriptor.
+const PICKER_SHORTCUTS: Array<{ name: string; descriptor: string }> = [
+  { name: 'glaisher', descriptor: 'Paper · Brass · IM Fell' },
+  { name: 'mammoth', descriptor: 'Paper · Copper · Source Serif' },
+];
 
 // --- Inline SVG weather icons (20x20, currentColor) ---
 
@@ -95,9 +103,9 @@ function mapForecastIcon(text: string): { icon: React.ReactNode; color: string }
 }
 
 function trendArrow(trend: string | null): { symbol: string; color: string } {
-  if (trend === "rising") return { symbol: "\u25B2", color: "var(--color-success)" };
-  if (trend === "falling") return { symbol: "\u25BC", color: "var(--color-warning)" };
-  return { symbol: "\u25B6", color: "var(--color-text-muted)" };
+  if (trend === "rising") return { symbol: "▲", color: "var(--color-success)" };
+  if (trend === "falling") return { symbol: "▼", color: "var(--color-warning)" };
+  return { symbol: "▶", color: "var(--color-text-muted)" };
 }
 
 // --- Header component ---
@@ -134,9 +142,30 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
   // Wordmark tag: the active theme's full ``label`` field, uppercased
   // via CSS (``text-transform``) so the raw label stays presentable
   // wherever else it's used (theme picker, dashboard title, footer).
-  // Per Design REVIEW-17 HEADER.md — "LOG · STATION" was a placeholder
-  // that read as one.
   const themeTag = theme.label;
+
+  // Theme picker (mocks 13a/13b): wordmark tag is the trigger.  Menu
+  // shows two shipping defaults plus a jump to Settings › Appearance.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerHover, setPickerHover] = useState(false);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPickerOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, [pickerOpen]);
 
   // Wall-clock ticker.  useState + setInterval so the header time
   // updates every 30 s without a full page reload; without this, the
@@ -163,6 +192,12 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
     .replace(/^Vantage /i, '')
     .replace(/\s*\(.*\)\s*/g, '')
     .toUpperCase();
+
+  const authLabel = user?.authenticated ? 'Logout' : 'Sign in';
+  const onAuth = () => {
+    if (user?.authenticated) logout();
+    else navigate('/login', { state: { from: location.pathname } });
+  };
 
   return (
     <header
@@ -204,8 +239,13 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
           }}
           className="header-menu-btn"
         >
-          {sidebarOpen ? '\u2715' : '\u2630'}
+          {sidebarOpen ? '✕' : '☰'}
         </button>
+
+        {/* Wordmark cluster — Kanfei title + theme-tag trigger.  The
+            tag is the theme picker (mocks 13a/13b); a caret glyph sits
+            at 0.5 opacity until hover.  The wordmark itself is not
+            interactive — clicking "Kanfei" doesn't open the picker. */}
         <h1
           className="header-title"
           style={{
@@ -220,21 +260,64 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
         >
           Kanfei
         </h1>
-        {paper && (
-          <span
+
+        <div ref={pickerRef} style={{ position: 'relative' }}>
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={pickerOpen}
+            aria-label={`Theme: ${themeTag}. Open theme picker.`}
+            onClick={() => setPickerOpen((v) => !v)}
+            onMouseEnter={() => setPickerHover(true)}
+            onMouseLeave={() => setPickerHover(false)}
             style={{
+              background: 'transparent',
+              border: 'none',
+              padding: '4px 4px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
               fontFamily: 'var(--font-mono)',
-              fontSize: 'calc(10px * var(--font-scale))',
+              fontSize: paper ? 'calc(10px * var(--font-scale))' : 'calc(11px * var(--font-scale))',
               fontWeight: 500,
               letterSpacing: '0.20em',
-              color: paperInkDim,
+              color: paper ? paperInkDim : 'var(--color-text-secondary)',
               textTransform: 'uppercase',
               whiteSpace: 'nowrap',
             }}
           >
-            {themeTag}
-          </span>
-        )}
+            <span>{themeTag}</span>
+            <span
+              aria-hidden="true"
+              style={{
+                fontSize: 'calc(9px * var(--font-scale))',
+                opacity: pickerHover || pickerOpen ? 1 : 0.5,
+                transition: 'opacity 0.15s ease',
+                lineHeight: 1,
+              }}
+            >
+              {'▾'}
+            </span>
+          </button>
+
+          {pickerOpen && (
+            <ThemePickerMenu
+              paper={paper}
+              activeTheme={themeName}
+              signedIn={!!user?.authenticated}
+              onPick={(name) => {
+                setThemeName(name);
+                setPickerOpen(false);
+              }}
+              onJumpToSettings={() => {
+                setPickerOpen(false);
+                navigate('/settings?tab=appearance');
+              }}
+            />
+          )}
+        </div>
+
         {!paper && local && (() => {
           const { icon, color } = mapForecastIcon(local.text);
           return (
@@ -414,49 +497,188 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
           </>
         )}
 
-        {!paper && (
-          <select
-            className="header-theme-select"
-            value={themeName}
-            onChange={(e) => setThemeName(e.target.value)}
-            style={{
-              background: 'var(--color-bg-secondary)',
-              color: 'var(--color-text)',
-              border: '1px solid var(--color-border)',
-              borderRadius: '6px',
-              padding: '6px 10px',
-              fontSize: 'calc(13px * var(--font-scale))',
-              fontFamily: 'var(--font-body)',
-              cursor: 'pointer',
-              outline: 'none',
-            }}
-          >
-            {Object.values(themes).map((t) => (
-              <option key={t.name} value={t.name}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {!paper && (
-          <button
-            onClick={user?.authenticated ? logout : () => navigate("/login", { state: { from: location.pathname } })}
-            style={{
-              background: 'none',
-              border: '1px solid var(--color-border)',
-              borderRadius: '6px',
-              padding: '6px 10px',
-              fontSize: 'calc(12px * var(--font-scale))',
-              fontFamily: 'var(--font-body)',
-              color: 'var(--color-text-secondary)',
-              cursor: 'pointer',
-            }}
-          >
-            {user?.authenticated ? "Logout" : "Login"}
-          </button>
-        )}
+        {/* Sign in / Logout.  Present on every theme now (mocks 13a/13b)
+            so an anonymous visitor has a route into Settings from any
+            page.  Paper themes use the quiet mono-caps button; dark and
+            classic keep the accent-outlined pill. */}
+        <button
+          onClick={onAuth}
+          style={paper ? {
+            background: 'transparent',
+            border: '1px solid var(--color-border)',
+            borderRadius: '2px',
+            padding: '7px 14px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 'calc(10px * var(--font-scale))',
+            letterSpacing: '0.20em',
+            textTransform: 'uppercase',
+            color: paperInk,
+            cursor: 'pointer',
+          } : {
+            background: 'none',
+            border: '1px solid var(--color-border)',
+            borderRadius: '6px',
+            padding: '6px 10px',
+            fontSize: 'calc(12px * var(--font-scale))',
+            fontFamily: 'var(--font-body)',
+            color: 'var(--color-text-secondary)',
+            cursor: 'pointer',
+          }}
+        >
+          {authLabel}
+        </button>
       </div>
     </header>
+  );
+}
+
+/* ────────────────────────────────────────────────── Theme picker menu */
+
+interface ThemePickerMenuProps {
+  paper: boolean;
+  activeTheme: string;
+  signedIn: boolean;
+  onPick: (name: string) => void;
+  onJumpToSettings: () => void;
+}
+
+/**
+ * Anchored under the header rule (mocks 13a/13b).  Two shipping
+ * defaults are named directly; everything else — the other three
+ * themes, backgrounds, fonts — sits behind the jump.  That keeps the
+ * menu a shortcut rather than a duplicate picker, and adding a sixth
+ * theme later doesn't lengthen it.
+ */
+function ThemePickerMenu({ paper, activeTheme, signedIn, onPick, onJumpToSettings }: ThemePickerMenuProps) {
+  const headerLine = signedIn ? 'Theme' : 'Theme · for this browser';
+  return (
+    <div
+      role="menu"
+      style={{
+        position: 'absolute',
+        top: 'calc(100% + 12px)',
+        left: '-30px',
+        width: '288px',
+        background: 'var(--color-bg)',
+        border: paper
+          ? '1px solid var(--color-border)'
+          : '1px solid var(--color-border)',
+        borderRadius: paper ? '0' : '8px',
+        boxShadow: paper ? 'none' : '0 8px 24px rgba(0,0,0,0.35)',
+        zIndex: 200,
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          padding: '10px 16px',
+          borderBottom: paper
+            ? '1px solid var(--color-border)'
+            : '1px solid var(--color-border-light)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 'calc(10px * var(--font-scale))',
+          letterSpacing: '0.20em',
+          textTransform: 'uppercase',
+          color: 'var(--color-text-secondary)',
+        }}
+      >
+        {headerLine}
+      </div>
+      {PICKER_SHORTCUTS.map((row) => {
+        const t = themes[row.name];
+        if (!t) return null;
+        const active = row.name === activeTheme;
+        return (
+          <button
+            key={row.name}
+            role="menuitemradio"
+            aria-checked={active}
+            type="button"
+            onClick={() => onPick(row.name)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              width: '100%',
+              minHeight: '56px',
+              padding: '10px 16px',
+              background: active
+                ? (paper ? 'var(--color-bg-secondary)' : 'var(--color-accent-muted)')
+                : 'transparent',
+              border: 'none',
+              borderBottom: paper
+                ? '1px solid var(--color-border)'
+                : '1px solid var(--color-border-light)',
+              color: 'var(--color-text)',
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: 'inline-block',
+                width: '14px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'calc(12px * var(--font-scale))',
+                color: 'var(--color-accent)',
+                flexShrink: 0,
+              }}
+            >
+              {active ? '✓' : ''}
+            </span>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: 'calc(15px * var(--font-scale))',
+                  fontStyle: 'italic',
+                  fontWeight: 600,
+                  color: 'var(--color-text)',
+                  lineHeight: 1.2,
+                }}
+              >
+                {t.label}
+              </span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 'calc(10px * var(--font-scale))',
+                  letterSpacing: '0.16em',
+                  textTransform: 'uppercase',
+                  color: 'var(--color-text-secondary)',
+                }}
+              >
+                {row.descriptor}
+              </span>
+            </span>
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        role="menuitem"
+        onClick={onJumpToSettings}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          padding: '14px 16px',
+          background: 'transparent',
+          border: 'none',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 'calc(10px * var(--font-scale))',
+          letterSpacing: '0.20em',
+          textTransform: 'uppercase',
+          color: 'var(--color-text-secondary)',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <span>All themes &amp; appearance</span>
+        <span aria-hidden="true">{'→'}</span>
+      </button>
+    </div>
   );
 }

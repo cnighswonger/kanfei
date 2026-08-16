@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { fetchConfig, updateConfig, fetchSerialPorts, reconnectStation, fetchWeatherLinkConfig, updateWeatherLinkConfig, clearRainDaily, clearRainYearly, forceArchive, fetchLocalUsage, fetchUsageStatus, fetchAnthropicCost, fetchDbStats, purgeTable, purgeAll, compactReadings, getDbBackupUrl, getDbExportUrl, fetchLogs, fetchNowcastPresets, triggerBackup, listBackups, deleteBackup, getBackupDownloadUrl, changePassword } from "../api/client.ts";
 import type { NowcastPresetOption } from "../api/client.ts";
 import type { ConfigItem, WeatherLinkConfig, WeatherLinkCalibration, AlertThreshold, LocalUsageResponse, UsageStatus, DbStats, LogEntry } from "../api/types.ts";
@@ -1940,6 +1941,17 @@ export default function Settings() {
     if (activeTab === "spray" && !flags.sprayEnabled) setActiveTab("station");
     if (activeTab === "usage" && !flags.nowcastEnabled) setActiveTab("station");
   }, [flags.nowcastEnabled, flags.sprayEnabled, activeTab]);
+
+  // Deep-link tab from ?tab= query param (the header theme picker jumps
+  // to /settings?tab=appearance).
+  const location = useLocation();
+  useEffect(() => {
+    const wanted = new URLSearchParams(location.search).get("tab");
+    if (wanted && wanted !== activeTab) {
+      setActiveTab(wanted as typeof activeTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   // Take over the parent scroll container so the header stays fixed
   // and only the tab content scrolls (single scrollbar).
