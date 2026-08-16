@@ -38,11 +38,11 @@ export const HeroTemperatureTile: React.FC<{ d: DashboardData; style?: React.CSS
       Zambretti{d.forecast.confidencePct != null && ` · ${Math.round(d.forecast.confidencePct)}% confidence`}
     </SectionLabel>
 
-    {/* high/low chips sit directly under the confidence label — not pushed to the
-        bottom of the tile. No margin-top:auto here.
-        minWidth:0 + overflow:hidden so an over-long value can never push the row
-        out of the 340px tile and across the neighbouring column. */}
-    <div style={{ display: 'flex', gap: 8, marginTop: 2, minWidth: 0, overflow: 'hidden' }}>
+    {/* high/low chips sit directly under the confidence label. flexShrink:0 and
+        NO overflow clip — an earlier overflow:hidden here sliced the chips in
+        half rather than fitting them. Each chip truncates its own timestamp
+        instead. */}
+    <div style={{ display: 'flex', gap: 8, marginTop: 2, minWidth: 0, flexShrink: 0 }}>
       <Chip label="High" value={fmt(d.outside.highF, 1, '°')} at={d.outside.highAt} tone={v.danger} />
       <Chip label="Low" value={fmt(d.outside.lowF, 1, '°')} at={d.outside.lowAt} tone={v.sky} />
     </div>
@@ -60,10 +60,10 @@ const Chip: React.FC<{ label: string; value: string; at?: string | null; tone: s
       padding: '3px 8px',
       color: tone,
       border: `1px solid ${v.ruleHair}`,
-      borderRadius: 'var(--radius-control)',
+      borderRadius: 'var(--radius-control, 0px)',
       whiteSpace: 'nowrap',
       minWidth: 0,
-      overflow: 'hidden',
+      textOverflow: 'ellipsis',
     }}
   >
     <span style={{ ...type('sectionLabel'), color: v.textSecondary }}>{label}</span>
@@ -211,7 +211,7 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ ...type('mono', { fontSize: 46 }), ...tnum, color: v.text, lineHeight: 1 }}>
+            <span style={{ ...type('mono', { fontSize: 34 }), ...tnum, color: v.text, lineHeight: 1 }}>
               {fmt(d.barometer.inHg, 2)}
             </span>
             <SectionLabel>inHg</SectionLabel>
@@ -221,7 +221,7 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
             {arrow}{trend != null && ` · ${trend > 0 ? '+' : ''}${trend.toFixed(3)} in / 3h`}
           </SectionLabel>
           {d.barometer.zone && <SectionLabel>Zone · {d.barometer.zone}</SectionLabel>}
-          <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: `1px ${v.ruleStyle} ${v.ruleHair}` }}>
+          <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
             <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>
               H {fmt(d.barometer.todayHigh, 2)} {fmtTime(d.barometer.todayHighAt)} · L {fmt(d.barometer.todayLow, 2)} {fmtTime(d.barometer.todayLowAt)}
             </span>
@@ -235,9 +235,10 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
 /* ────────────────────────────────────────────────────────────────── 5. wind */
 
 export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
-  const SIZE = 220;
-  const c = compass(110, 110, 80, 98);
-  const petals = rosePetals(110, 110, 72, d.wind.roseWeights);
+  // Mock 1d: 250px rendered from a 300 viewBox — compass at 150,150 r=110.
+  const SIZE = 250;
+  const c = compass(150, 150, 110, 132);
+  const petals = rosePetals(150, 150, 100, d.wind.roseWeights);
   // A needle at calm implies a direction the station isn't reporting.
   const showNeedle = (d.wind.speedMph ?? 0) >= 1 && d.wind.directionDeg != null;
 
@@ -246,9 +247,9 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
       <SectionLabel>Wind</SectionLabel>
       <Rule strong />
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, flex: 1, minHeight: 0 }}>
-        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} style={{ flexShrink: 0 }}>
-          <circle cx={110} cy={110} r={80} fill={v.chart.surface} stroke={v.rule} strokeWidth={1} />
-          <circle cx={110} cy={110} r={60} fill="none" stroke={v.ruleHair} strokeWidth={0.6} />
+        <svg width={SIZE} height={SIZE} viewBox="0 0 300 300" style={{ flexShrink: 0 }}>
+          <circle cx={150} cy={150} r={110} fill={v.chart.surface} stroke={v.rule} strokeWidth={1} />
+          <circle cx={150} cy={150} r={82} fill="none" stroke={v.ruleHair} strokeWidth={0.6} />
           {petals.map((p, i) => <path key={i} d={p.d} fill={v.accent} opacity={p.op} />)}
           {c.ticks.map((k, i) => (
             <line key={i} x1={k.x1} y1={k.y1} x2={k.x2} y2={k.y2} stroke={v.text} strokeOpacity={0.6} strokeWidth={k.sw} />
@@ -257,12 +258,12 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
             <text key={i} x={l.x} y={l.y} textAnchor="middle" style={type('sectionLabel')} fill={v.textSecondary}>{l.label}</text>
           ))}
           {showNeedle && (
-            <g style={{ transform: `rotate(${d.wind.directionDeg}deg)`, transformOrigin: '110px 110px' }}>
-              <line x1={110} y1={128} x2={110} y2={52} stroke={v.needle} strokeWidth={2.2} strokeLinecap="round" />
-              <polygon points="110,44 103,60 117,60" fill={v.needle} />
+            <g style={{ transform: `rotate(${d.wind.directionDeg}deg)`, transformOrigin: '150px 150px' }}>
+              <line x1={150} y1={174} x2={150} y2={74} stroke={v.needle} strokeWidth={2.6} strokeLinecap="round" />
+              <polygon points="150,62 142,80 158,80" fill={v.needle} />
             </g>
           )}
-          <circle cx={110} cy={110} r={3} fill={v.needle} />
+          <circle cx={150} cy={150} r={3.5} fill={v.needle} />
         </svg>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>

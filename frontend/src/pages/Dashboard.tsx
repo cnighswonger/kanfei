@@ -61,6 +61,55 @@ function clock(iso: string | null | undefined): string | null {
     : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+/**
+ * Barometer zone label — matches ``wheelDial()``'s zone words at
+ * their sweep midpoints.  Below ~28.95 stormy, above ~30.56 set fair;
+ * change / fair / rain bracket the typical range.
+ */
+function baroZone(inHg: number | null): string | null {
+  if (inHg == null || !Number.isFinite(inHg)) return null;
+  if (inHg < 28.95) return "STORMY";
+  if (inHg < 29.48) return "RAIN";
+  if (inHg < 30.03) return "CHANGE";
+  if (inHg < 30.57) return "FAIR";
+  return "SET FAIR";
+}
+
+/**
+ * 3-hour barometric trend rate in inHg / 3h, computed from history
+ * when the API doesn't report it (Kanfei currently ships only the
+ * qualitative ``rising / falling / steady`` string).  Signed —
+ * positive = rising.  Returns null if we don't have enough history.
+ */
+function trendPer3h(points: HistoryPoint[]): number | null {
+  if (points.length < 2) return null;
+  const now = Date.now();
+  // Latest sample within the last 15 min
+  let latest: HistoryPoint | null = null;
+  for (let i = points.length - 1; i >= 0; i--) {
+    const t = Date.parse(points[i].timestamp);
+    if (now - t <= 15 * 60_000 && points[i].value != null) {
+      latest = points[i];
+      break;
+    }
+  }
+  if (!latest || latest.value == null) return null;
+  // Sample nearest 3 h ago (within a 30-min window)
+  const target = Date.parse(latest.timestamp) - 3 * 60 * 60_000;
+  let earlier: HistoryPoint | null = null;
+  let earlierDelta = Infinity;
+  for (const p of points) {
+    if (p.value == null) continue;
+    const delta = Math.abs(Date.parse(p.timestamp) - target);
+    if (delta < earlierDelta && delta <= 30 * 60_000) {
+      earlier = p;
+      earlierDelta = delta;
+    }
+  }
+  if (!earlier || earlier.value == null) return null;
+  return Math.round((latest.value - earlier.value) * 1000) / 1000;
+}
+
 // Integrate 5-min rain rate samples into hourly totals (rate × dt, capped
 // at 1 h per sample so a gap doesn't inflate one bar).  24 buckets,
 // oldest first, keyed to the whole hour in the browser's local timezone.
@@ -97,6 +146,7 @@ interface AdapterSources {
   astronomy: AstronomyResponse | null;
   historyTemp: HistoryPoint[];
   historyDew: HistoryPoint[];
+  historyBarometer: HistoryPoint[];
   hourlyRain: (number | null)[];
   siteName: string | null;
 }
@@ -133,8 +183,16 @@ function toDashboardData(s: AdapterSources): DashboardData {
 
   return {
     station: {
-      name: s.siteName ?? "",
-      elevationFt: null,
+      // Prefer /api/station's station_name (public, no admin round-trip);
+      // fall back to /api/config's city+state, then to the empty string
+      // so Design's ``{d.station.name && …}`` gracefully hides the
+      // separator instead of leaking undefined.
+      name:
+        (status as { station_name?: string } | null)?.station_name ||
+        s.siteName ||
+        "",
+      elevationFt:
+        (status as { elevation_ft?: number | null } | null)?.elevation_ft ?? null,
       intervalSeconds: status?.poll_interval ?? null,
       clock: status?.station_time ?? "",
       lastPoll: clock(status?.last_poll) ?? "",
@@ -169,8 +227,12 @@ function toDashboardData(s: AdapterSources): DashboardData {
     barometer: {
       inHg: cc?.barometer?.value ?? null,
       hPa: cc?.barometer?.value != null ? cc.barometer.value * 33.8639 : null,
-      trendInHgPer3h: cc?.barometer?.trend_rate ?? null,
-      zone: null,
+      // API doesn't currently ship trend_rate; compute it from the 24 h
+      // barometer history (latest − 3 h ago).  Falls back to the raw
+      // trend field if history isn't populated yet.
+      trendInHgPer3h:
+        cc?.barometer?.trend_rate ?? trendPer3h(s.historyBarometer),
+      zone: baroZone(cc?.barometer?.value ?? null),
       todayHigh: cc?.daily_extremes?.barometer_hi?.value ?? null,
       todayHighAt: clock(cc?.daily_extremes?.barometer_hi?.at),
       todayLow: cc?.daily_extremes?.barometer_lo?.value ?? null,
@@ -227,6 +289,7 @@ export default function Dashboard() {
   const [astronomy, setAstronomy] = useState<AstronomyResponse | null>(null);
   const [historyTemp, setHistoryTemp] = useState<HistoryPoint[]>([]);
   const [historyDew, setHistoryDew] = useState<HistoryPoint[]>([]);
+  const [historyBarometer, setHistoryBarometer] = useState<HistoryPoint[]>([]);
   const [hourlyRain, setHourlyRain] = useState<(number | null)[]>(() => Array<null>(24).fill(null));
   const [siteName, setSiteName] = useState<string | null>(null);
 
@@ -237,12 +300,13 @@ export default function Dashboard() {
     const load = async () => {
       const end = new Date();
       const start = new Date(end.getTime() - 24 * 60 * 60_000);
-      const [fc, astro, temp, dew, rain] = await Promise.allSettled([
+      const [fc, astro, temp, dew, rain, baro] = await Promise.allSettled([
         fetchForecast(),
         fetchAstronomy(),
         fetchHistory("outside_temp", start.toISOString(), end.toISOString(), "5m"),
         fetchHistory("dew_point", start.toISOString(), end.toISOString(), "5m"),
         fetchHistory("rain_rate", start.toISOString(), end.toISOString(), "5m"),
+        fetchHistory("barometer", start.toISOString(), end.toISOString(), "5m"),
       ]);
       if (cancelled) return;
       if (fc.status === "fulfilled") setForecast(fc.value);
@@ -250,6 +314,7 @@ export default function Dashboard() {
       if (temp.status === "fulfilled") setHistoryTemp(temp.value.points ?? []);
       if (dew.status === "fulfilled") setHistoryDew(dew.value.points ?? []);
       if (rain.status === "fulfilled") setHourlyRain(hourlyRainInches(rain.value.points ?? []));
+      if (baro.status === "fulfilled") setHistoryBarometer(baro.value.points ?? []);
     };
     load();
     const id = setInterval(load, 5 * 60_000);
@@ -286,10 +351,11 @@ export default function Dashboard() {
         astronomy,
         historyTemp,
         historyDew,
+        historyBarometer,
         hourlyRain,
         siteName,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, hourlyRain, siteName],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName],
   );
 
   // Agriculture + Weather Nerd land as their own compositions later.

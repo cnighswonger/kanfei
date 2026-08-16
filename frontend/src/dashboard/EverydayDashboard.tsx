@@ -112,7 +112,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderTop: `1px ${v.ruleStyle} ${v.rule}`,
+        borderTop: `${v.ruleWidth} solid ${v.rule}`,
         paddingTop: 8,
       }}
     >
