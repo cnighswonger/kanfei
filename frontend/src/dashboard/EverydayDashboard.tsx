@@ -12,7 +12,7 @@
  *   footer                  26
  */
 import React from 'react';
-import { v, type, SectionLabel, tnum } from './primitives';
+import { v, type, SectionLabel, tnum, fmtTime } from './primitives';
 import type { DashboardData } from './types';
 import {
   HeroTemperatureTile, DerivedConditionsTile, HistoryChartTile, BarometerTile,
@@ -96,7 +96,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData }> = ({ d }) => (
         </span>
       </SectionLabel>
       <span style={{ ...type('sectionLabel'), ...tnum, color: v.textMuted }}>
-        Clock {d.station.clock} · last poll {d.station.lastPoll}
+        Clock {d.station.clock} · last poll {fmtTime(d.station.lastPoll)}
       </span>
     </div>
   </main>

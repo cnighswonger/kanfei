@@ -10,7 +10,7 @@
  *  - Heights come from the parent layout (TILE-CONTRACT.md), never from content.
  */
 import React from 'react';
-import { Tile, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt } from './primitives';
+import { Tile, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt, fmtTime } from './primitives';
 import type { DashboardData } from './types';
 import { wheelDial, compass, rosePetals, pathFor, ledgerGrid } from '../utils/gauges';
 
@@ -39,8 +39,10 @@ export const HeroTemperatureTile: React.FC<{ d: DashboardData; style?: React.CSS
     </SectionLabel>
 
     {/* high/low chips sit directly under the confidence label — not pushed to the
-        bottom of the tile. No margin-top:auto here. */}
-    <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+        bottom of the tile. No margin-top:auto here.
+        minWidth:0 + overflow:hidden so an over-long value can never push the row
+        out of the 340px tile and across the neighbouring column. */}
+    <div style={{ display: 'flex', gap: 8, marginTop: 2, minWidth: 0, overflow: 'hidden' }}>
       <Chip label="High" value={fmt(d.outside.highF, 1, '°')} at={d.outside.highAt} tone={v.danger} />
       <Chip label="Low" value={fmt(d.outside.lowF, 1, '°')} at={d.outside.lowAt} tone={v.sky} />
     </div>
@@ -60,11 +62,13 @@ const Chip: React.FC<{ label: string; value: string; at?: string | null; tone: s
       border: `1px solid ${v.ruleHair}`,
       borderRadius: 'var(--radius-control)',
       whiteSpace: 'nowrap',
+      minWidth: 0,
+      overflow: 'hidden',
     }}
   >
     <span style={{ ...type('sectionLabel'), color: v.textSecondary }}>{label}</span>
     {value}
-    {at && <span style={{ color: v.textMuted }}>{at}</span>}
+    {at && <span style={{ color: v.textMuted }}>{fmtTime(at)}</span>}
   </span>
 );
 
@@ -219,7 +223,7 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
           {d.barometer.zone && <SectionLabel>Zone · {d.barometer.zone}</SectionLabel>}
           <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: `1px ${v.ruleStyle} ${v.ruleHair}` }}>
             <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>
-              H {fmt(d.barometer.todayHigh, 2)} {d.barometer.todayHighAt} · L {fmt(d.barometer.todayLow, 2)} {d.barometer.todayLowAt}
+              H {fmt(d.barometer.todayHigh, 2)} {fmtTime(d.barometer.todayHighAt)} · L {fmt(d.barometer.todayLow, 2)} {fmtTime(d.barometer.todayLowAt)}
             </span>
           </div>
         </div>
@@ -269,7 +273,7 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
             <SectionLabel>mph {d.wind.directionLabel ?? ''}</SectionLabel>
           </div>
           <SectionLabel>
-            Gust {fmt(d.wind.gustMph, 0)} · peak {fmt(d.wind.peakMph, 0)}{d.wind.peakAt ? ` at ${d.wind.peakAt}` : ''}
+            Gust {fmt(d.wind.gustMph, 0)} · peak {fmt(d.wind.peakMph, 0)}{d.wind.peakAt ? ` at ${fmtTime(d.wind.peakAt)}` : ''}
           </SectionLabel>
           {d.wind.directionDeg != null && <SectionLabel>{Math.round(d.wind.directionDeg)}°</SectionLabel>}
         </div>
@@ -367,25 +371,32 @@ export const RainfallByHourTile: React.FC<{ d: DashboardData; style?: React.CSSP
       </div>
       <Rule strong />
       {/* Always render the 24 slots. An empty axis reads as "no rain today";
-          an empty tile reads as broken. */}
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', flex: 1, minHeight: 0 }}>
+          an empty tile reads as broken.
+
+          ⚠ preserveAspectRatio="none" stretches EVERYTHING in the viewBox,
+          including <text> — with the tile stretched, 10px hour labels rendered
+          ~3x oversized and detached from the plot. The axis is therefore HTML
+          below the svg, and the svg has a fixed height rather than flex:1. */}
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        style={{ display: 'block', width: '100%', height: H, flexShrink: 0 }}
+      >
         {Array.from({ length: 24 }, (_, i) => {
           const val = bars[i] ?? 0;
-          const h = val > 0 ? Math.max(2, (val / max) * (H - 16)) : 0;
+          const h = val > 0 ? Math.max(2, (val / max) * (H - 8)) : 0;
           const w = W / 24;
-          return (
-            <g key={i}>
-              <rect x={i * w + 2} y={H - 12 - h} width={w - 4} height={h} fill={v.chart.rain} />
-              {i % 4 === 0 && (
-                <text x={i * w + w / 2} y={H - 2} textAnchor="middle" style={type('sectionLabel')} fill={v.chart.axis}>
-                  {i === 0 ? '12a' : i < 12 ? `${i}a` : i === 12 ? '12p' : `${i - 12}p`}
-                </text>
-              )}
-            </g>
-          );
+          return <rect key={i} x={i * w + 2} y={H - h} width={w - 4} height={h} fill={v.chart.rain} />;
         })}
-        <line x1={0} y1={H - 12} x2={W} y2={H - 12} stroke={v.rule} strokeWidth={0.8} />
+        <line x1={0} y1={H - 0.4} x2={W} y2={H - 0.4} stroke={v.rule} strokeWidth={0.8} />
       </svg>
+      <div style={{ display: 'flex', ...type('sectionLabel'), color: v.chart.axis }}>
+        {Array.from({ length: 6 }, (_, k) => (
+          <span key={k} style={{ flex: 1, textAlign: k === 0 ? 'left' : 'center' }}>
+            {k * 4 === 0 ? '12a' : k * 4 < 12 ? `${k * 4}a` : k * 4 === 12 ? '12p' : `${k * 4 - 12}p`}
+          </span>
+        ))}
+      </div>
     </Tile>
   );
 };
@@ -418,12 +429,8 @@ export const StationStatusTile: React.FC<{ d: DashboardData; style?: React.CSSPr
           </span>
         ))}
       </div>
-      <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: `1px ${v.ruleStyle} ${v.ruleHair}` }}>
-        <SectionLabel>
-          Clock {s.clock} · last poll {s.lastPoll}
-          {s.intervalSeconds != null && ` · every ${s.intervalSeconds}s`}
-        </SectionLabel>
-      </div>
+      {/* No clock line here — it's in the footer strip, and having both was the
+          duplicated 'Clock … last poll …' pair at the foot of the page. */}
     </Tile>
   );
 };
