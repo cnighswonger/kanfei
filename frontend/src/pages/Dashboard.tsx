@@ -364,8 +364,17 @@ function buildSprayBlock(
   sp: SprayAdapterInputs | null,
   cc: CurrentConditions | null,
 ): DashboardData["spray"] {
-  if (!sp) return undefined;
-  const { product, evaluation, schedules, outcomes } = sp;
+  // Water fields come from ``/api/current`` (public); do not gate them
+  // on the admin-only spray fetches.  Product / verdict / schedule /
+  // applications DO gate on ``sp`` because they read the spray
+  // endpoints — those all render em-dashes when ``sp`` is null.
+  const empty: SprayAdapterInputs = {
+    product: null,
+    evaluation: null,
+    schedules: [],
+    outcomes: [],
+  };
+  const { product, evaluation, schedules, outcomes } = sp ?? empty;
 
   const verdict: "go" | "marginal" | "nogo" | null = evaluation
     ? evaluation.go
