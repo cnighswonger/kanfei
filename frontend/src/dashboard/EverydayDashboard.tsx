@@ -16,7 +16,7 @@
  *   footer                 27
  */
 import React from 'react';
-import { v, type, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, fmtTime, s, SCALE_VAR } from './primitives';
+import { v, type, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, fmtTime, s, SCALE_VAR, CONTENT_CAP } from './primitives';
 import type { DashboardData } from './types';
 import {
   HeroTemperatureTile, DerivedConditionsTile, HistoryChartTile, BarometerTile,
@@ -83,6 +83,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
         gap: s(24),
         paddingBottom: s(8),
         borderBottom: `${v.ruleWidth} solid ${v.rule}`,
+        ...CONTENT_CAP,
       }}
     >
       <h2 style={{ ...type('heading'), color: v.text, margin: 0 }}>Current Conditions</h2>
@@ -96,7 +97,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
     </div>
 
     {/* ── band A, 787 ─────────────────────────────────────────────────────── */}
-    <div data-band="a" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), alignItems: 'start' }}>
+    <div data-band="a" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), alignItems: 'start', ...CONTENT_CAP }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: s(20), minWidth: 0 }}>
         <div style={{ display: 'flex', gap: s(28), height: s(205) }}>
           <HeroTemperatureTile d={d} style={{ width: s(340), flexShrink: 0 }} />
@@ -120,7 +121,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
     </div>
 
     {/* ── band B, 150 ─────────────────────────────────────────────────────── */}
-    <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), height: s(150) }}>
+    <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), height: s(150), ...CONTENT_CAP }}>
       <RainfallByHourTile d={d} />
       <ConsoleAndLinkTile d={d} />
     </div>
@@ -133,6 +134,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
         justifyContent: 'space-between',
         borderTop: `${v.ruleWidth} solid ${v.rule}`,
         paddingTop: s(8),
+        ...CONTENT_CAP,
       }}
     >
       <SectionLabel>
