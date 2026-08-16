@@ -1,27 +1,24 @@
 /**
- * Almanac tile: sunrise/sunset, day length, moon phase, station type.
- * Backend returns pre-formatted display strings for sun times and a
- * ``moon.illumination`` already expressed as a percentage — pass both
- * straight through.
+ * Almanac tile: sunrise/sunset, day length, moon phase.  Backend
+ * returns pre-formatted display strings for sun times and
+ * ``moon.illumination`` already as a percentage — pass both through.
+ * Station type / firmware live in the station-status footer strip
+ * per Design's REVIEW-05 P3.
  */
 import { useEffect, useState } from 'react';
-import { fetchAstronomy, fetchStationStatus } from '../../api/client.ts';
-import type { AstronomyResponse, StationStatus } from '../../api/types.ts';
+import { fetchAstronomy } from '../../api/client.ts';
+import type { AstronomyResponse } from '../../api/types.ts';
 import TileLabel from '../common/TileLabel.tsx';
 
 export default function AlmanacTile() {
   const [astro, setAstro] = useState<AstronomyResponse | null>(null);
-  const [station, setStation] = useState<StationStatus | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const load = () => {
-      Promise.allSettled([fetchAstronomy(), fetchStationStatus()])
-        .then(([a, s]) => {
-          if (cancelled) return;
-          if (a.status === 'fulfilled') setAstro(a.value);
-          if (s.status === 'fulfilled') setStation(s.value);
-        });
+      fetchAstronomy()
+        .then((a) => { if (!cancelled) setAstro(a); })
+        .catch(() => { /* astronomy is optional; tile renders "—" placeholders */ });
     };
     load();
     const id = setInterval(load, 5 * 60_000);
@@ -32,19 +29,20 @@ export default function AlmanacTile() {
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      padding: '16px',
+      padding: '10px 14px',
       background: 'var(--color-bg-card)',
       borderRadius: 'var(--gauge-border-radius, 16px)',
       border: '1px solid var(--color-border)',
       height: '100%',
       boxSizing: 'border-box',
+      overflow: 'hidden',
     }}>
       <TileLabel>Almanac for today</TileLabel>
       <table style={{
         width: '100%',
         borderCollapse: 'collapse',
         fontFamily: 'var(--font-gauge)',
-        fontSize: 'calc(13px * var(--font-scale))',
+        fontSize: 'calc(12px * var(--font-scale))',
         color: 'var(--color-text)',
       }}>
         <tbody>
@@ -63,11 +61,6 @@ export default function AlmanacTile() {
               ? `${astro.moon.phase} ${Math.round(astro.moon.illumination)}%`
               : '—'
           } />
-          <Row label="Station" value={
-            station
-              ? `${station.type_name}${station.firmware_version ? ' · FW ' + station.firmware_version : ''}`
-              : '—'
-          } />
         </tbody>
       </table>
     </div>
@@ -78,12 +71,12 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <tr style={{ borderBottom: `var(--rule-width, 1px) var(--rule-style, solid) var(--rule-hair, rgba(0,0,0,0.1))` }}>
       <td style={{
-        padding: '10px 0',
+        padding: '6px 0',
         color: 'var(--color-text-secondary)',
         fontFamily: 'var(--font-body)',
-        fontSize: 'calc(13px * var(--font-scale))',
+        fontSize: 'calc(12px * var(--font-scale))',
       }}>{label}</td>
-      <td style={{ padding: '10px 0', textAlign: 'right' }}>{value}</td>
+      <td style={{ padding: '6px 0', textAlign: 'right' }}>{value}</td>
     </tr>
   );
 }
