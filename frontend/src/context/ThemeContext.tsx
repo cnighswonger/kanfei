@@ -97,6 +97,11 @@ export function applyThemeToDOM(theme: Theme) {
   root.style.setProperty('--plate-blend', plate?.blend ?? 'normal');
   root.style.setProperty('--plate-position', plate?.position ?? 'center');
   root.style.setProperty('--plate-size', plate?.size ?? 'contain');
+  // Alias for Design's newer dashboard components that read the plate
+  // via `--surface-plate` (v12 EverydayDashboard).  Same URL as the
+  // shell's `--plate-image`; different scope (dashboard-corner vs
+  // shell-wide).  ``none`` when no plate is configured.
+  root.style.setProperty('--surface-plate', plate ? `url("${plate.src}")` : 'none');
   root.style.setProperty('--surface-owns-background', theme.surface.ownsBackground ? '1' : '0');
 
   // Chart tokens.  Series colours as one var each so Highcharts
