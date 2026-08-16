@@ -22,6 +22,10 @@ import {
   fetchAstronomy,
   fetchHistory,
   fetchConfig,
+  fetchSprayProducts,
+  fetchSpraySchedules,
+  fetchSprayOutcomes,
+  evaluateSprayProduct,
 } from "../api/client.ts";
 import type {
   CurrentConditions,
@@ -29,6 +33,10 @@ import type {
   AstronomyResponse,
   StationStatus as StationStatusType,
   HistoryPoint,
+  SprayProduct,
+  SprayEvaluation,
+  SpraySchedule,
+  SprayOutcome,
 } from "../api/types.ts";
 
 /**
@@ -150,7 +158,71 @@ interface AdapterSources {
   historyBarometer: HistoryPoint[];
   hourlyRain: (number | null)[];
   siteName: string | null;
+  spray: SprayAdapterInputs | null;
 }
+
+interface SprayAdapterInputs {
+  product: SprayProduct | null;
+  evaluation: SprayEvaluation | null;
+  schedules: SpraySchedule[];
+  outcomes: SprayOutcome[];
+}
+
+/** wind|temperature|humidity|rain_free → human label */
+const SPRAY_CHECK_LABEL: Record<string, string> = {
+  wind: "Wind",
+  temperature: "Temperature",
+  humidity: "Humidity",
+  rain_free: "Rain-free",
+};
+
+/** Format a check's limit line ("≤ 10 mph", "40 – 90 °F", etc.). */
+function sprayCheckLimit(name: string, product: SprayProduct | null): string {
+  if (!product) return "";
+  switch (name) {
+    case "wind":
+      return product.max_wind_mph != null ? `≤ ${product.max_wind_mph} mph` : "";
+    case "temperature": {
+      const lo = product.min_temp_f;
+      const hi = product.max_temp_f;
+      if (lo != null && hi != null) return `${lo} – ${hi} °F`;
+      if (hi != null) return `≤ ${hi} °F`;
+      if (lo != null) return `≥ ${lo} °F`;
+      return "";
+    }
+    case "humidity": {
+      const lo = product.min_humidity_pct;
+      const hi = product.max_humidity_pct;
+      if (lo != null && hi != null) return `${lo} – ${hi} %`;
+      if (hi != null) return `≤ ${hi} %`;
+      if (lo != null) return `≥ ${lo} %`;
+      return "";
+    }
+    case "rain_free":
+      return product.rain_free_hours != null ? `≥ ${product.rain_free_hours} h` : "";
+    default:
+      return "";
+  }
+}
+
+function formatScheduleWhen(dateStr: string, startTime: string): string {
+  try {
+    const d = new Date(`${dateStr}T${startTime}`);
+    if (Number.isNaN(d.getTime())) return `${dateStr} ${startTime}`;
+    return d.toLocaleString(undefined, {
+      month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+    });
+  } catch {
+    return `${dateStr} ${startTime}`;
+  }
+}
+
+const SCHEDULE_STATUS: Record<string, "go" | "pending" | "nogo"> = {
+  go: "go",
+  no_go: "nogo",
+  pending: "pending",
+  applied: "go",
+};
 
 function toDashboardData(s: AdapterSources): DashboardData {
   const cc = s.cc;
@@ -278,6 +350,96 @@ function toDashboardData(s: AdapterSources): DashboardData {
       sampleCount: tempPts.length || null,
       avgTempF,
     },
+    spray: buildSprayBlock(s.spray, cc),
+  };
+}
+
+/**
+ * Shape the spray fetches into Design's ``DashboardData.spray`` block.
+ * Every downstream field is null-tolerant so an unauthenticated visitor
+ * (all spray endpoints 401 for anonymous) or a station without a
+ * selected product still renders the layout with em-dashes.
+ */
+function buildSprayBlock(
+  sp: SprayAdapterInputs | null,
+  cc: CurrentConditions | null,
+): DashboardData["spray"] {
+  if (!sp) return undefined;
+  const { product, evaluation, schedules, outcomes } = sp;
+
+  const verdict: "go" | "marginal" | "nogo" | null = evaluation
+    ? evaluation.go
+      ? "go"
+      : "nogo"
+    : null;
+
+  const checks = evaluation
+    ? evaluation.constraints.map((c) => ({
+        name: c.name,
+        label: SPRAY_CHECK_LABEL[c.name] ?? c.name,
+        value: c.current_value || "—",
+        limit: sprayCheckLimit(c.name, product),
+        pass: c.passed,
+      }))
+    : [];
+
+  const verdictNote =
+    evaluation?.overall_detail ??
+    (verdict === "go"
+      ? "Conditions favour spraying now."
+      : verdict === "nogo"
+      ? "One or more checks fail — hold."
+      : null);
+
+  const schedule = schedules.slice(0, 4).map((s) => ({
+    product: s.product_name,
+    when: formatScheduleWhen(s.planned_date, s.planned_start),
+    status: SCHEDULE_STATUS[s.status] ?? "pending",
+  }));
+
+  const applications = outcomes.slice(0, 4).map((o) => ({
+    product: o.product_name,
+    date: o.logged_at
+      ? new Date(o.logged_at).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        })
+      : "—",
+    stars: Math.max(0, Math.min(5, Math.round(o.effectiveness))),
+    note: o.notes,
+  }));
+
+  const rainTodayIn = cc?.rain?.daily?.value ?? null;
+  const etTodayIn = cc?.et_daily?.value ?? null;
+  const etMonthIn = cc?.et_monthly?.value ?? null;
+  const etYearIn = cc?.et_yearly?.value ?? null;
+
+  return {
+    product: product ? { name: product.name, category: product.category } : null,
+    verdict,
+    verdictNote,
+    caution: null,
+    checks,
+    window: [],
+    bestWindowToday: evaluation?.optimal_window
+      ? `${evaluation.optimal_window.start} – ${evaluation.optimal_window.end}`
+      : null,
+    nextWindow: null,
+    gustBins: [],
+    water: {
+      balanceIn:
+        rainTodayIn != null && etTodayIn != null ? rainTodayIn - etTodayIn : null,
+      rainTodayIn,
+      rainWeekIn: null,
+      etTodayIn,
+      etWeekIn: null,
+      etMonthIn,
+      etYearIn,
+      seasonRainIn: cc?.rain?.yearly?.value ?? null,
+    },
+    schedule,
+    applications,
+    driftRatePct: null,
   };
 }
 
@@ -293,6 +455,7 @@ export default function Dashboard() {
   const [historyBarometer, setHistoryBarometer] = useState<HistoryPoint[]>([]);
   const [hourlyRain, setHourlyRain] = useState<(number | null)[]>(() => Array<null>(24).fill(null));
   const [siteName, setSiteName] = useState<string | null>(null);
+  const [spray, setSpray] = useState<SprayAdapterInputs | null>(null);
 
   // Every-5-min re-fetch for the slow-moving feeds.  currentConditions +
   // stationStatus already tick via the shared WeatherDataProvider.
@@ -343,6 +506,44 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, []);
 
+  // Spray fetches — admin-only on the backend, so an anonymous visitor
+  // 401s and ``spray`` stays null (Agriculture tiles render em-dashes).
+  // Only fetched while on the Agriculture persona so private stations
+  // running the other personas don't churn PUT /api/spray/evaluate on
+  // the poll interval for a screen that isn't visible.
+  useEffect(() => {
+    if (persona !== "agriculture") {
+      setSpray(null);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      let products: SprayProduct[] = [];
+      let evaluation: SprayEvaluation | null = null;
+      let schedules: SpraySchedule[] = [];
+      let outcomes: SprayOutcome[] = [];
+      try {
+        products = await fetchSprayProducts();
+      } catch {
+        return; // 401 or offline; leave spray null
+      }
+      const product = products.find((p) => p.is_preset) ?? products[0] ?? null;
+      const [ev, sch, out] = await Promise.allSettled([
+        product ? evaluateSprayProduct(product.id) : Promise.resolve(null),
+        fetchSpraySchedules(),
+        fetchSprayOutcomes(5),
+      ]);
+      if (cancelled) return;
+      if (ev.status === "fulfilled") evaluation = ev.value;
+      if (sch.status === "fulfilled") schedules = sch.value;
+      if (out.status === "fulfilled") outcomes = out.value;
+      setSpray({ product, evaluation, schedules, outcomes });
+    };
+    load();
+    const id = setInterval(load, 5 * 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [persona]);
+
   const data = useMemo(
     () =>
       toDashboardData({
@@ -355,8 +556,9 @@ export default function Dashboard() {
         historyBarometer,
         hourlyRain,
         siteName,
+        spray,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName, spray],
   );
 
   // Persona dispatch — Weather Nerd lands as its own composition later.
