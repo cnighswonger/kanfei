@@ -262,7 +262,8 @@ export const fmtTime = (s: string | null | undefined): string => {
  */
 export const Tile: React.FC<{
   id: string;
-  height?: number;
+  /** Prefer minHeight from the layout — a fixed height clips grown text. */
+  height?: number | string;
   style?: React.CSSProperties;
   children: React.ReactNode;
 }> = ({ id, height, style, children }) => (
