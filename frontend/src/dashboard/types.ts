@@ -177,13 +177,24 @@ export interface DashboardData {
     /** NEW: % of the last 30 days Zambretti and NWS agreed. Needs a daily log. */
     agreementRate30d: number | null;
 
-    // ── link quality since local midnight ──────────────────────────────────
+    // ── link quality ───────────────────────────────────────────────────────
     reception: {
+      /**
+       * Link quality over `windowLabel`. Must be computed over the SAME window
+       * as the counters below — a percentage from one window beside counts
+       * from another is unreadable.
+       */
       pct: number | null;
       received: number | null;
       missed: number | null;
       crcErrors: number | null;
       resyncs: number | null;
+      /**
+       * The window these figures cover, e.g. "last hour" or "since midnight".
+       * The tile renders it in the kicker so a small received-count is legible
+       * instead of alarming.
+       */
+      windowLabel: string | null;
     } | null;
 
     // ── chart ──────────────────────────────────────────────────────────────

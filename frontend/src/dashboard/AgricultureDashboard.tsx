@@ -81,7 +81,10 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel?: str
       </div>
 
       {/* ── band A, 287 ───────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '694fr 604fr', gap: s(24), minHeight: s(287), alignItems: 'start', ...CONTENT_CAP }}>
+      {/* stretch, not start: band A tiles are BORDERED, and a row of boxes at
+          unequal heights reads as sloppy — sharing a height lets the tallest
+          content set it. Band B below is borderless and uses 'start'. */}
+      <div style={{ display: 'grid', gridTemplateColumns: '694fr 604fr', gap: s(24), minHeight: s(287), alignItems: 'stretch', ...CONTENT_CAP }}>
         <SprayVerdictTile d={d} />
         <SprayWindowTile d={d} />
       </div>
