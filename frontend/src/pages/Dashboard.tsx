@@ -456,12 +456,19 @@ function buildNerdBlock(
   // forecast to compare against yet, so leave null.
   const nwsAgrees = local ? null : null;
   return {
-    // Pressure provenance — altimeter and SLP need station elevation +
-    // temperature to compute properly; leave for a follow-up so the card
-    // doesn't lie.  hPa is already on d.barometer.hPa (the tile reads
-    // that directly), so the provenance line still fills.
-    altimeterInHg: null,
-    seaLevelHPa: null,
+    // Pressure provenance.  Davis reports ``barometer`` as an ISA-
+    // reduced-to-sea-level value already (user's configured
+    // ``barometer_elevation_ft`` applied on the console), so:
+    //   altimeter = the same value in inHg (that IS the altimeter
+    //     setting — aviation and Davis both use ISA temperature)
+    //   sea-level pressure = the same value converted to hPa.
+    // Both trivial re-labelings of ``cc.barometer.value`` — no new
+    // backend physics — but they satisfy the Weather Nerd provenance
+    // line's intent: name each interpretation of the reading.  A
+    // future PR that ingests a raw station-pressure column can
+    // differentiate SLP (actual-temp) from altimeter (ISA) properly.
+    altimeterInHg: cc?.barometer?.value ?? null,
+    seaLevelHPa: cc?.barometer?.value != null ? cc.barometer.value * 33.8639 : null,
 
     // Theta-e provenance — thetaE itself is on d.outside.thetaEK.
     // Delta since 06Z needs a stored snapshot; NEW work.
