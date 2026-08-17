@@ -262,7 +262,11 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
             <text key={i} x={l.x} y={l.y} textAnchor="middle" style={type('sectionLabel')} fill={v.textSecondary}>{l.label}</text>
           ))}
           {showNeedle && (
-            <g style={{ transform: `rotate(${d.wind.directionDeg}deg)`, transformOrigin: '150px 150px' }}>
+            // SVG ``transform`` attribute — CSS transforms on SVG
+            // elements are unreliable across browsers (Firefox / Safari
+            // don't map px-based ``transformOrigin`` to the SVG coord
+            // system).  See DriftRiskTile for the full note.
+            <g transform={`rotate(${d.wind.directionDeg} 150 150)`}>
               <line x1={150} y1={174} x2={150} y2={74} stroke={v.needle} strokeWidth={2.6} strokeLinecap="round" />
               <polygon points="150,62 142,80 158,80" fill={v.needle} />
             </g>
