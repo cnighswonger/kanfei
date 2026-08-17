@@ -328,7 +328,14 @@ export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
             <text key={i} x={l.x} y={l.y} textAnchor="middle" style={type('sectionLabel')} fill={v.textSecondary}>{l.label}</text>
           ))}
           {showNeedle && (
-            <g style={{ transform: `rotate(${d.wind.directionDeg}deg)`, transformOrigin: '110px 110px' }}>
+            // SVG `transform` ATTRIBUTE with `rotate(angle cx cy)` —
+            // NOT CSS `transform` in inline style.  CSS transforms on
+            // SVG elements only work reliably in Chromium; Firefox and
+            // Safari don't map `transformOrigin` in px to the SVG
+            // coordinate system, so the needle rotates around the wrong
+            // point (or, in Safari, doesn't render at all).  The SVG
+            // attribute form is coordinate-system-native and portable.
+            <g transform={`rotate(${d.wind.directionDeg} 110 110)`}>
               <line x1={110} y1={128} x2={110} y2={52} stroke={v.needle} strokeWidth={2.2} strokeLinecap="round" />
               <polygon points="110,44 103,60 117,60" fill={v.needle} />
             </g>
