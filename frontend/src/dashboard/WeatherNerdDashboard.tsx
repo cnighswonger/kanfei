@@ -240,7 +240,7 @@ export const ReceptionCard: React.FC<{ d: DashboardData }> = ({ d }) => {
   const pct = r?.pct ?? null;
   const tone = pct == null ? v.text : pct >= 98 ? v.success : pct >= 92 ? v.warning : v.danger;
   return (
-    <StatCard id="nerd-reception" kicker="Reception since midnight">
+    <StatCard id="nerd-reception" kicker="Reception · last hour">
       <BigFigure color={tone}>
         {pct == null ? '—' : fmt(pct, 1)}
         {pct != null && <span style={{ ...fs(14), color: v.textSecondary }}>%</span>}
