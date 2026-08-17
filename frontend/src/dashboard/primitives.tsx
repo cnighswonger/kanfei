@@ -286,13 +286,22 @@ export const decimate = (vals: (number | null)[], maxPoints = 600): (number | nu
  * Dividing the data range into N equal parts gives ticks like
  * ``97 / 90 / 83 / 77 / 70`` — arithmetically correct and unreadable,
  * because a reader can't do mental arithmetic against a 6.75 step.
- * Snapping the step to ``1 / 2 / 5 × 10ⁿ`` gives ``95 / 90 / 85 / 80 /
- * 75``, which can be read at a glance.
+ * Snapping the step to ``1 / 2 / 5 × 10ⁿ`` gives readable, round-
+ * number ticks.
+ *
+ * We bias toward MORE ticks, not fewer, by picking the largest nice
+ * step that is ≤ ``raw`` (the target spacing).  Picking ≥ ``raw``
+ * (the naive choice) rounds the step up and can leave a narrow-span
+ * axis with only two visible ticks — e.g., a pressure range 29.87 →
+ * 30.04, padded to 29.83 → 30.08, would target step 0.0625 and round
+ * up to 0.1, producing just ``29.9`` and ``30.0``.  Rounding down to
+ * 0.05 gives five ticks that fill the axis.
  */
 export const niceTicks = (lo: number, hi: number, target = 5): number[] => {
   const raw = (hi - lo) / Math.max(1, target - 1);
   const mag = Math.pow(10, Math.floor(Math.log10(raw)));
-  const step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag;
+  const step =
+    [10, 5, 2, 1].map((m) => m * mag).find((s) => s <= raw + 1e-9) ?? mag;
   const out: number[] = [];
   for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) {
     out.push(+v.toFixed(6));
