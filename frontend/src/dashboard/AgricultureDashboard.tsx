@@ -146,7 +146,11 @@ export const SprayVerdictTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(12) }}>
         <SectionLabel>Product</SectionLabel>
         <span style={{ ...type('body', fs(12.5)), color: v.text }}>
-          {sp?.product ? `${sp.product.name} — ${sp.product.category}` : '—'}
+          {sp?.product
+            ? sp.product.category
+              ? `${sp.product.name} — ${sp.product.category}`
+              : sp.product.name
+            : '—'}
         </span>
       </div>
 
