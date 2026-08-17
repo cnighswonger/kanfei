@@ -72,7 +72,9 @@ export const WeatherNerdDashboard: React.FC<{ d: DashboardData; themeLabel?: str
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: s(16),
           minHeight: s(147),
-          alignItems: 'start',
+          // stretch, not start: the four cards read as one instrument row, so they
+          // share a height. They grow together if any provenance line wraps.
+          alignItems: 'stretch',
           ...CONTENT_CAP,
         }}
       >
@@ -291,6 +293,7 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         borderRadius: v.radiusCard,
         padding: `${s(18)} ${s(20)}`,
         gap: s(10),
+        minHeight: s(341),
         ...CONTENT_CAP,
       }}
     >
@@ -310,43 +313,92 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, background: v.chart.surface }}>
-        <svg viewBox={`0 0 ${CW} ${CH}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: '100%' }}>
+      {/*
+        Two layers, deliberately:
+        ① an SVG of PATHS ONLY, stretched with preserveAspectRatio="none" so the
+          traces fill whatever width the tile has;
+        ② axis labels as HTML, positioned by percentage.
+
+        Text must never live inside a non-uniformly stretched SVG. In the first
+        render this tile had no height bound, so the SVG grew to its own 660:250
+        aspect (~504px tall), the whole viewBox scaled ~2x, and the axis numerals
+        rendered at roughly 24px — the chart swallowed the page and the three-up
+        band fell off the bottom. Bounding the height fixes the size; splitting the
+        text out fixes the distortion permanently.
+      */}
+      <div style={{ position: 'relative', height: s(250), minHeight: s(250), background: v.chart.surface }}>
+        <svg
+          viewBox={`0 0 ${CW} ${CH}`}
+          preserveAspectRatio="none"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
+        >
           {left.map((g, i) => (
             <line key={`g${i}`} x1={PL} y1={g.y} x2={CW - PR} y2={g.y} stroke={v.chart.gridMinor} strokeWidth={0.8} />
           ))}
-          {left.map((g, i) => (
-            <text key={`l${i}`} x={PL - 8} y={g.y + 4} textAnchor="end" style={type('sectionLabel')} fill={v.chart.axis}>
-              {g.label}
-            </text>
-          ))}
-          {/* Right axis is colour-keyed to the pressure trace, so no legend entry
-              has to explain which axis belongs to which series. */}
-          {bp &&
-            right.map((g, i) => (
-              <text key={`r${i}`} x={CW - PR + 8} y={g.y + 4} textAnchor="start" style={type('sectionLabel')} fill={v.chart.trace}>
-                {g.label}
-              </text>
-            ))}
-
           {bp && <path d={bp.line} fill="none" stroke={v.chart.trace} strokeWidth={1.6} strokeDasharray="5 3" opacity={0.9} />}
           {dw && <path d={dw.line} fill="none" stroke={v.chart.traceSecondary} strokeWidth={1.8} />}
           {t && <path d={t.line} fill="none" stroke={v.accent} strokeWidth={2.4} strokeLinecap="round" />}
-
           <line x1={PL} y1={CH - PB} x2={CW - PR} y2={CH - PB} stroke={v.ruleHair} strokeWidth={0.8} />
-          {['−24h', '−18', '−12', '−6', 'now'].map((label, i) => (
-            <text
-              key={label}
-              x={PL + ((CW - PR - PL) * i) / 4}
-              y={CH - 6}
-              textAnchor={i === 0 ? 'start' : i === 4 ? 'end' : 'middle'}
-              style={type('sectionLabel')}
-              fill={v.chart.axis}
-            >
-              {label}
-            </text>
-          ))}
         </svg>
+
+        {/* left axis — temperature and dew point share it */}
+        {left.map((g) => (
+          <span
+            key={`L${g.label}`}
+            style={{
+              ...type('sectionLabel'),
+              color: v.chart.axis,
+              position: 'absolute',
+              left: 0,
+              width: `${(PL / CW) * 100}%`,
+              top: `${(g.y / CH) * 100}%`,
+              transform: 'translateY(-50%)',
+              textAlign: 'right',
+              paddingRight: s(8),
+              boxSizing: 'border-box',
+            }}
+          >
+            {g.label}
+          </span>
+        ))}
+
+        {/* right axis — colour-keyed to the pressure trace, so no legend entry has
+            to explain which axis belongs to which series */}
+        {bp &&
+          right.map((g) => (
+            <span
+              key={`R${g.label}`}
+              style={{
+                ...type('sectionLabel'),
+                color: v.chart.trace,
+                position: 'absolute',
+                right: 0,
+                width: `${(PR / CW) * 100}%`,
+                top: `${(g.y / CH) * 100}%`,
+                transform: 'translateY(-50%)',
+                paddingLeft: s(8),
+                boxSizing: 'border-box',
+              }}
+            >
+              {g.label}
+            </span>
+          ))}
+
+        {/* x axis */}
+        <div
+          style={{
+            position: 'absolute',
+            left: `${(PL / CW) * 100}%`,
+            right: `${(PR / CW) * 100}%`,
+            bottom: s(4),
+            display: 'flex',
+            justifyContent: 'space-between',
+            ...type('sectionLabel'),
+            color: v.chart.axis,
+          }}
+        >
+          <span>−24h</span><span>−18</span><span>−12</span><span>−6</span><span>now</span>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: s(18), alignItems: 'center', flexWrap: 'wrap' }}>
@@ -437,11 +489,9 @@ export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
           </text>
         ))}
         {showNeedle && (
-          // SVG ``transform`` attribute — see DriftRiskTile / WindTile for
-          // the full note.  CSS transforms on SVG children only work in
-          // Chromium; Firefox / Safari don't map px-based ``transformOrigin``
-          // to the SVG coord system, so the needle vanishes or rotates
-          // around the wrong point.
+          // SVG ``transform`` attribute — see PR 50 note.  CSS transforms
+          // on SVG children only work in Chromium; the attribute form is
+          // portable across browsers.
           <g transform={`rotate(${d.wind.directionDeg} 130 122)`}>
             <line x1={130} y1={150} x2={130} y2={46} stroke={v.needle} strokeWidth={3} strokeLinecap="round" />
             <polygon points="130,36 121,52 139,52" fill={v.needle} />
