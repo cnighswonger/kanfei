@@ -66,6 +66,34 @@ const APP_VERSION =
   typeof __KANFEI_VERSION__ === "string" && __KANFEI_VERSION__ ? __KANFEI_VERSION__ : "0.1.0";
 
 /**
+ * Small localStorage cache for the persona-gated fetches (spray,
+ * signal-quality, solar-14d, METAR).  Populates ``useState`` inits so
+ * refresh restores the last-known values immediately instead of
+ * flashing em-dashes for the ~1 s each fetch takes.  Background fetch
+ * then overwrites with fresh data on the next 5-min tick.
+ *
+ * Failure-safe: any parse / storage error returns null, and the
+ * subsequent fetch fills in as usual.  Not versioned beyond the ``v1``
+ * suffix in the key — a shape change bumps the key.
+ */
+function cacheLoad<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+function cacheSave(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* quota / private mode — best-effort */
+  }
+}
+
+/**
  * ISO timestamp → ``5:09 PM`` clock display.  Every ``…At`` field on
  * ``DashboardData`` is a display string, never an ISO — a raw ISO is
  * ~28 chars and breaks chip / row layouts.  ``primitives.fmtTime()`` in
@@ -863,7 +891,7 @@ export default function Dashboard() {
   const [historyThetaE, setHistoryThetaE] = useState<HistoryPoint[]>([]);
   const [hourlyRain, setHourlyRain] = useState<(number | null)[]>(() => Array<null>(24).fill(null));
   const [siteName, setSiteName] = useState<string | null>(null);
-  const [spray, setSpray] = useState<SprayAdapterInputs | null>(null);
+  const [spray, setSpray] = useState<SprayAdapterInputs | null>(() => cacheLoad<SprayAdapterInputs>("kanfei.dashboard.spray.v1"));
 
   // Every-5-min re-fetch for the slow-moving feeds.  currentConditions +
   // stationStatus already tick via the shared WeatherDataProvider.
@@ -928,10 +956,9 @@ export default function Dashboard() {
   // running the other personas don't churn PUT /api/spray/evaluate on
   // the poll interval for a screen that isn't visible.
   useEffect(() => {
-    if (persona !== "agriculture") {
-      setSpray(null);
-      return;
-    }
+    // Off-persona: skip fetches, leave cached value in place so
+    // switching back is instant (same treatment as Weather Nerd).
+    if (persona !== "agriculture") return;
     let cancelled = false;
     const load = async () => {
       let products: SprayProduct[] = [];
@@ -961,7 +988,9 @@ export default function Dashboard() {
       if (out.status === "fulfilled") outcomes = out.value;
       if (fc.status === "fulfilled") forecastRows = fc.value.rows;
       if (gust.status === "fulfilled") gustHistory = (gust.value.points ?? []).map((p) => p.value);
-      setSpray({ product, evaluation, schedules, outcomes, forecast: forecastRows, gustHistory });
+      const next: SprayAdapterInputs = { product, evaluation, schedules, outcomes, forecast: forecastRows, gustHistory };
+      setSpray(next);
+      cacheSave("kanfei.dashboard.spray.v1", next);
     };
     load();
     const id = setInterval(load, 5 * 60_000);
@@ -979,18 +1008,26 @@ export default function Dashboard() {
   // buffer up to ~1 h of samples client-side (12 samples at the 5-min
   // fetch cadence) and let the adapter smooth the % across the window.
   const SIGNAL_WINDOW_MS = 60 * 60_000;
+  // Hydrate from localStorage on mount so refresh doesn't flash em-dashes.
   const [signalWindow, setSignalWindow] = useState<
     { time: number; sample: SignalQuality }[]
-  >([]);
-  const [solar14d, setSolar14d] = useState<(number | null)[]>([]);
-  const [metar, setMetar] = useState<string | null>(null);
+  >(() => {
+    const cached = cacheLoad<{ time: number; sample: SignalQuality }[]>("kanfei.dashboard.signalWindow.v1");
+    if (!cached) return [];
+    const now = Date.now();
+    return cached.filter((s) => now - s.time <= SIGNAL_WINDOW_MS);
+  });
+  const [solar14d, setSolar14d] = useState<(number | null)[]>(
+    () => cacheLoad<(number | null)[]>("kanfei.dashboard.solar14d.v1") ?? [],
+  );
+  const [metar, setMetar] = useState<string | null>(
+    () => cacheLoad<string>("kanfei.dashboard.metar.v1"),
+  );
   useEffect(() => {
-    if (persona !== "weather_nerd") {
-      setSignalWindow([]);
-      setSolar14d([]);
-      setMetar(null);
-      return;
-    }
+    // Off-persona: skip fetches, but LEAVE state populated so switching
+    // back is instant.  A subtly stale reading on re-entry is better
+    // than a full em-dash-then-populate flash on every persona swap.
+    if (persona !== "weather_nerd") return;
     let cancelled = false;
     const load = async () => {
       const [sig, sun, met] = await Promise.allSettled([
@@ -1003,14 +1040,20 @@ export default function Dashboard() {
         setSignalWindow((prev) => {
           const now = Date.now();
           const next = [...prev, { time: now, sample: sig.value }];
-          return next.filter((s) => now - s.time <= SIGNAL_WINDOW_MS);
+          const trimmed = next.filter((s) => now - s.time <= SIGNAL_WINDOW_MS);
+          cacheSave("kanfei.dashboard.signalWindow.v1", trimmed);
+          return trimmed;
         });
       }
       if (sun.status === "fulfilled") {
-        setSolar14d(sun.value.points.map((p) => p.value));
+        const pts = sun.value.points.map((p) => p.value);
+        setSolar14d(pts);
+        cacheSave("kanfei.dashboard.solar14d.v1", pts);
       }
       if (met.status === "fulfilled") {
-        setMetar(met.value.metar ?? null);
+        const s = met.value.metar ?? null;
+        setMetar(s);
+        cacheSave("kanfei.dashboard.metar.v1", s);
       }
     };
     load();
