@@ -504,20 +504,20 @@ function buildNerdBlock(
     // partial-day value that grows as the day progresses.
     solarEnergy14d: solar14d,
 
-    // Console extremes — day values are in cc.daily_extremes.  Month /
-    // year extremes need a query extension; leave null and the row
-    // shows an em-dash.
+    // Console extremes — day from cc.daily_extremes, month from
+    // cc.monthly_extremes, year from cc.yearly_extremes.  Backend
+    // computes each from a period cutoff; null propagates as em-dash.
     extremes: ex
       ? {
           tempDayHigh: ex.outside_temp_hi?.value ?? null,
           tempDayLow: ex.outside_temp_lo?.value ?? null,
-          tempMonthHigh: null,
-          tempMonthLow: null,
+          tempMonthHigh: cc?.monthly_extremes?.outside_temp_hi?.value ?? null,
+          tempMonthLow: cc?.monthly_extremes?.outside_temp_lo?.value ?? null,
           baroDayHigh: ex.barometer_hi?.value ?? null,
           baroDayLow: ex.barometer_lo?.value ?? null,
-          baroYearHigh: null,
-          baroYearLow: null,
-          gustMonthMax: null,
+          baroYearHigh: cc?.yearly_extremes?.barometer_hi?.value ?? null,
+          baroYearLow: cc?.yearly_extremes?.barometer_lo?.value ?? null,
+          gustMonthMax: cc?.monthly_extremes?.wind_speed_hi?.value ?? null,
           rainYearIn: cc?.rain?.yearly?.value ?? null,
         }
       : null,

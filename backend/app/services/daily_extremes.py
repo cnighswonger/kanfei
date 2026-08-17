@@ -92,6 +92,40 @@ def _at(db: Session, midnight: datetime, column, raw) -> Optional[datetime]:
     return row[0] if row is not None else None
 
 
+def get_period_extremes(db: Session, since_utc: datetime) -> Optional[dict]:
+    """Return temperature / barometer / gust extremes since ``since_utc``.
+
+    Companion to ``get_daily_extremes`` for the Weather Nerd persona's
+    month + year rows.  Same bounds guard; a much reduced shape (no
+    inside temps, no humidity, no rain rate — those aren't rendered on
+    the Weather Nerd extremes tile).  Returns ``None`` when the window
+    has no rows at all.
+    """
+    S = SensorReadingModel
+    row = (
+        db.query(
+            func.max(S.outside_temp), func.min(S.outside_temp),
+            func.max(S.wind_speed),
+            func.max(S.barometer), func.min(S.barometer),
+        )
+        .filter(S.timestamp >= since_utc)
+        .first()
+    )
+    if row is None or row[0] is None:
+        return None
+
+    def B(column, raw, model_col):
+        return _bounded(column, raw, lambda: _at(db, since_utc, model_col, raw))
+
+    return {
+        "outside_temp_hi": B("outside_temp", row[0], S.outside_temp),
+        "outside_temp_lo": B("outside_temp", row[1], S.outside_temp),
+        "wind_speed_hi":   B("wind_speed",   row[2], S.wind_speed),
+        "barometer_hi":    B("barometer",    row[3], S.barometer),
+        "barometer_lo":    B("barometer",    row[4], S.barometer),
+    }
+
+
 def get_daily_extremes(db: Session) -> Optional[dict]:
     """Query today's high/low extremes from sensor_readings.
 
