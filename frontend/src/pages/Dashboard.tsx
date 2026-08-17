@@ -31,6 +31,7 @@ import {
   fetchSignalQuality,
   fetchSolarEnergyHistory,
   fetchMetar,
+  fetchBarometerCalibration,
 } from "../api/client.ts";
 import type { SprayForecastRow } from "../api/client.ts";
 import { scoreSprayHours, type SprayConstraints } from "../utils/gauges.ts";
@@ -949,8 +950,11 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Site name + barometer offset live in station_config; one-time fetch.
-  const [baroOffsetInHg, setBaroOffsetInHg] = useState<number | null>(null);
+  // Site name lives in station_config; one-time fetch.  (Baro offset
+  // was here too, but the ``barometer_offset_inhg`` config key doesn't
+  // actually exist — the console's calibration value comes from
+  // BARDATA / ``barcal_inhg`` and is fetched in the Weather Nerd
+  // persona effect below.)
   useEffect(() => {
     let cancelled = false;
     fetchConfig()
@@ -963,15 +967,13 @@ export default function Dashboard() {
         if (cityItem?.value) parts.push(String(cityItem.value));
         if (stateItem?.value) parts.push(String(stateItem.value));
         setSiteName(parts.join(", ") || (nameItem?.value ? String(nameItem.value) : null));
-        const bo = items.find((i) => i.key === "barometer_offset_inhg");
-        if (bo?.value !== undefined && bo?.value !== null && bo.value !== "") {
-          const v = typeof bo.value === "number" ? bo.value : parseFloat(String(bo.value));
-          setBaroOffsetInHg(Number.isFinite(v) ? v : null);
-        }
       })
       .catch(() => { /* falls back to empty string in adapter */ });
     return () => { cancelled = true; };
   }, []);
+  const [baroOffsetInHg, setBaroOffsetInHg] = useState<number | null>(
+    () => cacheLoad<number>("kanfei.dashboard.baroOffsetInHg.v1"),
+  );
 
   // Spray fetches — admin-only on the backend, so an anonymous visitor
   // 401s and ``spray`` stays null (Agriculture tiles render em-dashes).
@@ -1053,10 +1055,11 @@ export default function Dashboard() {
     if (persona !== "weather_nerd") return;
     let cancelled = false;
     const load = async () => {
-      const [sig, sun, met] = await Promise.allSettled([
+      const [sig, sun, met, cal] = await Promise.allSettled([
         fetchSignalQuality(),
         fetchSolarEnergyHistory(14),
         fetchMetar(),
+        fetchBarometerCalibration(),
       ]);
       if (cancelled) return;
       if (sig.status === "fulfilled") {
@@ -1077,6 +1080,15 @@ export default function Dashboard() {
         const s = met.value.metar ?? null;
         setMetar(s);
         cacheSave("kanfei.dashboard.metar.v1", s);
+      }
+      // ``barcal_inhg`` from BARDATA is the user-configured barometer
+      // calibration offset — what the console applies before it reports
+      // the barometer reading.  Admin-gated on the backend; anonymous
+      // visitors 401 silently and the tile em-dashes.
+      if (cal.status === "fulfilled") {
+        const off = cal.value?.barcal_inhg ?? null;
+        setBaroOffsetInHg(off);
+        cacheSave("kanfei.dashboard.baroOffsetInHg.v1", off);
       }
     };
     load();
