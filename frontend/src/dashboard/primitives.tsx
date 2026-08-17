@@ -55,6 +55,16 @@ export const st = (n: number): string => `calc(${n} * var(--kt, var(--k, 1px)))`
  * whichever band carries slack (`flex: 1`), never in its font sizes.
  */
 const CANONICAL_WIDTH = 1318;
+// `--kt`'s clamp is anchored to a canonical height, NOT each persona's
+// own design height.  This is why: `--k` differs by persona (Everyday
+// 1120, Agriculture 928), and if the `--kt` clamp uses `var(--k)` for
+// its floor and cap, then at any viewport where the width-derived middle
+// value falls below the floor, `--kt` collapses to `--k` — and now
+// `--kt` differs by persona too, i.e. same body text is ~20% bigger on
+// Agriculture than on Everyday at Chris's typical viewport.
+// Using the taller layout's height as the canonical means both
+// personas produce identical `--kt` regardless of viewport.
+const CANONICAL_HEIGHT_FOR_TYPE = 1120;
 
 /**
  * TWO scale units, split by axis — this is the decomposition that works.
@@ -69,20 +79,28 @@ const CANONICAL_WIDTH = 1318;
  * display is, not how tall — scaling type by height is why fonts kept reading small
  * on the large monitor.
  *
- * `--kt` is capped at 1.35 × `--k` so type can grow for the display without
- * outgrowing the fixed-height tiles it sits in.
+ * `--kt` is floored / capped against a canonical (1120-derived) `--k`
+ * — NOT this persona's `--k`.  Anchoring the clamp bounds to each
+ * persona's own `--k` reintroduces exactly the persona-dependent type
+ * we're trying to avoid: at narrow / short viewports the width-derived
+ * middle value falls below the floor and `--kt` collapses back to
+ * `--k`, which now differs by persona.  The cap keeps type from
+ * outgrowing tiles on any layout.
  *
  * Earlier attempts got this backwards in both directions: per-layout type (which
  * made body text 16px on one persona and 19px on another) and then global layout
  * height (which left Agriculture 217px short and dumped the slack into one
  * flex band, opening the voids under Drift risk and Water balance).
  */
-export const scaleVar = (designHeight: number): React.CSSProperties => ({
-  ['--k' as string]:
-    `clamp(0.92px, calc((100vh - var(--chrome-height, 94px)) / ${designHeight}), 1.8px)`,
-  ['--kt' as string]:
-    `clamp(var(--k), calc((100vw - var(--sidebar-width, 220px)) / ${CANONICAL_WIDTH}), calc(var(--k) * 1.35))`,
-});
+export const scaleVar = (designHeight: number): React.CSSProperties => {
+  const canonicalK = `calc((100vh - var(--chrome-height, 94px)) / ${CANONICAL_HEIGHT_FOR_TYPE})`;
+  return {
+    ['--k' as string]:
+      `clamp(0.92px, calc((100vh - var(--chrome-height, 94px)) / ${designHeight}), 1.8px)`,
+    ['--kt' as string]:
+      `clamp(${canonicalK}, calc((100vw - var(--sidebar-width, 220px)) / ${CANONICAL_WIDTH}), calc(${canonicalK} * 1.35))`,
+  };
+};
 
 /** Everyday's wrapper — 1120px of main content. */
 export const SCALE_VAR: React.CSSProperties = scaleVar(1120);
