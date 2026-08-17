@@ -39,6 +39,7 @@ import type {
   ForecastResponse,
   AstronomyResponse,
   LocalForecast,
+  NWSPeriod,
   StationStatus as StationStatusType,
   HistoryPoint,
   SignalQuality,
@@ -64,6 +65,34 @@ const THEME_LABEL: Record<string, string | undefined> = {
 declare const __KANFEI_VERSION__: string | undefined;
 const APP_VERSION =
   typeof __KANFEI_VERSION__ === "string" && __KANFEI_VERSION__ ? __KANFEI_VERSION__ : "0.1.0";
+
+/**
+ * Small localStorage cache for the persona-gated fetches (spray,
+ * signal-quality, solar-14d, METAR).  Populates ``useState`` inits so
+ * refresh restores the last-known values immediately instead of
+ * flashing em-dashes for the ~1 s each fetch takes.  Background fetch
+ * then overwrites with fresh data on the next 5-min tick.
+ *
+ * Failure-safe: any parse / storage error returns null, and the
+ * subsequent fetch fills in as usual.  Not versioned beyond the ``v1``
+ * suffix in the key — a shape change bumps the key.
+ */
+function cacheLoad<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+function cacheSave(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* quota / private mode — best-effort */
+  }
+}
 
 /**
  * ISO timestamp → ``5:09 PM`` clock display.  Every ``…At`` field on
@@ -297,11 +326,27 @@ const SCHEDULE_STATUS: Record<string, "go" | "pending" | "nogo"> = {
   applied: "go",
 };
 
+/** Classify a free-text weather forecast into one of three coarse bins
+ *  (fair / unsettled / rain) so Zambretti and NWS sentences can be
+ *  compared as agree / differ.  Order matters — "rain" wins over
+ *  "unsettled" wins over "fair" ("less settled" contains both
+ *  "settled" and its own negation). */
+function classifyForecastText(text: string | null | undefined): 'fair' | 'unsettled' | 'rain' | null {
+  if (!text) return null;
+  const t = text.toLowerCase();
+  if (/rain|shower|storm|thunder|drizzle/.test(t)) return 'rain';
+  if (/unsettled|changeable|less settled|becoming.*(?:worse|less)/.test(t)) return 'unsettled';
+  if (/fine|fair|settled|clear|sun/.test(t)) return 'fair';
+  if (/cloud|overcast/.test(t)) return 'unsettled';
+  return null;
+}
+
 function toDashboardData(s: AdapterSources): DashboardData {
   const cc = s.cc;
   const status = s.status;
   const astro = s.astronomy;
   const local = s.forecast?.local ?? null;
+  const nwsCurrent = s.forecast?.nws?.periods?.[0] ?? null;
   const tempPts = s.historyTemp.map((p) => p.value);
   const dewPts = s.historyDew.map((p) => p.value);
   const finiteTemps = tempPts.filter((v): v is number => v != null && Number.isFinite(v));
@@ -428,7 +473,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       avgTempF,
     },
     spray: buildSprayBlock(s.spray, cc),
-    nerd: buildNerdBlock(cc, s.historyBarometer, s.historyThetaE, s.baroOffsetInHg, local, s.signalWindow, s.solar14d, s.metar),
+    nerd: buildNerdBlock(cc, s.historyBarometer, s.historyThetaE, s.baroOffsetInHg, local, nwsCurrent, s.signalWindow, s.solar14d, s.metar),
   };
 }
 
@@ -493,16 +538,22 @@ function buildNerdBlock(
   historyThetaE: HistoryPoint[],
   baroOffsetInHg: number | null,
   local: LocalForecast | null,
+  nwsCurrent: NWSPeriod | null,
   signalWindow: { time: number; sample: SignalQuality }[],
   solar14d: (number | null)[],
   metar: string | null,
 ): DashboardData["nerd"] {
   const ex = cc?.daily_extremes ?? null;
-  // Zambretti short-hand: "fine" / "fairly fine" / "becoming …" tend to
-  // match a fair-weather NWS icon; anything containing "unsettled" /
-  // "rain" / "changeable" reads as unsettled.  We don't have an NWS
-  // forecast to compare against yet, so leave null.
-  const nwsAgrees = local ? null : null;
+  // Coarse-bin the Zambretti sentence and the current NWS forecast
+  // text into fair / unsettled / rain; agree iff both land in the
+  // same bin.  Null when either side can't be classified — the tile
+  // omits the "· NWS agrees" clause rather than lying.
+  const nwsAgrees = (() => {
+    const zBin = classifyForecastText(local?.text ?? null);
+    const nBin = classifyForecastText(nwsCurrent?.short_forecast ?? nwsCurrent?.text ?? null);
+    if (!zBin || !nBin) return null;
+    return zBin === nBin;
+  })();
   return {
     // Pressure provenance.  Davis reports ``barometer`` as an ISA-
     // reduced-to-sea-level value already (user's configured
@@ -863,7 +914,7 @@ export default function Dashboard() {
   const [historyThetaE, setHistoryThetaE] = useState<HistoryPoint[]>([]);
   const [hourlyRain, setHourlyRain] = useState<(number | null)[]>(() => Array<null>(24).fill(null));
   const [siteName, setSiteName] = useState<string | null>(null);
-  const [spray, setSpray] = useState<SprayAdapterInputs | null>(null);
+  const [spray, setSpray] = useState<SprayAdapterInputs | null>(() => cacheLoad<SprayAdapterInputs>("kanfei.dashboard.spray.v1"));
 
   // Every-5-min re-fetch for the slow-moving feeds.  currentConditions +
   // stationStatus already tick via the shared WeatherDataProvider.
@@ -928,10 +979,9 @@ export default function Dashboard() {
   // running the other personas don't churn PUT /api/spray/evaluate on
   // the poll interval for a screen that isn't visible.
   useEffect(() => {
-    if (persona !== "agriculture") {
-      setSpray(null);
-      return;
-    }
+    // Off-persona: skip fetches, leave cached value in place so
+    // switching back is instant (same treatment as Weather Nerd).
+    if (persona !== "agriculture") return;
     let cancelled = false;
     const load = async () => {
       let products: SprayProduct[] = [];
@@ -961,7 +1011,9 @@ export default function Dashboard() {
       if (out.status === "fulfilled") outcomes = out.value;
       if (fc.status === "fulfilled") forecastRows = fc.value.rows;
       if (gust.status === "fulfilled") gustHistory = (gust.value.points ?? []).map((p) => p.value);
-      setSpray({ product, evaluation, schedules, outcomes, forecast: forecastRows, gustHistory });
+      const next: SprayAdapterInputs = { product, evaluation, schedules, outcomes, forecast: forecastRows, gustHistory };
+      setSpray(next);
+      cacheSave("kanfei.dashboard.spray.v1", next);
     };
     load();
     const id = setInterval(load, 5 * 60_000);
@@ -979,18 +1031,26 @@ export default function Dashboard() {
   // buffer up to ~1 h of samples client-side (12 samples at the 5-min
   // fetch cadence) and let the adapter smooth the % across the window.
   const SIGNAL_WINDOW_MS = 60 * 60_000;
+  // Hydrate from localStorage on mount so refresh doesn't flash em-dashes.
   const [signalWindow, setSignalWindow] = useState<
     { time: number; sample: SignalQuality }[]
-  >([]);
-  const [solar14d, setSolar14d] = useState<(number | null)[]>([]);
-  const [metar, setMetar] = useState<string | null>(null);
+  >(() => {
+    const cached = cacheLoad<{ time: number; sample: SignalQuality }[]>("kanfei.dashboard.signalWindow.v1");
+    if (!cached) return [];
+    const now = Date.now();
+    return cached.filter((s) => now - s.time <= SIGNAL_WINDOW_MS);
+  });
+  const [solar14d, setSolar14d] = useState<(number | null)[]>(
+    () => cacheLoad<(number | null)[]>("kanfei.dashboard.solar14d.v1") ?? [],
+  );
+  const [metar, setMetar] = useState<string | null>(
+    () => cacheLoad<string>("kanfei.dashboard.metar.v1"),
+  );
   useEffect(() => {
-    if (persona !== "weather_nerd") {
-      setSignalWindow([]);
-      setSolar14d([]);
-      setMetar(null);
-      return;
-    }
+    // Off-persona: skip fetches, but LEAVE state populated so switching
+    // back is instant.  A subtly stale reading on re-entry is better
+    // than a full em-dash-then-populate flash on every persona swap.
+    if (persona !== "weather_nerd") return;
     let cancelled = false;
     const load = async () => {
       const [sig, sun, met] = await Promise.allSettled([
@@ -1003,14 +1063,20 @@ export default function Dashboard() {
         setSignalWindow((prev) => {
           const now = Date.now();
           const next = [...prev, { time: now, sample: sig.value }];
-          return next.filter((s) => now - s.time <= SIGNAL_WINDOW_MS);
+          const trimmed = next.filter((s) => now - s.time <= SIGNAL_WINDOW_MS);
+          cacheSave("kanfei.dashboard.signalWindow.v1", trimmed);
+          return trimmed;
         });
       }
       if (sun.status === "fulfilled") {
-        setSolar14d(sun.value.points.map((p) => p.value));
+        const pts = sun.value.points.map((p) => p.value);
+        setSolar14d(pts);
+        cacheSave("kanfei.dashboard.solar14d.v1", pts);
       }
       if (met.status === "fulfilled") {
-        setMetar(met.value.metar ?? null);
+        const s = met.value.metar ?? null;
+        setMetar(s);
+        cacheSave("kanfei.dashboard.metar.v1", s);
       }
     };
     load();
