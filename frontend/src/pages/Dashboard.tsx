@@ -28,6 +28,7 @@ import {
   fetchSprayOutcomes,
   evaluateSprayProduct,
   fetchSprayForecast,
+  fetchSignalQuality,
 } from "../api/client.ts";
 import type { SprayForecastRow } from "../api/client.ts";
 import { scoreSprayHours, type SprayConstraints } from "../utils/gauges.ts";
@@ -38,6 +39,7 @@ import type {
   LocalForecast,
   StationStatus as StationStatusType,
   HistoryPoint,
+  SignalQuality,
   SprayProduct,
   SprayEvaluation,
   SpraySchedule,
@@ -165,6 +167,7 @@ interface AdapterSources {
   siteName: string | null;
   spray: SprayAdapterInputs | null;
   baroOffsetInHg: number | null;
+  signal: SignalQuality | null;
 }
 
 interface SprayAdapterInputs {
@@ -420,7 +423,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       avgTempF,
     },
     spray: buildSprayBlock(s.spray, cc),
-    nerd: buildNerdBlock(cc, s.historyBarometer, s.baroOffsetInHg, local),
+    nerd: buildNerdBlock(cc, s.historyBarometer, s.baroOffsetInHg, local, s.signal),
   };
 }
 
@@ -438,6 +441,7 @@ function buildNerdBlock(
   historyBarometer: HistoryPoint[],
   baroOffsetInHg: number | null,
   local: LocalForecast | null,
+  signal: SignalQuality | null,
 ): DashboardData["nerd"] {
   const ex = cc?.daily_extremes ?? null;
   // Zambretti short-hand: "fine" / "fairly fine" / "becoming …" tend to
@@ -465,11 +469,23 @@ function buildNerdBlock(
     nwsAgrees,
     agreementRate30d: null,
 
-    // Reception — the live station_status doesn't ship the counters the
-    // console tracks.  /api/station/signal-quality does but it's admin-
-    // gated and holds the serial lock; not worth polling on the
-    // dashboard cadence.  Leave null; the card renders em-dashes.
-    reception: null,
+    // Reception — persona-gated fetch of /api/station/signal-quality
+    // (RXCHECK).  Total = packets_received + missed; pct is the
+    // percentage that came through.  Null when anonymous (401), the
+    // logger daemon isn't answering (503), or the station doesn't
+    // support RXCHECK (501) — the tile em-dashes cleanly in all three.
+    reception: signal
+      ? {
+          received: signal.packets_received,
+          missed: signal.missed,
+          crcErrors: signal.crc_errors,
+          resyncs: signal.resync,
+          pct:
+            signal.packets_received + signal.missed > 0
+              ? (100 * signal.packets_received) / (signal.packets_received + signal.missed)
+              : null,
+        }
+      : null,
 
     // 24 h pressure series — same window shape as history.tempF, one
     // value per sample.  Feeds the multi-series chart's right axis.
@@ -851,6 +867,31 @@ export default function Dashboard() {
     return () => { cancelled = true; clearInterval(id); };
   }, [persona]);
 
+  // Weather Nerd fetches — the reception counters live behind
+  // ``/api/station/signal-quality``, which is admin-gated and briefly
+  // holds the serial lock (RXCHECK command).  Persona-gated + a 5-min
+  // cadence means at most 12 lock takings per hour, versus the poller's
+  // 360.  Anonymous 401 → ``signal`` stays null and the tile em-dashes.
+  const [signal, setSignal] = useState<SignalQuality | null>(null);
+  useEffect(() => {
+    if (persona !== "weather_nerd") {
+      setSignal(null);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const s = await fetchSignalQuality();
+        if (!cancelled) setSignal(s);
+      } catch {
+        /* 401 / 503 / offline — leave null */
+      }
+    };
+    load();
+    const id = setInterval(load, 5 * 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [persona]);
+
   const data = useMemo(
     () =>
       toDashboardData({
@@ -865,8 +906,9 @@ export default function Dashboard() {
         siteName,
         spray,
         baroOffsetInHg,
+        signal,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName, spray, baroOffsetInHg],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName, spray, baroOffsetInHg, signal],
   );
 
   // Persona dispatch.  Each layout owns its plate, its scale unit, and
