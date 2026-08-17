@@ -509,18 +509,39 @@ function buildSprayBlock(
   const etMonthIn = cc?.et_monthly?.value ?? null;
   const etYearIn = cc?.et_yearly?.value ?? null;
 
+  // Product name may already contain the category ("Fungicide
+  // (Protectant)") — sending both to the tile prints "Fungicide
+  // (Protectant) — Protectant" per DIFF-3c.  Drop the category when
+  // the humanised label already appears in the name (case-insensitive
+  // substring); everything else keeps the "name — category" pattern.
+  const categoryLabel = product ? sprayCategoryLabel(product.category) : null;
+  const categoryRedundant =
+    !!product &&
+    !!categoryLabel &&
+    product.name.toLowerCase().includes(categoryLabel.toLowerCase());
+
+  // Best window may collapse to a zero-length range when today has no
+  // "go" hours (start === end).  A degenerate range reads as a real
+  // answer — worse than admitting there isn't one (DIFF-3c.md).
+  const bestWindowToday = (() => {
+    const w = evaluation?.optimal_window;
+    if (!w || !w.start || !w.end || w.start === w.end) return null;
+    return `${w.start} – ${w.end}`;
+  })();
+
   return {
     product: product
-      ? { name: product.name, category: sprayCategoryLabel(product.category) }
+      ? {
+          name: product.name,
+          category: categoryRedundant ? null : categoryLabel,
+        }
       : null,
     verdict,
     verdictNote,
     caution: null,
     checks,
     window,
-    bestWindowToday: evaluation?.optimal_window
-      ? `${evaluation.optimal_window.start} – ${evaluation.optimal_window.end}`
-      : null,
+    bestWindowToday,
     nextWindow,
     gustBins: [],
     water: {

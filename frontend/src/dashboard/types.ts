@@ -120,7 +120,7 @@ export interface DashboardData {
    * reason strings the API returns.
    */
   spray?: {
-    product: { name: string; category: string } | null;
+    product: { name: string; category: string | null } | null;
     /** Verdict from spray_engine.py: all checks pass, some fail, or near a limit. */
     verdict: 'go' | 'marginal' | 'nogo' | null;
     verdictNote: string | null;      // 'All four checks pass right now'
