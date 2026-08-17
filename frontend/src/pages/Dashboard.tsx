@@ -165,6 +165,7 @@ interface AdapterSources {
   historyTemp: HistoryPoint[];
   historyDew: HistoryPoint[];
   historyBarometer: HistoryPoint[];
+  historyThetaE: HistoryPoint[];
   hourlyRain: (number | null)[];
   siteName: string | null;
   spray: SprayAdapterInputs | null;
@@ -427,7 +428,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       avgTempF,
     },
     spray: buildSprayBlock(s.spray, cc),
-    nerd: buildNerdBlock(cc, s.historyBarometer, s.baroOffsetInHg, local, s.signal, s.solar14d, s.metar),
+    nerd: buildNerdBlock(cc, s.historyBarometer, s.historyThetaE, s.baroOffsetInHg, local, s.signal, s.solar14d, s.metar),
   };
 }
 
@@ -440,9 +441,56 @@ function toDashboardData(s: AdapterSources): DashboardData {
  * dbSizeMB, uploadTargets, ipcStatus) stay null for MVP and each tile
  * renders em-dashes rather than breaking.
  */
+/** Vapour pressure e (hPa) from dew point °F, via Magnus formula. */
+function vapourPressureHPa(dewPointF: number): number {
+  const td = (dewPointF - 32) * (5 / 9); // → °C
+  return 6.112 * Math.exp((17.67 * td) / (td + 243.5));
+}
+
+/** Mixing ratio in g/kg from dew point °F + station pressure inHg. */
+function mixingRatioGKg(dewPointF: number | null, pressureInHg: number | null): number | null {
+  if (dewPointF == null || pressureInHg == null) return null;
+  const p_hPa = pressureInHg * 33.8639;
+  const e = vapourPressureHPa(dewPointF);
+  if (p_hPa <= e) return null;
+  return 621.97 * (e / (p_hPa - e));
+}
+
+/** Lifted condensation level height, in feet AGL.  Espy's approximation:
+ *  H(km) ≈ 0.125 × (T − Td) in °C.  Good to ~200 ft — plenty for a
+ *  provenance line, and it fails safely to null when either input is null. */
+function lclFt(tempF: number | null, dewPointF: number | null): number | null {
+  if (tempF == null || dewPointF == null) return null;
+  const t_c = (tempF - 32) * (5 / 9);
+  const td_c = (dewPointF - 32) * (5 / 9);
+  const h_km = 0.125 * (t_c - td_c);
+  if (h_km < 0) return 0;
+  return h_km * 3280.84;
+}
+
+/** Find the history point closest to the given ISO timestamp. */
+function historyValueAt(points: HistoryPoint[], targetMs: number): number | null {
+  if (!points.length) return null;
+  let best: HistoryPoint | null = null;
+  let bestDelta = Infinity;
+  for (const p of points) {
+    if (p.value == null) continue;
+    const delta = Math.abs(Date.parse(p.timestamp) - targetMs);
+    if (delta < bestDelta) {
+      best = p;
+      bestDelta = delta;
+    }
+  }
+  // Guard: only trust a match within ±30 min of the target so a partial
+  // history window doesn't return a wildly wrong "since 06Z" delta.
+  if (!best || bestDelta > 30 * 60_000) return null;
+  return best.value;
+}
+
 function buildNerdBlock(
   cc: CurrentConditions | null,
   historyBarometer: HistoryPoint[],
+  historyThetaE: HistoryPoint[],
   baroOffsetInHg: number | null,
   local: LocalForecast | null,
   signal: SignalQuality | null,
@@ -470,11 +518,32 @@ function buildNerdBlock(
     altimeterInHg: cc?.barometer?.value ?? null,
     seaLevelHPa: cc?.barometer?.value != null ? cc.barometer.value * 33.8639 : null,
 
-    // Theta-e provenance — thetaE itself is on d.outside.thetaEK.
-    // Delta since 06Z needs a stored snapshot; NEW work.
-    thetaEDelta: null,
-    mixingRatioGKg: null,
-    lclFt: null,
+    // Theta-e provenance.
+    //   thetaEDelta: current theta_e minus the 06Z reading from the
+    //     24 h theta_e history.  Falls back to null when the history
+    //     window doesn't reach 06Z yet (fresh start-of-day fetch) or
+    //     the closest sample is >30 min from the target.
+    //   mixingRatio: Magnus / Tetens on dew point + pressure.
+    //   lcl: Espy's approximation (0.125 × T-Td, °C → km).  Both are
+    //     accepted first-order formulas; good to within display noise.
+    thetaEDelta: (() => {
+      const now = cc?.derived?.theta_e?.value ?? null;
+      if (now == null) return null;
+      const sixZ = new Date();
+      sixZ.setUTCHours(6, 0, 0, 0);
+      // If it's before 06Z today, compare to yesterday's 06Z.
+      if (Date.now() < sixZ.getTime()) sixZ.setUTCDate(sixZ.getUTCDate() - 1);
+      const then = historyValueAt(historyThetaE, sixZ.getTime());
+      return then != null ? now - then : null;
+    })(),
+    mixingRatioGKg: mixingRatioGKg(
+      cc?.derived?.dew_point?.value ?? null,
+      cc?.barometer?.value ?? null,
+    ),
+    lclFt: lclFt(
+      cc?.temperature?.outside?.value ?? null,
+      cc?.derived?.dew_point?.value ?? null,
+    ),
 
     // Forecast agreement — Zambretti sentence is on d.forecast.
     // Comparing to NWS requires the NWS text-forecast fetch we don't do
@@ -778,6 +847,7 @@ export default function Dashboard() {
   const [historyTemp, setHistoryTemp] = useState<HistoryPoint[]>([]);
   const [historyDew, setHistoryDew] = useState<HistoryPoint[]>([]);
   const [historyBarometer, setHistoryBarometer] = useState<HistoryPoint[]>([]);
+  const [historyThetaE, setHistoryThetaE] = useState<HistoryPoint[]>([]);
   const [hourlyRain, setHourlyRain] = useState<(number | null)[]>(() => Array<null>(24).fill(null));
   const [siteName, setSiteName] = useState<string | null>(null);
   const [spray, setSpray] = useState<SprayAdapterInputs | null>(null);
@@ -789,13 +859,14 @@ export default function Dashboard() {
     const load = async () => {
       const end = new Date();
       const start = new Date(end.getTime() - 24 * 60 * 60_000);
-      const [fc, astro, temp, dew, rain, baro] = await Promise.allSettled([
+      const [fc, astro, temp, dew, rain, baro, tE] = await Promise.allSettled([
         fetchForecast(),
         fetchAstronomy(),
         fetchHistory("outside_temp", start.toISOString(), end.toISOString(), "5m"),
         fetchHistory("dew_point", start.toISOString(), end.toISOString(), "5m"),
         fetchHistory("rain_rate", start.toISOString(), end.toISOString(), "5m"),
         fetchHistory("barometer", start.toISOString(), end.toISOString(), "5m"),
+        fetchHistory("theta_e", start.toISOString(), end.toISOString(), "5m"),
       ]);
       if (cancelled) return;
       if (fc.status === "fulfilled") setForecast(fc.value);
@@ -804,6 +875,7 @@ export default function Dashboard() {
       if (dew.status === "fulfilled") setHistoryDew(dew.value.points ?? []);
       if (rain.status === "fulfilled") setHourlyRain(hourlyRainInches(rain.value.points ?? []));
       if (baro.status === "fulfilled") setHistoryBarometer(baro.value.points ?? []);
+      if (tE.status === "fulfilled") setHistoryThetaE(tE.value.points ?? []);
     };
     load();
     const id = setInterval(load, 5 * 60_000);
@@ -929,6 +1001,7 @@ export default function Dashboard() {
         historyTemp,
         historyDew,
         historyBarometer,
+        historyThetaE,
         hourlyRain,
         siteName,
         spray,
@@ -937,7 +1010,7 @@ export default function Dashboard() {
         solar14d,
         metar,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName, spray, baroOffsetInHg, signal, solar14d, metar],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, siteName, spray, baroOffsetInHg, signal, solar14d, metar],
   );
 
   // Persona dispatch.  Each layout owns its plate, its scale unit, and
