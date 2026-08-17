@@ -106,13 +106,22 @@ export const scaleVar = (designHeight: number): React.CSSProperties => {
 export const SCALE_VAR: React.CSSProperties = scaleVar(1120);
 
 /**
- * Content width cap. The mock is a ~1320px-wide composition; much past that,
- * `space-between` rows push their label and value to opposite ends of a very wide
- * column and stop reading as rows at all. Capping preserves the mock's proportions
- * at any window width.
+ * Content width cap.
+ *
+ * ⚠ Uses `--kt` (shared, width-derived), NOT `--k` (per-layout,
+ * height-derived).  With `--k` the cap resolves differently on each
+ * persona — 1600 × 1.11 = 1781px on Everyday against 1600 × 1.34 =
+ * 2150px on Agriculture — so the two dashboards render at visibly
+ * different widths in the same window.  Anything shared between
+ * personas must key off the shared unit.
+ *
+ * The mock is a ~1320px-wide composition; much past that,
+ * ``space-between`` rows push their label and value to opposite ends
+ * of a very wide column and stop reading as rows at all.  Capping
+ * preserves the mock's proportions at any window width.
  */
 export const CONTENT_CAP: React.CSSProperties = {
-  maxWidth: s(1600),
+  maxWidth: st(1600),
   marginLeft: 'auto',
   marginRight: 'auto',
   width: '100%',
