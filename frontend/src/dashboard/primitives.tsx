@@ -281,6 +281,26 @@ export const decimate = (vals: (number | null)[], maxPoints = 600): (number | nu
 };
 
 /**
+ * Axis ticks on round numbers, covering ``[lo, hi]``.
+ *
+ * Dividing the data range into N equal parts gives ticks like
+ * ``97 / 90 / 83 / 77 / 70`` — arithmetically correct and unreadable,
+ * because a reader can't do mental arithmetic against a 6.75 step.
+ * Snapping the step to ``1 / 2 / 5 × 10ⁿ`` gives ``95 / 90 / 85 / 80 /
+ * 75``, which can be read at a glance.
+ */
+export const niceTicks = (lo: number, hi: number, target = 5): number[] => {
+  const raw = (hi - lo) / Math.max(1, target - 1);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag;
+  const out: number[] = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) {
+    out.push(+v.toFixed(6));
+  }
+  return out;
+};
+
+/**
  * Tile shell. Paper themes get square corners and no fill from their tokens, dark
  * gets a card — one component, no branching.
  *
