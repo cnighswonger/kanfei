@@ -1,3 +1,32 @@
+kanfei (0.1.0~beta36) unstable; urgency=medium
+
+  * UI refactor continues.  Twenty additional PRs since beta35 wire the
+    Weather Nerd persona's live data end-to-end (DIFF-2b priority items
+    56-63: reception counters, 14-day solar, month + year extremes,
+    METAR, altimeter/SLP, theta-E provenance, rolling 1 h reception,
+    NWS agreement classification) and address surrounding defects
+    (localStorage hydration on refresh, SVG width/height via CSS style
+    so calc() values work, barometer offset sourced from BARDATA,
+    admin fetches serialised + retried against the serial-lock,
+    WebSocket broadcast mirrors the /api/current shape so extremes
+    and water-balance tiles no longer blink off every tick, vs-
+    reference wired via nearest-METAR lookup, chart pressure decimation
+    tightened, niceTicks step direction fixed so narrow spans show more
+    than two ticks, axis labels no longer wrap character-by-character
+    on tight viewports, /api/metar formats via output.metar directly,
+    period-extremes SENSOR_BOUNDS filter moved inside the SQL aggregate
+    so a single glitch reading no longer nulls the whole window, chart
+    axis ticks gated on data-present with unique keys so no stale DOM
+    spans leak after fetch resolves).  Design v29 handoff triaged and
+    partially cherry-picked (types.ts reception.windowLabel + bordered-
+    row alignItems stretch on Agriculture band A and Weather Nerd
+    three-up); the rest of that drop was rejected for build-breakers
+    and regressions of shipped fixes.  All three personas (Everyday,
+    Agriculture, Weather Nerd) now populate fully on the reference
+    hardware.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Mon, 17 Aug 2026 21:42:17 +0000
+
 kanfei (0.1.0~beta35) unstable; urgency=medium
 
   * UI refactor: personas + paper themes + Settings restructuring.
