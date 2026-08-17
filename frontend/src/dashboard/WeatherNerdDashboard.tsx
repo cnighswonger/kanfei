@@ -267,7 +267,11 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   // as a staircase, not a trace.
   const temps = decimate(d.history.tempF).filter((n): n is number => n != null);
   const dews = decimate(d.history.dewPointF).filter((n): n is number => n != null);
-  const baro = decimate(d.nerd?.historyInHg ?? []).filter((n): n is number => n != null);
+  // Pressure comes off the console in 0.01 inHg steps — a typical
+  // 0.2 in daily span holds only ~20 distinct values.  Binned to 600
+  // each value repeats ~30× and draws as a stair-step tread.  200 is
+  // enough to render smoothly without over-plotting.
+  const baro = decimate(d.nerd?.historyInHg ?? [], 200).filter((n): n is number => n != null);
 
   // Temperature and dew point share a domain; pressure gets its own right axis —
   // a 0.35 inHg span and a 30 °F span cannot share a scale meaningfully.
@@ -284,14 +288,27 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   const bp = baro.length ? pathFor(baro, PL, CW - PR, PT, CH - PB, bLo, bHi) : null;
 
   // Round-number ticks, not equal divisions of the data range — see niceTicks().
-  const left = niceTicks(lo, hi, 5).map((val) => ({
-    y: (CH - PB) - ((val - lo) / (hi - lo)) * (CH - PB - PT),
-    label: fmt(val, 0),
-  }));
-  const right = niceTicks(bLo, bHi, 5).map((val) => ({
-    y: (CH - PB) - ((val - bLo) / (bHi - bLo)) * (CH - PB - PT),
-    label: val.toFixed(2),
-  }));
+  //
+  // ``inPlot()`` is a guard, not decoration: a tick whose mapped y falls
+  // outside the plot box must not render.  In the pre-fix render a stray
+  // ``1`` appeared between the 90 and 80 labels — an out-of-domain tick
+  // drawn at a position no gridline occupied, which reads as a rendering
+  // fault rather than an axis.  Same guard fixes the right axis, which
+  // was showing only 30.00 and 29.90 where a 0.05 step over that range
+  // should give four or five.
+  const inPlot = (y: number) => y >= PT - 1 && y <= CH - PB + 1;
+  const left = niceTicks(lo, hi, 5)
+    .map((val) => ({
+      y: (CH - PB) - ((val - lo) / (hi - lo)) * (CH - PB - PT),
+      label: fmt(val, 0),
+    }))
+    .filter((g) => inPlot(g.y));
+  const right = niceTicks(bLo, bHi, 5)
+    .map((val) => ({
+      y: (CH - PB) - ((val - bLo) / (bHi - bLo)) * (CH - PB - PT),
+      label: val.toFixed(2),
+    }))
+    .filter((g) => inPlot(g.y));
 
   return (
     <Tile
