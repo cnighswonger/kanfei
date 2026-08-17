@@ -116,6 +116,19 @@ export interface CurrentConditions {
    *  Jan 1 wraparound bridging two years. */
   et_weekly: ValueWithUnit | null;
   daily_extremes: DailyExtremes | null;
+  /** Since first-of-month at local midnight.  Reduced shape — only the
+   *  fields the Weather Nerd extremes tile reads (temp, baro, gust). */
+  monthly_extremes?: PeriodExtremes | null;
+  /** Since Jan 1 at local midnight; same shape as ``monthly_extremes``. */
+  yearly_extremes?: PeriodExtremes | null;
+}
+
+export interface PeriodExtremes {
+  outside_temp_hi: ExtremeReading | null;
+  outside_temp_lo: ExtremeReading | null;
+  wind_speed_hi: ExtremeReading | null;
+  barometer_hi: ExtremeReading | null;
+  barometer_lo: ExtremeReading | null;
 }
 
 // --- Forecast ---
