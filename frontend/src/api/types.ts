@@ -50,6 +50,8 @@ export interface RainData {
   yearly: ValueWithUnit | null;
   rate: ValueWithUnit | null;
   yesterday?: ValueWithUnit | null;
+  /** Rolling 7-day rainfall total from year-to-date counter diff. */
+  weekly?: ValueWithUnit | null;
 }
 
 export interface DerivedData {
@@ -109,6 +111,10 @@ export interface CurrentConditions {
   et_daily: ValueWithUnit | null;
   et_monthly: ValueWithUnit | null;
   et_yearly: ValueWithUnit | null;
+  /** Rolling 7-day ET total from year-to-date counter diff.  Null on
+   *  fresh installs (no reading from ~7 days ago yet) or across the
+   *  Jan 1 wraparound bridging two years. */
+  et_weekly: ValueWithUnit | null;
   daily_extremes: DailyExtremes | null;
 }
 

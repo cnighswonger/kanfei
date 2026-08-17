@@ -71,6 +71,44 @@ def _clamp_humidity(val: dict | None) -> dict | None:
     return val
 
 
+def _weekly_delta(db: Session, column, sensor_key: str) -> dict | None:
+    """Rolling 7-day accumulation of a year-to-date counter column.
+
+    ``rain_yearly`` and ``et_yearly`` are running year-to-date totals in
+    storage units (rain: hundredths of inches; ET: tenths of a mm).
+    The last 7 days is simply the current value minus the value from
+    ~7 days ago, no daily-reset gotcha the way a ``rain_daily`` diff
+    would have.  Returned in display units via ``convert()``.
+
+    Returns None if either endpoint is missing, or if the delta is
+    negative (a Jan 1 wraparound bridges two years — infrequent, but
+    the tile prefers a null / em-dash to a bogus figure that week).
+    """
+    now = datetime.now(timezone.utc)
+    latest = (
+        db.query(SensorReadingModel.timestamp, column)
+        .filter(column.isnot(None))
+        .order_by(SensorReadingModel.timestamp.desc())
+        .first()
+    )
+    if latest is None or latest[1] is None:
+        return None
+    earlier = (
+        db.query(column)
+        .filter(SensorReadingModel.timestamp <= now - timedelta(days=7))
+        .filter(column.isnot(None))
+        .order_by(SensorReadingModel.timestamp.desc())
+        .first()
+    )
+    if earlier is None or earlier[0] is None:
+        return None
+    delta_raw = latest[1] - earlier[0]
+    if delta_raw < 0:
+        return None
+    display = convert(sensor_key, delta_raw)
+    return {"value": display, "unit": SENSOR_UNITS.get(sensor_key, "")}
+
+
 def _get_daily_extremes(db: Session) -> dict | None:
     """Delegate to shared implementation."""
     return get_daily_extremes(db)
@@ -153,6 +191,7 @@ def get_current(db: Session = Depends(get_db)):
             "yearly": _val("rain_yearly", reading.rain_yearly),
             "rate": _val("rain_rate", reading.rain_rate),
             "yesterday": _get_rain_yesterday(db),
+            "weekly": _weekly_delta(db, SensorReadingModel.rain_yearly, "rain_yearly"),
         },
         "derived": {
             "heat_index": _val("heat_index", reading.heat_index),
@@ -170,5 +209,6 @@ def get_current(db: Session = Depends(get_db)):
         "et_daily": _et_display(reading.et_daily),
         "et_monthly": _et_display(reading.et_monthly),
         "et_yearly": _et_display(reading.et_yearly),
+        "et_weekly": _weekly_delta(db, SensorReadingModel.et_yearly, "et_yearly"),
         "daily_extremes": _get_daily_extremes(db),
     }
