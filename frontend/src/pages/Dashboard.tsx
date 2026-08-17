@@ -30,6 +30,7 @@ import {
   fetchSprayForecast,
   fetchSignalQuality,
   fetchSolarEnergyHistory,
+  fetchMetar,
 } from "../api/client.ts";
 import type { SprayForecastRow } from "../api/client.ts";
 import { scoreSprayHours, type SprayConstraints } from "../utils/gauges.ts";
@@ -170,6 +171,7 @@ interface AdapterSources {
   baroOffsetInHg: number | null;
   signal: SignalQuality | null;
   solar14d: (number | null)[];
+  metar: string | null;
 }
 
 interface SprayAdapterInputs {
@@ -425,7 +427,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       avgTempF,
     },
     spray: buildSprayBlock(s.spray, cc),
-    nerd: buildNerdBlock(cc, s.historyBarometer, s.baroOffsetInHg, local, s.signal, s.solar14d),
+    nerd: buildNerdBlock(cc, s.historyBarometer, s.baroOffsetInHg, local, s.signal, s.solar14d, s.metar),
   };
 }
 
@@ -445,6 +447,7 @@ function buildNerdBlock(
   local: LocalForecast | null,
   signal: SignalQuality | null,
   solar14d: (number | null)[],
+  metar: string | null,
 ): DashboardData["nerd"] {
   const ex = cc?.daily_extremes ?? null;
   // Zambretti short-hand: "fine" / "fairly fine" / "becoming …" tend to
@@ -529,9 +532,11 @@ function buildNerdBlock(
     baroVsReferenceInHg: null,
     referenceStation: null,
 
-    // System footer diagnostics — endpoints exist but each needs a
-    // dedicated fetch; deferred.
-    metar: null,
+    // METAR-formatted current conditions from /api/metar, fetched
+    // persona-gated.  The tile makes the block user-selectable so it
+    // can be pasted into a decoder.
+    metar,
+    // Footer diagnostics — each is a separate fetch, deferred.
     dbSizeMB: null,
     uploadTargets: null,
     ipcStatus: null,
@@ -878,22 +883,28 @@ export default function Dashboard() {
   // block leaves its slot null so the tile em-dashes cleanly.
   const [signal, setSignal] = useState<SignalQuality | null>(null);
   const [solar14d, setSolar14d] = useState<(number | null)[]>([]);
+  const [metar, setMetar] = useState<string | null>(null);
   useEffect(() => {
     if (persona !== "weather_nerd") {
       setSignal(null);
       setSolar14d([]);
+      setMetar(null);
       return;
     }
     let cancelled = false;
     const load = async () => {
-      const [sig, sun] = await Promise.allSettled([
+      const [sig, sun, met] = await Promise.allSettled([
         fetchSignalQuality(),
         fetchSolarEnergyHistory(14),
+        fetchMetar(),
       ]);
       if (cancelled) return;
       if (sig.status === "fulfilled") setSignal(sig.value);
       if (sun.status === "fulfilled") {
         setSolar14d(sun.value.points.map((p) => p.value));
+      }
+      if (met.status === "fulfilled") {
+        setMetar(met.value.metar ?? null);
       }
     };
     load();
@@ -917,8 +928,9 @@ export default function Dashboard() {
         baroOffsetInHg,
         signal,
         solar14d,
+        metar,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName, spray, baroOffsetInHg, signal, solar14d],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName, spray, baroOffsetInHg, signal, solar14d, metar],
   );
 
   // Persona dispatch.  Each layout owns its plate, its scale unit, and
