@@ -253,6 +253,34 @@ export const fmtTime = (s: string | null | undefined): string => {
 /* ──────────────────────────────────────────────────────────────── components */
 
 /**
+ * Bin a series down to at most ``maxPoints`` by averaging.
+ *
+ * Plotting more points than the chart has pixels does not add
+ * information — it adds noise.  8,180 samples across ~2,000 px is 4
+ * per pixel, and because the console reports temperature in 0.1 °F
+ * steps, those overlapping samples render as visible stair-steps: the
+ * trace looks quantised and "clunky" rather than smooth.
+ *
+ * Averaging into pixel-width bins keeps the shape exactly and removes
+ * the staircase.  Nulls are skipped; a bin with no readings stays null
+ * so real gaps still show as gaps.
+ */
+export const decimate = (vals: (number | null)[], maxPoints = 600): (number | null)[] => {
+  if (vals.length <= maxPoints) return vals;
+  const size = vals.length / maxPoints;
+  const out: (number | null)[] = [];
+  for (let i = 0; i < maxPoints; i++) {
+    const slice = vals.slice(
+      Math.floor(i * size),
+      Math.max(Math.floor((i + 1) * size), Math.floor(i * size) + 1),
+    );
+    const nums = slice.filter((n): n is number => n != null && !Number.isNaN(n));
+    out.push(nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null);
+  }
+  return out;
+};
+
+/**
  * Tile shell. Paper themes get square corners and no fill from their tokens, dark
  * gets a card — one component, no branching.
  *

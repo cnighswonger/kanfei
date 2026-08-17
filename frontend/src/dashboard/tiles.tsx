@@ -10,7 +10,7 @@
  *  - Heights come from the parent layout (TILE-CONTRACT.md), never from content.
  */
 import React from 'react';
-import { Tile, TileHeading, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt, fmtTime, s, fs } from './primitives';
+import { Tile, TileHeading, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt, fmtTime, s, fs, decimate } from './primitives';
 import type { DashboardData } from './types';
 import { wheelDial, compass, rosePetals, pathFor, ledgerGrid } from '../utils/gauges';
 
@@ -94,8 +94,12 @@ const CHART_W = 700;
 const CHART_H = 196;
 
 export const HistoryChartTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
-  const temps = d.history.tempF.filter((n): n is number => n != null);
-  const dews = d.history.dewPointF.filter((n): n is number => n != null);
+  // Bin to ~600 points before drawing.  Over-plotting a ~2000px trace
+  // with 8,000+ raw samples of 0.1 °F resolution renders as a
+  // staircase; averaging into pixel-width bins keeps the shape and
+  // removes the artefact.  See ``decimate`` in primitives.tsx.
+  const temps = decimate(d.history.tempF).filter((n): n is number => n != null);
+  const dews = decimate(d.history.dewPointF).filter((n): n is number => n != null);
   if (!temps.length) {
     return (
       <Tile id="history-chart" style={style}>
@@ -144,13 +148,16 @@ export const HistoryChartTile: React.FC<{ d: DashboardData; style?: React.CSSPro
                   stroke={g.op > 0.1 ? v.chart.gridMajor : v.chart.gridMinor} strokeWidth={0.4} />
           ))}
 
-          {/* dew point: solid, secondary trace colour. Not dashed, not saturated. */}
-          {dew && <path d={dew.line} fill="none" stroke={v.chart.traceSecondary} strokeWidth={1.6} />}
+          {/* dew point: solid, secondary trace colour. Not dashed, not saturated.
+              ``vectorEffect="non-scaling-stroke"`` on every path here — the SVG
+              uses ``preserveAspectRatio="none"`` and scales x ~3× more than y, so
+              without it a stroke draws ~3× thicker horizontally than vertically. */}
+          {dew && <path d={dew.line} fill="none" stroke={v.chart.traceSecondary} strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
 
           {/* temperature drawn twice — ink shadow under accent. This doubling is
               what makes it read as ink on paper rather than a line on a screen. */}
-          <path d={t.line} fill="none" stroke={v.chart.traceShadow} strokeWidth={2.4} strokeLinecap="round" />
-          <path d={t.line} fill="none" stroke={v.chart.trace} strokeWidth={1.8} strokeLinecap="round" />
+          <path d={t.line} fill="none" stroke={v.chart.traceShadow} strokeWidth={2.4} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          <path d={t.line} fill="none" stroke={v.chart.trace} strokeWidth={1.8} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
 
           <circle cx={t.last.x} cy={t.last.y} r={3.5} fill={v.chart.surface} stroke={v.chart.trace} strokeWidth={1.8} />
         </svg>
