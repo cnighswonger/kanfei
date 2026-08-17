@@ -267,7 +267,7 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
 
       {/* Cells at FULL opacity — any wash puts the scale out of step with its own
           legend swatches below. */}
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={s(84)} style={{ display: 'block' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', width: '100%', height: s(84) }}>
         {cells.map((c, i) => (
           <rect key={i} x={i * 26.5} y={8} width={23} height={42} rx={1} fill={tone[c.state]} />
         ))}
@@ -318,7 +318,7 @@ export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       <TileHeading>Drift risk</TileHeading>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: s(10), minHeight: s(180) }}>
-        <svg width={s(170)} height={s(170)} viewBox="0 0 220 220" style={{ flexShrink: 0 }}>
+        <svg viewBox="0 0 220 220" style={{ width: s(170), height: s(170), flexShrink: 0 }}>
           <circle cx={110} cy={110} r={80} fill={v.chart.surface} stroke={v.rule} strokeWidth={1} />
           {petals.map((p, i) => <path key={i} d={p.d} fill={v.accent} opacity={p.op} />)}
           {c.ticks.map((k, i) => (
@@ -356,7 +356,7 @@ export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       {/* viewBox matches the tile's own width (425 in the mock) so the bars span
           it. A 270-wide viewBox letterboxed into a wide column, leaving the
           histogram floating small and off-centre. */}
-      <svg viewBox="0 0 425 100" width="100%" height={s(82)} style={{ display: 'block', marginTop: 'auto' }}>
+      <svg viewBox="0 0 425 100" style={{ display: 'block', width: '100%', height: s(82), marginTop: 'auto' }}>
         {bins.map((n, i) => {
           const h = (n / max) * 74;
           return <rect key={i} x={i * 47 + 4} y={80 - h} width={38} height={h} rx={1} fill={v.warning} opacity={0.75} />;
@@ -399,7 +399,7 @@ export const WaterBalanceTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         <Row label="Season rain" value={fmt(w?.seasonRainIn, 2, ' in')} last />
       </div>
 
-      <svg viewBox="0 0 620 76" preserveAspectRatio="none" width="100%" height={s(60)} style={{ display: 'block', marginTop: 'auto' }}>
+      <svg viewBox="0 0 620 76" preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: s(60), marginTop: 'auto' }}>
         {Array.from({ length: 24 }, (_, i) => {
           const val = bars[i] ?? 0;
           const h = val > 0 ? Math.max(2, (val / max) * 56) : 0;
