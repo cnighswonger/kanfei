@@ -153,4 +153,73 @@ export interface DashboardData {
     applications: { product: string; date: string; stars: number; note: string | null }[];
     driftRatePct: number | null;
   };
+
+  /**
+   * Weather nerd persona only (mock 2b). Omit and every tile renders em-dashes.
+   *
+   * Almost all of this already exists server-side — it's re-exposure, not new
+   * physics. Marked NEW where a value genuinely has to be computed or stored.
+   */
+  nerd?: {
+    // ── pressure provenance (from the same barometer read) ──────────────────
+    altimeterInHg: number | null;
+    seaLevelHPa: number | null;
+
+    // ── theta-e provenance ─────────────────────────────────────────────────
+    /** NEW: theta-e now minus theta-e at 06Z. Needs one stored value per day. */
+    thetaEDelta: number | null;
+    mixingRatioGKg: number | null;
+    /** Lifted condensation level, ft AGL. */
+    lclFt: number | null;
+
+    // ── forecast agreement ─────────────────────────────────────────────────
+    nwsAgrees: boolean | null;
+    /** NEW: % of the last 30 days Zambretti and NWS agreed. Needs a daily log. */
+    agreementRate30d: number | null;
+
+    // ── link quality since local midnight ──────────────────────────────────
+    reception: {
+      pct: number | null;
+      received: number | null;
+      missed: number | null;
+      crcErrors: number | null;
+      resyncs: number | null;
+    } | null;
+
+    // ── chart ──────────────────────────────────────────────────────────────
+    /** 24 h pressure series, same length as history.tempF. Own right axis. */
+    historyInHg: (number | null)[];
+    /** Which resolution button is active. */
+    resolution: 'Raw' | '5 min' | 'Hourly' | 'Daily' | null;
+
+    // ── solar ──────────────────────────────────────────────────────────────
+    /** Daily solar energy MJ/m², oldest first, 14 entries. Today is last. */
+    solarEnergy14d: (number | null)[];
+
+    // ── console extremes (the console already tracks all of these) ──────────
+    extremes: {
+      tempDayHigh: number | null;  tempDayLow: number | null;
+      tempMonthHigh: number | null; tempMonthLow: number | null;
+      baroDayHigh: number | null;  baroDayLow: number | null;
+      baroYearHigh: number | null; baroYearLow: number | null;
+      gustMonthMax: number | null;
+      rainYearIn: number | null;
+    } | null;
+
+    // ── calibration ────────────────────────────────────────────────────────
+    /** The configured barometer offset, signed, inHg. */
+    baroOffsetInHg: number | null;
+    /** NEW: live delta against a reference station's altimeter setting. */
+    baroVsReferenceInHg: number | null;
+    /** ICAO id of that station, e.g. 'KTTA'. */
+    referenceStation: string | null;
+
+    // ── system footer ──────────────────────────────────────────────────────
+    metar: string | null;
+    dbSizeMB: number | null;
+    /** e.g. 'WU + CWOP' — omit the word 'uploading', the tile adds it. */
+    uploadTargets: string | null;
+    /** e.g. 'IPC 6514 up' */
+    ipcStatus: string | null;
+  };
 }
