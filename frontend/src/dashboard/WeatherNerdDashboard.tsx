@@ -377,7 +377,12 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
           <line x1={PL} y1={CH - PB} x2={CW - PR} y2={CH - PB} stroke={v.ruleHair} strokeWidth={1} vectorEffect="non-scaling-stroke" />
         </svg>
 
-        {/* left axis — temperature and dew point share it */}
+        {/* left axis — temperature and dew point share it.  ``nowrap`` is
+            load-bearing: the label container is only PL/CW ≈ 7.9 % of the
+            chart's width, and on a narrow viewport that's tight enough
+            that ``100`` at sectionLabel size + letter-spacing wraps
+            character-by-character to ``1`` / ``0`` / ``0`` stacked
+            vertically — Chris caught that in the 16:14 render. */}
         {left.map((g) => (
           <span
             key={`L${g.label}`}
@@ -392,6 +397,7 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
               textAlign: 'right',
               paddingRight: s(8),
               boxSizing: 'border-box',
+              whiteSpace: 'nowrap',
             }}
           >
             {g.label}
@@ -399,7 +405,8 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         ))}
 
         {/* right axis — colour-keyed to the pressure trace, so no legend entry has
-            to explain which axis belongs to which series */}
+            to explain which axis belongs to which series.  ``nowrap`` for the
+            same reason as the left axis. */}
         {bp &&
           right.map((g) => (
             <span
@@ -414,6 +421,7 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
                 transform: 'translateY(-50%)',
                 paddingLeft: s(8),
                 boxSizing: 'border-box',
+                whiteSpace: 'nowrap',
               }}
             >
               {g.label}
