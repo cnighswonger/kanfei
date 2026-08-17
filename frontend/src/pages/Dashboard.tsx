@@ -32,6 +32,7 @@ import {
   fetchSolarEnergyHistory,
   fetchMetar,
   fetchBarometerCalibration,
+  fetchBarometerReference,
 } from "../api/client.ts";
 import type { SprayForecastRow } from "../api/client.ts";
 import { scoreSprayHours, type SprayConstraints } from "../utils/gauges.ts";
@@ -44,6 +45,7 @@ import type {
   StationStatus as StationStatusType,
   HistoryPoint,
   SignalQuality,
+  MetarReferenceResponse,
   SprayProduct,
   SprayEvaluation,
   SpraySchedule,
@@ -93,6 +95,21 @@ function cacheSave(key: string, value: unknown): void {
   } catch {
     /* quota / private mode — best-effort */
   }
+}
+
+/** Pull the closest usable METAR reference from the multi-station
+ *  aggregate.  Returns null when location isn't configured or no
+ *  station reported an altimeter in the current window. */
+function pickNearestReference(
+  resp: MetarReferenceResponse,
+): { station: string; altimeterInHg: number } | null {
+  if (!resp.location_configured) return null;
+  for (const r of resp.references) {
+    if (r.altimeter_inhg != null && Number.isFinite(r.altimeter_inhg)) {
+      return { station: r.station_id, altimeterInHg: r.altimeter_inhg };
+    }
+  }
+  return null;
 }
 
 /**
@@ -203,6 +220,7 @@ interface AdapterSources {
   signalWindow: { time: number; sample: SignalQuality }[];
   solar14d: (number | null)[];
   metar: string | null;
+  baroRef: { station: string; altimeterInHg: number } | null;
 }
 
 interface SprayAdapterInputs {
@@ -474,7 +492,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       avgTempF,
     },
     spray: buildSprayBlock(s.spray, cc),
-    nerd: buildNerdBlock(cc, s.historyBarometer, s.historyThetaE, s.baroOffsetInHg, local, nwsCurrent, s.signalWindow, s.solar14d, s.metar),
+    nerd: buildNerdBlock(cc, s.historyBarometer, s.historyThetaE, s.baroOffsetInHg, local, nwsCurrent, s.signalWindow, s.solar14d, s.metar, s.baroRef),
   };
 }
 
@@ -543,6 +561,7 @@ function buildNerdBlock(
   signalWindow: { time: number; sample: SignalQuality }[],
   solar14d: (number | null)[],
   metar: string | null,
+  baroRef: { station: string; altimeterInHg: number } | null,
 ): DashboardData["nerd"] {
   const ex = cc?.daily_extremes ?? null;
   // Coarse-bin the Zambretti sentence and the current NWS forecast
@@ -666,12 +685,18 @@ function buildNerdBlock(
         }
       : null,
 
-    // Calibration — the configured offset is in station_config.
-    // Comparing to a live reference station needs an ICAO METAR fetch;
-    // NEW work.
+    // Calibration.  ``baroOffsetInHg`` comes from BARDATA (see the
+    // persona effect); ``baroVsReferenceInHg`` is the signed delta
+    // between our SLP and the nearest ICAO METAR's altimeter setting,
+    // and ``referenceStation`` names that airport.  A green tone-gate
+    // in the tile fires when |delta| ≤ 0.02 inHg (well-calibrated
+    // console), warning otherwise.
     baroOffsetInHg,
-    baroVsReferenceInHg: null,
-    referenceStation: null,
+    baroVsReferenceInHg:
+      cc?.barometer?.value != null && baroRef
+        ? cc.barometer.value - baroRef.altimeterInHg
+        : null,
+    referenceStation: baroRef?.station ?? null,
 
     // METAR-formatted current conditions from /api/metar, fetched
     // persona-gated.  The tile makes the block user-selectable so it
@@ -974,6 +999,11 @@ export default function Dashboard() {
   const [baroOffsetInHg, setBaroOffsetInHg] = useState<number | null>(
     () => cacheLoad<number>("kanfei.dashboard.baroOffsetInHg.v1"),
   );
+  // Closest METAR reference station + its altimeter setting, for the
+  // "vs KTTA -0.012 in" row on the Weather Nerd extremes tile.
+  const [baroRef, setBaroRef] = useState<
+    { station: string; altimeterInHg: number } | null
+  >(() => cacheLoad<{ station: string; altimeterInHg: number }>("kanfei.dashboard.baroRef.v1"));
 
   // Spray fetches — admin-only on the backend, so an anonymous visitor
   // 401s and ``spray`` stays null (Agriculture tiles render em-dashes).
@@ -1078,9 +1108,14 @@ export default function Dashboard() {
     };
 
     const load = async () => {
-      const [sun, met] = await Promise.allSettled([
+      // ``barometer-reference`` is admin-gated (anonymous 401) but
+      // doesn't touch the serial port — it calls aviationweather.gov
+      // and reads the DB.  Safe to run in the public parallel group
+      // alongside solar + metar.
+      const [sun, met, ref] = await Promise.allSettled([
         fetchSolarEnergyHistory(14),
         fetchMetar(),
+        fetchBarometerReference(),
       ]);
       if (cancelled) return;
       if (sun.status === "fulfilled") {
@@ -1092,6 +1127,13 @@ export default function Dashboard() {
         const s = met.value.metar ?? null;
         setMetar(s);
         cacheSave("kanfei.dashboard.metar.v1", s);
+      }
+      if (ref.status === "fulfilled") {
+        // Pick the closest usable reference (list is sorted by
+        // distance); null-safe on empty / unconfigured.
+        const nearest = pickNearestReference(ref.value);
+        setBaroRef(nearest);
+        cacheSave("kanfei.dashboard.baroRef.v1", nearest);
       }
 
       try {
@@ -1140,8 +1182,9 @@ export default function Dashboard() {
         signalWindow,
         solar14d,
         metar,
+        baroRef,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, siteName, spray, baroOffsetInHg, signalWindow, solar14d, metar],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, siteName, spray, baroOffsetInHg, signalWindow, solar14d, metar, baroRef],
   );
 
   // Persona dispatch.  Each layout owns its plate, its scale unit, and
