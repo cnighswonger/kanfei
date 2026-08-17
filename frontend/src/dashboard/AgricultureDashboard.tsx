@@ -81,13 +81,13 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel?: str
       </div>
 
       {/* ── band A, 287 ───────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '694fr 604fr', gap: s(24), height: s(287), ...CONTENT_CAP }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '694fr 604fr', gap: s(24), minHeight: s(287), alignItems: 'start', ...CONTENT_CAP }}>
         <SprayVerdictTile d={d} />
         <SprayWindowTile d={d} />
       </div>
 
       {/* ── band B, 478 ───────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: s(24), height: s(478), ...CONTENT_CAP }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: s(24), minHeight: s(478), alignItems: 'start', ...CONTENT_CAP }}>
         <DriftRiskTile d={d} />
         <WaterBalanceTile d={d} />
         <FieldScheduleTile d={d} />
@@ -172,8 +172,19 @@ const VERDICT_TONE = (verdict: string | null | undefined) =>
 
 export const SprayVerdictTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   const sp = d.spray;
+  // Boxed: band A tiles carry a solid 0.8px rule and 18/20 padding in
+  // the mock.  Transparent fill — the rule alone is the container.
+  // Band B tiles are open sections with no border, divided by their
+  // heading underlines.
   return (
-    <Tile id="spray-verdict" style={{ gap: s(12) }}>
+    <Tile
+      id="spray-verdict"
+      style={{
+        border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
+        padding: `${s(18)} ${s(20)}`,
+        gap: s(12),
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(12) }}>
         <SectionLabel>Product</SectionLabel>
         <span style={{ ...type('body', fs(12.5)), color: v.text }}>
@@ -244,7 +255,14 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   const tone = { go: v.success, marginal: v.warning, nogo: v.danger };
 
   return (
-    <Tile id="spray-window" style={{ gap: s(10) }}>
+    <Tile
+      id="spray-window"
+      style={{
+        border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
+        padding: `${s(18)} ${s(20)}`,
+        gap: s(10),
+      }}
+    >
       <SectionLabel>Next 24 hours</SectionLabel>
 
       {/* Cells at FULL opacity — any wash puts the scale out of step with its own
@@ -299,7 +317,7 @@ export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile id="drift-risk" style={{ gap: s(8) }}>
       <TileHeading>Drift risk</TileHeading>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: s(10), height: s(180) }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: s(10), minHeight: s(180) }}>
         <svg width={s(170)} height={s(170)} viewBox="0 0 220 220" style={{ flexShrink: 0 }}>
           <circle cx={110} cy={110} r={80} fill={v.chart.surface} stroke={v.rule} strokeWidth={1} />
           {petals.map((p, i) => <path key={i} d={p.d} fill={v.accent} opacity={p.op} />)}
@@ -360,7 +378,7 @@ export const WaterBalanceTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile id="water-balance" style={{ gap: s(8) }}>
       <TileHeading>Water balance</TileHeading>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: s(8), height: s(44) }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: s(8), minHeight: s(44) }}>
         <span style={{ ...type('display', fs(44)), color: bal != null && bal < 0 ? v.danger : v.success, lineHeight: 1 }}>
           {bal == null ? '—' : `${bal < 0 ? '−' : '+'}${Math.abs(bal).toFixed(2)}`}
         </span>
@@ -408,10 +426,13 @@ export const FieldScheduleTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile id="field-schedule" style={{ gap: s(8) }}>
       <TileHeading>Field &amp; schedule</TileHeading>
 
+      {/* No fixed height: the cells contain --kt-scaled text inside a --k-scaled
+          box, so pinning the height makes them overflow and crowd the label below.
+          Let the grid size to its content; the tile's flex gap does the spacing. */}
       {/* Solid rule + sunken fill on each cell.  A 1px dotted border at
           24% ink is invisible over the engraving plate — the boxes
           disappeared entirely in the earlier render. */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(10), height: s(130) }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(10) }}>
         {cells.map(([label, value, tone]) => (
           <div
             key={label}

@@ -99,14 +99,14 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
     {/* ── band A, 787 ─────────────────────────────────────────────────────── */}
     <div data-band="a" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), alignItems: 'start', ...CONTENT_CAP }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: s(20), minWidth: 0 }}>
-        <div style={{ display: 'flex', gap: s(28), height: s(205) }}>
+        <div style={{ display: 'flex', gap: s(28), minHeight: s(205) }}>
           <HeroTemperatureTile d={d} style={{ width: s(340), flexShrink: 0 }} />
           <DerivedConditionsTile d={d} style={{ flex: 1, minWidth: 0 }} />
         </div>
 
-        <HistoryChartTile d={d} style={{ height: s(269) }} />
+        <HistoryChartTile d={d} style={{ minHeight: s(269) }} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(24), height: s(159) }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(24), minHeight: s(159), alignItems: 'start' }}>
           {/* 1d titles this 'Rain ledger', not 'Rain' */}
           <RainTile d={d} title="Rain ledger" />
           <SolarUvTile d={d} />
@@ -114,14 +114,14 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: s(18), minWidth: 0 }}>
-        <BarometerTile d={d} style={{ height: s(280) }} />
-        <WindTile d={d} style={{ height: s(220) }} />
-        <AlmanacTile d={d} style={{ height: s(159) }} />
+        <BarometerTile d={d} style={{ minHeight: s(280) }} />
+        <WindTile d={d} style={{ minHeight: s(220) }} />
+        <AlmanacTile d={d} style={{ minHeight: s(159) }} />
       </div>
     </div>
 
     {/* ── band B, 150 ─────────────────────────────────────────────────────── */}
-    <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), height: s(150), ...CONTENT_CAP }}>
+    <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), minHeight: s(150), alignItems: 'start', ...CONTENT_CAP }}>
       <RainfallByHourTile d={d} />
       <ConsoleAndLinkTile d={d} />
     </div>
