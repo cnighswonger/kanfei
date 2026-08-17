@@ -17,7 +17,7 @@
  */
 import React from 'react';
 import {
-  v, type, s, scaleVar, FILL_HEIGHT, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile,
+  v, type, s, scaleVar, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile,
   tnum, fmt, fmtInt, fmtTime, fs,
 } from './primitives';
 import type { DashboardData } from './types';
@@ -30,8 +30,7 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel?: str
   <main data-dashboard="agriculture" style={{ minWidth: 0, overflow: 'hidden' }}>
     <div
       style={{
-        ...scaleVar(),
-        ...FILL_HEIGHT,
+        ...scaleVar(928),
         padding: `${s(22)} ${s(28)} ${s(20)}`,
         display: 'flex',
         flexDirection: 'column',
@@ -88,9 +87,7 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel?: str
       </div>
 
       {/* ── band B, 478 ───────────────────────────────────────────────────── */}
-      {/* flex:1 + minHeight: this band takes the leftover vertical space, so a
-          shorter composition fills the viewport without inflating its type. */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: s(24), flex: 1, minHeight: s(478), ...CONTENT_CAP }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: s(24), height: s(478), ...CONTENT_CAP }}>
         <DriftRiskTile d={d} />
         <WaterBalanceTile d={d} />
         <FieldScheduleTile d={d} />
@@ -136,6 +133,14 @@ const fmtRange = (r: string | null | undefined): string => {
 
 /* ──────────────────────────────────────────────────── 1. verdict + checks */
 
+/** Check names from spray_engine.py, in the order the mock lists them. */
+const CHECK_ORDER: [string, string][] = [
+  ['wind', 'Wind'],
+  ['temperature', 'Temperature'],
+  ['humidity', 'Humidity'],
+  ['rain_free', 'Rain-free'],
+];
+
 const VERDICT_TONE = (verdict: string | null | undefined) =>
   verdict === 'go' ? 'success' : verdict === 'marginal' ? 'warning' : 'danger';
 
@@ -146,11 +151,7 @@ export const SprayVerdictTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(12) }}>
         <SectionLabel>Product</SectionLabel>
         <span style={{ ...type('body', fs(12.5)), color: v.text }}>
-          {sp?.product
-            ? sp.product.category
-              ? `${sp.product.name} — ${sp.product.category}`
-              : sp.product.name
-            : '—'}
+          {sp?.product ? `${sp.product.name} — ${sp.product.category}` : '—'}
         </span>
       </div>
 
@@ -175,21 +176,31 @@ export const SprayVerdictTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         </div>
       </div>
 
-      {/* The four real checks from spray.py, value then limit then a tick. */}
+      {/* All FOUR checks, always — see CHECK_ORDER. A product with no humidity
+          constraint still gets its row, marked 'no limit'. Omitting it is
+          ambiguous (did it pass, or was it not evaluated?) and it makes the tile
+          change height from one product to the next. */}
       <div>
-        {(sp?.checks ?? []).map((c, i) => (
-          <Row
-            key={c.name}
-            label={c.label}
-            value={
-              <>
-                {c.value} <span style={{ color: v.textMuted }}>{c.limit}</span>{' '}
-                <span style={{ color: c.pass ? v.success : v.danger }}>{c.pass ? '✓' : '✕'}</span>
-              </>
-            }
-            last={i === (sp?.checks.length ?? 0) - 1}
-          />
-        ))}
+        {CHECK_ORDER.map(([name, label], i) => {
+          const c = sp?.checks.find((x) => x.name === name);
+          return (
+            <Row
+              key={name}
+              label={label}
+              value={
+                c ? (
+                  <>
+                    {c.value} <span style={{ color: v.textMuted }}>{c.limit}</span>{' '}
+                    <span style={{ color: c.pass ? v.success : v.danger }}>{c.pass ? '✓' : '✕'}</span>
+                  </>
+                ) : (
+                  <span style={{ color: v.textMuted }}>no limit</span>
+                )
+              }
+              last={i === CHECK_ORDER.length - 1}
+            />
+          );
+        })}
       </div>
     </Tile>
   );
@@ -287,14 +298,17 @@ export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         </div>
       </div>
 
-      <svg viewBox="0 0 270 100" width="100%" height={s(82)} style={{ display: 'block', marginTop: 'auto' }}>
+      {/* viewBox matches the tile's own width (425 in the mock) so the bars span
+          it. A 270-wide viewBox letterboxed into a wide column, leaving the
+          histogram floating small and off-centre. */}
+      <svg viewBox="0 0 425 100" width="100%" height={s(82)} style={{ display: 'block', marginTop: 'auto' }}>
         {bins.map((n, i) => {
           const h = (n / max) * 74;
-          return <rect key={i} x={i * 30} y={80 - h} width={22} height={h} rx={1} fill={v.warning} opacity={0.7} />;
+          return <rect key={i} x={i * 47 + 4} y={80 - h} width={38} height={h} rx={1} fill={v.warning} opacity={0.75} />;
         })}
-        <line x1={0} y1={80} x2={270} y2={80} stroke={v.ruleHair} strokeWidth={1} />
+        <line x1={0} y1={80} x2={425} y2={80} stroke={v.ruleHair} strokeWidth={1} />
         {bins.map((_, i) => (
-          <text key={`x${i}`} x={i * 30 + 11} y={94} textAnchor="middle" style={type('sectionLabel')} fill={v.chart.axis}>
+          <text key={`x${i}`} x={i * 47 + 23} y={94} textAnchor="middle" style={type('sectionLabel')} fill={v.chart.axis}>
             {i * 2 + 2}
           </text>
         ))}
@@ -364,9 +378,19 @@ export const FieldScheduleTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile id="field-schedule" style={{ gap: s(8) }}>
       <TileHeading>Field &amp; schedule</TileHeading>
 
+      {/* Solid rule + sunken fill on each cell.  A 1px dotted border at
+          24% ink is invisible over the engraving plate — the boxes
+          disappeared entirely in the earlier render. */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(10), height: s(130) }}>
         {cells.map(([label, value, tone]) => (
-          <div key={label} style={{ border: `1px ${v.ruleStyle} ${v.ruleHair}`, padding: `${s(10)} ${s(12)}` }}>
+          <div
+            key={label}
+            style={{
+              border: `1px solid ${v.ruleHair}`,
+              background: v.chart.surface,
+              padding: `${s(10)} ${s(12)}`,
+            }}
+          >
             <SectionLabel>{label}</SectionLabel>
             <div style={{ ...type('mono', fs(20)), ...tnum, color: tone ?? v.text }}>{value}</div>
           </div>

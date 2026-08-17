@@ -39,6 +39,9 @@ import React from 'react';
  */
 export const s = (n: number): string => `calc(${n} * var(--k, 1px))`;
 
+/** Type scale — use for every font-size. Falls back to the layout unit. */
+export const st = (n: number): string => `calc(${n} * var(--kt, var(--k, 1px)))`;
+
 /**
  * ⚠ ONE scale factor for every persona.
  *
@@ -51,22 +54,38 @@ export const s = (n: number): string => `calc(${n} * var(--k, 1px))`;
  * the CANONICAL 1120px frame. A shorter composition absorbs its residual height in
  * whichever band carries slack (`flex: 1`), never in its font sizes.
  */
-const CANONICAL_HEIGHT = 1120;
-
-export const scaleVar = (): React.CSSProperties => ({
-  ['--k' as string]:
-    `clamp(0.92px, calc((100vh - var(--chrome-height, 94px)) / ${CANONICAL_HEIGHT}), 1.5px)`,
-});
-
-export const SCALE_VAR: React.CSSProperties = scaleVar();
+const CANONICAL_WIDTH = 1318;
 
 /**
- * Fill the available height without needing a definite parent height, so a layout
- * can distribute residual space into its flexible bands.
+ * TWO scale units, split by axis — this is the decomposition that works.
+ *
+ * `--k` (LAYOUT) comes from height, against **this layout's own** design height:
+ * Everyday 1120, Agriculture 928. Each composition then fills its viewport exactly,
+ * with no leftover band and no tile stretched past its content. Layout scale
+ * differing between personas is invisible; it just means each fits.
+ *
+ * `--kt` (TYPE) comes from width, against the shared 1318px content width, so text
+ * is the same size on every persona. Perceived text size tracks how *wide* a
+ * display is, not how tall — scaling type by height is why fonts kept reading small
+ * on the large monitor.
+ *
+ * `--kt` is capped at 1.35 × `--k` so type can grow for the display without
+ * outgrowing the fixed-height tiles it sits in.
+ *
+ * Earlier attempts got this backwards in both directions: per-layout type (which
+ * made body text 16px on one persona and 19px on another) and then global layout
+ * height (which left Agriculture 217px short and dumped the slack into one
+ * flex band, opening the voids under Drift risk and Water balance).
  */
-export const FILL_HEIGHT: React.CSSProperties = {
-  minHeight: 'calc(100vh - var(--chrome-height, 94px))',
-};
+export const scaleVar = (designHeight: number): React.CSSProperties => ({
+  ['--k' as string]:
+    `clamp(0.92px, calc((100vh - var(--chrome-height, 94px)) / ${designHeight}), 1.8px)`,
+  ['--kt' as string]:
+    `clamp(var(--k), calc((100vw - var(--sidebar-width, 220px)) / ${CANONICAL_WIDTH}), calc(var(--k) * 1.35))`,
+});
+
+/** Everyday's wrapper — 1120px of main content. */
+export const SCALE_VAR: React.CSSProperties = scaleVar(1120);
 
 /**
  * Content width cap. The mock is a ~1320px-wide composition; much past that,
@@ -164,7 +183,7 @@ export const type = (role: Role, overrides: React.CSSProperties = {}): React.CSS
   const f = ROLE[role];
   return {
     fontFamily: `var(--type-${role}-family, ${f.family})`,
-    fontSize: `var(--type-${role}-size, ${s(f.size)})`,
+    fontSize: `var(--type-${role}-size, ${st(f.size)})`,
     fontWeight: `var(--type-${role}-weight, ${f.weight})` as unknown as number,
     fontStyle: `var(--type-${role}-style, ${f.style})`,
     letterSpacing: `var(--type-${role}-tracking, ${f.tracking})`,
@@ -174,7 +193,7 @@ export const type = (role: Role, overrides: React.CSSProperties = {}): React.CSS
 };
 
 /** Scaled font-size override, for the handful of one-off sizes in the mock. */
-export const fs = (n: number): React.CSSProperties => ({ fontSize: s(n) });
+export const fs = (n: number): React.CSSProperties => ({ fontSize: st(n) });
 
 /** Tabular figures — mandatory on any value that updates live, or rows jitter. */
 export const tnum: React.CSSProperties = { fontVariantNumeric: 'tabular-nums' };

@@ -14,7 +14,6 @@ import { Tile, TileHeading, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt,
 import type { DashboardData } from './types';
 import { wheelDial, compass, rosePetals, pathFor, ledgerGrid } from '../utils/gauges';
 
-
 /* ───────────────────────────────────────────────────── 1. hero temperature */
 
 export const HeroTemperatureTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
@@ -445,14 +444,15 @@ export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boo
 /* ──────────────────────────────────────────────────────── 10. station status */
 
 export const StationStatusTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
-  const st = d.station;
+  // Named ``stn`` so it doesn't shadow the ``s(n)`` scale helper.
+  const stn = d.station;
   const items: [string, React.ReactNode][] = [
-    ['Console', `${st.console} ${st.model}`],
-    ['Firmware', st.firmware],
-    ['Transmitters', <span style={{ color: st.transmittersOk ? v.success : v.danger }}>{st.transmittersOk ? 'ok' : 'fault'}</span>],
-    ['Battery', fmt(st.batteryVolts, 2, ' V')],
-    ['CRC / timeouts', `${st.crcErrors} / ${st.timeouts}`],
-    ['Archive', fmtInt(st.archiveRecords, ' records')],
+    ['Console', `${stn.console} ${stn.model}`],
+    ['Firmware', stn.firmware],
+    ['Transmitters', <span style={{ color: stn.transmittersOk ? v.success : v.danger }}>{stn.transmittersOk ? 'ok' : 'fault'}</span>],
+    ['Battery', fmt(stn.batteryVolts, 2, ' V')],
+    ['CRC / timeouts', `${stn.crcErrors} / ${stn.timeouts}`],
+    ['Archive', fmtInt(stn.archiveRecords, ' records')],
   ];
 
   return (
