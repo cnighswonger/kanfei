@@ -14,7 +14,12 @@ from typing import Any, Callable, Coroutine, Optional
 
 from sqlalchemy import func
 
-from .daily_extremes import get_daily_extremes
+from .daily_extremes import (
+    get_daily_extremes,
+    get_month_extremes,
+    get_year_extremes,
+    get_weekly_delta,
+)
 from .solar_energy import compute_daily_solar_energy_j_per_m2, joules_to_display_unit
 from .uv_warning import classify_uv
 
@@ -305,8 +310,18 @@ class Poller:
             db.add(model)
             db.commit()
 
-            # Query daily extremes while session is open
+            # Query daily / monthly / yearly extremes AND the weekly
+            # rain / ET rollups while the session is open.  All four
+            # ride the WS broadcast so the frontend does not blink
+            # them to null between poll cycles (see the comment below
+            # about setCurrentConditions() overwriting the whole
+            # object).
             extremes = self._get_daily_extremes(db)
+            monthly_extremes = get_month_extremes(db)
+            yearly_extremes = get_year_extremes(db)
+            from ..models.sensor_reading import SensorReadingModel as _S
+            rain_weekly = get_weekly_delta(db, _S.rain_yearly, "rain_yearly")
+            et_weekly = get_weekly_delta(db, _S.et_yearly, "et_yearly")
             # Solar-energy accumulator needs the same DB session and the
             # operator's unit preference.  Match what /api/current computes
             # so the WS broadcast doesn't blink the field to null on every
@@ -337,6 +352,10 @@ class Poller:
             data_dict = self._snapshot_to_dict(
                 snapshot, hi, dp, wc, fl, theta, trend, extremes,
                 solar_energy_daily=solar_energy_daily,
+                monthly_extremes=monthly_extremes,
+                yearly_extremes=yearly_extremes,
+                rain_weekly=rain_weekly,
+                et_weekly=et_weekly,
             )
             # ``snapshot`` (the raw SensorSnapshot dataclass) rides
             # along so downstream consumers that need the flat SI
@@ -433,6 +452,10 @@ class Poller:
         trend: Optional[str],
         extremes: Optional[dict] = None,
         solar_energy_daily: Optional[dict] = None,
+        monthly_extremes: Optional[dict] = None,
+        yearly_extremes: Optional[dict] = None,
+        rain_weekly: Optional[dict] = None,
+        et_weekly: Optional[dict] = None,
     ) -> dict:
         """Convert a SensorSnapshot (SI) to a JSON-serializable dict for WebSocket.
 
@@ -535,6 +558,7 @@ class Poller:
                     if snapshot.rain_rate is not None else None
                 ),
                 "yesterday": {"value": round(self.rain_yesterday, 2), "unit": "in"},
+                "weekly": rain_weekly,
             },
             "derived": {
                 "heat_index": {"value": _derived_f(hi), "unit": "F"},
@@ -569,5 +593,8 @@ class Poller:
             "et_daily": _et_display(snapshot.et_daily),
             "et_monthly": _et_display(snapshot.et_monthly),
             "et_yearly": _et_display(snapshot.et_yearly),
+            "et_weekly": et_weekly,
             "daily_extremes": extremes,
+            "monthly_extremes": monthly_extremes,
+            "yearly_extremes": yearly_extremes,
         }
