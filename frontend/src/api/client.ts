@@ -617,6 +617,16 @@ export function fetchSignalQuality(): Promise<
   return request("/api/station/signal-quality");
 }
 
+/** Daily solar-energy series, oldest first, converted to the
+ *  operator's ``solar_energy_unit`` preference (usually MJ/m²). */
+export function fetchSolarEnergyHistory(days = 14): Promise<{
+  unit: string;
+  days: number;
+  points: { date: string; value: number | null }[];
+}> {
+  return request(`/api/history/solar-energy?days=${days}`);
+}
+
 export function fetchRadioState(): Promise<
   import("./types.ts").RadioState
 > {
