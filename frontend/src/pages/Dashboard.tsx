@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from "react";
 import EverydayDashboard from "../dashboard/EverydayDashboard.tsx";
 import { AgricultureDashboard } from "../dashboard/AgricultureDashboard.tsx";
+import { WeatherNerdDashboard } from "../dashboard/WeatherNerdDashboard.tsx";
 import type { DashboardData } from "../dashboard/types.ts";
 import { useTheme } from "../context/ThemeContext.tsx";
 import { usePersona } from "../context/PersonaContext.tsx";
@@ -34,6 +35,7 @@ import type {
   CurrentConditions,
   ForecastResponse,
   AstronomyResponse,
+  LocalForecast,
   StationStatus as StationStatusType,
   HistoryPoint,
   SprayProduct,
@@ -162,6 +164,7 @@ interface AdapterSources {
   hourlyRain: (number | null)[];
   siteName: string | null;
   spray: SprayAdapterInputs | null;
+  baroOffsetInHg: number | null;
 }
 
 interface SprayAdapterInputs {
@@ -413,6 +416,101 @@ function toDashboardData(s: AdapterSources): DashboardData {
       avgTempF,
     },
     spray: buildSprayBlock(s.spray, cc),
+    nerd: buildNerdBlock(cc, s.historyBarometer, s.baroOffsetInHg, local),
+  };
+}
+
+/**
+ * Populate the Weather Nerd persona's ``nerd`` block from the same live
+ * feeds the other tiles use.  Everything here is RE-EXPOSURE of an
+ * existing server-side value or a client-side arithmetic on one — no
+ * new backend physics.  Fields Design flagged as NEW (thetaEDelta,
+ * agreementRate30d, baroVsReferenceInHg, solarEnergy14d, metar,
+ * dbSizeMB, uploadTargets, ipcStatus) stay null for MVP and each tile
+ * renders em-dashes rather than breaking.
+ */
+function buildNerdBlock(
+  cc: CurrentConditions | null,
+  historyBarometer: HistoryPoint[],
+  baroOffsetInHg: number | null,
+  local: LocalForecast | null,
+): DashboardData["nerd"] {
+  const ex = cc?.daily_extremes ?? null;
+  // Zambretti short-hand: "fine" / "fairly fine" / "becoming …" tend to
+  // match a fair-weather NWS icon; anything containing "unsettled" /
+  // "rain" / "changeable" reads as unsettled.  We don't have an NWS
+  // forecast to compare against yet, so leave null.
+  const nwsAgrees = local ? null : null;
+  return {
+    // Pressure provenance — altimeter and SLP need station elevation +
+    // temperature to compute properly; leave for a follow-up so the card
+    // doesn't lie.  hPa is already on d.barometer.hPa (the tile reads
+    // that directly), so the provenance line still fills.
+    altimeterInHg: null,
+    seaLevelHPa: null,
+
+    // Theta-e provenance — thetaE itself is on d.outside.thetaEK.
+    // Delta since 06Z needs a stored snapshot; NEW work.
+    thetaEDelta: null,
+    mixingRatioGKg: null,
+    lclFt: null,
+
+    // Forecast agreement — Zambretti sentence is on d.forecast.
+    // Comparing to NWS requires the NWS text-forecast fetch we don't do
+    // yet; NEW work.
+    nwsAgrees,
+    agreementRate30d: null,
+
+    // Reception — the live station_status doesn't ship the counters the
+    // console tracks.  /api/station/signal-quality does but it's admin-
+    // gated and holds the serial lock; not worth polling on the
+    // dashboard cadence.  Leave null; the card renders em-dashes.
+    reception: null,
+
+    // 24 h pressure series — same window shape as history.tempF, one
+    // value per sample.  Feeds the multi-series chart's right axis.
+    historyInHg: historyBarometer.map((p) => p.value),
+
+    // Resolution matches what the history feeds are on — "5 min" per the
+    // dashboard's fetch calls.
+    resolution: "5 min",
+
+    // 14-day solar energy — needs a daily rollup or client-side sum
+    // from history; deferred.  The tile falls back to just the UV / solar
+    // now readings on the same card.
+    solarEnergy14d: [],
+
+    // Console extremes — day values are in cc.daily_extremes.  Month /
+    // year extremes need a query extension; leave null and the row
+    // shows an em-dash.
+    extremes: ex
+      ? {
+          tempDayHigh: ex.outside_temp_hi?.value ?? null,
+          tempDayLow: ex.outside_temp_lo?.value ?? null,
+          tempMonthHigh: null,
+          tempMonthLow: null,
+          baroDayHigh: ex.barometer_hi?.value ?? null,
+          baroDayLow: ex.barometer_lo?.value ?? null,
+          baroYearHigh: null,
+          baroYearLow: null,
+          gustMonthMax: null,
+          rainYearIn: cc?.rain?.yearly?.value ?? null,
+        }
+      : null,
+
+    // Calibration — the configured offset is in station_config.
+    // Comparing to a live reference station needs an ICAO METAR fetch;
+    // NEW work.
+    baroOffsetInHg,
+    baroVsReferenceInHg: null,
+    referenceStation: null,
+
+    // System footer diagnostics — endpoints exist but each needs a
+    // dedicated fetch; deferred.
+    metar: null,
+    dbSizeMB: null,
+    uploadTargets: null,
+    ipcStatus: null,
   };
 }
 
@@ -679,7 +777,8 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Site name lives in station_config; one-time fetch is fine.
+  // Site name + barometer offset live in station_config; one-time fetch.
+  const [baroOffsetInHg, setBaroOffsetInHg] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
     fetchConfig()
@@ -692,6 +791,11 @@ export default function Dashboard() {
         if (cityItem?.value) parts.push(String(cityItem.value));
         if (stateItem?.value) parts.push(String(stateItem.value));
         setSiteName(parts.join(", ") || (nameItem?.value ? String(nameItem.value) : null));
+        const bo = items.find((i) => i.key === "barometer_offset_inhg");
+        if (bo?.value !== undefined && bo?.value !== null && bo.value !== "") {
+          const v = typeof bo.value === "number" ? bo.value : parseFloat(String(bo.value));
+          setBaroOffsetInHg(Number.isFinite(v) ? v : null);
+        }
       })
       .catch(() => { /* falls back to empty string in adapter */ });
     return () => { cancelled = true; };
@@ -756,15 +860,19 @@ export default function Dashboard() {
         hourlyRain,
         siteName,
         spray,
+        baroOffsetInHg,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName, spray],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName, spray, baroOffsetInHg],
   );
 
-  // Persona dispatch — Weather Nerd lands as its own composition later.
-  // Each layout owns its plate, its scale unit, and its own composition;
-  // they share primitives, tokens, and the DashboardData contract.
+  // Persona dispatch.  Each layout owns its plate, its scale unit, and
+  // its own composition; they share primitives, tokens, and the
+  // DashboardData contract.
   if (persona === "agriculture") {
     return <AgricultureDashboard d={data} themeLabel={THEME_LABEL[themeName]} />;
+  }
+  if (persona === "weather_nerd") {
+    return <WeatherNerdDashboard d={data} themeLabel={THEME_LABEL[themeName]} />;
   }
   return <EverydayDashboard d={data} themeLabel={THEME_LABEL[themeName]} />;
 }
