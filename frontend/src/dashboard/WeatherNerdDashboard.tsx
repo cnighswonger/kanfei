@@ -96,7 +96,12 @@ export const WeatherNerdDashboard: React.FC<{ d: DashboardData; themeLabel?: str
           gridTemplateColumns: '406fr 406fr 487fr',
           gap: s(16),
           minHeight: s(293),
-          alignItems: 'start',
+          // stretch, not start: these three tiles are BORDERED. A row of
+          // boxes at unequal heights reads as sloppy; sharing a height lets
+          // the tallest content set it. Open (borderless) rows use 'start'
+          // — there stretching would push margin-top:auto footers down and
+          // open visible voids with no box to contain them.
+          alignItems: 'stretch',
           ...CONTENT_CAP,
         }}
       >
@@ -240,7 +245,7 @@ export const ReceptionCard: React.FC<{ d: DashboardData }> = ({ d }) => {
   const pct = r?.pct ?? null;
   const tone = pct == null ? v.text : pct >= 98 ? v.success : pct >= 92 ? v.warning : v.danger;
   return (
-    <StatCard id="nerd-reception" kicker="Reception · last hour">
+    <StatCard id="nerd-reception" kicker={`Reception · ${r?.windowLabel ?? 'last hour'}`}>
       <BigFigure color={tone}>
         {pct == null ? '—' : fmt(pct, 1)}
         {pct != null && <span style={{ ...fs(14), color: v.textSecondary }}>%</span>}
