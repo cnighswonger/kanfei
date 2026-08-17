@@ -1,3 +1,18 @@
+kanfei (0.1.0~beta37) unstable; urgency=medium
+
+  * Fixes the Agriculture Drift-risk tile's "gust frequency" histogram
+    on any station where the Davis Vantage LOOP2 wind_gust_10min field
+    is under-reporting.  On the reference vsits-02 Vue the wire value
+    caps at ~1 mph while the current wind_speed at the same instant
+    reads up to 11 mph, so the histogram sat flat in bin 0 both days
+    while real wind was blowing past 10 mph.  The tile now sources
+    wind_speed at raw poll cadence over the same 4 h window, which is
+    what a reader intuits from a bar chart of "how often is the wind
+    gusty" regardless.  Retitled the kicker "wind frequency" to match.
+    The LOOP2 driver-side investigation is tracked as its own issue.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Mon, 17 Aug 2026 23:08:55 +0000
+
 kanfei (0.1.0~beta36) unstable; urgency=medium
 
   * UI refactor continues.  Twenty additional PRs since beta35 wire the
