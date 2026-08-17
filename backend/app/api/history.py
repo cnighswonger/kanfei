@@ -177,7 +177,13 @@ def _aggregate(db, sensor, column, start_dt, end_dt, resolution,
 
     # --- Time bucket grouping ---
     if resolution == "5m":
-        bucket = func.cast(func.strftime("%s", ts_col), Integer) / 300
+        # SQLAlchemy 2.0 emits `x / (300 + 0.0)` for the Python `/`
+        # operator on numeric columns — a portability hedge that turns
+        # int/int into float division on SQLite.  Under float division
+        # every unix-timestamp second gets its own bucket, so the query
+        # never collapses and 24 h returns ~8k raw rows instead of ~288.
+        # Force SQL integer division with `.op("/")`.
+        bucket = func.cast(func.strftime("%s", ts_col), Integer).op("/")(300)
         time_label = func.strftime("%Y-%m-%dT%H:%M:00", ts_col)
         group_key = bucket
     elif resolution == "hourly":
