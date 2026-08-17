@@ -494,7 +494,7 @@ export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       }}
     >
       <SectionLabel>Wind rose · 4 h</SectionLabel>
-      <svg viewBox="0 -12 260 262" width="100%" height={s(210)} style={{ display: 'block' }}>
+      <svg viewBox="0 -12 260 262" style={{ display: 'block', width: '100%', height: s(210) }}>
         <circle cx={130} cy={122} r={104} fill={v.chart.surface} stroke={v.ruleHair} strokeWidth={1} />
         {petals.map((p, i) => (
           <path key={i} d={p.d} fill={v.accent} opacity={p.op} />
@@ -542,7 +542,7 @@ export const SolarEnergyTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       }}
     >
       <SectionLabel>Solar energy · 14 days</SectionLabel>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={s(118)} style={{ display: 'block' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: s(118) }}>
         {Array.from({ length: 14 }, (_, i) => {
           const val = days[i] ?? 0;
           const h = val > 0 ? (val / max) * 76 : 0;
