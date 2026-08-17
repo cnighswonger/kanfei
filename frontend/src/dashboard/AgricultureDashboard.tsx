@@ -371,7 +371,7 @@ export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
           </text>
         ))}
       </svg>
-      <SectionLabel style={{ textAlign: 'center' }}>gust frequency, mph, last 4 h</SectionLabel>
+      <SectionLabel style={{ textAlign: 'center' }}>wind frequency, mph, last 4 h</SectionLabel>
     </Tile>
   );
 };
