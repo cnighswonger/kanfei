@@ -17,7 +17,7 @@
  */
 import React from 'react';
 import {
-  v, type, s, scaleVar, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile,
+  v, type, s, st, scaleVar, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile,
   tnum, fmt, fmtInt, fmtTime, fs,
 } from './primitives';
 import type { DashboardData } from './types';
@@ -141,6 +141,32 @@ const CHECK_ORDER: [string, string][] = [
   ['rain_free', 'Rain-free'],
 ];
 
+/**
+ * Pass/fail indicator for a check row.
+ *
+ * ✓ and ✕ set inline at row-value size are thin, light strokes on a paper ground
+ * with an engraving behind it — legible in the mock's flat 1600px frame, not on a
+ * real display. Set them a size up, at weight 700, in a fixed-width slot so all
+ * four align down the column regardless of how long each limit string is.
+ */
+const CheckMark: React.FC<{ pass: boolean }> = ({ pass }) => (
+  <span
+    aria-label={pass ? 'passes' : 'fails'}
+    style={{
+      display: 'inline-block',
+      width: s(20),
+      marginLeft: s(4),
+      textAlign: 'right',
+      fontSize: st(17.5),
+      fontWeight: 700,
+      lineHeight: 1,
+      color: pass ? v.success : v.danger,
+    }}
+  >
+    {pass ? '✓' : '✕'}
+  </span>
+);
+
 const VERDICT_TONE = (verdict: string | null | undefined) =>
   verdict === 'go' ? 'success' : verdict === 'marginal' ? 'warning' : 'danger';
 
@@ -151,7 +177,11 @@ export const SprayVerdictTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(12) }}>
         <SectionLabel>Product</SectionLabel>
         <span style={{ ...type('body', fs(12.5)), color: v.text }}>
-          {sp?.product ? `${sp.product.name} — ${sp.product.category}` : '—'}
+          {/* The em-dash clause only appears when there IS a category — otherwise
+              the line reads 'Fungicide (Protectant) — null'. */}
+          {sp?.product
+            ? [sp.product.name, sp.product.category].filter(Boolean).join(' — ')
+            : '—'}
         </span>
       </div>
 
@@ -190,8 +220,8 @@ export const SprayVerdictTile: React.FC<{ d: DashboardData }> = ({ d }) => {
               value={
                 c ? (
                   <>
-                    {c.value} <span style={{ color: v.textMuted }}>{c.limit}</span>{' '}
-                    <span style={{ color: c.pass ? v.success : v.danger }}>{c.pass ? '✓' : '✕'}</span>
+                    {c.value} <span style={{ color: v.textMuted }}>{c.limit}</span>
+                    <CheckMark pass={c.pass} />
                   </>
                 ) : (
                   <span style={{ color: v.textMuted }}>no limit</span>
