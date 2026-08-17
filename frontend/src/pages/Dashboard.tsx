@@ -258,6 +258,15 @@ function sprayCheckLimit(name: string, product: SprayProduct | null): string {
   }
 }
 
+/** Format an hour-of-day (0-23) as ``H:00 AM/PM`` — matches Design's
+ *  ``bestWindowToday`` shape so the two window readouts read the same. */
+function fmtHour12(hour: number): string {
+  const h = ((hour % 24) + 24) % 24;
+  const hh = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  const ap = h < 12 ? "AM" : "PM";
+  return `${hh}:00 ${ap}`;
+}
+
 function formatScheduleWhen(dateStr: string, startTime: string): string {
   try {
     const d = new Date(`${dateStr}T${startTime}`);
@@ -455,7 +464,14 @@ function buildSprayBlock(
       ? "One or more checks fail — hold."
       : null);
 
-  const schedule = schedules.slice(0, 4).map((s) => ({
+  // Only upcoming rows belong under "Scheduled".  Completed /
+  // cancelled rows go under Spray › Past sprays; showing them on the
+  // dashboard's Scheduled section makes a stale row look like planned
+  // work.  Matches the split in ``pages/Spray.tsx``.
+  const upcomingSchedules = schedules.filter(
+    (s) => s.status !== "completed" && s.status !== "cancelled",
+  );
+  const schedule = upcomingSchedules.slice(0, 4).map((s) => ({
     product: s.product_name,
     when: formatScheduleWhen(s.planned_date, s.planned_start),
     status: SCHEDULE_STATUS[s.status] ?? "pending",
@@ -496,21 +512,28 @@ function buildSprayBlock(
       ).map((c) => ({ hour: c.hour, label: c.label, state: c.state }))
     : [];
 
-  // First contiguous run of ``go`` cells after today's cells.  The
-  // adapter passes the label like ``"7a Wed"`` — Design's tile formats
-  // it further with fmtRange if needed.
+  // First contiguous ``go`` run that is NOT the current one.  If the
+  // window opens with a go run, skip past its end and start looking
+  // there (that leading run is the ``bestWindowToday`` — showing it
+  // again as "Next window" is redundant).  Format both endpoints as
+  // clock times to match Design's ``bestWindowToday`` shape
+  // ("2:00 AM – 6:00 AM"); the raw ``label`` from ``scoreSprayHours``
+  // is a short-form axis tick ("7a"), not user prose.
   const nextWindow = (() => {
     if (!window.length) return null;
-    // Skip today (assume first ~24 cells are today) — find first go cell
-    // where hour resets past 0 or a full day has passed.  Simple pass:
-    // find first ``go`` after any ``nogo`` sequence, only if that ``go``
-    // block starts after row 8 (rough heuristic for "not right now").
-    for (let i = 8; i < window.length; i++) {
-      if (window[i].state === "go" && (i === 0 || window[i - 1].state !== "go")) {
-        return window[i].label;
-      }
-    }
-    return null;
+    let i = 0;
+    // Skip the leading go run — it's today's best window.
+    while (i < window.length && window[i].state === "go") i++;
+    // Skip forward to the next go cell.
+    while (i < window.length && window[i].state !== "go") i++;
+    if (i >= window.length) return null;
+    const start = window[i].hour;
+    // Find the end of this go run.
+    let j = i;
+    while (j + 1 < window.length && window[j + 1].state === "go") j++;
+    // The window ends at the START of the next hour after the last go cell.
+    const endHour = (window[j].hour + 1) % 24;
+    return `${fmtHour12(start)} – ${fmtHour12(endHour)}`;
   })();
 
   const applications = outcomes.slice(0, 4).map((o) => ({
