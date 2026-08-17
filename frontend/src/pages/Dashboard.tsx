@@ -170,7 +170,7 @@ interface AdapterSources {
   siteName: string | null;
   spray: SprayAdapterInputs | null;
   baroOffsetInHg: number | null;
-  signal: SignalQuality | null;
+  signalWindow: { time: number; sample: SignalQuality }[];
   solar14d: (number | null)[];
   metar: string | null;
 }
@@ -428,7 +428,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       avgTempF,
     },
     spray: buildSprayBlock(s.spray, cc),
-    nerd: buildNerdBlock(cc, s.historyBarometer, s.historyThetaE, s.baroOffsetInHg, local, s.signal, s.solar14d, s.metar),
+    nerd: buildNerdBlock(cc, s.historyBarometer, s.historyThetaE, s.baroOffsetInHg, local, s.signalWindow, s.solar14d, s.metar),
   };
 }
 
@@ -493,7 +493,7 @@ function buildNerdBlock(
   historyThetaE: HistoryPoint[],
   baroOffsetInHg: number | null,
   local: LocalForecast | null,
-  signal: SignalQuality | null,
+  signalWindow: { time: number; sample: SignalQuality }[],
   solar14d: (number | null)[],
   metar: string | null,
 ): DashboardData["nerd"] {
@@ -551,23 +551,36 @@ function buildNerdBlock(
     nwsAgrees,
     agreementRate30d: null,
 
-    // Reception — persona-gated fetch of /api/station/signal-quality
-    // (RXCHECK).  Total = packets_received + missed; pct is the
-    // percentage that came through.  Null when anonymous (401), the
-    // logger daemon isn't answering (503), or the station doesn't
-    // support RXCHECK (501) — the tile em-dashes cleanly in all three.
-    reception: signal
-      ? {
-          received: signal.packets_received,
-          missed: signal.missed,
-          crcErrors: signal.crc_errors,
-          resyncs: signal.resync,
-          pct:
-            signal.packets_received + signal.missed > 0
-              ? (100 * signal.packets_received) / (signal.packets_received + signal.missed)
-              : null,
-        }
-      : null,
+    // Reception — Davis RXCHECK's counters do NOT behave as the driver
+    // docs claim ("since station midnight").  In practice the same
+    // link reads 100% one poll and 80% the next, and the raw
+    // ``packets_received`` walks up and down between fetches.  So:
+    //  - ``pct`` is the average of the per-sample %s across the last
+    //    ~1 h of client-buffered samples — noise smooths out, real
+    //    dropouts still register.
+    //  - the counters (received / missed / CRC / resyncs) are shown
+    //    from the LATEST sample, unchanged; those are the numbers a
+    //    station owner still reads to spot pathological jumps even
+    //    though the total is misleading.
+    // Null on empty window (persona just loaded, no successful fetch
+    // yet, or anonymous / 503 / 501 for every sample so far).
+    reception: (() => {
+      if (!signalWindow.length) return null;
+      const latest = signalWindow[signalWindow.length - 1].sample;
+      const pcts: number[] = [];
+      for (const { sample } of signalWindow) {
+        const total = sample.packets_received + sample.missed;
+        if (total > 0) pcts.push((100 * sample.packets_received) / total);
+      }
+      const pct = pcts.length ? pcts.reduce((a, b) => a + b, 0) / pcts.length : null;
+      return {
+        received: latest.packets_received,
+        missed: latest.missed,
+        crcErrors: latest.crc_errors,
+        resyncs: latest.resync,
+        pct,
+      };
+    })(),
 
     // 24 h pressure series — same window shape as history.tempF, one
     // value per sample.  Feeds the multi-series chart's right axis.
@@ -960,12 +973,20 @@ export default function Dashboard() {
   // briefly holds the serial lock via RXCHECK).  Solar-energy series
   // via ``/api/history/solar-energy`` (public, cheap).  Each catch
   // block leaves its slot null so the tile em-dashes cleanly.
-  const [signal, setSignal] = useState<SignalQuality | null>(null);
+  // Reception counters are noisy sample-to-sample — a single RXCHECK
+  // doesn't behave as "since midnight" the way Davis docs claim, so
+  // one refresh reads 100% and the next 80% for the same link.  We
+  // buffer up to ~1 h of samples client-side (12 samples at the 5-min
+  // fetch cadence) and let the adapter smooth the % across the window.
+  const SIGNAL_WINDOW_MS = 60 * 60_000;
+  const [signalWindow, setSignalWindow] = useState<
+    { time: number; sample: SignalQuality }[]
+  >([]);
   const [solar14d, setSolar14d] = useState<(number | null)[]>([]);
   const [metar, setMetar] = useState<string | null>(null);
   useEffect(() => {
     if (persona !== "weather_nerd") {
-      setSignal(null);
+      setSignalWindow([]);
       setSolar14d([]);
       setMetar(null);
       return;
@@ -978,7 +999,13 @@ export default function Dashboard() {
         fetchMetar(),
       ]);
       if (cancelled) return;
-      if (sig.status === "fulfilled") setSignal(sig.value);
+      if (sig.status === "fulfilled") {
+        setSignalWindow((prev) => {
+          const now = Date.now();
+          const next = [...prev, { time: now, sample: sig.value }];
+          return next.filter((s) => now - s.time <= SIGNAL_WINDOW_MS);
+        });
+      }
       if (sun.status === "fulfilled") {
         setSolar14d(sun.value.points.map((p) => p.value));
       }
@@ -1006,11 +1033,11 @@ export default function Dashboard() {
         siteName,
         spray,
         baroOffsetInHg,
-        signal,
+        signalWindow,
         solar14d,
         metar,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, siteName, spray, baroOffsetInHg, signal, solar14d, metar],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, siteName, spray, baroOffsetInHg, signalWindow, solar14d, metar],
   );
 
   // Persona dispatch.  Each layout owns its plate, its scale unit, and
