@@ -170,6 +170,26 @@ interface SprayAdapterInputs {
   schedules: SpraySchedule[];
   outcomes: SprayOutcome[];
   forecast: SprayForecastRow[];
+  /** Wind gust readings for the last 4 h — bucketed into 2 mph bins
+   * for the Drift-risk gust-frequency histogram (DIFF-3c).  Empty
+   * when the endpoint returned no rows or the fetch failed. */
+  gustHistory: (number | null)[];
+}
+
+/**
+ * Bucket raw gust-mph readings into 12 fixed 2-mph bins for the
+ * Drift-risk gust-frequency histogram (mock 3c, DIFF-3c).  Bin i
+ * covers ``[2i, 2i+2)`` mph; readings ≥ 24 mph fall into the last
+ * bin.  Nulls / non-finite values are skipped.
+ */
+function bucketGustReadings(readings: (number | null)[]): number[] {
+  const bins = new Array<number>(12).fill(0);
+  for (const r of readings) {
+    if (r == null || !Number.isFinite(r) || r < 0) continue;
+    const idx = Math.min(11, Math.floor(r / 2));
+    bins[idx] += 1;
+  }
+  return bins;
 }
 
 /** wind|temperature|humidity|rain_free → human label */
@@ -407,8 +427,9 @@ function buildSprayBlock(
     schedules: [],
     outcomes: [],
     forecast: [],
+    gustHistory: [],
   };
-  const { product, evaluation, schedules, outcomes, forecast } = sp ?? empty;
+  const { product, evaluation, schedules, outcomes, forecast, gustHistory } = sp ?? empty;
 
   const verdict: "go" | "marginal" | "nogo" | null = evaluation
     ? evaluation.go
@@ -543,7 +564,7 @@ function buildSprayBlock(
     window,
     bestWindowToday,
     nextWindow,
-    gustBins: [],
+    gustBins: bucketGustReadings(gustHistory),
     water: {
       balanceIn:
         rainTodayIn != null && etTodayIn != null ? rainTodayIn - etTodayIn : null,
@@ -641,24 +662,29 @@ export default function Dashboard() {
       let schedules: SpraySchedule[] = [];
       let outcomes: SprayOutcome[] = [];
       let forecastRows: SprayForecastRow[] = [];
+      let gustHistory: (number | null)[] = [];
       try {
         products = await fetchSprayProducts();
       } catch {
         return; // 401 or offline; leave spray null
       }
       const product = products.find((p) => p.is_preset) ?? products[0] ?? null;
-      const [ev, sch, out, fc] = await Promise.allSettled([
+      const gustEnd = new Date();
+      const gustStart = new Date(gustEnd.getTime() - 4 * 60 * 60_000);
+      const [ev, sch, out, fc, gust] = await Promise.allSettled([
         product ? evaluateSprayProduct(product.id) : Promise.resolve(null),
         fetchSpraySchedules(),
         fetchSprayOutcomes(5),
         fetchSprayForecast(24),
+        fetchHistory("wind_gust", gustStart.toISOString(), gustEnd.toISOString(), "raw"),
       ]);
       if (cancelled) return;
       if (ev.status === "fulfilled") evaluation = ev.value;
       if (sch.status === "fulfilled") schedules = sch.value;
       if (out.status === "fulfilled") outcomes = out.value;
       if (fc.status === "fulfilled") forecastRows = fc.value.rows;
-      setSpray({ product, evaluation, schedules, outcomes, forecast: forecastRows });
+      if (gust.status === "fulfilled") gustHistory = (gust.value.points ?? []).map((p) => p.value);
+      setSpray({ product, evaluation, schedules, outcomes, forecast: forecastRows, gustHistory });
     };
     load();
     const id = setInterval(load, 5 * 60_000);
