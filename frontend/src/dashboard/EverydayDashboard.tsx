@@ -16,7 +16,7 @@
  *   footer                 27
  */
 import React from 'react';
-import { v, type, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, fmtTime, s, SCALE_VAR, CONTENT_CAP } from './primitives';
+import { v, type, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, fmtTime, s, scaleVar, CONTENT_CAP } from './primitives';
 import type { DashboardData } from './types';
 import {
   HeroTemperatureTile, DerivedConditionsTile, HistoryChartTile, BarometerTile,
@@ -41,7 +41,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
   >
     <div
       style={{
-        ...SCALE_VAR,
+        ...scaleVar(1120),
         padding: `${s(24)} ${s(30)} ${s(20)}`,
         display: 'flex',
         flexDirection: 'column',
@@ -157,17 +157,18 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string
  * The clock and last poll are rows here; the footer carries 'Last update' only.
  */
 export const ConsoleAndLinkTile: React.FC<{ d: DashboardData }> = ({ d }) => {
-  // Named ``st`` so it doesn't shadow the ``s(n)`` scale helper.
-  const st = d.station;
+  // Named ``stn`` so it doesn't shadow the ``s(n)`` scale helper used
+  // for the ``columnGap: s(24)`` below.
+  const stn = d.station;
   const rows: [string, React.ReactNode][] = [
-    ['Firmware', st.firmware],
-    ['Product', st.model],
-    ['Transmitters', <span style={{ color: st.transmittersOk ? v.success : v.danger }}>{st.transmittersOk ? 'OK' : 'FAULT'}</span>],
-    ['Console battery', fmt(st.batteryVolts, 2, ' V')],
-    ['CRC / timeouts', `${st.crcErrors} / ${st.timeouts}`],
-    ['Archive records', fmtInt(st.archiveRecords)],
-    ['Console clock', st.clock ?? '—'],
-    ['Last poll', fmtTime(st.lastPoll)],
+    ['Firmware', stn.firmware],
+    ['Product', stn.model],
+    ['Transmitters', <span style={{ color: stn.transmittersOk ? v.success : v.danger }}>{stn.transmittersOk ? 'OK' : 'FAULT'}</span>],
+    ['Console battery', fmt(stn.batteryVolts, 2, ' V')],
+    ['CRC / timeouts', `${stn.crcErrors} / ${stn.timeouts}`],
+    ['Archive records', fmtInt(stn.archiveRecords)],
+    ['Console clock', stn.clock ?? '—'],
+    ['Last poll', fmtTime(stn.lastPoll)],
   ];
 
   return (
