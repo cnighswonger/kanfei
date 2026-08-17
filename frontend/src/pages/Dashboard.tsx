@@ -39,6 +39,7 @@ import type {
   ForecastResponse,
   AstronomyResponse,
   LocalForecast,
+  NWSPeriod,
   StationStatus as StationStatusType,
   HistoryPoint,
   SignalQuality,
@@ -297,11 +298,27 @@ const SCHEDULE_STATUS: Record<string, "go" | "pending" | "nogo"> = {
   applied: "go",
 };
 
+/** Classify a free-text weather forecast into one of three coarse bins
+ *  (fair / unsettled / rain) so Zambretti and NWS sentences can be
+ *  compared as agree / differ.  Order matters — "rain" wins over
+ *  "unsettled" wins over "fair" ("less settled" contains both
+ *  "settled" and its own negation). */
+function classifyForecastText(text: string | null | undefined): 'fair' | 'unsettled' | 'rain' | null {
+  if (!text) return null;
+  const t = text.toLowerCase();
+  if (/rain|shower|storm|thunder|drizzle/.test(t)) return 'rain';
+  if (/unsettled|changeable|less settled|becoming.*(?:worse|less)/.test(t)) return 'unsettled';
+  if (/fine|fair|settled|clear|sun/.test(t)) return 'fair';
+  if (/cloud|overcast/.test(t)) return 'unsettled';
+  return null;
+}
+
 function toDashboardData(s: AdapterSources): DashboardData {
   const cc = s.cc;
   const status = s.status;
   const astro = s.astronomy;
   const local = s.forecast?.local ?? null;
+  const nwsCurrent = s.forecast?.nws?.periods?.[0] ?? null;
   const tempPts = s.historyTemp.map((p) => p.value);
   const dewPts = s.historyDew.map((p) => p.value);
   const finiteTemps = tempPts.filter((v): v is number => v != null && Number.isFinite(v));
@@ -428,7 +445,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       avgTempF,
     },
     spray: buildSprayBlock(s.spray, cc),
-    nerd: buildNerdBlock(cc, s.historyBarometer, s.historyThetaE, s.baroOffsetInHg, local, s.signalWindow, s.solar14d, s.metar),
+    nerd: buildNerdBlock(cc, s.historyBarometer, s.historyThetaE, s.baroOffsetInHg, local, nwsCurrent, s.signalWindow, s.solar14d, s.metar),
   };
 }
 
@@ -493,16 +510,22 @@ function buildNerdBlock(
   historyThetaE: HistoryPoint[],
   baroOffsetInHg: number | null,
   local: LocalForecast | null,
+  nwsCurrent: NWSPeriod | null,
   signalWindow: { time: number; sample: SignalQuality }[],
   solar14d: (number | null)[],
   metar: string | null,
 ): DashboardData["nerd"] {
   const ex = cc?.daily_extremes ?? null;
-  // Zambretti short-hand: "fine" / "fairly fine" / "becoming …" tend to
-  // match a fair-weather NWS icon; anything containing "unsettled" /
-  // "rain" / "changeable" reads as unsettled.  We don't have an NWS
-  // forecast to compare against yet, so leave null.
-  const nwsAgrees = local ? null : null;
+  // Coarse-bin the Zambretti sentence and the current NWS forecast
+  // text into fair / unsettled / rain; agree iff both land in the
+  // same bin.  Null when either side can't be classified — the tile
+  // omits the "· NWS agrees" clause rather than lying.
+  const nwsAgrees = (() => {
+    const zBin = classifyForecastText(local?.text ?? null);
+    const nBin = classifyForecastText(nwsCurrent?.short_forecast ?? nwsCurrent?.text ?? null);
+    if (!zBin || !nBin) return null;
+    return zBin === nBin;
+  })();
   return {
     // Pressure provenance.  Davis reports ``barometer`` as an ISA-
     // reduced-to-sea-level value already (user's configured
