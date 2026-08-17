@@ -627,6 +627,12 @@ export function fetchSolarEnergyHistory(days = 14): Promise<{
   return request(`/api/history/solar-energy?days=${days}`);
 }
 
+/** METAR-formatted string built from the latest sensor reading.
+ *  Public — no auth required. */
+export function fetchMetar(): Promise<{ metar?: string; error?: string }> {
+  return request("/api/metar");
+}
+
 export function fetchRadioState(): Promise<
   import("./types.ts").RadioState
 > {
