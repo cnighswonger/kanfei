@@ -1054,23 +1054,35 @@ export default function Dashboard() {
     // than a full em-dash-then-populate flash on every persona swap.
     if (persona !== "weather_nerd") return;
     let cancelled = false;
+
+    // Admin fetches (signal-quality, barometer-calibration) each take
+    // the serial lock briefly and compete both with the poller and
+    // each other.  Serialise them and retry on 503/504 so one failed
+    // sample doesn't leave the tile stuck on the previous value for
+    // 5 min (or on em-dash for the first fetch cycle).  Public
+    // fetches (solar, metar) run in parallel — they only touch the DB.
+    const retryAdmin = async <T,>(fn: () => Promise<T>): Promise<T> => {
+      const delays = [0, 700, 1500];
+      let lastErr: unknown;
+      for (const d of delays) {
+        if (d) await new Promise((r) => setTimeout(r, d));
+        try {
+          return await fn();
+        } catch (e) {
+          lastErr = e;
+          const status = (e as { status?: number })?.status;
+          if (status === 401) throw e; // no point retrying auth
+        }
+      }
+      throw lastErr;
+    };
+
     const load = async () => {
-      const [sig, sun, met, cal] = await Promise.allSettled([
-        fetchSignalQuality(),
+      const [sun, met] = await Promise.allSettled([
         fetchSolarEnergyHistory(14),
         fetchMetar(),
-        fetchBarometerCalibration(),
       ]);
       if (cancelled) return;
-      if (sig.status === "fulfilled") {
-        setSignalWindow((prev) => {
-          const now = Date.now();
-          const next = [...prev, { time: now, sample: sig.value }];
-          const trimmed = next.filter((s) => now - s.time <= SIGNAL_WINDOW_MS);
-          cacheSave("kanfei.dashboard.signalWindow.v1", trimmed);
-          return trimmed;
-        });
-      }
       if (sun.status === "fulfilled") {
         const pts = sun.value.points.map((p) => p.value);
         setSolar14d(pts);
@@ -1081,15 +1093,29 @@ export default function Dashboard() {
         setMetar(s);
         cacheSave("kanfei.dashboard.metar.v1", s);
       }
-      // ``barcal_inhg`` from BARDATA is the user-configured barometer
-      // calibration offset — what the console applies before it reports
-      // the barometer reading.  Admin-gated on the backend; anonymous
-      // visitors 401 silently and the tile em-dashes.
-      if (cal.status === "fulfilled") {
-        const off = cal.value?.barcal_inhg ?? null;
+
+      try {
+        const s = await retryAdmin(fetchSignalQuality);
+        if (cancelled) return;
+        setSignalWindow((prev) => {
+          const now = Date.now();
+          const next = [...prev, { time: now, sample: s }];
+          const trimmed = next.filter((x) => now - x.time <= SIGNAL_WINDOW_MS);
+          cacheSave("kanfei.dashboard.signalWindow.v1", trimmed);
+          return trimmed;
+        });
+      } catch { /* keep last-known, tile em-dashes only on truly empty state */ }
+
+      try {
+        const c = await retryAdmin(fetchBarometerCalibration);
+        if (cancelled) return;
+        // ``barcal_inhg`` from BARDATA is the user-configured barometer
+        // calibration offset.  Admin-gated; anonymous 401 leaves last-
+        // known value in place (tile em-dashes only if never populated).
+        const off = c?.barcal_inhg ?? null;
         setBaroOffsetInHg(off);
         cacheSave("kanfei.dashboard.baroOffsetInHg.v1", off);
-      }
+      } catch { /* keep last-known */ }
     };
     load();
     const id = setInterval(load, 5 * 60_000);
