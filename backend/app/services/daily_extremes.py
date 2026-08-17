@@ -1,6 +1,6 @@
 """Shared daily extremes query — used by both the REST API and the WebSocket poller."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from sqlalchemy import func
@@ -8,6 +8,62 @@ from sqlalchemy.orm import Session
 
 from ..models.sensor_reading import SensorReadingModel
 from ..models.sensor_meta import convert, SENSOR_UNITS, SENSOR_BOUNDS
+
+
+def get_month_extremes(db: Session) -> Optional[dict]:
+    """First-of-month at local midnight → now."""
+    now = datetime.now().astimezone()
+    month_start = now.replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0,
+    ).astimezone(timezone.utc)
+    return get_period_extremes(db, month_start)
+
+
+def get_year_extremes(db: Session) -> Optional[dict]:
+    """Jan 1 at local midnight → now."""
+    now = datetime.now().astimezone()
+    year_start = now.replace(
+        month=1, day=1, hour=0, minute=0, second=0, microsecond=0,
+    ).astimezone(timezone.utc)
+    return get_period_extremes(db, year_start)
+
+
+def get_weekly_delta(db: Session, column, sensor_key: str) -> Optional[dict]:
+    """Rolling 7-day accumulation of a year-to-date counter column.
+
+    ``rain_yearly`` and ``et_yearly`` are running year-to-date totals in
+    storage units (rain: hundredths of inches; ET: tenths of a mm).
+    The last 7 days is simply the current value minus the value from
+    ~7 days ago, no daily-reset gotcha the way a ``rain_daily`` diff
+    would have.  Returned in display units via ``convert()``.
+
+    Returns None if either endpoint is missing, or if the delta is
+    negative (a Jan 1 wraparound bridges two years — infrequent, but
+    the tile prefers a null / em-dash to a bogus figure that week).
+    """
+    now = datetime.now(timezone.utc)
+    latest = (
+        db.query(SensorReadingModel.timestamp, column)
+        .filter(column.isnot(None))
+        .order_by(SensorReadingModel.timestamp.desc())
+        .first()
+    )
+    if latest is None or latest[1] is None:
+        return None
+    earlier = (
+        db.query(column)
+        .filter(SensorReadingModel.timestamp <= now - timedelta(days=7))
+        .filter(column.isnot(None))
+        .order_by(SensorReadingModel.timestamp.desc())
+        .first()
+    )
+    if earlier is None or earlier[0] is None:
+        return None
+    delta_raw = latest[1] - earlier[0]
+    if delta_raw < 0:
+        return None
+    display = convert(sensor_key, delta_raw)
+    return {"value": display, "unit": SENSOR_UNITS.get(sensor_key, "")}
 
 
 def _iso_z(ts: Optional[datetime]) -> Optional[str]:
