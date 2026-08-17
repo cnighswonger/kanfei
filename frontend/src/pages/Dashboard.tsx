@@ -29,6 +29,7 @@ import {
   evaluateSprayProduct,
   fetchSprayForecast,
   fetchSignalQuality,
+  fetchSolarEnergyHistory,
 } from "../api/client.ts";
 import type { SprayForecastRow } from "../api/client.ts";
 import { scoreSprayHours, type SprayConstraints } from "../utils/gauges.ts";
@@ -168,6 +169,7 @@ interface AdapterSources {
   spray: SprayAdapterInputs | null;
   baroOffsetInHg: number | null;
   signal: SignalQuality | null;
+  solar14d: (number | null)[];
 }
 
 interface SprayAdapterInputs {
@@ -423,7 +425,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       avgTempF,
     },
     spray: buildSprayBlock(s.spray, cc),
-    nerd: buildNerdBlock(cc, s.historyBarometer, s.baroOffsetInHg, local, s.signal),
+    nerd: buildNerdBlock(cc, s.historyBarometer, s.baroOffsetInHg, local, s.signal, s.solar14d),
   };
 }
 
@@ -442,6 +444,7 @@ function buildNerdBlock(
   baroOffsetInHg: number | null,
   local: LocalForecast | null,
   signal: SignalQuality | null,
+  solar14d: (number | null)[],
 ): DashboardData["nerd"] {
   const ex = cc?.daily_extremes ?? null;
   // Zambretti short-hand: "fine" / "fairly fine" / "becoming …" tend to
@@ -495,10 +498,11 @@ function buildNerdBlock(
     // dashboard's fetch calls.
     resolution: "5 min",
 
-    // 14-day solar energy — needs a daily rollup or client-side sum
-    // from history; deferred.  The tile falls back to just the UV / solar
-    // now readings on the same card.
-    solarEnergy14d: [],
+    // 14-day solar energy — one integrated value per local day from
+    // ``/api/history/solar-energy`` (in the operator's preferred unit,
+    // usually MJ/m²).  Oldest first; today is the last entry and is a
+    // partial-day value that grows as the day progresses.
+    solarEnergy14d: solar14d,
 
     // Console extremes — day values are in cc.daily_extremes.  Month /
     // year extremes need a query extension; leave null and the row
@@ -867,24 +871,29 @@ export default function Dashboard() {
     return () => { cancelled = true; clearInterval(id); };
   }, [persona]);
 
-  // Weather Nerd fetches — the reception counters live behind
-  // ``/api/station/signal-quality``, which is admin-gated and briefly
-  // holds the serial lock (RXCHECK command).  Persona-gated + a 5-min
-  // cadence means at most 12 lock takings per hour, versus the poller's
-  // 360.  Anonymous 401 → ``signal`` stays null and the tile em-dashes.
+  // Weather Nerd fetches — persona-gated, one 5-min cycle for all of
+  // them.  Reception via ``/api/station/signal-quality`` (admin-gated,
+  // briefly holds the serial lock via RXCHECK).  Solar-energy series
+  // via ``/api/history/solar-energy`` (public, cheap).  Each catch
+  // block leaves its slot null so the tile em-dashes cleanly.
   const [signal, setSignal] = useState<SignalQuality | null>(null);
+  const [solar14d, setSolar14d] = useState<(number | null)[]>([]);
   useEffect(() => {
     if (persona !== "weather_nerd") {
       setSignal(null);
+      setSolar14d([]);
       return;
     }
     let cancelled = false;
     const load = async () => {
-      try {
-        const s = await fetchSignalQuality();
-        if (!cancelled) setSignal(s);
-      } catch {
-        /* 401 / 503 / offline — leave null */
+      const [sig, sun] = await Promise.allSettled([
+        fetchSignalQuality(),
+        fetchSolarEnergyHistory(14),
+      ]);
+      if (cancelled) return;
+      if (sig.status === "fulfilled") setSignal(sig.value);
+      if (sun.status === "fulfilled") {
+        setSolar14d(sun.value.points.map((p) => p.value));
       }
     };
     load();
@@ -907,8 +916,9 @@ export default function Dashboard() {
         spray,
         baroOffsetInHg,
         signal,
+        solar14d,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName, spray, baroOffsetInHg, signal],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, hourlyRain, siteName, spray, baroOffsetInHg, signal, solar14d],
   );
 
   // Persona dispatch.  Each layout owns its plate, its scale unit, and
