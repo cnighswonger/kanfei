@@ -1036,7 +1036,19 @@ export default function Dashboard() {
         fetchSpraySchedules(),
         fetchSprayOutcomes(5),
         fetchSprayForecast(24),
-        fetchHistory("wind_gust", gustStart.toISOString(), gustEnd.toISOString(), "raw"),
+        // The histogram is billed as "gust frequency" but we source
+        // ``wind_speed`` here, not ``wind_gust``.  The Davis Vantage
+        // LOOP2 ``wind_gust_10min`` field (offset 22, docs claim
+        // tenths mph) on our Vue reads ~1 mph while the current
+        // ``wind_speed`` at the same instant reads 11 mph — the field
+        // is either broken on this hardware rev or scaled differently
+        // than the manual says (see reference/vantage_dash_values.md:
+        // where wire and manual conflict, wire wins).  ``wind_speed``
+        // at the raw poll cadence IS the "gust events" a reader would
+        // intuit from the chart; the peak matches what the Wind tile
+        // reports.  See issue: kanfei-working/issues (LOOP2 wind_gust
+        // investigation).
+        fetchHistory("wind_speed", gustStart.toISOString(), gustEnd.toISOString(), "raw"),
       ]);
       if (cancelled) return;
       if (ev.status === "fulfilled") evaluation = ev.value;
