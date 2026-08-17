@@ -549,9 +549,31 @@ function buildSprayBlock(
   }));
 
   const rainTodayIn = cc?.rain?.daily?.value ?? null;
+  const rainWeekIn = cc?.rain?.weekly?.value ?? null;
   const etTodayIn = cc?.et_daily?.value ?? null;
+  const etWeekIn = cc?.et_weekly?.value ?? null;
   const etMonthIn = cc?.et_monthly?.value ?? null;
   const etYearIn = cc?.et_yearly?.value ?? null;
+
+  // Drift-rate kicker under Last applications (mock 3c).  Percentage
+  // of past outcomes where the operator observed drift; SprayOutcome
+  // stores this as a 0 / 1 bool-as-int.  Null when the log is empty
+  // so the kicker collapses to just "LAST APPLICATIONS".
+  const driftRatePct = outcomes.length
+    ? (100 * outcomes.filter((o) => o.drift_observed).length) / outcomes.length
+    : null;
+
+  // Verdict-column caution note (mock 3c: "▲ Window closes 6:40 PM").
+  // Only when the current hour is a go: name the time the leading go
+  // run ends.  If the run continues past the 24 h horizon, or the
+  // current hour isn't a go, leave null (nothing to caution about).
+  const caution = (() => {
+    if (!window.length || window[0].state !== "go") return null;
+    let k = 0;
+    while (k < window.length && window[k].state === "go") k++;
+    if (k >= window.length) return null; // the strip has no close inside 24 h
+    return `Window closes ${fmtHour12(window[k].hour)}`;
+  })();
 
   // Product name may already contain the category ("Fungicide
   // (Protectant)") — sending both to the tile prints "Fungicide
@@ -582,26 +604,33 @@ function buildSprayBlock(
       : null,
     verdict,
     verdictNote,
-    caution: null,
+    caution,
     checks,
     window,
     bestWindowToday,
     nextWindow,
     gustBins: bucketGustReadings(gustHistory),
     water: {
+      // Water balance = rain - ET on a WEEKLY basis where possible;
+      // today alone reads noisy on a day without rain (always negative).
+      // Fall back to daily when the 7-day rollup isn't wired yet.
       balanceIn:
-        rainTodayIn != null && etTodayIn != null ? rainTodayIn - etTodayIn : null,
+        rainWeekIn != null && etWeekIn != null
+          ? rainWeekIn - etWeekIn
+          : rainTodayIn != null && etTodayIn != null
+          ? rainTodayIn - etTodayIn
+          : null,
       rainTodayIn,
-      rainWeekIn: null,
+      rainWeekIn,
       etTodayIn,
-      etWeekIn: null,
+      etWeekIn,
       etMonthIn,
       etYearIn,
       seasonRainIn: cc?.rain?.yearly?.value ?? null,
     },
     schedule,
     applications,
-    driftRatePct: null,
+    driftRatePct,
   };
 }
 
