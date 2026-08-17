@@ -290,25 +290,39 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   // Round-number ticks, not equal divisions of the data range — see niceTicks().
   //
   // ``inPlot()`` is a guard, not decoration: a tick whose mapped y falls
-  // outside the plot box must not render.  In the pre-fix render a stray
+  // outside the plot box must not render.  In an earlier render a stray
   // ``1`` appeared between the 90 and 80 labels — an out-of-domain tick
   // drawn at a position no gridline occupied, which reads as a rendering
   // fault rather than an axis.  Same guard fixes the right axis, which
   // was showing only 30.00 and 29.90 where a 0.05 step over that range
   // should give four or five.
+  //
+  // ``all.length`` / ``baro.length`` gates:  don't emit fallback ticks
+  // (``lo=0, hi=1`` → ``[0.0, 0.2, 0.4, ..., 1.0]`` rendered as
+  // ``"0","0","0","1","1","1"`` with COLLIDING keys) before the fetch
+  // resolves.  Duplicate keys make React reconcile-by-position, which
+  // in turn leaves those fallback spans in the DOM after real data
+  // arrives — Chris caught four stray ``0``/``1`` labels on the temp
+  // axis in the 17:xx render.
   const inPlot = (y: number) => y >= PT - 1 && y <= CH - PB + 1;
-  const left = niceTicks(lo, hi, 5)
-    .map((val) => ({
-      y: (CH - PB) - ((val - lo) / (hi - lo)) * (CH - PB - PT),
-      label: fmt(val, 0),
-    }))
-    .filter((g) => inPlot(g.y));
-  const right = niceTicks(bLo, bHi, 5)
-    .map((val) => ({
-      y: (CH - PB) - ((val - bLo) / (bHi - bLo)) * (CH - PB - PT),
-      label: val.toFixed(2),
-    }))
-    .filter((g) => inPlot(g.y));
+  const left = all.length
+    ? niceTicks(lo, hi, 5)
+        .map((val, i) => ({
+          key: `T${i}`,
+          y: (CH - PB) - ((val - lo) / (hi - lo)) * (CH - PB - PT),
+          label: fmt(val, 0),
+        }))
+        .filter((g) => inPlot(g.y))
+    : [];
+  const right = baro.length
+    ? niceTicks(bLo, bHi, 5)
+        .map((val, i) => ({
+          key: `P${i}`,
+          y: (CH - PB) - ((val - bLo) / (bHi - bLo)) * (CH - PB - PT),
+          label: val.toFixed(2),
+        }))
+        .filter((g) => inPlot(g.y))
+    : [];
 
   return (
     <Tile
@@ -385,7 +399,7 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
             vertically — Chris caught that in the 16:14 render. */}
         {left.map((g) => (
           <span
-            key={`L${g.label}`}
+            key={g.key}
             style={{
               ...type('sectionLabel'),
               color: v.chart.axis,
@@ -410,7 +424,7 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         {bp &&
           right.map((g) => (
             <span
-              key={`R${g.label}`}
+              key={g.key}
               style={{
                 ...type('sectionLabel'),
                 color: v.chart.trace,
