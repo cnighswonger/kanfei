@@ -158,27 +158,55 @@ def get_period_extremes(db: Session, since_utc: datetime) -> Optional[dict]:
     has no rows at all.
     """
     S = SensorReadingModel
+
+    # Bounded max/min per column: computed inside SQL so a single
+    # out-of-range value (e.g., a startup zero, a hurricane-eye
+    # sentinel from a glitched read) doesn't null the extreme for
+    # the whole window.  Previously the query took a plain
+    # ``func.max/min``, then ``_bounded()`` rejected the raw value
+    # post-hoc — one 7781 hundredths-inHg row (25.5 inHg) was
+    # nulling the entire year's ``barometer_lo``.
+    def _bmax(column: str, model_col):
+        bounds = SENSOR_BOUNDS.get(column)
+        q = func.max(model_col)
+        if bounds is not None:
+            q = func.max(model_col).filter(model_col.between(bounds[0], bounds[1]))
+        return q
+
+    def _bmin(column: str, model_col):
+        bounds = SENSOR_BOUNDS.get(column)
+        q = func.min(model_col)
+        if bounds is not None:
+            q = func.min(model_col).filter(model_col.between(bounds[0], bounds[1]))
+        return q
+
     row = (
         db.query(
-            func.max(S.outside_temp), func.min(S.outside_temp),
-            func.max(S.wind_speed),
-            func.max(S.barometer), func.min(S.barometer),
+            _bmax("outside_temp", S.outside_temp),
+            _bmin("outside_temp", S.outside_temp),
+            _bmax("wind_speed",   S.wind_speed),
+            _bmax("barometer",    S.barometer),
+            _bmin("barometer",    S.barometer),
         )
         .filter(S.timestamp >= since_utc)
         .first()
     )
-    if row is None or row[0] is None:
+    if row is None or all(v is None for v in row):
         return None
 
-    def B(column, raw, model_col):
-        return _bounded(column, raw, lambda: _at(db, since_utc, model_col, raw))
+    def V(column, raw, model_col):
+        # Values already in-bounds by construction; still route through
+        # ``_val`` for the display-unit conversion and ``at`` lookup.
+        if raw is None:
+            return None
+        return _val(column, raw, _at(db, since_utc, model_col, raw))
 
     return {
-        "outside_temp_hi": B("outside_temp", row[0], S.outside_temp),
-        "outside_temp_lo": B("outside_temp", row[1], S.outside_temp),
-        "wind_speed_hi":   B("wind_speed",   row[2], S.wind_speed),
-        "barometer_hi":    B("barometer",    row[3], S.barometer),
-        "barometer_lo":    B("barometer",    row[4], S.barometer),
+        "outside_temp_hi": V("outside_temp", row[0], S.outside_temp),
+        "outside_temp_lo": V("outside_temp", row[1], S.outside_temp),
+        "wind_speed_hi":   V("wind_speed",   row[2], S.wind_speed),
+        "barometer_hi":    V("barometer",    row[3], S.barometer),
+        "barometer_lo":    V("barometer",    row[4], S.barometer),
     }
 
 
