@@ -650,6 +650,7 @@ function buildNerdBlock(
         crcErrors: latest.crc_errors,
         resyncs: latest.resync,
         pct,
+        windowLabel: "last hour",
       };
     })(),
 
