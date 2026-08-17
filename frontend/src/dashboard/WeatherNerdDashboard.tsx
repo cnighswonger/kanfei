@@ -19,7 +19,7 @@
  */
 import React from 'react';
 import {
-  v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, Row, Tile, tnum, fmt, fmtInt, fmtTime,
+  v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, Row, Tile, tnum, fmt, fmtInt, fmtTime, decimate,
 } from './primitives';
 import type { DashboardData } from './types';
 import { compass, rosePetals, pathFor } from '../utils/gauges';
@@ -256,9 +256,12 @@ export const ReceptionCard: React.FC<{ d: DashboardData }> = ({ d }) => {
 const CW = 660, CH = 250, PL = 46, PR = 46, PT = 14, PB = 26;
 
 export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
-  const temps = d.history.tempF.filter((n): n is number => n != null);
-  const dews = d.history.dewPointF.filter((n): n is number => n != null);
-  const baro = (d.nerd?.historyInHg ?? []).filter((n): n is number => n != null);
+  // Bin to ~600 points first — see decimate() in primitives.tsx.  Raw
+  // 8k-sample series at 0.1 °F resolution over ~2000 px would render
+  // as a staircase, not a trace.
+  const temps = decimate(d.history.tempF).filter((n): n is number => n != null);
+  const dews = decimate(d.history.dewPointF).filter((n): n is number => n != null);
+  const baro = decimate(d.nerd?.historyInHg ?? []).filter((n): n is number => n != null);
 
   // Temperature and dew point share a domain; pressure gets its own right axis —
   // a 0.35 inHg span and a 30 °F span cannot share a scale meaningfully.
@@ -332,13 +335,23 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
           preserveAspectRatio="none"
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
         >
+          {/* ``vectorEffect="non-scaling-stroke"`` on every stroked element —
+              preserveAspectRatio="none" scales x ~3× more than y, so without it
+              strokes draw 3× thicker horizontally than vertically and joins look
+              lumpy.  With it, widths are in screen px and traces read evenly. */}
           {left.map((g, i) => (
-            <line key={`g${i}`} x1={PL} y1={g.y} x2={CW - PR} y2={g.y} stroke={v.chart.gridMinor} strokeWidth={0.8} />
+            <line key={`g${i}`} x1={PL} y1={g.y} x2={CW - PR} y2={g.y} stroke={v.chart.gridMinor} strokeWidth={1} vectorEffect="non-scaling-stroke" />
           ))}
-          {bp && <path d={bp.line} fill="none" stroke={v.chart.trace} strokeWidth={1.6} strokeDasharray="5 3" opacity={0.9} />}
-          {dw && <path d={dw.line} fill="none" stroke={v.chart.traceSecondary} strokeWidth={1.8} />}
-          {t && <path d={t.line} fill="none" stroke={v.accent} strokeWidth={2.4} strokeLinecap="round" />}
-          <line x1={PL} y1={CH - PB} x2={CW - PR} y2={CH - PB} stroke={v.ruleHair} strokeWidth={0.8} />
+          {bp && (
+            <path d={bp.line} fill="none" stroke={v.chart.trace} strokeWidth={1.4} strokeDasharray="5 3" opacity={0.9} vectorEffect="non-scaling-stroke" />
+          )}
+          {dw && (
+            <path d={dw.line} fill="none" stroke={v.chart.traceSecondary} strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          )}
+          {t && (
+            <path d={t.line} fill="none" stroke={v.accent} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          )}
+          <line x1={PL} y1={CH - PB} x2={CW - PR} y2={CH - PB} stroke={v.ruleHair} strokeWidth={1} vectorEffect="non-scaling-stroke" />
         </svg>
 
         {/* left axis — temperature and dew point share it */}
