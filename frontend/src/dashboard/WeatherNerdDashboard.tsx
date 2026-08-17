@@ -19,7 +19,7 @@
  */
 import React from 'react';
 import {
-  v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, Row, Tile, tnum, fmt, fmtInt, fmtTime, decimate,
+  v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, Row, Tile, tnum, fmt, fmtInt, fmtTime, decimate, niceTicks,
 } from './primitives';
 import type { DashboardData } from './types';
 import { compass, rosePetals, pathFor } from '../utils/gauges';
@@ -44,14 +44,16 @@ export const WeatherNerdDashboard: React.FC<{ d: DashboardData; themeLabel?: str
         boxSizing: 'border-box',
       }}
     >
-      {/* Corner plate, as Everyday — this screen is dense, so the engraving stays
-          out of the way rather than sitting behind the whole page. */}
+      {/* Corner plate, as Everyday — this screen is dense, so sit the
+          plate up higher and drop opacity a shade so it doesn't clip
+          against the footer or compete with the console-extremes tile
+          (DIFF-2b v27 cosmetic). */}
       <div
         aria-hidden
         style={{
           position: 'absolute',
           right: 0,
-          bottom: s(60),
+          bottom: s(100),
           width: s(380),
           height: s(260),
           zIndex: -2,
@@ -59,7 +61,7 @@ export const WeatherNerdDashboard: React.FC<{ d: DashboardData; themeLabel?: str
           backgroundSize: 'contain',
           backgroundPosition: 'right bottom',
           backgroundRepeat: 'no-repeat',
-          opacity: 'var(--surface-plate-opacity, 0.10)',
+          opacity: 'var(--surface-plate-opacity, 0.07)',
           filter: 'var(--surface-plate-filter, none)',
           mixBlendMode: 'var(--surface-plate-blend, normal)' as React.CSSProperties['mixBlendMode'],
         }}
@@ -253,7 +255,11 @@ export const ReceptionCard: React.FC<{ d: DashboardData }> = ({ d }) => {
 
 /* ─────────────────────────────────────────────── the multi-series chart */
 
-const CW = 660, CH = 250, PL = 46, PR = 46, PT = 14, PB = 26;
+const CW = 660, CH = 250, PL = 52, PR = 52, PT = 14, PB = 26;
+/** Gridlines stop short of the gutter: at 3× horizontal scale a line
+ *  ending flush against a label reads as an extra character ("90"
+ *  became "9I" in review). */
+const GRID_INSET = 8;
 
 export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   // Bin to ~600 points first — see decimate() in primitives.tsx.  Raw
@@ -277,15 +283,15 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   const dw = dews.length ? pathFor(dews, PL, CW - PR, PT, CH - PB, lo, hi) : null;
   const bp = baro.length ? pathFor(baro, PL, CW - PR, PT, CH - PB, bLo, bHi) : null;
 
-  const yTicks = 4;
-  const left = Array.from({ length: yTicks + 1 }, (_, i) => {
-    const val = lo + ((hi - lo) * i) / yTicks;
-    return { y: (CH - PB) - ((val - lo) / (hi - lo)) * (CH - PB - PT), label: fmt(val, 0) };
-  });
-  const right = Array.from({ length: yTicks + 1 }, (_, i) => {
-    const val = bLo + ((bHi - bLo) * i) / yTicks;
-    return { y: (CH - PB) - ((val - bLo) / (bHi - bLo)) * (CH - PB - PT), label: val.toFixed(2) };
-  });
+  // Round-number ticks, not equal divisions of the data range — see niceTicks().
+  const left = niceTicks(lo, hi, 5).map((val) => ({
+    y: (CH - PB) - ((val - lo) / (hi - lo)) * (CH - PB - PT),
+    label: fmt(val, 0),
+  }));
+  const right = niceTicks(bLo, bHi, 5).map((val) => ({
+    y: (CH - PB) - ((val - bLo) / (bHi - bLo)) * (CH - PB - PT),
+    label: val.toFixed(2),
+  }));
 
   return (
     <Tile
@@ -340,7 +346,7 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
               strokes draw 3× thicker horizontally than vertically and joins look
               lumpy.  With it, widths are in screen px and traces read evenly. */}
           {left.map((g, i) => (
-            <line key={`g${i}`} x1={PL} y1={g.y} x2={CW - PR} y2={g.y} stroke={v.chart.gridMinor} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <line key={`g${i}`} x1={PL + GRID_INSET} y1={g.y} x2={CW - PR - GRID_INSET} y2={g.y} stroke={v.chart.gridMinor} strokeWidth={1} vectorEffect="non-scaling-stroke" />
           ))}
           {bp && (
             <path d={bp.line} fill="none" stroke={v.chart.trace} strokeWidth={1.4} strokeDasharray="5 3" opacity={0.9} vectorEffect="non-scaling-stroke" />

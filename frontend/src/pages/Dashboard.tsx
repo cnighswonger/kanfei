@@ -334,7 +334,11 @@ function toDashboardData(s: AdapterSources): DashboardData {
       intervalSeconds: status?.poll_interval ?? null,
       clock: status?.station_time ?? "",
       lastPoll: clock(status?.last_poll) ?? "",
-      console: status?.type_name ?? "",
+      // Strip the ``(FW …)`` tail — the Weather Nerd + Everyday
+      // footers append firmware as its own column, and a raw
+      // ``Vantage Vue (FW 4.33)`` here doubles firmware to
+      // ``VANTAGE VUE (FW 4.33) · 6351 · FW 4.33`` (DIFF-2b v27).
+      console: (status?.type_name ?? "").replace(/\s*\(FW[^)]*\)\s*/i, "").trim(),
       model: status?.product_sku ?? "",
       firmware: status?.firmware_version ?? status?.firmware_date ?? "",
       transmittersOk:
