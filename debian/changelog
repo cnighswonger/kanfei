@@ -1,3 +1,16 @@
+kanfei (0.1.0~beta39) unstable; urgency=medium
+
+  * Keeps the compass needle visible on all three wind-dial tiles
+    when the anemometer reads calm.  The old gate `speedMph >= 1`
+    hid the needle at 0 mph while the numeric readout still showed
+    a valid direction ("0 mph E"), which read as a rendering fault
+    rather than "wind is calm".  Davis vanes hold their last-known
+    direction when the anemometer stalls, so the needle now tracks
+    the vane; a station without a vane still reports null and the
+    needle stays hidden then.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 18 Aug 2026 00:29:06 +0000
+
 kanfei (0.1.0~beta38) unstable; urgency=medium
 
   * Fixes GET /api/history?resolution=5m so it actually returns 5-min
