@@ -525,7 +525,8 @@ const ChartButton: React.FC<{ active?: boolean; emphasis?: boolean; children: Re
 export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   const c = compass(130, 122, 92, 112);
   const petals = rosePetals(130, 122, 84, d.wind.roseWeights);
-  const showNeedle = (d.wind.speedMph ?? 0) >= 1 && d.wind.directionDeg != null;
+  // See WindTile note — direction alone gates the needle now.
+  const showNeedle = d.wind.directionDeg != null;
   return (
     <Tile
       id="nerd-wind-rose"

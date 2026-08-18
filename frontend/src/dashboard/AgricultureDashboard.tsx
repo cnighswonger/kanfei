@@ -312,7 +312,9 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
 export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   const c = compass(110, 110, 80, 98);
   const petals = rosePetals(110, 110, 72, d.wind.roseWeights);
-  const showNeedle = (d.wind.speedMph ?? 0) >= 1 && d.wind.directionDeg != null;
+  // See WindTile note — the vane's last-known direction beats a
+  // disappearing needle when speed drops to zero.
+  const showNeedle = d.wind.directionDeg != null;
   const bins = d.spray?.gustBins ?? [];
   const max = Math.max(1, ...bins);
 
