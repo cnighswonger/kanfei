@@ -1,3 +1,18 @@
+kanfei (0.1.0~beta40) unstable; urgency=medium
+
+  * Weather Nerd BigFigure switches from bolded mono to display
+    (serif italic) so Glaisher's Notebook has serif numerals on
+    every persona, not just Everyday and Agriculture.  Drops the
+    fontWeight: 700 override too — IM Fell English ships in one
+    weight and IBM Plex Mono at 400/500/600, so 700 was being
+    faux-bolded by the browser (a fourth-typeface look).  Cherry-
+    picked from the Design v30 handoff.
+  * Corner plate on Weather Nerd: opacity 0.07 → 0.10 and bottom
+    100 → 60 so it reads a shade clearer against the dense screen
+    without clipping the footer.  Also from v30.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 18 Aug 2026 00:37:20 +0000
+
 kanfei (0.1.0~beta39) unstable; urgency=medium
 
   * Keeps the compass needle visible on all three wind-dial tiles
