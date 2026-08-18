@@ -52,16 +52,6 @@ import type {
   SprayOutcome,
 } from "../api/types.ts";
 
-/**
- * Theme → dashboard title-row label.  Paper themes lead the title row
- * with the theme name ("The Mammoth's Log · Sanford, NC · 412 ft");
- * non-paper themes just use the station name.  Design REVIEW-12.
- */
-const THEME_LABEL: Record<string, string | undefined> = {
-  glaisher: "Glaisher's Notebook",
-  mammoth: "The Mammoth's Log",
-};
-
 // Package version for the footer strip ("Kanfei v1.0.0 · …").  Same
 // value the backend reads from ``backend/app/VERSION``; injected at
 // build time via ``define`` in vite.config.ts as ``__KANFEI_VERSION__``.
@@ -961,7 +951,7 @@ function buildSprayBlock(
 }
 
 export default function Dashboard() {
-  const { themeName } = useTheme();
+  const { theme } = useTheme();
   const { persona } = usePersona();
   const { currentConditions, stationStatus } = useWeatherData();
 
@@ -1253,10 +1243,10 @@ export default function Dashboard() {
   // its own composition; they share primitives, tokens, and the
   // DashboardData contract.
   if (persona === "agriculture") {
-    return <AgricultureDashboard d={data} themeLabel={THEME_LABEL[themeName]} />;
+    return <AgricultureDashboard d={data} themeLabel={theme.label} />;
   }
   if (persona === "weather_nerd") {
-    return <WeatherNerdDashboard d={data} themeLabel={THEME_LABEL[themeName]} />;
+    return <WeatherNerdDashboard d={data} themeLabel={theme.label} />;
   }
-  return <EverydayDashboard d={data} themeLabel={THEME_LABEL[themeName]} />;
+  return <EverydayDashboard d={data} themeLabel={theme.label} />;
 }
