@@ -1,3 +1,16 @@
+kanfei (0.1.0~beta41) unstable; urgency=medium
+
+  * Fixes the dashboard title row on non-paper themes.  It was reading
+    "THE MAMMOTH'S LOG" on every theme because the persona components
+    had a hardcoded default themeLabel that matched the stored default
+    theme name, and the parent's THEME_LABEL lookup only carried
+    entries for the two paper themes — every other theme fell through
+    to the hardcoded fallback.  Sourced the label from the active
+    theme object directly (theme.label), so the title row now matches
+    the theme picker on every theme.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 18 Aug 2026 00:47:00 +0000
+
 kanfei (0.1.0~beta40) unstable; urgency=medium
 
   * Weather Nerd BigFigure switches from bolded mono to display
