@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { fetchConfig, updateConfig, fetchSerialPorts, reconnectStation, fetchWeatherLinkConfig, updateWeatherLinkConfig, clearRainDaily, clearRainYearly, forceArchive, fetchLocalUsage, fetchUsageStatus, fetchAnthropicCost, fetchDbStats, purgeTable, purgeAll, compactReadings, getDbBackupUrl, getDbExportUrl, fetchLogs, fetchNowcastPresets, triggerBackup, listBackups, deleteBackup, getBackupDownloadUrl, changePassword } from "../api/client.ts";
 import type { NowcastPresetOption } from "../api/client.ts";
@@ -7,6 +7,7 @@ import { useTheme } from "../context/ThemeContext.tsx";
 import { useWeatherBackground } from "../context/WeatherBackgroundContext.tsx";
 import { themes } from "../themes/index.ts";
 import { SectionRail } from "../components/settings/SectionRail.tsx";
+import { SaveBar, type SaveBarStatus, configKeyToLabel } from "../components/settings/SaveBar.tsx";
 import ThemeEditor from "../components/settings/ThemeEditor.tsx";
 import BarometerCalibration from "../components/settings/BarometerCalibration.tsx";
 import ConsoleDataOperations from "../components/settings/ConsoleDataOperations.tsx";
@@ -1759,6 +1760,11 @@ function SystemTab({ isMobile }: { isMobile: boolean }) {
 export default function Settings() {
   const isMobile = useIsMobile();
   const [configItems, setConfigItems] = useState<ConfigItem[]>([]);
+  // Frozen at the last-loaded / last-saved state so the SaveBar can
+  // compute which fields are actually dirty (per-field diff, not just
+  // "did the user click anywhere").  A ``null`` baseline means we
+  // haven't loaded yet and the SaveBar shouldn't offer to save.
+  const [baselineItems, setBaselineItems] = useState<ConfigItem[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
@@ -1886,6 +1892,7 @@ export default function Settings() {
     ])
       .then(([items, portResult]) => {
         setConfigItems(items);
+        setBaselineItems(items);
         setPorts(portResult.ports);
         setLoading(false);
         // Load alert thresholds from config
@@ -2015,6 +2022,7 @@ export default function Settings() {
       items = items.filter((i) => !i.key.startsWith("ui_"));
       const updated = await updateConfig(items);
       setConfigItems(updated);
+      setBaselineItems(updated);
       setSaveSuccess(true);
       notifyMuteChanged();
       await refreshFeatureFlags();
@@ -2041,6 +2049,7 @@ export default function Settings() {
       items = items.filter((i) => !i.key.startsWith("ui_"));
       const updated = await updateConfig(items);
       setConfigItems(updated);
+      setBaselineItems(updated);
       notifyMuteChanged();
       const result = await reconnectStation();
       if (result.success) {
@@ -2057,6 +2066,39 @@ export default function Settings() {
       setReconnecting(false);
     }
   }, [configItems]);
+
+  // Revert = drop all pending edits back to whatever we last loaded /
+  // saved.  A no-op if the baseline hasn't been established yet.
+  const handleRevert = useCallback(() => {
+    if (baselineItems) setConfigItems(baselineItems);
+    setSaveSuccess(false);
+    setError(null);
+  }, [baselineItems]);
+
+  // Which fields differ from the baseline?  Compares by key/value pairs
+  // and returns the human labels for the SaveBar.  ``ui_*`` keys are
+  // owned by their context providers (not saved through Settings), so
+  // they never count as dirty here.
+  const dirtyLabels = useMemo(() => {
+    if (!baselineItems || baselineItems === configItems) return [];
+    const baseline = new Map(baselineItems.map((i) => [i.key, i.value]));
+    const out: string[] = [];
+    for (const cur of configItems) {
+      if (cur.key.startsWith("ui_")) continue;
+      if (baseline.get(cur.key) !== cur.value) {
+        out.push(configKeyToLabel(cur.key));
+      }
+    }
+    return out;
+  }, [configItems, baselineItems]);
+
+  const saveBarStatus: SaveBarStatus = error
+    ? { kind: "error", msg: error }
+    : reconnectMsg
+    ? { kind: "reconnected", msg: reconnectMsg }
+    : saveSuccess
+    ? { kind: "saved" }
+    : { kind: "idle" };
 
   const refreshPorts = useCallback(() => {
     fetchSerialPorts()
@@ -4571,82 +4613,19 @@ export default function Settings() {
       </div>{/* end padding wrapper */}
       </div>{/* end scrollable */}
 
-      {/* Row 3: save-status + save buttons.  Temporary — Phase 3 replaces
-          this with Design's SaveBar that names the dirty fields.  For now
-          it spans both grid columns at the bottom so the panel scroll
-          doesn't hide it. */}
-      <div
-        style={{
-          gridColumn: "1 / -1",
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-          padding: "12px 26px",
-          borderTop: "0.8px solid var(--color-border)",
-          background: "var(--color-bg-secondary)",
-          minHeight: "59px",
-          boxSizing: "border-box",
-          justifyContent: "flex-end",
-          flexWrap: "wrap",
-        }}
-      >
-        <span style={{ flex: 1 }} />
-
-        {saveSuccess && (
-          <span style={{ color: "var(--color-success)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
-            Saved.
-          </span>
-        )}
-        {reconnectMsg && (
-          <span style={{ color: "var(--color-success)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
-            {reconnectMsg}
-          </span>
-        )}
-        {error && (
-          <span style={{ color: "var(--color-danger)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
-            Error: {error}
-          </span>
-        )}
-
-        {/* Save + Reconnect are hidden on a public droplet — writes are
-            gated at the middleware, and rendering a disabled Save just
-            teases guests with a button they can't use.  See issue #336
-            Phase 4. */}
-        {!flags.publicModeActive && (
-          <>
-            <button
-              style={{
-                ...btnPrimary,
-                fontSize: "calc(13px * var(--font-scale))",
-                padding: "8px 16px",
-                opacity: saving ? 0.6 : 1,
-                cursor: saving ? "wait" : "pointer",
-              }}
-              onClick={handleSave}
-              disabled={saving || reconnecting}
-            >
-              {saving && !reconnecting ? "Saving..." : "Save"}
-            </button>
-
-            <button
-              style={{
-                ...btnPrimary,
-                fontSize: "calc(13px * var(--font-scale))",
-                padding: "8px 16px",
-                background: "var(--color-bg-secondary)",
-                color: "var(--color-text)",
-                border: "1px solid var(--color-border)",
-                opacity: reconnecting ? 0.6 : 1,
-                cursor: reconnecting ? "wait" : "pointer",
-              }}
-              onClick={handleSaveAndReconnect}
-              disabled={saving || reconnecting}
-            >
-              {reconnecting ? "Reconnecting..." : "Save & Reconnect"}
-            </button>
-          </>
-        )}
-      </div>
+      {/* Row 3: SaveBar — Design v31 Phase 3.  Names the dirty fields,
+          offers Revert + Save + Save & reconnect, hides Save when writes
+          are gated at the middleware (public droplet). */}
+      <SaveBar
+        dirtyLabels={dirtyLabels}
+        onRevert={handleRevert}
+        onSave={handleSave}
+        onSaveAndReconnect={handleSaveAndReconnect}
+        saving={saving}
+        reconnecting={reconnecting}
+        hideActions={flags.publicModeActive}
+        status={saveBarStatus}
+      />
     </div>
   );
 }
