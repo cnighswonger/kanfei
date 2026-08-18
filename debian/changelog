@@ -1,3 +1,22 @@
+kanfei (0.1.0~beta46) unstable; urgency=medium
+
+  * Settings restructure Phase 3: SaveBar names the dirty fields.
+    Replaces the old top-bar Save button and the beta44 temporary
+    save-status footer with a proper Design-spec SaveBar spanning
+    both grid columns at the bottom.  When the user touches a
+    field the bar lists which fields are pending: "2 unsaved
+    changes · rain collector clicks, inside temp offset".  Revert
+    restores every touched field to its last-saved value in one
+    click.  Save-success / reconnect / error messages surface
+    inline in the bar instead of scattered above the tab bar.  The
+    bar hides itself completely when nothing is dirty and no
+    status message is queued, so the panel gets the full vertical
+    budget while browsing.  On a public droplet the Save button
+    stays hidden (writes are gated at the middleware); the message
+    region still surfaces confirmation.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 18 Aug 2026 15:57:00 +0000
+
 kanfei (0.1.0~beta45) unstable; urgency=medium
 
   * Settings restructure Phase 2b: applies the bordered-card
