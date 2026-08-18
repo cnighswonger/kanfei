@@ -214,6 +214,9 @@ interface AdapterSources {
   historyBarometer: HistoryPoint[];
   historyThetaE: HistoryPoint[];
   hourlyRain: (number | null)[];
+  /** Raw wind-direction samples over the last 4 h.  Feeds the wind-rose
+   *  petals.  Empty until the first fetch resolves. */
+  windDir4h: (number | null)[];
   siteName: string | null;
   spray: SprayAdapterInputs | null;
   baroOffsetInHg: number | null;
@@ -249,6 +252,34 @@ function bucketGustReadings(readings: (number | null)[]): number[] {
     bins[idx] += 1;
   }
   return bins;
+}
+
+/**
+ * Bucket wind-direction samples into 16 wedges of 22.5° each for the
+ * wind-rose petals.  Wedge 0 is centred on N (0°), wedge 4 on E, 8 on S,
+ * 12 on W.  Returns normalised weights (max = 1); an all-nulls window
+ * returns ``undefined`` so the tile falls back cleanly on ``??``.
+ *
+ * Design's default hardcoded weights implied count-based frequency
+ * (all values in [0, 1]) — a speed-weighted rose is a different chart
+ * ("wind energy per bearing") and is worth having, but not what the
+ * mock shows.  Keep counts.
+ */
+function bucketWindDirection(readings: (number | null)[]): number[] | undefined {
+  const bins = new Array<number>(16).fill(0);
+  let total = 0;
+  for (const r of readings) {
+    if (r == null || !Number.isFinite(r)) continue;
+    // Shift by 11.25° so wedge 0 straddles N (348.75-11.25) rather than
+    // starting at N.  Modulo 360 to fold the E-of-W wraparound.
+    const shifted = ((r + 11.25) % 360 + 360) % 360;
+    const idx = Math.min(15, Math.floor(shifted / 22.5));
+    bins[idx] += 1;
+    total += 1;
+  }
+  if (!total) return undefined;
+  const max = Math.max(...bins);
+  return bins.map((n) => (max > 0 ? n / max : 0));
 }
 
 /** wind|temperature|humidity|rain_free → human label */
@@ -459,6 +490,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       gustMph,
       peakMph: cc?.daily_extremes?.wind_speed_hi?.value ?? null,
       peakAt: clock(cc?.daily_extremes?.wind_speed_hi?.at),
+      roseWeights: bucketWindDirection(s.windDir4h),
     },
     rain: {
       rateInPerHr: cc?.rain?.rate?.value ?? null,
@@ -939,6 +971,12 @@ export default function Dashboard() {
   const [historyDew, setHistoryDew] = useState<HistoryPoint[]>([]);
   const [historyBarometer, setHistoryBarometer] = useState<HistoryPoint[]>([]);
   const [historyThetaE, setHistoryThetaE] = useState<HistoryPoint[]>([]);
+  // 4 h of raw wind_direction readings feeds the wind-rose petals.  Window
+  // matches the Weather Nerd "Wind rose · 4 h" kicker and the Agriculture
+  // drift-risk 4 h shape; Everyday inherits the same weights.
+  const [windDir4h, setWindDir4h] = useState<(number | null)[]>(
+    () => cacheLoad<(number | null)[]>("kanfei.dashboard.windDir4h.v1") ?? [],
+  );
   const [hourlyRain, setHourlyRain] = useState<(number | null)[]>(() => Array<null>(24).fill(null));
   const [siteName, setSiteName] = useState<string | null>(null);
   const [spray, setSpray] = useState<SprayAdapterInputs | null>(() => cacheLoad<SprayAdapterInputs>("kanfei.dashboard.spray.v1"));
@@ -950,7 +988,8 @@ export default function Dashboard() {
     const load = async () => {
       const end = new Date();
       const start = new Date(end.getTime() - 24 * 60 * 60_000);
-      const [fc, astro, temp, dew, rain, baro, tE] = await Promise.allSettled([
+      const windStart = new Date(end.getTime() - 4 * 60 * 60_000);
+      const [fc, astro, temp, dew, rain, baro, tE, wd] = await Promise.allSettled([
         fetchForecast(),
         fetchAstronomy(),
         fetchHistory("outside_temp", start.toISOString(), end.toISOString(), "5m"),
@@ -958,6 +997,10 @@ export default function Dashboard() {
         fetchHistory("rain_rate", start.toISOString(), end.toISOString(), "5m"),
         fetchHistory("barometer", start.toISOString(), end.toISOString(), "5m"),
         fetchHistory("theta_e", start.toISOString(), end.toISOString(), "5m"),
+        // Wind direction: raw over 4 h.  A 5-min average across a
+        // window that swings from N to W would produce NW readings
+        // that never happened — kills the rose's honesty.
+        fetchHistory("wind_direction", windStart.toISOString(), end.toISOString(), "raw"),
       ]);
       if (cancelled) return;
       if (fc.status === "fulfilled") setForecast(fc.value);
@@ -967,6 +1010,11 @@ export default function Dashboard() {
       if (rain.status === "fulfilled") setHourlyRain(hourlyRainInches(rain.value.points ?? []));
       if (baro.status === "fulfilled") setHistoryBarometer(baro.value.points ?? []);
       if (tE.status === "fulfilled") setHistoryThetaE(tE.value.points ?? []);
+      if (wd.status === "fulfilled") {
+        const dirs = (wd.value.points ?? []).map((p) => p.value);
+        setWindDir4h(dirs);
+        cacheSave("kanfei.dashboard.windDir4h.v1", dirs);
+      }
     };
     load();
     const id = setInterval(load, 5 * 60_000);
@@ -1189,6 +1237,7 @@ export default function Dashboard() {
         historyBarometer,
         historyThetaE,
         hourlyRain,
+        windDir4h,
         siteName,
         spray,
         baroOffsetInHg,
@@ -1197,7 +1246,7 @@ export default function Dashboard() {
         metar,
         baroRef,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, siteName, spray, baroOffsetInHg, signalWindow, solar14d, metar, baroRef],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, windDir4h, siteName, spray, baroOffsetInHg, signalWindow, solar14d, metar, baroRef],
   );
 
   // Persona dispatch.  Each layout owns its plate, its scale unit, and
