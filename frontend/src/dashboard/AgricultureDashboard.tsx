@@ -23,9 +23,9 @@ import {
 import type { DashboardData } from './types';
 import { compass, rosePetals } from '../utils/gauges';
 
-export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel?: string }> = ({
+export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: string }> = ({
   d,
-  themeLabel = "The Mammoth's Log",
+  themeLabel,
 }) => (
   <main data-dashboard="agriculture" style={{ minWidth: 0, overflow: 'hidden' }}>
     <div

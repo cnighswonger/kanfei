@@ -26,7 +26,7 @@ import { compass, rosePetals, pathFor } from '../utils/gauges';
 
 const DESIGN_HEIGHT = 928;
 
-export const WeatherNerdDashboard: React.FC<{ d: DashboardData; themeLabel?: string }> = ({
+export const WeatherNerdDashboard: React.FC<{ d: DashboardData; themeLabel: string }> = ({
   d,
   themeLabel,
 }) => (
