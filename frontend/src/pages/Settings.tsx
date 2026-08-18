@@ -6,6 +6,7 @@ import type { ConfigItem, WeatherLinkConfig, WeatherLinkCalibration, AlertThresh
 import { useTheme } from "../context/ThemeContext.tsx";
 import { useWeatherBackground } from "../context/WeatherBackgroundContext.tsx";
 import { themes } from "../themes/index.ts";
+import { SectionRail } from "../components/settings/SectionRail.tsx";
 import ThemeEditor from "../components/settings/ThemeEditor.tsx";
 import BarometerCalibration from "../components/settings/BarometerCalibration.tsx";
 import ConsoleDataOperations from "../components/settings/ConsoleDataOperations.tsx";
@@ -2180,200 +2181,94 @@ export default function Settings() {
     );
   }
 
+  // 5-group section-rail navigation (Design's SETTINGS.md v31 spec).
+  // The mapping is intentionally the same one that used to live in the
+  // horizontal tab-bar IIFE — audience-oriented groups collect the 11
+  // functional tabs.  Feature-flag filtering runs on the section list
+  // so a disabled feature drops its section rather than showing an
+  // empty entry.
+  const railGroups = [
+    { id: "station", label: "Station", sections: [{ id: "station", label: "Station" }] },
+    { id: "site_units", label: "Site & Units", sections: [{ id: "site_units", label: "Site & Units" }] },
+    { id: "appearance", label: "Appearance", sections: [{ id: "appearance", label: "Appearance" }] },
+    {
+      id: "integrations",
+      label: "Integrations",
+      sections: [
+        { id: "services", label: "Services" },
+        { id: "bots", label: "Bots" },
+        { id: "alerts", label: "Alerts" },
+        ...(flags.nowcastEnabled ? [{ id: "nowcast", label: "Nowcast" }] : []),
+        ...(flags.sprayEnabled ? [{ id: "spray", label: "Spray" }] : []),
+        ...(flags.nowcastEnabled ? [{ id: "usage", label: "Usage" }] : []),
+      ],
+    },
+    {
+      id: "data",
+      label: "Data",
+      sections: [
+        { id: "database", label: "Database" },
+        { id: "backup", label: "Backup" },
+        { id: "system", label: "System" },
+      ],
+    },
+  ];
+  const tabToGroup: Record<string, string> = {};
+  for (const g of railGroups) for (const s of g.sections) tabToGroup[s.id] = g.id;
+  const activeGroupKey = tabToGroup[activeTab] ?? "station";
+
   return (
-    <div ref={settingsRef} style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      {/* Fixed header: heading + tab bar + save buttons */}
-      <div style={{
-        flexShrink: 0,
-        padding: "0 24px 12px",
-      }}>
-      <h2
+    <div
+      ref={settingsRef}
+      style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "250px 1fr",
+        // auto title / 1fr body / auto save-bar — the panel takes the
+        // remaining vertical space.  Design's 990 px body is a mock
+        // number; on the running viewport we fill.
+        gridTemplateRows: "auto 1fr auto",
+        height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
+      {/* Row 1: title, spans both columns. */}
+      <div
         style={{
-          margin: "0 0 12px 0",
-          fontSize: "calc(24px * var(--font-scale))",
-          fontFamily: "var(--font-heading)",
-          color: "var(--color-text)",
+          gridColumn: "1 / -1",
+          padding: "18px 26px 14px",
+          borderBottom: "1.6px solid var(--color-text)",
         }}
       >
-        Settings
-      </h2>
-
-      {/* 5-group navigation.  Row 1 is the group buttons; row 2 shows
-          the group's sub-tabs (hidden when the group has only one).  A
-          single flat 11-button strip was the pre-refactor shape; this
-          two-level nav collects related settings under audience-oriented
-          groups so the sidebar scan is 5 items instead of 11.
-          Feature-flag filtering runs on the sub-tab list, so a disabled
-          feature still drops its tab entirely rather than showing an
-          empty group. */}
-      {(() => {
-        const groups = [
-          { key: "station", label: "Station", tabs: [["station", "Station"]] as const },
-          { key: "site_units", label: "Site & Units", tabs: [["site_units", "Site & Units"]] as const },
-          { key: "appearance", label: "Appearance", tabs: [["appearance", "Appearance"]] as const },
-          {
-            key: "integrations", label: "Integrations", tabs: [
-              ["services", "Services"] as const,
-              ["bots", "Bots"] as const,
-              ["alerts", "Alerts"] as const,
-              ...(flags.nowcastEnabled ? [["nowcast", "Nowcast"] as const] : []),
-              ...(flags.sprayEnabled ? [["spray", "Spray"] as const] : []),
-              ...(flags.nowcastEnabled ? [["usage", "Usage"] as const] : []),
-            ] as ReadonlyArray<readonly [string, string]>,
-          },
-          {
-            key: "data", label: "Data", tabs: [
-              ["database", "Database"] as const,
-              ["backup", "Backup"] as const,
-              ["system", "System"] as const,
-            ] as ReadonlyArray<readonly [string, string]>,
-          },
-        ] as const;
-
-        const tabToGroup: Record<string, string> = {};
-        for (const g of groups) for (const [k] of g.tabs) tabToGroup[k] = g.key;
-        const activeGroupKey = tabToGroup[activeTab] ?? "station";
-        const activeGroup = groups.find((g) => g.key === activeGroupKey)!;
-        return (
-          <>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              flexWrap: "wrap",
-            }}>
-              {groups.map((g) => (
-                <button
-                  key={g.key}
-                  onClick={() => {
-                    const first = g.tabs[0]?.[0];
-                    if (first) setActiveTab(first as typeof activeTab);
-                  }}
-                  style={{
-                    fontFamily: "var(--font-body)",
-                    fontSize: "calc(14px * var(--font-scale))",
-                    padding: isMobile ? "8px 14px" : "8px 20px",
-                    borderRadius: "6px",
-                    border: "1px solid var(--color-border)",
-                    background: activeGroupKey === g.key ? "var(--color-accent)" : "var(--color-bg-secondary)",
-                    color: activeGroupKey === g.key ? "#fff" : "var(--color-text-secondary)",
-                    cursor: "pointer",
-                    transition: "background 0.15s ease, color 0.15s ease",
-                  }}
-                >
-                  {g.label}
-                </button>
-              ))}
-
-              <span style={{ flex: 1 }} />
-              {/* save-status + save-buttons block continues below */}
-            </div>
-
-            {activeGroup.tabs.length > 1 && (
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                flexWrap: "wrap",
-                marginTop: "8px",
-                paddingLeft: "4px",
-              }}>
-                {activeGroup.tabs.map(([key, label]) => (
-                  <button
-                    key={key}
-                    onClick={() => setActiveTab(key as typeof activeTab)}
-                    style={{
-                      fontFamily: "var(--font-body)",
-                      fontSize: "calc(13px * var(--font-scale))",
-                      padding: "6px 14px",
-                      borderRadius: "14px",
-                      border: "1px solid var(--color-border)",
-                      background: activeTab === key ? "var(--color-accent-muted)" : "transparent",
-                      color: activeTab === key ? "var(--color-accent)" : "var(--color-text-secondary)",
-                      fontWeight: activeTab === key ? 600 : 400,
-                      cursor: "pointer",
-                      transition: "background 0.15s ease, color 0.15s ease",
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </>
-        );
-      })()}
-
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "6px",
-        flexWrap: "wrap",
-        marginTop: "8px",
-        justifyContent: "flex-end",
-      }}>
-        <span style={{ flex: 1 }} />
-
-        {saveSuccess && (
-          <span style={{ color: "var(--color-success)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
-            Saved.
-          </span>
-        )}
-        {reconnectMsg && (
-          <span style={{ color: "var(--color-success)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
-            {reconnectMsg}
-          </span>
-        )}
-        {error && (
-          <span style={{ color: "var(--color-danger)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
-            Error: {error}
-          </span>
-        )}
-
-        {/* Save + Reconnect are hidden on a public droplet — writes
-            are gated at the middleware, and rendering a disabled Save
-            just teases guests with a button they can't use.  See
-            issue #336 Phase 4. */}
-        {!flags.publicModeActive && (
-          <>
-            <button
-              style={{
-                ...btnPrimary,
-                fontSize: "calc(13px * var(--font-scale))",
-                padding: "8px 16px",
-                opacity: saving ? 0.6 : 1,
-                cursor: saving ? "wait" : "pointer",
-              }}
-              onClick={handleSave}
-              disabled={saving || reconnecting}
-            >
-              {saving && !reconnecting ? "Saving..." : "Save"}
-            </button>
-
-            <button
-              style={{
-                ...btnPrimary,
-                fontSize: "calc(13px * var(--font-scale))",
-                padding: "8px 16px",
-                background: "var(--color-bg-secondary)",
-                color: "var(--color-text)",
-                border: "1px solid var(--color-border)",
-                opacity: reconnecting ? 0.6 : 1,
-                cursor: reconnecting ? "wait" : "pointer",
-              }}
-              onClick={handleSaveAndReconnect}
-              disabled={saving || reconnecting}
-            >
-              {reconnecting ? "Reconnecting..." : "Save & Reconnect"}
-            </button>
-          </>
-        )}
-      </div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "calc(26px * var(--font-scale))",
+            fontFamily: "var(--font-heading)",
+            fontStyle: "italic",
+            color: "var(--color-text)",
+          }}
+        >
+          Settings
+        </h2>
       </div>
 
-      {/* Scrollable tab content — no padding here so scrollbar sits at page edge */}
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
-      <div style={{ padding: "16px 24px 24px" }}>
+      {/* Row 2, col 1: section rail.  Hidden on mobile — the panel
+          gets the whole width and falls back to the tab-body's
+          own scroll.  Tab switching on mobile is Phase 2. */}
+      {!isMobile && (
+        <SectionRail
+          groups={railGroups}
+          activeGroup={activeGroupKey}
+          activeSection={activeTab}
+          onSelect={(_, sid) => setActiveTab(sid as typeof activeTab)}
+        />
+      )}
+
+      {/* Row 2, col 2: scrollable panel body — no padding here so
+          the scrollbar sits at the panel edge. */}
+      <div style={{ overflowY: "auto", minHeight: 0 }}>
+      <div style={{ padding: "20px 26px" }}>
 
       {activeTab === "station" && (<>
       {/* Optional Features */}
@@ -4661,6 +4556,83 @@ export default function Settings() {
 
       </div>{/* end padding wrapper */}
       </div>{/* end scrollable */}
+
+      {/* Row 3: save-status + save buttons.  Temporary — Phase 3 replaces
+          this with Design's SaveBar that names the dirty fields.  For now
+          it spans both grid columns at the bottom so the panel scroll
+          doesn't hide it. */}
+      <div
+        style={{
+          gridColumn: "1 / -1",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          padding: "12px 26px",
+          borderTop: "0.8px solid var(--color-border)",
+          background: "var(--color-bg-secondary)",
+          minHeight: "59px",
+          boxSizing: "border-box",
+          justifyContent: "flex-end",
+          flexWrap: "wrap",
+        }}
+      >
+        <span style={{ flex: 1 }} />
+
+        {saveSuccess && (
+          <span style={{ color: "var(--color-success)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
+            Saved.
+          </span>
+        )}
+        {reconnectMsg && (
+          <span style={{ color: "var(--color-success)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
+            {reconnectMsg}
+          </span>
+        )}
+        {error && (
+          <span style={{ color: "var(--color-danger)", fontSize: "calc(13px * var(--font-scale))", fontFamily: "var(--font-body)" }}>
+            Error: {error}
+          </span>
+        )}
+
+        {/* Save + Reconnect are hidden on a public droplet — writes are
+            gated at the middleware, and rendering a disabled Save just
+            teases guests with a button they can't use.  See issue #336
+            Phase 4. */}
+        {!flags.publicModeActive && (
+          <>
+            <button
+              style={{
+                ...btnPrimary,
+                fontSize: "calc(13px * var(--font-scale))",
+                padding: "8px 16px",
+                opacity: saving ? 0.6 : 1,
+                cursor: saving ? "wait" : "pointer",
+              }}
+              onClick={handleSave}
+              disabled={saving || reconnecting}
+            >
+              {saving && !reconnecting ? "Saving..." : "Save"}
+            </button>
+
+            <button
+              style={{
+                ...btnPrimary,
+                fontSize: "calc(13px * var(--font-scale))",
+                padding: "8px 16px",
+                background: "var(--color-bg-secondary)",
+                color: "var(--color-text)",
+                border: "1px solid var(--color-border)",
+                opacity: reconnecting ? 0.6 : 1,
+                cursor: reconnecting ? "wait" : "pointer",
+              }}
+              onClick={handleSaveAndReconnect}
+              disabled={saving || reconnecting}
+            >
+              {reconnecting ? "Reconnecting..." : "Save & Reconnect"}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
