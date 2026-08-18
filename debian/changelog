@@ -1,3 +1,27 @@
+kanfei (0.1.0~beta38) unstable; urgency=medium
+
+  * Fixes GET /api/history?resolution=5m so it actually returns 5-min
+    buckets rather than raw rows.  SQLAlchemy 2.0 emits float division
+    for the Python `/` operator on numeric columns as a portability
+    hedge; on SQLite that puts every unix-timestamp second into its
+    own bucket, so the GROUP BY silently didn't collapse and 24 h
+    returned ~8k rows instead of ~288.  Forced SQL integer division
+    with .op("/"); charts requesting "5m" now get true 5-min averages
+    with per-bucket min/max, the sample-count kicker matches reality,
+    and the payload is 27x smaller.  Regression test suite in
+    test_history_aggregate.py fails if this ever slips again.
+
+  * Fixes the wind rose (Everyday, Agriculture drift-risk, Weather
+    Nerd) so it draws from live data instead of a fixed 16-petal
+    placeholder that had been shipping unchanged since the tile
+    landed.  A new adapter fetch pulls wind_direction at raw
+    resolution over the last 4 h (matching the "Wind rose · 4 h"
+    kicker), buckets into 16 22.5-degree wedges centred on N/E/S/W,
+    normalises to a max of 1.0, and passes the weights to the tiles.
+    localStorage-hydrated so the rose comes back on refresh.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 18 Aug 2026 00:05:20 +0000
+
 kanfei (0.1.0~beta37) unstable; urgency=medium
 
   * Fixes the Agriculture Drift-risk tile's "gust frequency" histogram
