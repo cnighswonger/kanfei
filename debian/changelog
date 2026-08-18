@@ -1,3 +1,16 @@
+kanfei (0.1.0~beta42) unstable; urgency=medium
+
+  * Wires up the Weather Nerd chart's Raw / 5 min / Hourly / Daily
+    resolution buttons.  They were decorative — clicking did nothing
+    and the fetch was hardcoded to 5m regardless.  Now the click
+    drives the query, the selection persists to localStorage, and
+    the fetch window scales with resolution so each choice returns
+    a legible number of points (Raw / 5 min = 24 h, Hourly = 7 days,
+    Daily = 30 days).  Rain and wind-rose fetches keep their own
+    windows; the selector only affects the multi-series chart.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 18 Aug 2026 13:05:00 +0000
+
 kanfei (0.1.0~beta41) unstable; urgency=medium
 
   * Fixes the dashboard title row on non-paper themes.  It was reading
