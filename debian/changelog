@@ -1,3 +1,17 @@
+kanfei (0.1.0~beta44) unstable; urgency=medium
+
+  * Settings restructure Phase 2: bordered-card treatment on every
+    section.  cardStyle now paints a transparent 0.8 px hairline
+    frame with 18/20 padding (matches Agriculture band-A tiles).
+    sectionTitle drops to 16 px body font so section headings stop
+    competing with the page title.  Adds a dangerCardStyle for
+    grouped destructive-action sections (Danger Zone picks it up
+    unconditionally instead of the 1/2 px border-swap-on-expand).
+    Section content and destructive-action grouping into a bottom-
+    of-panel block are Phase 2b.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 18 Aug 2026 15:32:00 +0000
+
 kanfei (0.1.0~beta43) unstable; urgency=medium
 
   * Settings page restructure, Phase 1 of Design's v31 spec: shell
