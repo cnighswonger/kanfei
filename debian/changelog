@@ -1,3 +1,18 @@
+kanfei (0.1.0~beta45) unstable; urgency=medium
+
+  * Settings restructure Phase 2b: applies the bordered-card
+    treatment to the seven extracted sub-components that each
+    carried their own inline copy of the pre-refactor card style
+    (BaroCalibrationAggregate, BarometerCalibration, ConsoleData-
+    Operations, ConsoleHighsLows, RainSeason, SignalQuality,
+    VantageCalibration).  Every card in Settings now renders with
+    the same hairline rule + transparent fill; every section title
+    with the same 16 px body font.  ThemeEditor's swatch cards and
+    ConsoleLocation's parent-supplied card style are left to a
+    later audit.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 18 Aug 2026 15:44:00 +0000
+
 kanfei (0.1.0~beta44) unstable; urgency=medium
 
   * Settings restructure Phase 2: bordered-card treatment on every
