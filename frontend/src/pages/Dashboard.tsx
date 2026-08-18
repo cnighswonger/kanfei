@@ -10,11 +10,11 @@
  *   - Both paper themes get an instruments corner plate at ~0.09-0.10
  * Dark, light, classic ship with no dashboard-specific background.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import EverydayDashboard from "../dashboard/EverydayDashboard.tsx";
 import { AgricultureDashboard } from "../dashboard/AgricultureDashboard.tsx";
 import { WeatherNerdDashboard } from "../dashboard/WeatherNerdDashboard.tsx";
-import type { DashboardData } from "../dashboard/types.ts";
+import type { DashboardData, NerdResolution } from "../dashboard/types.ts";
 import { useTheme } from "../context/ThemeContext.tsx";
 import { usePersona } from "../context/PersonaContext.tsx";
 import { useWeatherData } from "../context/WeatherDataContext.tsx";
@@ -214,6 +214,9 @@ interface AdapterSources {
   solar14d: (number | null)[];
   metar: string | null;
   baroRef: { station: string; altimeterInHg: number } | null;
+  /** Which resolution the chart series were fetched at.  Echoed back into
+   *  ``d.nerd.resolution`` so the button strip lights the right choice. */
+  nerdResolution: NerdResolution;
 }
 
 interface SprayAdapterInputs {
@@ -514,7 +517,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       avgTempF,
     },
     spray: buildSprayBlock(s.spray, cc),
-    nerd: buildNerdBlock(cc, s.historyBarometer, s.historyThetaE, s.baroOffsetInHg, local, nwsCurrent, s.signalWindow, s.solar14d, s.metar, s.baroRef),
+    nerd: buildNerdBlock(cc, s.historyBarometer, s.historyThetaE, s.baroOffsetInHg, local, nwsCurrent, s.signalWindow, s.solar14d, s.metar, s.baroRef, s.nerdResolution),
   };
 }
 
@@ -584,6 +587,7 @@ function buildNerdBlock(
   solar14d: (number | null)[],
   metar: string | null,
   baroRef: { station: string; altimeterInHg: number } | null,
+  nerdResolution: NerdResolution,
 ): DashboardData["nerd"] {
   const ex = cc?.daily_extremes ?? null;
   // Coarse-bin the Zambretti sentence and the current NWS forecast
@@ -680,9 +684,8 @@ function buildNerdBlock(
     // value per sample.  Feeds the multi-series chart's right axis.
     historyInHg: historyBarometer.map((p) => p.value),
 
-    // Resolution matches what the history feeds are on — "5 min" per the
-    // dashboard's fetch calls.
-    resolution: "5 min",
+    // Resolution echoes the state driving the chart-series fetch cycle.
+    resolution: nerdResolution,
 
     // 14-day solar energy — one integrated value per local day from
     // ``/api/history/solar-energy`` (in the operator's preferred unit,
@@ -970,23 +973,56 @@ export default function Dashboard() {
   const [hourlyRain, setHourlyRain] = useState<(number | null)[]>(() => Array<null>(24).fill(null));
   const [siteName, setSiteName] = useState<string | null>(null);
   const [spray, setSpray] = useState<SprayAdapterInputs | null>(() => cacheLoad<SprayAdapterInputs>("kanfei.dashboard.spray.v1"));
+  // Weather Nerd chart resolution — persisted so the choice sticks across
+  // refresh.  The window scales with the resolution so each choice returns a
+  // legible number of points: Daily over 24 h is one bar, Hourly over 24 h is
+  // twenty-four which is fine but wastes the visual budget.
+  const [nerdResolution, setNerdResolution] = useState<NerdResolution>(
+    () => (cacheLoad<NerdResolution>("kanfei.dashboard.nerdResolution.v1") ?? "5 min"),
+  );
 
   // Every-5-min re-fetch for the slow-moving feeds.  currentConditions +
   // stationStatus already tick via the shared WeatherDataProvider.
+  //
+  // The chart series (temp / dew / baro / theta-e) fetch at whatever
+  // resolution the Weather Nerd selector is set to; ``nerdResolution`` is a
+  // dep so a selector click re-runs this immediately rather than waiting
+  // for the next 5-min tick.  Wind direction and rain always fetch at a
+  // rose-appropriate window regardless — they don't share the chart's
+  // resolution.
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       const end = new Date();
-      const start = new Date(end.getTime() - 24 * 60 * 60_000);
+      // Window scales with resolution so each choice returns a legible number
+      // of points.  Daily over 24 h is a single bar; Hourly over 24 h wastes
+      // most of the visual budget on a low tick density.
+      const windowHours: Record<NerdResolution, number> = {
+        'Raw': 24,
+        '5 min': 24,
+        'Hourly': 24 * 7,
+        'Daily': 24 * 30,
+      };
+      const apiRes: Record<NerdResolution, 'raw' | '5m' | 'hourly' | 'daily'> = {
+        'Raw': 'raw',
+        '5 min': '5m',
+        'Hourly': 'hourly',
+        'Daily': 'daily',
+      };
+      const start = new Date(end.getTime() - windowHours[nerdResolution] * 60 * 60_000);
       const windStart = new Date(end.getTime() - 4 * 60 * 60_000);
+      const rainStart = new Date(end.getTime() - 24 * 60 * 60_000);
+      const res = apiRes[nerdResolution];
       const [fc, astro, temp, dew, rain, baro, tE, wd] = await Promise.allSettled([
         fetchForecast(),
         fetchAstronomy(),
-        fetchHistory("outside_temp", start.toISOString(), end.toISOString(), "5m"),
-        fetchHistory("dew_point", start.toISOString(), end.toISOString(), "5m"),
-        fetchHistory("rain_rate", start.toISOString(), end.toISOString(), "5m"),
-        fetchHistory("barometer", start.toISOString(), end.toISOString(), "5m"),
-        fetchHistory("theta_e", start.toISOString(), end.toISOString(), "5m"),
+        fetchHistory("outside_temp", start.toISOString(), end.toISOString(), res),
+        fetchHistory("dew_point", start.toISOString(), end.toISOString(), res),
+        // Rain hovers over a fixed 24 h regardless of chart resolution — the
+        // hourly-rain strip is a separate consumer with a fixed window.
+        fetchHistory("rain_rate", rainStart.toISOString(), end.toISOString(), "5m"),
+        fetchHistory("barometer", start.toISOString(), end.toISOString(), res),
+        fetchHistory("theta_e", start.toISOString(), end.toISOString(), res),
         // Wind direction: raw over 4 h.  A 5-min average across a
         // window that swings from N to W would produce NW readings
         // that never happened — kills the rose's honesty.
@@ -1012,6 +1048,11 @@ export default function Dashboard() {
       cancelled = true;
       clearInterval(id);
     };
+  }, [nerdResolution]);
+
+  const handleNerdResolutionChange = useCallback((r: NerdResolution) => {
+    setNerdResolution(r);
+    cacheSave("kanfei.dashboard.nerdResolution.v1", r);
   }, []);
 
   // Site name lives in station_config; one-time fetch.  (Baro offset
@@ -1235,8 +1276,9 @@ export default function Dashboard() {
         solar14d,
         metar,
         baroRef,
+        nerdResolution,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, windDir4h, siteName, spray, baroOffsetInHg, signalWindow, solar14d, metar, baroRef],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, windDir4h, siteName, spray, baroOffsetInHg, signalWindow, solar14d, metar, baroRef, nerdResolution],
   );
 
   // Persona dispatch.  Each layout owns its plate, its scale unit, and
@@ -1246,7 +1288,13 @@ export default function Dashboard() {
     return <AgricultureDashboard d={data} themeLabel={theme.label} />;
   }
   if (persona === "weather_nerd") {
-    return <WeatherNerdDashboard d={data} themeLabel={theme.label} />;
+    return (
+      <WeatherNerdDashboard
+        d={data}
+        themeLabel={theme.label}
+        onResolutionChange={handleNerdResolutionChange}
+      />
+    );
   }
   return <EverydayDashboard d={data} themeLabel={theme.label} />;
 }
