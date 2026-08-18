@@ -27,16 +27,17 @@ import type {
 type LoadStatus = "loading" | "loaded" | "error" | "unsupported";
 
 const card: React.CSSProperties = {
-  background: "var(--color-bg-card)",
-  borderRadius: "var(--gauge-border-radius)",
-  border: "1px solid var(--color-border)",
+  background: "transparent",
+  borderRadius: 0,
+  border: "0.8px solid var(--color-border)",
+  padding: "18px 20px",
   marginBottom: "16px",
 };
 
 const title: React.CSSProperties = {
   margin: "0 0 16px 0",
-  fontSize: "calc(18px * var(--font-scale))",
-  fontFamily: "var(--font-heading)",
+  fontSize: "calc(16px * var(--font-scale))",
+  fontFamily: "var(--font-body)",
   color: "var(--color-text)",
 };
 
