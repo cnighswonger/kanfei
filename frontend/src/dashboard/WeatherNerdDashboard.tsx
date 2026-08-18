@@ -53,7 +53,7 @@ export const WeatherNerdDashboard: React.FC<{ d: DashboardData; themeLabel?: str
         style={{
           position: 'absolute',
           right: 0,
-          bottom: s(100),
+          bottom: s(60),
           width: s(380),
           height: s(260),
           zIndex: -2,
@@ -61,7 +61,7 @@ export const WeatherNerdDashboard: React.FC<{ d: DashboardData; themeLabel?: str
           backgroundSize: 'contain',
           backgroundPosition: 'right bottom',
           backgroundRepeat: 'no-repeat',
-          opacity: 'var(--surface-plate-opacity, 0.07)',
+          opacity: 'var(--surface-plate-opacity, 0.10)',
           filter: 'var(--surface-plate-filter, none)',
           mixBlendMode: 'var(--surface-plate-blend, normal)' as React.CSSProperties['mixBlendMode'],
         }}
@@ -182,8 +182,28 @@ const StatCard: React.FC<{
   </Tile>
 );
 
+/**
+ * The one headline figure per card.
+ *
+ * ``display``, not ``mono`` — matching Everyday's hero temperature and
+ * Agriculture's NO-GO and water-balance figures.  The mocks draw a
+ * consistent distinction:
+ *
+ *   serif italic  = the screen's headline or verdict figure
+ *   mono tabular  = instrument readouts, tables, axes
+ *
+ * Built as mono, this screen was the only one of the three with no serif
+ * numerals anywhere, so Glaisher's Notebook lost its voice on exactly one
+ * persona.  These four cards ARE this screen's headline figures — it has
+ * no single hero — so they take the display role.
+ *
+ * No fontWeight override: IM Fell English ships in one weight, and IBM
+ * Plex Mono is loaded at 400/500/600 only, so the old ``fontWeight: 700``
+ * was being synthesised by the browser — a smeared faux-bold that read
+ * as a fourth typeface.
+ */
 const BigFigure: React.FC<{ children: React.ReactNode; color?: string }> = ({ children, color = v.text }) => (
-  <div style={{ ...type('mono', { ...fs(34), fontWeight: 700 }), ...tnum, color, lineHeight: 1.05 }}>{children}</div>
+  <div style={{ ...type('display', fs(34)), ...tnum, color, lineHeight: 1.05 }}>{children}</div>
 );
 
 /** Plain-language provenance line — body 11px, secondary ink. */
@@ -248,7 +268,7 @@ export const ReceptionCard: React.FC<{ d: DashboardData }> = ({ d }) => {
     <StatCard id="nerd-reception" kicker={`Reception · ${r?.windowLabel ?? 'last hour'}`}>
       <BigFigure color={tone}>
         {pct == null ? '—' : fmt(pct, 1)}
-        {pct != null && <span style={{ ...fs(14), color: v.textSecondary }}>%</span>}
+        {pct != null && <span style={{ ...type('display', fs(16)), color: v.textSecondary }}>%</span>}
       </BigFigure>
       <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary }}>
         {fmtInt(r?.received, ' received')} · {fmtInt(r?.missed, ' missed')} · CRC {r?.crcErrors ?? '—'} · resync{' '}
