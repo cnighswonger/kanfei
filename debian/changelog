@@ -1,3 +1,18 @@
+kanfei (0.1.0~beta43) unstable; urgency=medium
+
+  * Settings page restructure, Phase 1 of Design's v31 spec: shell
+    only, no tab-body changes.  Ships a SectionRail component and
+    re-lays the Settings page as a 3-row 2-col grid: title spans,
+    250 px section rail + scrollable panel in the middle row, save
+    bar spans at the bottom.  The 5-group / 12-tab mapping preserved
+    verbatim; feature flags still drop unavailable sections.  Save
+    and Reconnect buttons moved into the new save-bar row (temporary
+    — Phase 3 replaces with Design's dirty-field-naming SaveBar).
+    Mobile collapses the rail and gives the panel full width;
+    mobile-appropriate section switch is Phase 2.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 18 Aug 2026 15:20:00 +0000
+
 kanfei (0.1.0~beta42) unstable; urgency=medium
 
   * Wires up the Weather Nerd chart's Raw / 5 min / Hourly / Daily
