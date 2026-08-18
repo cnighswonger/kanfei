@@ -25,18 +25,33 @@ import { notifyMuteChanged } from "../hooks/useMuteStatus.ts";
 
 // --- Shared styles ---
 
+// Panel section — bordered card, transparent fill.  Same treatment as an
+// Agriculture band-A tile: the rule alone is the container.  Design v31
+// SETTINGS.md.  Kept as an exported style so the ~40 sites that already
+// spread ``cardStyle`` at their card root get the new look for free.
 const cardStyle: React.CSSProperties = {
-  background: "var(--color-bg-card)",
-  borderRadius: "var(--gauge-border-radius)",
-  border: "1px solid var(--color-border)",
-  padding: "20px",
+  background: "transparent",
+  borderRadius: 0,
+  border: "0.8px solid var(--color-border)",
+  padding: "18px 20px",
   marginBottom: "16px",
 };
 
+// Danger card — same geometry, danger-coloured rule.  Applied to any
+// section whose actions include a destructive verb (CLEAR, COMPACT,
+// DELETE DATABASE, PURGE).  Design's spec: 0.8px solid #9c3e2c ink.
+export const dangerCardStyle: React.CSSProperties = {
+  ...cardStyle,
+  border: "0.8px solid var(--color-danger)",
+};
+
+// Section title — prose heading, not a kicker.  Design chose body 16px
+// over the heading-font 18px so the sections don't compete with the
+// page title.
 const sectionTitle: React.CSSProperties = {
   margin: "0 0 16px 0",
-  fontSize: "calc(18px * var(--font-scale))",
-  fontFamily: "var(--font-heading)",
+  fontSize: "calc(16px * var(--font-scale))",
+  fontFamily: "var(--font-body)",
   color: "var(--color-text)",
 };
 
@@ -1064,9 +1079,8 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
 
       {/* Purge All (Nuclear) */}
       <div style={{
-        ...cardStyle,
-        padding: isMobile ? "12px" : "20px",
-        border: showPurgeAll ? "2px solid var(--color-danger)" : "1px solid var(--color-border)",
+        ...dangerCardStyle,
+        padding: isMobile ? "12px" : "18px 20px",
       }}>
         <h3 style={{ ...sectionTitle, color: "var(--color-danger)" }}>Danger Zone</h3>
 
