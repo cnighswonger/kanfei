@@ -21,15 +21,16 @@ import React from 'react';
 import {
   v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, Row, Tile, tnum, fmt, fmtInt, fmtTime, decimate, niceTicks,
 } from './primitives';
-import type { DashboardData } from './types';
+import type { DashboardData, NerdResolution } from './types';
 import { compass, rosePetals, pathFor } from '../utils/gauges';
 
 const DESIGN_HEIGHT = 928;
 
-export const WeatherNerdDashboard: React.FC<{ d: DashboardData; themeLabel: string }> = ({
-  d,
-  themeLabel,
-}) => (
+export const WeatherNerdDashboard: React.FC<{
+  d: DashboardData;
+  themeLabel: string;
+  onResolutionChange?: (r: NerdResolution) => void;
+}> = ({ d, themeLabel, onResolutionChange }) => (
   <main data-dashboard="weather_nerd" style={{ minWidth: 0, overflow: 'hidden' }}>
     <div
       style={{
@@ -87,7 +88,7 @@ export const WeatherNerdDashboard: React.FC<{ d: DashboardData; themeLabel: stri
       </div>
 
       {/* ── multi-series chart, 341 ───────────────────────────────────────── */}
-      <NerdChartTile d={d} />
+      <NerdChartTile d={d} onResolutionChange={onResolutionChange} />
 
       {/* ── three-up, 293 ────────────────────────────────────────────────── */}
       <div
@@ -286,7 +287,10 @@ const CW = 660, CH = 250, PL = 52, PR = 52, PT = 14, PB = 26;
  *  became "9I" in review). */
 const GRID_INSET = 8;
 
-export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
+export const NerdChartTile: React.FC<{
+  d: DashboardData;
+  onResolutionChange?: (r: NerdResolution) => void;
+}> = ({ d, onResolutionChange }) => {
   // Bin to ~600 points first — see decimate() in primitives.tsx.  Raw
   // 8k-sample series at 0.1 °F resolution over ~2000 px would render
   // as a staircase, not a trace.
@@ -369,7 +373,11 @@ export const NerdChartTile: React.FC<{ d: DashboardData }> = ({ d }) => {
           {(['Raw', '5 min', 'Hourly', 'Daily'] as const).map((label) => {
             const active = label === (d.nerd?.resolution ?? '5 min');
             return (
-              <ChartButton key={label} active={active}>
+              <ChartButton
+                key={label}
+                active={active}
+                onClick={onResolutionChange ? () => onResolutionChange(label) : undefined}
+              >
                 {label}
               </ChartButton>
             );
@@ -516,13 +524,15 @@ const LegendKey: React.FC<{ color: string; dashed?: boolean; children: React.Rea
   </span>
 );
 
-const ChartButton: React.FC<{ active?: boolean; emphasis?: boolean; children: React.ReactNode }> = ({
-  active,
-  emphasis,
-  children,
-}) => (
+const ChartButton: React.FC<{
+  active?: boolean;
+  emphasis?: boolean;
+  onClick?: () => void;
+  children: React.ReactNode;
+}> = ({ active, emphasis, onClick, children }) => (
   <button
     type="button"
+    onClick={onClick}
     style={{
       ...type('sectionLabel', fs(12)),
       letterSpacing: 'normal',

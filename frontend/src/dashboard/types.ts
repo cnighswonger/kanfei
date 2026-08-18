@@ -10,6 +10,13 @@
  * a zero, which is what makes a partially-wired dashboard still look right.
  */
 
+/**
+ * Resolution buttons on the Weather Nerd multi-series chart.  Labels are
+ * user-facing — the adapter maps them to the backend's ``raw`` / ``5m`` /
+ * ``hourly`` / ``daily`` query values before hitting ``/api/history``.
+ */
+export type NerdResolution = 'Raw' | '5 min' | 'Hourly' | 'Daily';
+
 export interface Reading {
   value: number | null;
   /** Pre-formatted for display when the raw number needs unit-aware rounding. */
@@ -201,7 +208,7 @@ export interface DashboardData {
     /** 24 h pressure series, same length as history.tempF. Own right axis. */
     historyInHg: (number | null)[];
     /** Which resolution button is active. */
-    resolution: 'Raw' | '5 min' | 'Hourly' | 'Daily' | null;
+    resolution: NerdResolution | null;
 
     // ── solar ──────────────────────────────────────────────────────────────
     /** Daily solar energy MJ/m², oldest first, 14 entries. Today is last. */
