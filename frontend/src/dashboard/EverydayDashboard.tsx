@@ -26,9 +26,9 @@ import {
 const BAND_COLS = '739fr 547fr';
 const BAND_GAP = 32;
 
-export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel?: string }> = ({
+export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string }> = ({
   d,
-  themeLabel = "The Mammoth's Log",
+  themeLabel,
 }) => (
   <main
     data-dashboard="everyday"
