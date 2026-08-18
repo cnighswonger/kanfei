@@ -250,8 +250,12 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
   const SIZE = 250;
   const c = compass(150, 150, 110, 132);
   const petals = rosePetals(150, 150, 100, d.wind.roseWeights);
-  // A needle at calm implies a direction the station isn't reporting.
-  const showNeedle = (d.wind.speedMph ?? 0) >= 1 && d.wind.directionDeg != null;
+  // Davis vanes keep pointing at the last-known direction when the
+  // anemometer stalls; the tile shows "0 mph E" so a hidden needle
+  // reads as "we lost the pointer" rather than "wind is calm".
+  // Gate on direction alone — a station without a vane reports null
+  // and the needle stays hidden then.
+  const showNeedle = d.wind.directionDeg != null;
 
   return (
     <Tile id="wind" style={style}>
