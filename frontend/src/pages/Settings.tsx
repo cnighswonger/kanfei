@@ -1782,6 +1782,11 @@ export default function Settings() {
   // the curated field index in ``searchIndex.ts``; the per-tab tally
   // renders as ``matches`` badges on the SectionRail.
   const [searchQuery, setSearchQuery] = useState("");
+  // Ref to the scrollable panel's content div so an effect can walk
+  // its DOM and wrap search matches in <mark> elements.  In-panel
+  // highlighting was called out as follow-up in the Phase 6 PR; this
+  // is that follow-up.
+  const panelBodyRef = useRef<HTMLDivElement | null>(null);
 
   const { flags, refresh: refreshFeatureFlags } = useFeatureFlags();
   const { themeName, setThemeName } = useTheme();
@@ -2212,6 +2217,74 @@ export default function Settings() {
   // with React #310 on first render (loading -> not loading).
   const searchMatches = useMemo(() => computeMatches(searchQuery), [searchQuery]);
 
+  // In-panel highlight — wrap matches inside the panel body in <mark>
+  // elements after every render.  React reconciliation clears the
+  // previous marks for us on the next render (they're not in the JSX
+  // tree, so React removes them when it reconciles).  Kicks in at
+  // query length >= 2 to avoid highlighting every "a" while the user
+  // is mid-word.  Same effect deps as the panel body: the query, and
+  // whichever tab is currently rendered.
+  useEffect(() => {
+    const panel = panelBodyRef.current;
+    if (!panel) return;
+    const q = searchQuery.trim();
+    if (q.length < 2) return;
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(escaped, "gi");
+    const walker = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT, {
+      // Skip text inside inputs, textareas, scripts and existing marks
+      // (avoids re-wrapping our own output on subsequent runs where
+      // the reconcile hasn't happened yet).
+      acceptNode(node) {
+        const parent = node.parentElement;
+        if (!parent) return NodeFilter.FILTER_REJECT;
+        const tag = parent.tagName;
+        if (tag === "SCRIPT" || tag === "STYLE" || tag === "MARK") {
+          return NodeFilter.FILTER_REJECT;
+        }
+        if (parent.closest("input, textarea, select")) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    const nodes: Text[] = [];
+    let n: Node | null;
+    while ((n = walker.nextNode())) nodes.push(n as Text);
+    for (const node of nodes) {
+      const text = node.nodeValue ?? "";
+      re.lastIndex = 0;
+      if (!re.test(text)) continue;
+      re.lastIndex = 0;
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text))) {
+        if (m.index > last) {
+          frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        }
+        const mark = document.createElement("mark");
+        mark.dataset.settingsHighlight = "true";
+        mark.textContent = m[0];
+        mark.style.background = "var(--color-accent-muted, rgba(168,95,36,0.24))";
+        mark.style.color = "var(--color-text)";
+        mark.style.padding = "0 2px";
+        mark.style.borderRadius = "2px";
+        frag.appendChild(mark);
+        last = m.index + m[0].length;
+        // Guard against zero-width matches on some regex engines.
+        if (m.index === re.lastIndex) re.lastIndex++;
+      }
+      if (last < text.length) {
+        frag.appendChild(document.createTextNode(text.slice(last)));
+      }
+      node.parentNode?.replaceChild(frag, node);
+    }
+    // No cleanup — React reconciles the panel body on the next render
+    // and removes the mark elements as part of that (they're not in
+    // the JSX tree).  If we cleaned up here we'd race the reconcile.
+  });
+
   if (loading) {
     return (
       <div>
@@ -2416,7 +2489,7 @@ export default function Settings() {
       {/* Row 2, col 2: scrollable panel body — no padding here so
           the scrollbar sits at the panel edge. */}
       <div style={{ overflowY: "auto", minHeight: 0 }}>
-      <div style={{ padding: "20px 26px" }}>
+      <div ref={panelBodyRef} style={{ padding: "20px 26px" }}>
 
       {activeTab === "station" && (<>
       {/* Optional Features */}
