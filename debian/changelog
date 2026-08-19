@@ -1,3 +1,17 @@
+kanfei (0.1.0~beta59) unstable; urgency=medium
+
+  * Design v32 P0s: suppress the app-wide ornamental plate on the
+    Settings page (it was carried over from the dashboard; the mock
+    never had one and it sat behind form inputs, competing with the
+    controls being read).  Remove the sidebar-collapse feature —
+    Design's spec is 220 px labelled always; the collapsed icon-rail
+    threw away the colour-keyed nav and read as an unlabelled strip
+    at high viewports.  The ``ui_sidebar_collapsed`` localStorage key
+    stays on disk (harmless leftover).  Mobile keeps its overlay
+    pattern for hide/show.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 18:15:00 +0000
+
 kanfei (0.1.0~beta58) unstable; urgency=medium
 
   * Dark theme: adds a scrim + translucent tile layer so
