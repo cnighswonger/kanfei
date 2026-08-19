@@ -1,3 +1,28 @@
+kanfei (0.1.0~beta58) unstable; urgency=medium
+
+  * Dark theme: adds a scrim + translucent tile layer so
+    photographic user backgrounds stop destroying legibility.
+    Design's DIFF-dark-background.md.  When the user picks a
+    photograph as their weather background, Dark now paints a
+    fixed 74%-alpha ink scrim over the image, tiles render as
+    82%-alpha glass panels with a 3 px backdrop blur, and the
+    row hairlines are raised to 14% alpha so borders stay
+    visible.  The photograph is still visible between tiles;
+    inside a tile the numerals no longer fight high-frequency
+    detail underneath.  Paper themes are unaffected — the new
+    tokens are theme-side, opt-in.  Tiles that used to render
+    invisibly over bright wallpaper regions read now.
+  * Dark header cleanup: drops the Zambretti forecast pill and
+    H/L extremes chip that Dark carried and paper themes didn't.
+    Both duplicated the hero tile below, which already shows the
+    same Zambretti sentence, the same confidence, and the same
+    two chips.  Header now matches the paper design across
+    themes; forecast + extremes belong in the tile that explains
+    them.  Connected/Disconnected indicator kept — no tile
+    currently surfaces that state.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 17:00:00 +0000
+
 kanfei (0.1.0~beta57) unstable; urgency=medium
 
   * Settings restructure Phase 7b: Site & units and Appearance
