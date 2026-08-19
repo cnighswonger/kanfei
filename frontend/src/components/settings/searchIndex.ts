@@ -110,24 +110,30 @@ export const SETTINGS_SEARCH_INDEX: SearchEntry[] = [
   // ── site & units · timezone ───────────────────────────────────────
   { sectionId: "site_units__timezone", term: "Timezone" },
 
-  // ── appearance · theme ────────────────────────────────────────────
-  { sectionId: "appearance__theme", term: "Theme" },
-  { sectionId: "appearance__theme", term: "Dark theme" },
-  { sectionId: "appearance__theme", term: "Light theme" },
-  { sectionId: "appearance__theme", term: "Mammoth" },
-  { sectionId: "appearance__theme", term: "Glaisher" },
-  { sectionId: "appearance__theme", term: "Classic" },
-  { sectionId: "appearance__theme", term: "Custom theme" },
-  { sectionId: "appearance__theme", term: "Font scale" },
-  { sectionId: "appearance__theme", term: "Display" },
-
-  // ── appearance · backgrounds ──────────────────────────────────────
-  { sectionId: "appearance__backgrounds", term: "Backgrounds" },
-  { sectionId: "appearance__backgrounds", term: "Weather background" },
-  { sectionId: "appearance__backgrounds", term: "Background image" },
-  { sectionId: "appearance__backgrounds", term: "Custom images" },
-  { sectionId: "appearance__backgrounds", term: "Intensity" },
-  { sectionId: "appearance__backgrounds", term: "Transparency" },
+  // ── appearance ────────────────────────────────────────────────────
+  // Design v32 review collapsed the two sub-sections (theme +
+  // backgrounds) into a single panel with three cards (Theme + Persona
+  // + Backgrounds); every entry here points at the leaf ``appearance``
+  // rail row.
+  { sectionId: "appearance", term: "Theme" },
+  { sectionId: "appearance", term: "Dark theme" },
+  { sectionId: "appearance", term: "Light theme" },
+  { sectionId: "appearance", term: "Mammoth" },
+  { sectionId: "appearance", term: "Glaisher" },
+  { sectionId: "appearance", term: "Classic" },
+  { sectionId: "appearance", term: "Custom theme" },
+  { sectionId: "appearance", term: "Font scale" },
+  { sectionId: "appearance", term: "Display" },
+  { sectionId: "appearance", term: "Persona" },
+  { sectionId: "appearance", term: "Everyday" },
+  { sectionId: "appearance", term: "Agriculture" },
+  { sectionId: "appearance", term: "Weather Nerd" },
+  { sectionId: "appearance", term: "Backgrounds" },
+  { sectionId: "appearance", term: "Weather background" },
+  { sectionId: "appearance", term: "Background image" },
+  { sectionId: "appearance", term: "Custom images" },
+  { sectionId: "appearance", term: "Intensity" },
+  { sectionId: "appearance", term: "Transparency" },
 
   // ── services (integrations) ──────────────────────────────────────
   { sectionId: "services", term: "Weather Underground" },
