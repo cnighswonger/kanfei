@@ -2086,7 +2086,7 @@ export default function Settings() {
     for (const cur of configItems) {
       if (cur.key.startsWith("ui_")) continue;
       if (baseline.get(cur.key) !== cur.value) {
-        out.push(configKeyToLabel(cur.key));
+        out.push(configKeyToLabel(cur.key, cur.value));
       }
     }
     return out;
