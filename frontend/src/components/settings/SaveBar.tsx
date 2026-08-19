@@ -170,11 +170,30 @@ export const SaveBar: React.FC<{
 };
 
 /**
- * Human-readable label for a config key.  ``rain_collector_clicks`` →
- * "rain collector clicks".  Deliberately dumb: a curated map would be
- * better but the config schema has ~80 keys and half of them are
- * self-documenting; the dumb fallback covers everything and a curated
- * map can layer on top when a specific key needs polish.
+ * Human-readable label for a config change.  Describes what the user
+ * JUST did, not what field they touched — so ``spray_enabled: false``
+ * reads "spray disabled" rather than "spray enabled" (which would read
+ * as the opposite of the action they took).
+ *
+ * Rules:
+ * - Boolean ending in ``_enabled``: strip the suffix, append
+ *   "enabled" / "disabled" to reflect the NEW value.
+ * - Other booleans: ``label: on / off``.
+ * - Everything else (strings, numbers): ``label: value``.
+ * - No new value (only a key given): fall back to the key label.
  */
-export const configKeyToLabel = (key: string): string =>
-  key.replace(/^ui_/, "").replace(/_/g, " ");
+export const configKeyToLabel = (key: string, value?: unknown): string => {
+  const stem = key.replace(/^ui_/, "");
+  const base = stem.replace(/_/g, " ");
+  if (typeof value === "boolean") {
+    if (stem.endsWith("_enabled")) {
+      const root = stem.slice(0, -"_enabled".length).replace(/_/g, " ");
+      return `${root} ${value ? "enabled" : "disabled"}`;
+    }
+    return `${base}: ${value ? "on" : "off"}`;
+  }
+  if (value !== undefined && value !== null && value !== "") {
+    return `${base}: ${value}`;
+  }
+  return base;
+};
