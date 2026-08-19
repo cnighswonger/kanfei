@@ -26,16 +26,28 @@ export const SectionRail: React.FC<{
   activeGroup: string;
   activeSection: string;
   onSelect: (groupId: string, sectionId: string) => void;
-}> = ({ groups, activeGroup, activeSection, onSelect }) => (
+  /**
+   * Optional auth reminder rendered as a bordered box at the bottom of
+   * the rail.  Design v31 SETTINGS.md: "matching the existing auth
+   * split" — the rail carries the note whenever an operator might not
+   * be signed in yet.  On a private station where the operator is the
+   * only user this is a truism, so Settings passes it only in
+   * public-mode.
+   */
+  authNote?: string | null;
+}> = ({ groups, activeGroup, activeSection, onSelect, authNote = null }) => (
   <nav
     style={{
       padding: "18px 14px",
       borderRight: "0.8px solid var(--color-border)",
       overflowY: "auto",
       fontFamily: "var(--font-body)",
+      display: "flex",
+      flexDirection: "column",
     }}
     aria-label="Settings sections"
   >
+    <div style={{ flex: 1, minHeight: 0 }}>
     {groups.map((g) => {
       const open = g.id === activeGroup;
       return (
@@ -107,5 +119,21 @@ export const SectionRail: React.FC<{
         </div>
       );
     })}
+    </div>
+
+    {authNote ? (
+      <div
+        style={{
+          border: "0.8px solid var(--color-border)",
+          padding: "12px",
+          marginTop: "12px",
+          fontSize: "calc(11.5px * var(--font-scale))",
+          lineHeight: 1.4,
+          color: "var(--color-text-secondary)",
+        }}
+      >
+        {authNote}
+      </div>
+    ) : null}
   </nav>
 );
