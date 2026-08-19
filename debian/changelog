@@ -1,3 +1,17 @@
+kanfei (0.1.0~beta50) unstable; urgency=medium
+
+  * Settings restructure Phase 6: field-level search.  A 260 px
+    search input in the title row filters against a curated index
+    of ~130 terms across the 12 sections; matches render as badges
+    on the section rail and a total-count line under the input tells
+    the operator "3 matches across 2 sections · currently viewing
+    Station".  Case-insensitive substring; aliases like "GPS" for
+    Location and "APRS" for CWOP are indexed so users don't need to
+    guess the tab name.  In-panel highlighting (bordering the
+    matched field within the panel body) is a separate follow-up.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 12:15:00 +0000
+
 kanfei (0.1.0~beta49) unstable; urgency=medium
 
   * Settings Phase 5: help text at 11.5 px on the muted-color
