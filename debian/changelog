@@ -1,3 +1,15 @@
+kanfei (0.1.0~beta56) unstable; urgency=medium
+
+  * Settings restructure Phase 7: Station tab splits into four
+    sub-sections in the rail — Optional features / Hardware /
+    Console configuration / Calibration & diagnostics.  Each
+    section renders only its own cards; the rest are hidden.
+    Signal Quality moved into the Calibration & diagnostics group
+    where it belongs.  All fields still reachable, just via one
+    more click.  Site & units and Appearance splits deferred.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 15:15:00 +0000
+
 kanfei (0.1.0~beta55) unstable; urgency=medium
 
   * Fix: Settings search highlight now handles query extension.
