@@ -2318,6 +2318,11 @@ export default function Settings() {
           activeGroup={activeGroupKey}
           activeSection={activeTab}
           onSelect={(_, sid) => setActiveTab(sid as typeof activeTab)}
+          authNote={
+            flags.publicModeActive
+              ? "Hardware commands require sign-in. Reading settings is public."
+              : null
+          }
         />
       )}
 
