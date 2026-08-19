@@ -1,3 +1,21 @@
+kanfei (0.1.0~beta61) unstable; urgency=medium
+
+  * Design v32 P2s.  RainSeason (Site & Units › Location) drops its
+    inline Save button and routes through the top-level SaveBar via a
+    new ``registerSatellite`` handshake — components that own their
+    own write path can register ``{dirty, label, save, revert}`` and
+    the SaveBar aggregates their label into ``dirtyLabels`` and
+    calls their save/revert alongside the config commit.  ``Compact
+    Readings…`` and ``Download Backup`` drop the brass fill so
+    ``Save changes`` is the single ink-filled primary on paper themes
+    (brass is a link colour, not a button fill).  The Multi-Station
+    Aggregate status pills (Console / Stations / Spread) move from a
+    25 % alpha wash to bordered-transparent chips that match the
+    SectionRail badge vocabulary.  All three are cosmetic /
+    surface-only changes; no wire or backend behaviour.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 19:45:00 +0000
+
 kanfei (0.1.0~beta60) unstable; urgency=medium
 
   * Design v32 P1: collapse Appearance to a single leaf rail row.
