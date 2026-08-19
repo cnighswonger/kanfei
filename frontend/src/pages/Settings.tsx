@@ -142,6 +142,25 @@ const btnPrimary: React.CSSProperties = {
   transition: "background 0.15s",
 };
 
+// Secondary section button — used where Design v32 P2 asked us to
+// pull the brass fill off Compact / Download Backup (Save changes in
+// the SaveBar is the single ink-filled primary; brass is a link
+// colour on paper themes, not a button fill).  Same footprint as
+// btnPrimary, softer treatment: bg-secondary ground, thin border,
+// text colour rather than accent-on-white.
+const btnSecondary: React.CSSProperties = {
+  fontFamily: "var(--font-body)",
+  fontSize: "calc(14px * var(--font-scale))",
+  padding: "10px 24px",
+  borderRadius: "6px",
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-secondary)",
+  color: "var(--color-text)",
+  cursor: "pointer",
+  fontWeight: 500,
+  transition: "background 0.15s",
+};
+
 function gridTwoCol(mobile?: boolean): React.CSSProperties {
   return {
     display: "grid",
@@ -1004,7 +1023,11 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
 
         {!showCompact ? (
           <button
-            style={btnPrimary}
+            style={{
+              ...btnSecondary,
+              opacity: sensorRowCount === 0 ? 0.5 : 1,
+              cursor: sensorRowCount === 0 ? "not-allowed" : "pointer",
+            }}
             onClick={() => setShowCompact(true)}
             disabled={sensorRowCount === 0}
           >
@@ -1071,7 +1094,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
           href={getDbBackupUrl()}
           download
           style={{
-            ...btnPrimary,
+            ...btnSecondary,
             display: "inline-block",
             textDecoration: "none",
           }}
@@ -2027,6 +2050,29 @@ export default function Settings() {
     [],
   );
 
+  // Satellite panels — components that own their own write path but
+  // still want to participate in the top-level SaveBar so a user has
+  // one commit surface for the whole page.  Design v32 P2: RainSeason
+  // was the first case (its own inline Save was a second commit
+  // surface competing with the SaveBar).  Panels register on mount,
+  // update on dirty-state change, unregister on unmount.
+  type SatelliteEntry = {
+    dirty: boolean;
+    label: string;
+    save: () => Promise<void>;
+    revert: () => void;
+  };
+  const satellitesRef = useRef<Map<string, SatelliteEntry>>(new Map());
+  const [satelliteBump, setSatelliteBump] = useState(0);
+  const registerSatellite = useCallback(
+    (key: string, entry: SatelliteEntry | null) => {
+      if (entry) satellitesRef.current.set(key, entry);
+      else satellitesRef.current.delete(key);
+      setSatelliteBump((v) => v + 1);
+    },
+    [],
+  );
+
   const handleSave = useCallback(async () => {
     setSaving(true);
     setError(null);
@@ -2043,6 +2089,12 @@ export default function Settings() {
       const updated = await updateConfig(items);
       setConfigItems(updated);
       setBaselineItems(updated);
+      // Commit any dirty satellite panels alongside the main config.
+      // Sequential rather than Promise.all — the hardware serial link
+      // is single-master; overlapping IPC commands regularly time out.
+      for (const entry of satellitesRef.current.values()) {
+        if (entry.dirty) await entry.save();
+      }
       setSaveSuccess(true);
       notifyMuteChanged();
       await refreshFeatureFlags();
@@ -2070,6 +2122,9 @@ export default function Settings() {
       const updated = await updateConfig(items);
       setConfigItems(updated);
       setBaselineItems(updated);
+      for (const entry of satellitesRef.current.values()) {
+        if (entry.dirty) await entry.save();
+      }
       notifyMuteChanged();
       const result = await reconnectStation();
       if (result.success) {
@@ -2091,6 +2146,7 @@ export default function Settings() {
   // saved.  A no-op if the baseline hasn't been established yet.
   const handleRevert = useCallback(() => {
     if (baselineItems) setConfigItems(baselineItems);
+    for (const entry of satellitesRef.current.values()) entry.revert();
     setSaveSuccess(false);
     setError(null);
   }, [baselineItems]);
@@ -2100,17 +2156,25 @@ export default function Settings() {
   // owned by their context providers (not saved through Settings), so
   // they never count as dirty here.
   const dirtyLabels = useMemo(() => {
-    if (!baselineItems || baselineItems === configItems) return [];
-    const baseline = new Map(baselineItems.map((i) => [i.key, i.value]));
     const out: string[] = [];
-    for (const cur of configItems) {
-      if (cur.key.startsWith("ui_")) continue;
-      if (baseline.get(cur.key) !== cur.value) {
-        out.push(configKeyToLabel(cur.key, cur.value));
+    if (baselineItems && baselineItems !== configItems) {
+      const baseline = new Map(baselineItems.map((i) => [i.key, i.value]));
+      for (const cur of configItems) {
+        if (cur.key.startsWith("ui_")) continue;
+        if (baseline.get(cur.key) !== cur.value) {
+          out.push(configKeyToLabel(cur.key, cur.value));
+        }
       }
     }
+    // Satellite panels contribute their own dirty labels (RainSeason
+    // et al.).  ``satelliteBump`` is the re-render trigger — the Map
+    // lives in a ref because entries are stable identity, not values.
+    for (const entry of satellitesRef.current.values()) {
+      if (entry.dirty && entry.label) out.push(entry.label);
+    }
     return out;
-  }, [configItems, baselineItems]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configItems, baselineItems, satelliteBump]);
 
   const saveBarStatus: SaveBarStatus = error
     ? { kind: "error", msg: error }
@@ -3298,6 +3362,7 @@ export default function Settings() {
       <RainSeason
         supported={wlConfig?.supported?.rain_season ?? false}
         isMobile={isMobile}
+        registerSatellite={registerSatellite}
       />
       </>}
 
