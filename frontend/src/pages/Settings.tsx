@@ -1788,6 +1788,10 @@ export default function Settings() {
   // that subset of cards.
   type StationSection = "optional" | "hardware" | "console_config" | "calibration";
   const [stationSection, setStationSection] = useState<StationSection>("optional");
+  type SiteUnitsSection = "location" | "units" | "timezone";
+  const [siteUnitsSection, setSiteUnitsSection] = useState<SiteUnitsSection>("location");
+  type AppearanceSection = "theme" | "backgrounds";
+  const [appearanceSection, setAppearanceSection] = useState<AppearanceSection>("theme");
   // Ref to the scrollable panel's content div so an effect can walk
   // its DOM and wrap search matches in <mark> elements.  In-panel
   // highlighting was called out as follow-up in the Phase 6 PR; this
@@ -2366,8 +2370,23 @@ export default function Settings() {
         { id: "station__calibration", label: "Calibration & diagnostics" },
       ],
     },
-    { id: "site_units", label: "Site & Units", sections: [{ id: "site_units", label: "Site & Units" }] },
-    { id: "appearance", label: "Appearance", sections: [{ id: "appearance", label: "Appearance" }] },
+    {
+      id: "site_units",
+      label: "Site & Units",
+      sections: [
+        { id: "site_units__location", label: "Location" },
+        { id: "site_units__units", label: "Units" },
+        { id: "site_units__timezone", label: "Timezone" },
+      ],
+    },
+    {
+      id: "appearance",
+      label: "Appearance",
+      sections: [
+        { id: "appearance__theme", label: "Theme" },
+        { id: "appearance__backgrounds", label: "Backgrounds" },
+      ],
+    },
     {
       id: "integrations",
       label: "Integrations",
@@ -2398,11 +2417,24 @@ export default function Settings() {
   // treat Station specially and fall back to the map for every
   // other tab.
   const activeGroupKey =
-    activeTab === "station" ? "station" : (tabToGroup[activeTab] ?? "station");
-  // Section id passed to the rail — for Station this is the sub-
-  // section id, for every other tab it's the tab id itself.
+    activeTab === "station"
+      ? "station"
+      : activeTab === "site_units"
+      ? "site_units"
+      : activeTab === "appearance"
+      ? "appearance"
+      : (tabToGroup[activeTab] ?? "station");
+  // Section id passed to the rail — for the three tabs with sub-
+  // sections this is the sub-section id; for every other tab it's
+  // the tab id itself.
   const activeSectionKey =
-    activeTab === "station" ? `station__${stationSection}` : activeTab;
+    activeTab === "station"
+      ? `station__${stationSection}`
+      : activeTab === "site_units"
+      ? `site_units__${siteUnitsSection}`
+      : activeTab === "appearance"
+      ? `appearance__${appearanceSection}`
+      : activeTab;
 
   // Attach match counts to the rail groups' sections.  Not memoised —
   // ``railGroups`` is a small local array and the derivation is cheap;
@@ -2527,6 +2559,12 @@ export default function Settings() {
             if (sid.startsWith("station__")) {
               setActiveTab("station");
               setStationSection(sid.slice("station__".length) as StationSection);
+            } else if (sid.startsWith("site_units__")) {
+              setActiveTab("site_units");
+              setSiteUnitsSection(sid.slice("site_units__".length) as SiteUnitsSection);
+            } else if (sid.startsWith("appearance__")) {
+              setActiveTab("appearance");
+              setAppearanceSection(sid.slice("appearance__".length) as AppearanceSection);
             } else {
               setActiveTab(sid as typeof activeTab);
             }
@@ -3229,6 +3267,7 @@ export default function Settings() {
       </>)}
 
       {activeTab === "site_units" && (<>
+      {siteUnitsSection === "location" && <>
       {/* Location section — moved out of Station in the 5-group nav
           rework so site coordinates live with unit preferences instead
           of buried under station calibration.  StepLocation is the same
@@ -3260,7 +3299,9 @@ export default function Settings() {
         supported={wlConfig?.supported?.rain_season ?? false}
         isMobile={isMobile}
       />
+      </>}
 
+      {siteUnitsSection === "units" && <>
       {/* Units section */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Units</h3>
@@ -3356,6 +3397,15 @@ export default function Settings() {
           </div>
         </div>
 
+      </div>
+      </>}
+
+      {siteUnitsSection === "timezone" && <>
+      {/* Timezone — split out of the Units card so it can live on its
+          own rail sub-section per Design v31.  Stores an IANA name in
+          station_timezone for the nowcast service to consume. */}
+      <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
+        <h3 style={sectionTitle}>Timezone</h3>
         <div style={fieldGroup}>
           <label style={labelStyle}>Timezone</label>
           <select
@@ -3380,12 +3430,14 @@ export default function Settings() {
           </select>
         </div>
       </div>
+      </>}
       </>)}
 
       {activeTab === "appearance" && (<>
-      {/* Display section */}
+      {appearanceSection === "theme" && <>
+      {/* Theme picker + custom editor. */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
-        <h3 style={sectionTitle}>Display</h3>
+        <h3 style={sectionTitle}>Theme</h3>
         <div style={fieldGroup}>
           <label style={labelStyle}>Theme</label>
           <select
@@ -3411,8 +3463,16 @@ export default function Settings() {
             }
           }} />
         )}
+      </div>
+      </>}
 
-        <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "16px", marginTop: "8px" }}>
+      {appearanceSection === "backgrounds" && <>
+      {/* Backgrounds — weather-driven gradient, tile transparency,
+          and user-uploaded background images.  Split from the Theme
+          card in the v31 sub-section rework. */}
+      <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
+        <h3 style={sectionTitle}>Backgrounds</h3>
+        <div>
           <div style={fieldGroup}>
             <label style={checkboxLabel}>
               <input
@@ -3547,6 +3607,7 @@ export default function Settings() {
           )}
         </div>
       </div>
+      </>}
       </>)}
 
       {activeTab === "services" && (<>
