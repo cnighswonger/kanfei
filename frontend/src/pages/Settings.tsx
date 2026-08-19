@@ -8,6 +8,7 @@ import { useWeatherBackground } from "../context/WeatherBackgroundContext.tsx";
 import { themes } from "../themes/index.ts";
 import { SectionRail } from "../components/settings/SectionRail.tsx";
 import { SaveBar, type SaveBarStatus, configKeyToLabel } from "../components/settings/SaveBar.tsx";
+import { computeMatches, totalMatches } from "../components/settings/searchIndex.ts";
 import ThemeEditor from "../components/settings/ThemeEditor.tsx";
 import BarometerCalibration from "../components/settings/BarometerCalibration.tsx";
 import ConsoleDataOperations from "../components/settings/ConsoleDataOperations.tsx";
@@ -1777,6 +1778,10 @@ export default function Settings() {
   const [telegramTestResult, setTelegramTestResult] = useState<string | null>(null);
   const [discordTesting, setDiscordTesting] = useState(false);
   const [discordTestResult, setDiscordTestResult] = useState<string | null>(null);
+  // Search input in the title row.  Feeds ``computeMatches`` against
+  // the curated field index in ``searchIndex.ts``; the per-tab tally
+  // renders as ``matches`` badges on the SectionRail.
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { flags, refresh: refreshFeatureFlags } = useFeatureFlags();
   const { themeName, setThemeName } = useTheme();
@@ -2273,6 +2278,30 @@ export default function Settings() {
   for (const g of railGroups) for (const s of g.sections) tabToGroup[s.id] = g.id;
   const activeGroupKey = tabToGroup[activeTab] ?? "station";
 
+  // Search matches per section — feeds the rail's badge column.  Empty
+  // when the search box is blank so the rail reads as before.
+  const searchMatches = useMemo(() => computeMatches(searchQuery), [searchQuery]);
+  const railGroupsWithMatches = useMemo(
+    () =>
+      railGroups.map((g) => ({
+        ...g,
+        sections: g.sections.map((s) => ({
+          ...s,
+          matches: searchMatches.get(s.id) ?? 0,
+        })),
+      })),
+    // railGroups is rebuilt every render from the same feature-flag
+    // inputs; the useMemo just avoids recomputing sections when the
+    // search doesn't move.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [searchMatches, flags.nowcastEnabled, flags.sprayEnabled],
+  );
+  const totalMatchCount = totalMatches(searchMatches);
+  const activeGroupSection = railGroups
+    .find((g) => g.id === activeGroupKey)
+    ?.sections.find((s) => s.id === activeTab);
+  const searchMatchSectionLabel = activeGroupSection?.label ?? "";
+
   return (
     <div
       ref={settingsRef}
@@ -2288,12 +2317,17 @@ export default function Settings() {
         overflow: "hidden",
       }}
     >
-      {/* Row 1: title, spans both columns. */}
+      {/* Row 1: title + search, spans both columns. */}
       <div
         style={{
           gridColumn: "1 / -1",
           padding: "18px 26px 14px",
           borderBottom: "1.6px solid var(--color-text)",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: "16px",
+          flexWrap: "wrap",
         }}
       >
         <h2
@@ -2307,6 +2341,58 @@ export default function Settings() {
         >
           Settings
         </h2>
+
+        {/* Right cluster: search input + match count.  Hidden on
+            mobile — the section rail already collapses there and a
+            search that landed users on a section they can't jump to
+            would be more confusing than useful.  Mobile search is
+            Phase 2 alongside the mobile section switch. */}
+        {!isMobile && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", minWidth: "260px" }}>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search settings…"
+              aria-label="Search settings"
+              style={{
+                width: "260px",
+                height: "36px",
+                padding: "0 12px",
+                fontFamily: "var(--font-body)",
+                fontSize: "calc(14px * var(--font-scale))",
+                background: "var(--color-bg-secondary)",
+                color: "var(--color-text)",
+                border: "0.8px solid var(--color-border)",
+                borderRadius: 0,
+                outline: "none",
+                textAlign: "right",
+                boxSizing: "border-box",
+              }}
+            />
+            {searchQuery.trim() ? (
+              <div
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: "calc(11.5px * var(--font-scale))",
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                {totalMatchCount === 0
+                  ? "No matches"
+                  : totalMatchCount === 1
+                  ? `1 match — click a section to jump`
+                  : `${totalMatchCount} matches across ${searchMatches.size} section${searchMatches.size === 1 ? "" : "s"}`}
+                {totalMatchCount > 0 && searchMatchSectionLabel && (
+                  <>
+                    {" · currently viewing "}
+                    <strong>{searchMatchSectionLabel}</strong>
+                  </>
+                )}
+              </div>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {/* Row 2, col 1: section rail.  Hidden on mobile — the panel
@@ -2314,7 +2400,7 @@ export default function Settings() {
           own scroll.  Tab switching on mobile is Phase 2. */}
       {!isMobile && (
         <SectionRail
-          groups={railGroups}
+          groups={railGroupsWithMatches}
           activeGroup={activeGroupKey}
           activeSection={activeTab}
           onSelect={(_, sid) => setActiveTab(sid as typeof activeTab)}
