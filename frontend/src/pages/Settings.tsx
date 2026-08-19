@@ -1087,7 +1087,7 @@ function DatabaseTab({ isMobile }: { isMobile: boolean }) {
 
         {!showPurgeAll ? (
           <>
-            <p style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0 0 12px 0" }}>
+            <p style={{ fontSize: "calc(11.5px * var(--font-scale))", color: "var(--color-text-muted)", fontFamily: "var(--font-body)", margin: "0 0 12px 0" }}>
               Permanently delete all sensor readings, archives, nowcasts, knowledge base entries, and spray history.
               Configuration and product definitions are preserved.
             </p>
@@ -2335,7 +2335,7 @@ export default function Settings() {
       {/* Optional Features */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Optional Features</h3>
-        <p style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-muted)", marginBottom: "16px", fontFamily: "var(--font-body)", marginTop: 0 }}>
+        <p style={{ fontSize: "calc(11.5px * var(--font-scale))", color: "var(--color-text-muted)", marginBottom: "16px", fontFamily: "var(--font-body)", marginTop: 0 }}>
           Enable optional features to add their pages and settings tabs.
         </p>
         <div style={fieldGroup}>
@@ -2654,7 +2654,7 @@ export default function Settings() {
       {String(val("station_driver_type") || "legacy") !== "public_relay" && (
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Public Droplet Relay</h3>
-        <p style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-muted)", marginBottom: "16px", fontFamily: "var(--font-body)", marginTop: 0 }}>
+        <p style={{ fontSize: "calc(11.5px * var(--font-scale))", color: "var(--color-text-muted)", marginBottom: "16px", fontFamily: "var(--font-body)", marginTop: 0 }}>
           Push live readings to a public droplet running Kanfei in
           read-only mode.  See <code style={{ fontFamily: "var(--font-mono, monospace)" }}>docs/public-droplet.md</code>.
         </p>
