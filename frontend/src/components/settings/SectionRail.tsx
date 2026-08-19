@@ -50,6 +50,12 @@ export const SectionRail: React.FC<{
     <div style={{ flex: 1, minHeight: 0 }}>
     {groups.map((g) => {
       const open = g.id === activeGroup;
+      // Sum of matches across every section in this group.  Rendered as
+      // a badge on the collapsed group header so a search that lands in
+      // a currently-collapsed group is still visible — otherwise
+      // "4 matches across 3 sections" reads while the rail shows
+      // nothing changed.
+      const groupMatches = g.sections.reduce((n, s) => n + (s.matches ?? 0), 0);
       return (
         <div key={g.id}>
           <button
@@ -60,6 +66,7 @@ export const SectionRail: React.FC<{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
+              gap: "8px",
               padding: "8px 10px",
               margin: 0,
               border: "none",
@@ -72,7 +79,31 @@ export const SectionRail: React.FC<{
             }}
           >
             <span>{g.label}</span>
-            <span style={{ opacity: 0.7 }}>{open ? "▾" : "▸"}</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+              {groupMatches > 0 ? (
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono, var(--font-body))",
+                    fontSize: "calc(10px * var(--font-scale))",
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    padding: "1px 6px",
+                    // Accent chip that reads on both the inverted (open)
+                    // and default (closed) group backgrounds.  Ink border
+                    // when open so the chip has contrast on the ink fill.
+                    border: open
+                      ? "0.8px solid var(--color-bg)"
+                      : "0.8px solid var(--color-accent)",
+                    color: open ? "var(--color-bg)" : "var(--color-accent)",
+                    borderRadius: 0,
+                    background: "transparent",
+                  }}
+                >
+                  {groupMatches}
+                </span>
+              ) : null}
+              <span style={{ opacity: 0.7 }}>{open ? "▾" : "▸"}</span>
+            </span>
           </button>
           {open &&
             g.sections.map((sec) => {
