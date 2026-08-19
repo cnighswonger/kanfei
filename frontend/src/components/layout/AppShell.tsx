@@ -9,7 +9,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { useWeatherData } from '../../context/WeatherDataContext';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useMuteStatus } from '../../hooks/useMuteStatus';
-import { readUIPref, writeUIPref, syncUIPrefs } from '../../utils/uiPrefs';
 
 const CHANNEL_LABELS: Record<string, string> = {
   outdoor_temperature: 'Outdoor Temperature',
@@ -37,9 +36,6 @@ export default function AppShell({
   lastUpdate = null,
 }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => readUIPref("ui_sidebar_collapsed", "false") === "true",
-  );
   const { enabled } = useWeatherBackground();
   const { theme } = useTheme();
   const themeOwnsBackground = theme.surface.ownsBackground;
@@ -54,28 +50,15 @@ export default function AppShell({
     return () => clearTimeout(timer);
   }, [nowcastWarning, dismissNowcastWarning]);
 
-  // Reconcile sidebar state with backend on mount
-  useEffect(() => {
-    syncUIPrefs().then((prefs) => {
-      const v = prefs["ui_sidebar_collapsed"];
-      if (v !== undefined) {
-        setSidebarCollapsed(v === "true");
-      }
-    });
-  }, []);
-
-  const toggleCollapse = () => {
-    setSidebarCollapsed((prev) => {
-      const next = !prev;
-      writeUIPref("ui_sidebar_collapsed", String(next));
-      return next;
-    });
-  };
-
   const location = useLocation();
   const isAbout = location.pathname === '/about';
   const hideHeader = isAbout && !isMobile;
-  const sidebarWidth = sidebarCollapsed ? '56px' : '220px';
+  // Desktop sidebar is always the labelled 220 px per Design's SCREENS.md
+  // spec.  The earlier collapse-to-icon-rail toggle was removed after
+  // Design flagged it in the v32 review — the labelled colour-keyed nav
+  // is load-bearing on every page.  Mobile still uses ``sidebarOpen``
+  // (overlay pattern) to hide/show.
+  const sidebarWidth = '220px';
 
   // A paper theme owns the page background: body's texture layer
   // and the plate below both need to show through, so the shell
@@ -113,7 +96,17 @@ export default function AppShell({
           route: the dashboard renders its own scoped corner plate
           via --surface-plate, and painting both duplicates the
           engraving across the page. */}
-      {location.pathname !== '/' && <div className="app-plate" aria-hidden="true" />}
+      {/* Ornamental plate — dashboard renders its own scoped corner
+          plate via ``--surface-plate``, so we suppress the shell-wide
+          layer there.  Also suppressed on Settings per Design's v32
+          review: Settings is a work surface, the plate sits behind
+          form inputs (Location map, Channel Mute grid) and becomes
+          the subject of the page.  If a paper texture is wanted the
+          theme's ``surface.texture`` gradient already provides one
+          at a weight that doesn't compete. */}
+      {location.pathname !== '/' && location.pathname !== '/settings' && (
+        <div className="app-plate" aria-hidden="true" />
+      )}
       <div
         style={{
           display: 'grid',
@@ -143,8 +136,6 @@ export default function AppShell({
           <Sidebar
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
-            collapsed={sidebarCollapsed}
-            onToggleCollapse={toggleCollapse}
           />
         </div>
 
