@@ -61,9 +61,27 @@ const dark: Theme = {
     mono: role(mono, 13, 400),
     sectionLabel: role(body, 11, 600, { tracking: 1.4, transform: 'uppercase' }),
   },
-  rules: { hairline: 1, style: 'solid', strong: '#2a2d3e', hair: '#353849' },
+  // Hairline raised to rgba(255,255,255,0.14) (was #353849 ≈ 0.08 on
+  // the shell surface) so tile borders stay visible over the scrim +
+  // user background.  Design's DIFF-dark-background.md — the old
+  // hair value was calibrated for a flat ground and disappeared once
+  // a photograph sat behind it.
+  rules: { hairline: 1, style: 'solid', strong: '#2a2d3e', hair: 'rgba(255,255,255,0.14)' },
   radius: { card: '16px', control: '6px' },
-  surface: { ownsBackground: false },
+  surface: {
+    ownsBackground: false,
+    // Sits over the user's weather-background image, under all
+    // content.  Guarantees floor contrast against any photograph;
+    // without it, legibility depends on the user picking a flat
+    // low-contrast wallpaper.  Design's DIFF-dark-background.md.
+    scrim: 'rgba(16,19,28,0.74)',
+    // Tiles read as glass panels: the photograph still shows between
+    // tiles (which is the whole point of allowing one) but the tile
+    // itself has a dark ground so numerals don't fight high-frequency
+    // detail underneath.
+    tileBg: 'rgba(23,27,40,0.82)',
+    tileBackdrop: 'blur(3px)',
+  },
   chart: {
     series: {
       temp: '#4c8dff',

@@ -106,6 +106,12 @@ export function applyThemeToDOM(theme: Theme) {
   // shell-wide).  ``none`` when no plate is configured.
   root.style.setProperty('--surface-plate', plate ? `url("${plate.src}")` : 'none');
   root.style.setProperty('--surface-owns-background', theme.surface.ownsBackground ? '1' : '0');
+  // Scrim + tile glass — Dark ships values here (Design's
+  // DIFF-dark-background.md).  Paper themes leave them unset so the
+  // consuming CSS falls back to transparent / none.
+  root.style.setProperty('--surface-scrim', theme.surface.scrim ?? 'transparent');
+  root.style.setProperty('--tile-bg', theme.surface.tileBg ?? 'transparent');
+  root.style.setProperty('--tile-backdrop', theme.surface.tileBackdrop ?? 'none');
 
   // Chart tokens.  Series colours as one var each so Highcharts
   // callers can pick them by role rather than by index.
