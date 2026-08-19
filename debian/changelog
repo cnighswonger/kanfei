@@ -1,3 +1,18 @@
+kanfei (0.1.0~beta55) unstable; urgency=medium
+
+  * Fix: Settings search highlight now handles query extension.
+    Beta53's comment claimed React would reconcile the previous
+    run's <mark> wraps away — untrue, React's diff only touches
+    nodes whose JSX changed and the imperative wraps are invisible
+    to it.  Result: typing "bar" left an old <mark>ba</mark> in
+    place and the walker (which skips MARK subtrees) never saw the
+    "b" or "a" text nodes it needed to re-wrap.  The effect now
+    unwraps every mark[data-settings-highlight] and normalises the
+    parent before the new walk, so the walker sees the same shape
+    as on the first pass.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 14:33:00 +0000
+
 kanfei (0.1.0~beta54) unstable; urgency=medium
 
   * Search highlight now uses the theme's full accent color as
