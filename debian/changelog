@@ -1,3 +1,16 @@
+kanfei (0.1.0~beta53) unstable; urgency=medium
+
+  * Settings search now highlights matches inside the panel body,
+    not just on the rail badges.  Typing "bar" wraps every
+    occurrence of "bar" in the visible panel with a subtle accent-
+    ground <mark> so the operator can eyeball where the matches
+    are.  Kicks in at query length >= 2 to keep single-letter
+    typing quiet; skips inputs/textareas so form values aren't
+    disturbed.  This was called out as a Phase 6 follow-up in the
+    beta50 changelog.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 14:15:00 +0000
+
 kanfei (0.1.0~beta52) unstable; urgency=medium
 
   * Fix: Settings search now advertises matches on the collapsed
