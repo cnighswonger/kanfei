@@ -1,3 +1,22 @@
+kanfei (0.1.0~beta60) unstable; urgency=medium
+
+  * Design v32 P1: collapse Appearance to a single leaf rail row.
+    The panel now renders three cards — Theme, Persona, Backgrounds —
+    in one column.  Persona was previously reachable only from the
+    header pill; Settings is where someone discovers what a persona
+    is, so the pill and the settings card now share the same
+    underlying context state.  The SectionRail component grew a
+    leaf-group affordance (no caret, click routes to the group's own
+    section id) that other single-panel groups can adopt.
+  * Sidebar: consume ``theme.nav.iconHues`` on the non-paper render
+    branch too.  The Dark / Ink / Slate themes' colour-keyed nav
+    icons (blue Dashboard, purple History, amber Astronomy, green
+    Map, coral Nowcast, teal Spray) were shipped as theme tokens but
+    only paper themes ever rendered them; the non-paper branch was
+    hardcoded to muted grey.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 19:00:00 +0000
+
 kanfei (0.1.0~beta59) unstable; urgency=medium
 
   * Design v32 P0s: suppress the app-wide ornamental plate on the
