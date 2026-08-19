@@ -1,3 +1,16 @@
+kanfei (0.1.0~beta51) unstable; urgency=medium
+
+  * Fixes React #310 crash on the first Settings render introduced by
+    beta50 search work.  Two new useMemo hooks sat below the
+    ``if (loading) return`` early exit, so the initial render skipped
+    them and the second render (loading -> false) landed with an
+    extra hook count.  ``searchMatches`` moved above the loading
+    return; the tiny ``railGroupsWithMatches`` derivation is now a
+    plain ``.map`` (memoising it needed ``railGroups`` hoisted too;
+    not worth it for a nine-item array).
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 13:07:00 +0000
+
 kanfei (0.1.0~beta50) unstable; urgency=medium
 
   * Settings restructure Phase 6: field-level search.  A 260 px
