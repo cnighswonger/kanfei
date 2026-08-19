@@ -2227,6 +2227,23 @@ export default function Settings() {
   useEffect(() => {
     const panel = panelBodyRef.current;
     if (!panel) return;
+    // Clear the previous run's marks first.  React DOESN'T reliably
+    // reconcile them away — its diff only touches nodes whose JSX
+    // changed, and our imperative <mark> wraps are invisible to the
+    // diff.  Without this clear, extending "ba" to "bar" leaves the
+    // old <mark>ba</mark> in place and my walker (which skips MARK)
+    // never sees the "bar" substring it needs to re-wrap.
+    panel.querySelectorAll("mark[data-settings-highlight]").forEach((mark) => {
+      const parent = mark.parentNode;
+      if (!parent) return;
+      parent.replaceChild(
+        document.createTextNode(mark.textContent ?? ""),
+        mark,
+      );
+      // Merge adjacent text nodes back together so the next walker
+      // pass sees single-string labels instead of a shredded chain.
+      parent.normalize();
+    });
     const q = searchQuery.trim();
     if (q.length < 2) return;
     const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
