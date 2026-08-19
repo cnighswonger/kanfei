@@ -1,3 +1,15 @@
+kanfei (0.1.0~beta47) unstable; urgency=medium
+
+  * Fix: SaveBar labels now describe the NEW value, not the field
+    name.  Chris disabled Spray Advisor and the bar read "spray
+    enabled" — the opposite of the action taken.  Boolean fields
+    ending in ``_enabled`` now render as "spray disabled" / "spray
+    enabled" per the pending value; other booleans as "field: on"
+    / "field: off"; scalars as "field: value".  Same field diff,
+    the label just tells the truth about what saving will do.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 00:22:00 +0000
+
 kanfei (0.1.0~beta46) unstable; urgency=medium
 
   * Settings restructure Phase 3: SaveBar names the dirty fields.
