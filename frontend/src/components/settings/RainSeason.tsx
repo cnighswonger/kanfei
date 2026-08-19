@@ -7,11 +7,14 @@
  * July so a mid-winter storm season is not split across two yearly
  * totals.  Legacy stations reset every January without exposing a knob.
  *
- * Read-then-write.  Not much UI: a select, a save button, and the
- * before/after echo for confidence.
+ * Read-then-write.  Not much UI: a select and a before/after echo
+ * for confidence.  Commit routes through Settings' top-level SaveBar
+ * via the ``registerSatellite`` handshake — Design v32 P2 asked us
+ * to drop the panel's own Save button so users have one commit
+ * surface for the whole page.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
   fetchRainSeason,
@@ -81,12 +84,25 @@ function monthLabel(n: number | null | undefined): string {
   return MONTHS.find((m) => m.value === n)?.label ?? String(n);
 }
 
+type SatelliteEntry = {
+  dirty: boolean;
+  label: string;
+  save: () => Promise<void>;
+  revert: () => void;
+};
+
 interface Props {
   supported: boolean;
   isMobile: boolean;
+  /**
+   * Optional hook into the parent Settings' SaveBar.  Registered on
+   * mount, updated on dirty-state change, unregistered on unmount.
+   * Absent for standalone use in tests or Storybook.
+   */
+  registerSatellite?: (key: string, entry: SatelliteEntry | null) => void;
 }
 
-export default function RainSeason({ supported, isMobile }: Props) {
+export default function RainSeason({ supported, isMobile, registerSatellite }: Props) {
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [current, setCurrent] = useState<number | null>(null);
   const [draft, setDraft] = useState<number | null>(null);
@@ -128,7 +144,11 @@ export default function RainSeason({ supported, isMobile }: Props) {
 
   const dirty = draft != null && draft !== current;
 
-  const apply = async () => {
+  // Keep the apply function up-to-date without triggering a re-register
+  // on every keystroke of unrelated state — the parent SaveBar calls
+  // whichever version is current when the user clicks.
+  const applyRef = useRef<() => Promise<void>>(async () => {});
+  applyRef.current = async () => {
     if (draft == null) return;
     setSaving(true);
     setError(null);
@@ -141,10 +161,27 @@ export default function RainSeason({ supported, isMobile }: Props) {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      throw err;
     } finally {
       setSaving(false);
     }
   };
+
+  const draftLabelForBar = dirty ? `rain season → ${monthLabel(draft)}` : "";
+
+  useEffect(() => {
+    if (!registerSatellite) return;
+    registerSatellite("rain_year_start", {
+      dirty,
+      label: draftLabelForBar,
+      save: () => applyRef.current(),
+      revert: () => {
+        setDraft(current);
+        setError(null);
+      },
+    });
+    return () => registerSatellite("rain_year_start", null);
+  }, [registerSatellite, dirty, draftLabelForBar, current]);
 
   return (
     <div style={{ ...card, padding: isMobile ? "12px" : "20px" }}>
@@ -189,20 +226,7 @@ export default function RainSeason({ supported, isMobile }: Props) {
             </select>
           </label>
 
-          <button
-            type="button"
-            style={{
-              ...button,
-              opacity: dirty && !saving ? 1 : 0.5,
-              cursor: dirty && !saving ? "pointer" : "default",
-            }}
-            onClick={apply}
-            disabled={!dirty || saving}
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
-
-          {applyResult && (
+          {applyResult && !dirty && (
             <span style={{ ...body, opacity: 0.75 }}>
               {applyResult.before === applyResult.after
                 ? `Console reads: ${monthLabel(applyResult.after)}`

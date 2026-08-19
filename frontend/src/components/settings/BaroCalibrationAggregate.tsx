@@ -94,24 +94,29 @@ const td: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const badge = (kind: "pass" | "hold"): React.CSSProperties => ({
+// Bordered transparent chip — Design v32 P2: the previous 25%-wash
+// fills read as "saturated green and tan" on paper themes and
+// competed with the panel copy for attention.  Match the SectionRail
+// badge treatment (border + transparent ground) so the whole app
+// speaks with one chip vocabulary.  Role tokens (success / warning /
+// textSecondary) carry the state instead of an alpha wash.
+type BadgeKind = "pass" | "hold" | "neutral";
+const CHIP_TOKEN: Record<BadgeKind, string> = {
+  pass: "var(--color-success)",
+  hold: "var(--color-warning)",
+  neutral: "var(--color-text-secondary)",
+};
+const badge = (kind: BadgeKind): React.CSSProperties => ({
   display: "inline-block",
-  // Vertical padding + explicit line-height so the pill has breathing
-  // room around the label — the previous `2px 8px` and default
-  // line-height produced visibly cramped text (nit against the beta27
-  // screenshot).  Horizontal padding kept at 10px for the same read.
-  padding: "4px 10px",
+  padding: "3px 10px",
   lineHeight: 1.4,
   borderRadius: "999px",
   fontSize: "calc(11px * var(--font-scale))",
   fontFamily: "var(--font-body)",
   fontWeight: 600,
-  background:
-    kind === "pass"
-      ? "color-mix(in oklab, var(--color-success) 25%, transparent)"
-      : "color-mix(in oklab, var(--color-warning) 25%, transparent)",
-  color:
-    kind === "pass" ? "var(--color-success)" : "var(--color-warning)",
+  background: "transparent",
+  border: `0.8px solid ${CHIP_TOKEN[kind]}`,
+  color: CHIP_TOKEN[kind],
 });
 
 // Human-readable one-liner per skip reason.  Kept as a lookup so the
