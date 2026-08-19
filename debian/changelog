@@ -1,3 +1,13 @@
+kanfei (0.1.0~beta54) unstable; urgency=medium
+
+  * Search highlight now uses the theme's full accent color as
+    background with the bg token as text and 600 weight — reads as
+    a lozenge on paper and Dark alike.  Beta53 used the accent-
+    muted token, which is 10% alpha on Mammoth and effectively
+    invisible against the paper background.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 14:25:00 +0000
+
 kanfei (0.1.0~beta53) unstable; urgency=medium
 
   * Settings search now highlights matches inside the panel body,
