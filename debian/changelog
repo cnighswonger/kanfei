@@ -1,3 +1,17 @@
+kanfei (0.1.0~beta52) unstable; urgency=medium
+
+  * Fix: Settings search now advertises matches on the collapsed
+    group headers, not just the expanded one.  With badges only
+    rendering inside the currently-expanded group's children, a
+    search matching a section in a collapsed group left the rail
+    looking unchanged even though the count line correctly said
+    "4 matches across 3 sections".  The header now carries an
+    accent chip with the sum of matches in that group, so a
+    collapsed Data or Integrations group can still signal "your
+    search is in here."
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 13:20:00 +0000
+
 kanfei (0.1.0~beta51) unstable; urgency=medium
 
   * Fixes React #310 crash on the first Settings render introduced by
