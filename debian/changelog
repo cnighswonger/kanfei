@@ -1,3 +1,23 @@
+kanfei (0.1.0~beta57) unstable; urgency=medium
+
+  * Settings restructure Phase 7b: Site & units and Appearance
+    join Station in the rail sub-section split.  Site & units now
+    breaks into Location / Units / Timezone (Timezone finally has
+    its own card, split out of the Units block).  Appearance is
+    Theme / Backgrounds — Theme owns the picker + editor;
+    Backgrounds owns the weather-driven gradient + tile
+    transparency + custom images.  Persona intentionally not a
+    section here since its picker still lives in the header.
+  * Search index reindexed so match badges point at the specific
+    sub-section rather than accumulating on the parent group.
+    Typing "GPS" now lights up Location directly; "background"
+    lights Backgrounds; "bar" lights both Station -> Calibration
+    and Site & units -> Location.  The parent group badge (added
+    beta52) still shows the total so collapsed groups can advertise
+    matches too.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 16:15:00 +0000
+
 kanfei (0.1.0~beta56) unstable; urgency=medium
 
   * Settings restructure Phase 7: Station tab splits into four
