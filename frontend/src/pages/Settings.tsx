@@ -2205,6 +2205,13 @@ export default function Settings() {
   // Convenience getters
   const val = (key: string) => getConfigValue(configItems, key);
 
+  // Search matches per section — feeds the rail's badge column.  Empty
+  // when the search box is blank so the rail reads as before.  Must be
+  // declared before the ``if (loading)`` early return; a hook after a
+  // conditional early return violates the rules of hooks and blows up
+  // with React #310 on first render (loading -> not loading).
+  const searchMatches = useMemo(() => computeMatches(searchQuery), [searchQuery]);
+
   if (loading) {
     return (
       <div>
@@ -2278,24 +2285,18 @@ export default function Settings() {
   for (const g of railGroups) for (const s of g.sections) tabToGroup[s.id] = g.id;
   const activeGroupKey = tabToGroup[activeTab] ?? "station";
 
-  // Search matches per section — feeds the rail's badge column.  Empty
-  // when the search box is blank so the rail reads as before.
-  const searchMatches = useMemo(() => computeMatches(searchQuery), [searchQuery]);
-  const railGroupsWithMatches = useMemo(
-    () =>
-      railGroups.map((g) => ({
-        ...g,
-        sections: g.sections.map((s) => ({
-          ...s,
-          matches: searchMatches.get(s.id) ?? 0,
-        })),
-      })),
-    // railGroups is rebuilt every render from the same feature-flag
-    // inputs; the useMemo just avoids recomputing sections when the
-    // search doesn't move.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [searchMatches, flags.nowcastEnabled, flags.sprayEnabled],
-  );
+  // Attach match counts to the rail groups' sections.  Not memoised —
+  // ``railGroups`` is a small local array and the derivation is cheap;
+  // memoising would need railGroups declared above the loading check
+  // and it lives here for cache-locality with the other tab-index
+  // work.  The hook counted above the loading check is ``searchMatches``.
+  const railGroupsWithMatches = railGroups.map((g) => ({
+    ...g,
+    sections: g.sections.map((s) => ({
+      ...s,
+      matches: searchMatches.get(s.id) ?? 0,
+    })),
+  }));
   const totalMatchCount = totalMatches(searchMatches);
   const activeGroupSection = railGroups
     .find((g) => g.id === activeGroupKey)
