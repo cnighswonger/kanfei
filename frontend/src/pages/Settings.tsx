@@ -2266,10 +2266,14 @@ export default function Settings() {
         const mark = document.createElement("mark");
         mark.dataset.settingsHighlight = "true";
         mark.textContent = m[0];
-        mark.style.background = "var(--color-accent-muted, rgba(168,95,36,0.24))";
-        mark.style.color = "var(--color-text)";
-        mark.style.padding = "0 2px";
+        // Accent ground + paper text — the mark reads as a lozenge
+        // and doesn't fight the surrounding copy.  ``accent-muted``
+        // (10% alpha on Mammoth) was invisible on paper backgrounds.
+        mark.style.background = "var(--color-accent)";
+        mark.style.color = "var(--color-bg)";
+        mark.style.padding = "0 3px";
         mark.style.borderRadius = "2px";
+        mark.style.fontWeight = "600";
         frag.appendChild(mark);
         last = m.index + m[0].length;
         // Guard against zero-width matches on some regex engines.
