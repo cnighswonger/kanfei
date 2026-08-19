@@ -87,6 +87,25 @@ export default function AppShell({
   return (
     <>
       <WeatherBackground />
+      {/* Scrim — sits over the WeatherBackground image and under all
+          content.  Renders only when the active theme provides a
+          scrim colour AND the user has a weather background enabled.
+          Purpose: guarantee a floor contrast so tiles / hairlines /
+          labels stay legible against any photograph.  Design's
+          DIFF-dark-background.md.  Paper themes ship no scrim and
+          own their own background, so this stays hidden there. */}
+      {enabled && theme.surface.scrim && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'var(--surface-scrim, transparent)',
+            pointerEvents: 'none',
+            zIndex: 2,
+          }}
+        />
+      )}
       {/* Ornamental plate layer.  Reads --plate-* custom properties
           published by applyThemeToDOM.  Non-paper themes ship
           --plate-image: none, so the element paints nothing — safe
