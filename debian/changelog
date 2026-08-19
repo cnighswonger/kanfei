@@ -1,3 +1,14 @@
+kanfei (0.1.0~beta49) unstable; urgency=medium
+
+  * Settings Phase 5: help text at 11.5 px on the muted-color
+    paragraphs (Design v31 spec).  The 75% ink was already correct
+    on Mammoth; the change is font size 13 → 11.5 px on the five
+    muted paragraphs where help text lives.  "Loading…" / "No
+    backups found." status lines stay at 13 — those are info
+    states, not help text.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 00:48:00 +0000
+
 kanfei (0.1.0~beta48) unstable; urgency=medium
 
   * Settings Phase 4: auth-note in the rail on public droplets.
