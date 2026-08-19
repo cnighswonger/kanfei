@@ -149,6 +149,30 @@ export interface Theme {
      * Wired in the shell/settings PR (PR 4), not this one.
      */
     ownsBackground: boolean;
+    /**
+     * Overlay painted between the user's weather background and the
+     * app content when the theme does NOT own the background.  Only
+     * meaningful on themes that permit a photographic user background
+     * (Dark today).  ``AppShell`` renders a fixed-position layer with
+     * this colour + alpha whenever the scrim is set AND
+     * ``WeatherBackground`` is active.  Purpose: guarantee a floor
+     * contrast so tile hairlines and labels stay legible against any
+     * photograph.  See ``docs/decisions/dark-scrim-and-translucent-
+     * tiles.md`` for the reasoning; the short version is Design's
+     * DIFF-dark-background.md.  Absent on themes without a
+     * user-selected background.
+     */
+    scrim?: string;
+    /**
+     * Semi-opaque tile fill and ``backdrop-filter`` for themes that
+     * want tiles to read as glass panels over a scrim + user
+     * background.  When set, ``Tile`` in ``dashboard/primitives.tsx``
+     * paints tiles with the background colour + backdrop blur;
+     * un-set, tiles stay transparent (the pre-existing behaviour on
+     * paper themes).  Only Dark uses these today.
+     */
+    tileBg?: string;
+    tileBackdrop?: string;
     /** Engraving plate for the shell, when ``ownsBackground`` is true. */
     plate?: {
       src: string;

@@ -336,6 +336,11 @@ export const Tile: React.FC<{
       background: 'var(--tile-bg, transparent)',
       border: 'var(--tile-border, none)',
       borderRadius: v.radiusCard,
+      // Backdrop blur for glass-panel themes (Dark).  Paper themes
+      // ship ``none`` here so the property is inert.  The webkit
+      // prefix keeps Safari behaving the same as Chromium.
+      backdropFilter: 'var(--tile-backdrop, none)',
+      WebkitBackdropFilter: 'var(--tile-backdrop, none)',
       ...style,
     }}
   >
