@@ -1782,6 +1782,12 @@ export default function Settings() {
   // the curated field index in ``searchIndex.ts``; the per-tab tally
   // renders as ``matches`` badges on the SectionRail.
   const [searchQuery, setSearchQuery] = useState("");
+  // Sub-section within Station.  Design v31: split the Station tab
+  // into Optional features / Hardware / Console configuration /
+  // Calibration & diagnostics.  Rail-driven; each click renders only
+  // that subset of cards.
+  type StationSection = "optional" | "hardware" | "console_config" | "calibration";
+  const [stationSection, setStationSection] = useState<StationSection>("optional");
   // Ref to the scrollable panel's content div so an effect can walk
   // its DOM and wrap search matches in <mark> elements.  In-panel
   // highlighting was called out as follow-up in the Phase 6 PR; this
@@ -2350,7 +2356,16 @@ export default function Settings() {
   // so a disabled feature drops its section rather than showing an
   // empty entry.
   const railGroups = [
-    { id: "station", label: "Station", sections: [{ id: "station", label: "Station" }] },
+    {
+      id: "station",
+      label: "Station",
+      sections: [
+        { id: "station__optional", label: "Optional features" },
+        { id: "station__hardware", label: "Hardware" },
+        { id: "station__console_config", label: "Console configuration" },
+        { id: "station__calibration", label: "Calibration & diagnostics" },
+      ],
+    },
     { id: "site_units", label: "Site & Units", sections: [{ id: "site_units", label: "Site & Units" }] },
     { id: "appearance", label: "Appearance", sections: [{ id: "appearance", label: "Appearance" }] },
     {
@@ -2377,7 +2392,17 @@ export default function Settings() {
   ];
   const tabToGroup: Record<string, string> = {};
   for (const g of railGroups) for (const s of g.sections) tabToGroup[s.id] = g.id;
-  const activeGroupKey = tabToGroup[activeTab] ?? "station";
+  // ``activeGroupKey`` used to be a straight lookup, but Station now
+  // exposes four sub-sections (``station__optional`` etc.) while
+  // ``activeTab`` stays at just ``station``.  The lookup would miss;
+  // treat Station specially and fall back to the map for every
+  // other tab.
+  const activeGroupKey =
+    activeTab === "station" ? "station" : (tabToGroup[activeTab] ?? "station");
+  // Section id passed to the rail — for Station this is the sub-
+  // section id, for every other tab it's the tab id itself.
+  const activeSectionKey =
+    activeTab === "station" ? `station__${stationSection}` : activeTab;
 
   // Attach match counts to the rail groups' sections.  Not memoised —
   // ``railGroups`` is a small local array and the derivation is cheap;
@@ -2497,8 +2522,15 @@ export default function Settings() {
         <SectionRail
           groups={railGroupsWithMatches}
           activeGroup={activeGroupKey}
-          activeSection={activeTab}
-          onSelect={(_, sid) => setActiveTab(sid as typeof activeTab)}
+          activeSection={activeSectionKey}
+          onSelect={(_, sid) => {
+            if (sid.startsWith("station__")) {
+              setActiveTab("station");
+              setStationSection(sid.slice("station__".length) as StationSection);
+            } else {
+              setActiveTab(sid as typeof activeTab);
+            }
+          }}
           authNote={
             flags.publicModeActive
               ? "Hardware commands require sign-in. Reading settings is public."
@@ -2513,6 +2545,7 @@ export default function Settings() {
       <div ref={panelBodyRef} style={{ padding: "20px 26px" }}>
 
       {activeTab === "station" && (<>
+      {stationSection === "optional" && <>
       {/* Optional Features */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Optional Features</h3>
@@ -2666,6 +2699,8 @@ export default function Settings() {
         </div>
       )}
 
+      </>}
+      {stationSection === "hardware" && <>
       {/* Station section — driver-aware */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Station</h3>
@@ -3149,15 +3184,8 @@ export default function Settings() {
       </div>
       )}
 
-      {/* Barometer calibration — Vantage only; the component renders its own
-          "not supported" state rather than vanishing, per #249. */}
-      <BarometerCalibration
-        supported={wlConfig?.supported?.barometer_cal ?? false}
-        isMobile={isMobile}
-        configElevationFt={Number(val("elevation")) || 0}
-        pressureUnit={val("pressure_unit") === "hPa" ? "hPa" : "inHg"}
-      />
-
+      </>}
+      {stationSection === "console_config" && <>
       {/* Destructive console operations, each behind a preflight that
           states the cost (#264). */}
       <ConsoleDataOperations
@@ -3171,12 +3199,16 @@ export default function Settings() {
         supported={wlConfig?.supported?.highs_lows ?? false}
         isMobile={isMobile}
       />
+      </>}
 
-      {/* Reception diagnostics — names the transmitter dropout behind
-          #230 while it is happening, not hours later. */}
-      <SignalQuality
-        supported={wlConfig?.supported?.signal_quality ?? false}
+      {stationSection === "calibration" && <>
+      {/* Barometer calibration — Vantage only; the component renders its own
+          "not supported" state rather than vanishing, per #249. */}
+      <BarometerCalibration
+        supported={wlConfig?.supported?.barometer_cal ?? false}
         isMobile={isMobile}
+        configElevationFt={Number(val("elevation")) || 0}
+        pressureUnit={val("pressure_unit") === "hPa" ? "hPa" : "inHg"}
       />
 
       {/* The other half of #249: a Vantage adjusts temperature and
@@ -3185,6 +3217,14 @@ export default function Settings() {
         supported={wlConfig?.supported?.sensor_calibration ?? false}
         isMobile={isMobile}
       />
+
+      {/* Reception diagnostics — names the transmitter dropout behind
+          #230 while it is happening, not hours later. */}
+      <SignalQuality
+        supported={wlConfig?.supported?.signal_quality ?? false}
+        isMobile={isMobile}
+      />
+      </>}
 
       </>)}
 
