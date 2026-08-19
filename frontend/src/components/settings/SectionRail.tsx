@@ -19,6 +19,12 @@ export interface SectionRailGroup {
   id: string;
   label: string;
   sections: { id: string; label: string; matches?: number }[];
+  /**
+   * For a leaf group (``sections.length === 0``): match count for the
+   * row itself.  Ignored when the group has sub-sections — those sum
+   * their own ``matches`` fields into the group badge.
+   */
+  matches?: number;
 }
 
 export const SectionRail: React.FC<{
@@ -50,17 +56,27 @@ export const SectionRail: React.FC<{
     <div style={{ flex: 1, minHeight: 0 }}>
     {groups.map((g) => {
       const open = g.id === activeGroup;
-      // Sum of matches across every section in this group.  Rendered as
-      // a badge on the collapsed group header so a search that lands in
-      // a currently-collapsed group is still visible — otherwise
-      // "4 matches across 3 sections" reads while the rail shows
-      // nothing changed.
-      const groupMatches = g.sections.reduce((n, s) => n + (s.matches ?? 0), 0);
+      // A group with zero sections is a LEAF: the header IS the row, no
+      // children to expand.  Design's v32 review flagged that
+      // one-section groups read as "an accordion holding one item" —
+      // Appearance now uses a single panel with three cards, and its
+      // rail entry should behave like the leaf it is.  Match-badge
+      // still surfaces so a search hit on Persona / Theme / Backgrounds
+      // still marks the row.
+      const isLeaf = g.sections.length === 0;
+      const leafSectionId = g.id;
+      // Sum of matches across every section in this group, or the
+      // leaf's own match count when the group has no sub-sections.
+      const groupMatches = isLeaf
+        ? (g.matches ?? 0)
+        : g.sections.reduce((n, s) => n + (s.matches ?? 0), 0);
       return (
         <div key={g.id}>
           <button
             type="button"
-            onClick={() => onSelect(g.id, g.sections[0]?.id ?? "")}
+            onClick={() =>
+              onSelect(g.id, isLeaf ? leafSectionId : (g.sections[0]?.id ?? ""))
+            }
             style={{
               width: "100%",
               display: "flex",
@@ -102,7 +118,9 @@ export const SectionRail: React.FC<{
                   {groupMatches}
                 </span>
               ) : null}
-              <span style={{ opacity: 0.7 }}>{open ? "▾" : "▸"}</span>
+              {isLeaf ? null : (
+                <span style={{ opacity: 0.7 }}>{open ? "▾" : "▸"}</span>
+              )}
             </span>
           </button>
           {open &&

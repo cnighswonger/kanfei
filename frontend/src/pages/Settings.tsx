@@ -4,6 +4,7 @@ import { fetchConfig, updateConfig, fetchSerialPorts, reconnectStation, fetchWea
 import type { NowcastPresetOption } from "../api/client.ts";
 import type { ConfigItem, WeatherLinkConfig, WeatherLinkCalibration, AlertThreshold, LocalUsageResponse, UsageStatus, DbStats, LogEntry } from "../api/types.ts";
 import { useTheme } from "../context/ThemeContext.tsx";
+import { usePersona, PERSONAS, type Persona } from "../context/PersonaContext.tsx";
 import { useWeatherBackground } from "../context/WeatherBackgroundContext.tsx";
 import { themes } from "../themes/index.ts";
 import { SectionRail } from "../components/settings/SectionRail.tsx";
@@ -1790,8 +1791,6 @@ export default function Settings() {
   const [stationSection, setStationSection] = useState<StationSection>("optional");
   type SiteUnitsSection = "location" | "units" | "timezone";
   const [siteUnitsSection, setSiteUnitsSection] = useState<SiteUnitsSection>("location");
-  type AppearanceSection = "theme" | "backgrounds";
-  const [appearanceSection, setAppearanceSection] = useState<AppearanceSection>("theme");
   // Ref to the scrollable panel's content div so an effect can walk
   // its DOM and wrap search matches in <mark> elements.  In-panel
   // highlighting was called out as follow-up in the Phase 6 PR; this
@@ -1800,6 +1799,7 @@ export default function Settings() {
 
   const { flags, refresh: refreshFeatureFlags } = useFeatureFlags();
   const { themeName, setThemeName } = useTheme();
+  const { persona, setPersona } = usePersona();
   const [timezone, setTimezoneState] = useState(getTimezone);
   const {
     enabled: bgEnabled,
@@ -2380,12 +2380,14 @@ export default function Settings() {
       ],
     },
     {
+      // Appearance is a LEAF rail entry per Design v32 review: the
+      // Theme, Persona and Backgrounds cards render as one panel,
+      // there's no accordion.  Theme and Backgrounds must be adjacent
+      // (paper themes override user backgrounds) and Persona is
+      // discoverable from the same page.
       id: "appearance",
       label: "Appearance",
-      sections: [
-        { id: "appearance__theme", label: "Theme" },
-        { id: "appearance__backgrounds", label: "Backgrounds" },
-      ],
+      sections: [],
     },
     {
       id: "integrations",
@@ -2432,8 +2434,6 @@ export default function Settings() {
       ? `station__${stationSection}`
       : activeTab === "site_units"
       ? `site_units__${siteUnitsSection}`
-      : activeTab === "appearance"
-      ? `appearance__${appearanceSection}`
       : activeTab;
 
   // Attach match counts to the rail groups' sections.  Not memoised —
@@ -2443,6 +2443,9 @@ export default function Settings() {
   // work.  The hook counted above the loading check is ``searchMatches``.
   const railGroupsWithMatches = railGroups.map((g) => ({
     ...g,
+    // Leaf groups (no sub-sections) get their own match count on the
+    // group itself; SectionRail reads ``g.matches`` for them.
+    matches: g.sections.length === 0 ? (searchMatches.get(g.id) ?? 0) : undefined,
     sections: g.sections.map((s) => ({
       ...s,
       matches: searchMatches.get(s.id) ?? 0,
@@ -2562,9 +2565,6 @@ export default function Settings() {
             } else if (sid.startsWith("site_units__")) {
               setActiveTab("site_units");
               setSiteUnitsSection(sid.slice("site_units__".length) as SiteUnitsSection);
-            } else if (sid.startsWith("appearance__")) {
-              setActiveTab("appearance");
-              setAppearanceSection(sid.slice("appearance__".length) as AppearanceSection);
             } else {
               setActiveTab(sid as typeof activeTab);
             }
@@ -3434,7 +3434,6 @@ export default function Settings() {
       </>)}
 
       {activeTab === "appearance" && (<>
-      {appearanceSection === "theme" && <>
       {/* Theme picker + custom editor. */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Theme</h3>
@@ -3464,12 +3463,35 @@ export default function Settings() {
           }} />
         )}
       </div>
-      </>}
 
-      {appearanceSection === "backgrounds" && <>
+      {/* Persona — coarse audience-shape control.  Design v32: fold
+          the header switch into Settings so a passer-by discovers
+          what a persona is by browsing the settings.  Header pills
+          remain the fast path once you know they exist. */}
+      <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
+        <h3 style={sectionTitle}>Persona</h3>
+        <div style={fieldGroup}>
+          <label style={labelStyle}>
+            Audience-shape preset — reorders sidebar nav and swaps the
+            dashboard tile set.
+          </label>
+          <select
+            style={selectStyle}
+            value={persona}
+            onChange={(e) => setPersona(e.target.value as Persona)}
+            aria-label="Persona"
+          >
+            {PERSONAS.map((p) => (
+              <option key={p} value={p}>
+                {p === "everyday" ? "Everyday" : p === "agriculture" ? "Agriculture" : "Weather Nerd"}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* Backgrounds — weather-driven gradient, tile transparency,
-          and user-uploaded background images.  Split from the Theme
-          card in the v31 sub-section rework. */}
+          and user-uploaded background images. */}
       <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
         <h3 style={sectionTitle}>Backgrounds</h3>
         <div>
@@ -3607,7 +3629,6 @@ export default function Settings() {
           )}
         </div>
       </div>
-      </>}
       </>)}
 
       {activeTab === "services" && (<>
