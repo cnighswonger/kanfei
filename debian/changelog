@@ -1,3 +1,14 @@
+kanfei (0.1.0~beta48) unstable; urgency=medium
+
+  * Settings Phase 4: auth-note in the rail on public droplets.
+    A bordered box at the bottom of the section rail explains why
+    Save buttons don't render for a guest — "Hardware commands
+    require sign-in.  Reading settings is public."  Renders only
+    when public-mode is active; on a private station where the
+    operator is the auth boundary, the note would be noise.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 19 Aug 2026 00:35:00 +0000
+
 kanfei (0.1.0~beta47) unstable; urgency=medium
 
   * Fix: SaveBar labels now describe the NEW value, not the field
