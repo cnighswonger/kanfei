@@ -4,10 +4,9 @@
  * Highcharts gauge in ``chart.styledMode: true``: every colour and
  * font lives in ``WheelBarometer.css`` against the theme's CSS
  * custom properties, and this file owns geometry (angles, radii,
- * ticks, dial widths).  The two-file split is the point — Design
- * can iterate on the visual identity in CSS without a code change,
- * and the paper themes' identity carries into the wheel without a
- * per-token JS bridge.
+ * ticks, dial widths, zone-ring boundaries).  The two-file split is
+ * the point — Design can iterate on the visual identity in CSS
+ * without a code change.
  *
  * The two spec calls Design flagged as easy to get wrong stay in
  * geometry, not style:
@@ -23,12 +22,6 @@
 import { useMemo } from "react";
 import Highcharts from "highcharts";
 import "highcharts/highcharts-more";
-// Highcharts' base styled-mode stylesheet ships class-name rules
-// for every SVG element the library draws.  Import it once so the
-// wheel picks up the neutral defaults; ``WheelBarometer.css`` then
-// overrides the pieces we own.  Global import is fine — classic-
-// mode consumers ignore the classes because they paint with inline
-// attributes.
 import "highcharts/css/highcharts.css";
 import "./WheelBarometer.css";
 import { HighchartsReact } from "highcharts-react-official";
@@ -47,6 +40,32 @@ interface WheelBarometerProps {
 const MIN_INHG = 28.5;
 const MAX_INHG = 31.0;
 
+/**
+ * Zone ring boundaries.  Ratios of the pane radius.  Stated as
+ * constants so plot bands, hairline separators and the label ring
+ * all read the same numbers — Design v35 DIFF-barometer-beta69.md P1.
+ */
+const ZONE_RING_INNER = 0.55;
+const ZONE_RING_OUTER = 0.62;
+const ZONE_RING_MID = (ZONE_RING_INNER + ZONE_RING_OUTER) / 2;
+
+/**
+ * Rim ring radii (fraction of pane radius).  0.967 outer + 0.887
+ * inner match the SVG barometer's ``gradOuter`` / ``gradInner``
+ * theme ratios so the two renderings are interchangeable.
+ */
+const RIM_OUTER = 0.967;
+const RIM_INNER = 0.887;
+
+/**
+ * Half-width in inHg of the hairline separators between zones.
+ * ~1 px at a 260 px gauge; Design's Option B: instead of five
+ * contiguous same-fill bands (which read as one continuous arc),
+ * four thin separators mark the four boundaries and the ring is
+ * *implied* by its divisions, not by a fill.
+ */
+const SEPARATOR_HALFWIDTH = 0.004;
+
 const ZONE_BANDS = [
   { from: 28.5, to: 29.0, label: "STORMY" },
   { from: 29.0, to: 29.5, label: "RAIN" },
@@ -54,6 +73,13 @@ const ZONE_BANDS = [
   { from: 30.0, to: 30.5, label: "FAIR" },
   { from: 30.5, to: 31.0, label: "SET FAIR" },
 ];
+
+function zoneAt(value: number): string {
+  for (const band of ZONE_BANDS) {
+    if (value >= band.from && value < band.to) return band.label.toLowerCase();
+  }
+  return value >= MAX_INHG ? ZONE_BANDS[ZONE_BANDS.length - 1].label.toLowerCase() : "";
+}
 
 export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBarometerProps) {
   const { themeName } = useTheme();
@@ -70,8 +96,7 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
       chart: {
         type: "gauge",
         // Styled mode: Highcharts stops emitting inline colour /
-        // font attributes and every element carries a class name
-        // instead.  Skinning happens in WheelBarometer.css.
+        // font attributes and every element carries a class name.
         styledMode: true,
         spacing: [4, 4, 4, 4],
         height: size,
@@ -79,26 +104,36 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
       },
       title: { text: undefined },
       credits: { enabled: false },
+      // Design v35 review: gauge doesn't need the full a11y module,
+      // but silently disabling it isn't defensible either.  The
+      // wrapper div carries ``aria-hidden`` and the readout column
+      // beside the tile is the accessible content.
       accessibility: { enabled: false },
+      // Kill the export burger — Design flagged it as the highest-
+      // contrast element in the tile in the beta69 review.  History
+      // still exports; that's the one opt-in.
+      exporting: { enabled: false },
       pane: {
         // 240° sweep opening downward — 8 o'clock to 4 o'clock
         // through 12.  Highcharts pane angles run from 12 o'clock
         // clockwise, so ``-120`` = 8 o'clock, ``120`` = 4 o'clock.
         startAngle: -120,
         endAngle: 120,
-        // Two concentric ring backgrounds.  The CSS owns their
-        // stroke + opacity; here we just declare the radii.  The
-        // outer entry gets ``className: 'highcharts-pane-outer'``
-        // so the stylesheet can distinguish the two.
+        // Two concentric hairline rings.  Both pane.background
+        // entries render as zero-width bands; the CSS strokes them
+        // with the theme's rule / grid tokens.  Design v35 P4:
+        // ratios come from the theme's ``dial`` group so the SVG
+        // and HC renderings stay interchangeable.
         background: [
           {
-            outerRadius: "100%",
-            innerRadius: "99%",
-            className: "highcharts-pane-outer",
+            outerRadius: `${RIM_OUTER * 100}%`,
+            innerRadius: `${RIM_OUTER * 100}%`,
+            className: "wheel-baro-rim-outer",
           },
           {
-            outerRadius: "78%",
-            innerRadius: "77.5%",
+            outerRadius: `${RIM_INNER * 100}%`,
+            innerRadius: `${RIM_INNER * 100}%`,
+            className: "wheel-baro-rim-inner",
           },
         ],
       },
@@ -109,26 +144,34 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
         minorTickInterval: 0.125,
         tickLength: 12,
         minorTickLength: 7,
-        // Widths stay here — they're geometry.  Colours come from
-        // the CSS.
         tickWidth: 1.6,
         minorTickWidth: 0.8,
         lineWidth: 0,
+        // Numerals inside the rim — Design v35 P2.  Positive
+        // ``distance`` pushes labels outward past the graduations,
+        // which crowds the outer rim and pushes zone names inward.
+        // Negative distance sits them under the ticks.  Paired with
+        // ``tickPosition: 'inside'`` so the graduations sit within
+        // the rim too — otherwise they default outward.
         labels: {
-          distance: 18,
+          distance: -26,
           formatter: function () {
             const v = typeof this.value === "number" ? this.value : Number(this.value);
             return v.toFixed(1);
           },
         },
-        plotBands: ZONE_BANDS.map((band) => ({
-          from: band.from,
-          to: band.to,
-          innerRadius: "55%",
-          outerRadius: "62%",
-          // Every band shares one class — the CSS gives them all
-          // the same fill and the label text distinguishes the zones.
-          className: "wheel-baro-zone",
+        tickPosition: "inside",
+        minorTickPosition: "inside",
+        // Hairline separators, NOT contiguous fills.  Five same-fill
+        // bands read as one unbroken arc (Design v35 P0); four
+        // narrow separators at the four boundaries divide the ring
+        // by implication and let the ring itself stay empty.
+        plotBands: ZONE_BANDS.slice(1).map((band) => ({
+          from: band.from - SEPARATOR_HALFWIDTH,
+          to: band.from + SEPARATOR_HALFWIDTH,
+          innerRadius: `${ZONE_RING_INNER * 100}%`,
+          outerRadius: `${ZONE_RING_OUTER * 100}%`,
+          className: "wheel-baro-separator",
         })),
       },
       tooltip: { enabled: false },
@@ -145,6 +188,9 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
                 topWidth: 2,
                 rearLength: "0%",
               },
+              // No data label on either dial — the readout column
+              // beside the gauge is the value; the dial is position.
+              dataLabels: { enabled: false },
               enableMouseTracking: false,
             }]
           : []),
@@ -160,6 +206,7 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
             rearLength: "0%",
           },
           pivot: { radius: 4 },
+          dataLabels: { enabled: false },
           enableMouseTracking: false,
         },
       ],
@@ -168,9 +215,9 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
   }, [inHg, trendInHgPer3h, size, themeName]);
 
   // Zone-name labels ride on chart.events.render — HC has no native
-  // label-on-plotBand.  In styled mode the ``.css()`` call would be a
-  // no-op; the label picks up its font/colour via a class on the
-  // element instead (see WheelBarometer.css).
+  // label-on-plotBand.  Design v35 P1: read geometry from ``pane.center``
+  // + the axis's own ``startAngleRad`` / ``endAngleRad`` so a size /
+  // sweep / pane change moves bands and labels together.
   const optionsWithLabels = useMemo<Highcharts.Options | null>(() => {
     if (!options) return null;
     return {
@@ -181,36 +228,46 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
           render: function () {
             const chart = this as Highcharts.Chart & {
               _wheelBaroLabels?: Highcharts.SVGElement[];
+              pane?: Array<{ center: number[] }>;
             };
             if (chart._wheelBaroLabels) {
               for (const el of chart._wheelBaroLabels) el.destroy();
             }
-            const labels: Highcharts.SVGElement[] = [];
-            const cx = chart.plotLeft + chart.plotWidth / 2;
-            // The gauge centres vertically with the pane at the
-            // middle; 0.55 accounts for the 240° sweep leaving a
-            // narrower top half than a full circle would.
-            const cy = chart.plotTop + chart.plotHeight * 0.55;
-            const r = Math.min(chart.plotWidth, chart.plotHeight) * 0.36;
-            const sweepStart = -120;
-            const sweepEnd = 120;
-            for (const band of ZONE_BANDS) {
+            const pane = chart.pane?.[0];
+            const axis = chart.yAxis?.[0] as Highcharts.Axis & {
+              startAngleRad: number;
+              endAngleRad: number;
+            };
+            if (!pane || !axis) {
+              chart._wheelBaroLabels = [];
+              return;
+            }
+            // pane.center is [x, y, diameter, innerDiameter] in
+            // plot-area pixels.  ``startAngleRad`` already carries
+            // the -90° offset (0 rad points up), so no extra rotation.
+            const [pcx, pcy, diameter] = pane.center as unknown as number[];
+            const cx = chart.plotLeft + pcx;
+            const cy = chart.plotTop + pcy;
+            const rLabel = (diameter / 2) * ZONE_RING_MID;
+            const a0 = axis.startAngleRad;
+            const a1 = axis.endAngleRad;
+            const labels = ZONE_BANDS.map((band) => {
               const mid = (band.from + band.to) / 2;
               const t = (mid - MIN_INHG) / (MAX_INHG - MIN_INHG);
-              const angleDeg = sweepStart + t * (sweepEnd - sweepStart);
-              const angleRad = (angleDeg - 90) * Math.PI / 180;
-              const x = cx + Math.cos(angleRad) * r;
-              const y = cy + Math.sin(angleRad) * r;
-              const label = chart.renderer
+              const ang = a0 + t * (a1 - a0);
+              const x = cx + Math.cos(ang) * rLabel;
+              // +3 nudges the baseline to optical centre;
+              // dominant-baseline is unreliable in the Highcharts
+              // renderer across browsers.
+              const y = cy + Math.sin(ang) * rLabel + 3;
+              return chart.renderer
                 .text(band.label, x, y)
                 .attr({
                   "text-anchor": "middle",
-                  "dominant-baseline": "middle",
                   class: "wheel-baro-zone-label",
                 })
                 .add();
-              labels.push(label);
-            }
+            });
             chart._wheelBaroLabels = labels;
           },
         },
@@ -220,13 +277,25 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
 
   if (!optionsWithLabels) {
     return (
-      <div style={{ width: size, height: size }} aria-hidden="true" />
+      <div
+        className="wheel-barometer"
+        aria-hidden="true"
+        style={{ width: size, height: size }}
+      />
     );
   }
 
-  // The ``wheel-barometer`` scope class is what the CSS keys on.
   return (
-    <div className="wheel-barometer" style={{ width: size, height: size }}>
+    <div
+      className="wheel-barometer"
+      aria-hidden="true"
+      aria-label={
+        inHg != null
+          ? `Barometric pressure ${inHg.toFixed(2)} inches of mercury, zone ${zoneAt(inHg)}.`
+          : undefined
+      }
+      style={{ width: size, height: size }}
+    >
       <HighchartsReact highcharts={Highcharts} options={optionsWithLabels} />
     </div>
   );
