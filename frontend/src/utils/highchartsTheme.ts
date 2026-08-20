@@ -114,6 +114,61 @@ export function highchartsTheme(): Highcharts.Options {
       series: { animation: false, marker: { enabled: false } },
       column: { borderWidth: 0, groupPadding: 0.08 },
     },
+    // Navigator (the strip beneath a Stock-module chart) ships its
+    // own defaults — a sans-serif fallback that clashes with the
+    // paper themes.  Push the theme's mono family into the label
+    // style and colour it with the muted-ink token so it reads as
+    // scale, not chrome.
+    navigator: {
+      maskFill: "rgba(154,110,43,0.14)",
+      outlineColor: t.gridMajor,
+      handles: {
+        backgroundColor: t.surface,
+        borderColor: t.inkSoft,
+      },
+      xAxis: {
+        labels: {
+          style: {
+            color: t.inkFaint,
+            fontFamily: t.mono,
+            fontSize: "10px",
+          },
+        },
+        gridLineColor: t.gridMinor,
+      },
+      series: {
+        color: t.trace,
+        lineColor: t.trace,
+        fillOpacity: 0.15,
+      },
+    },
+    // Scrollbar sits beside the navigator; hidden by default in
+    // History.tsx but the theme still styles it so a Stock consumer
+    // that enables it doesn't inherit greyscale defaults.
+    scrollbar: {
+      barBackgroundColor: t.surface,
+      barBorderColor: t.gridMajor,
+      buttonBackgroundColor: t.surface,
+      buttonBorderColor: t.gridMajor,
+      rifleColor: t.inkSoft,
+      trackBackgroundColor: "transparent",
+      trackBorderColor: t.gridMinor,
+    },
+    // Range selector is a Stock feature; not used in History today
+    // but the theme covers it so future Stock consumers inherit
+    // typography that matches everything else.
+    rangeSelector: {
+      inputStyle: {
+        color: t.ink,
+        fontFamily: t.mono,
+        fontSize: "11px",
+      },
+      labelStyle: {
+        color: t.inkSoft,
+        fontFamily: t.body,
+        fontSize: "11px",
+      },
+    },
     colors: [t.trace, t.traceAlt, t.accent, t.inkSoft],
   };
 }

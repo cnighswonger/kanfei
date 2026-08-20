@@ -287,12 +287,12 @@ export default function History() {
         xDateFormat: "%b %e, %Y %l:%M %p",
       },
       // Navigator: Highcharts' built-in brush.  Design's HISTORY.md v35
-      // supersedes the RangeStrip snippet with this.
+      // supersedes the RangeStrip snippet with this.  All styling
+      // (fill, handles, label font) comes from ``highchartsTheme()``;
+      // this page only decides enabled + reactivity.
       navigator: {
         enabled: !isMobile,
         adaptToUpdatedData: true,
-        maskFill: "rgba(154,110,43,0.14)",
-        outlineColor: "var(--color-accent, #9a6e2b)",
       },
       scrollbar: { enabled: false },
       // Export module — Highcharts adds a burger menu by default; hide
