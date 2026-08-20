@@ -1,3 +1,19 @@
+kanfei (0.1.0~beta67) unstable; urgency=medium
+
+  * Charts: theme the Highcharts navigator, scrollbar, and range
+    selector so the navigator strip's font stops falling back to the
+    sans-serif default that clashed with paper themes.  Extends
+    ``highchartsTheme()`` with the three blocks — navigator gets
+    mono labels + resolved-token outline / handles / mask fill;
+    scrollbar picks up the same treatment for future Stock consumers
+    that enable it; range selector's datetime inputs and labels
+    inherit the mono + body families.  History.tsx's per-chart
+    navigator override (which contained an unresolvable
+    ``var(--color-accent)`` string) is dropped — the theme now owns
+    styling and the page decides only enabled + reactivity.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Wed, 20 Aug 2026 15:30:00 +0000
+
 kanfei (0.1.0~beta66) unstable; urgency=medium
 
   * History: swap the navigator import for ``modules/stock``.
