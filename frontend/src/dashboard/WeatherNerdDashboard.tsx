@@ -22,7 +22,8 @@ import {
   v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, Row, Tile, tnum, fmt, fmtInt, fmtTime, decimate, niceTicks,
 } from './primitives';
 import type { DashboardData, NerdResolution } from './types';
-import { compass, rosePetals, pathFor } from '../utils/gauges';
+import { pathFor } from '../utils/gauges';
+import WindRoseDial from '../components/charts/WindRoseDial';
 
 const DESIGN_HEIGHT = 928;
 
@@ -553,10 +554,6 @@ const ChartButton: React.FC<{
 /* ───────────────────────────────────────────────────────── the three-up */
 
 export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
-  const c = compass(130, 122, 92, 112);
-  const petals = rosePetals(130, 122, 84, d.wind.roseWeights);
-  // See WindTile note — direction alone gates the needle now.
-  const showNeedle = d.wind.directionDeg != null;
   return (
     <Tile
       id="nerd-wind-rose"
@@ -569,29 +566,18 @@ export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       }}
     >
       <SectionLabel>Wind rose · 4 h</SectionLabel>
-      <svg viewBox="0 -12 260 262" style={{ display: 'block', width: '100%', height: s(210) }}>
-        <circle cx={130} cy={122} r={104} fill={v.chart.surface} stroke={v.ruleHair} strokeWidth={1} />
-        {petals.map((p, i) => (
-          <path key={i} d={p.d} fill={v.accent} opacity={p.op} />
-        ))}
-        {c.ticks.map((k, i) => (
-          <line key={i} x1={k.x1} y1={k.y1} x2={k.x2} y2={k.y2} stroke={v.text} strokeOpacity={0.55} strokeWidth={k.sw} />
-        ))}
-        {c.labels.map((l, i) => (
-          <text key={i} x={l.x} y={l.y} textAnchor="middle" style={type('sectionLabel')} fill={v.textSecondary}>
-            {l.label}
-          </text>
-        ))}
-        {showNeedle && (
-          // SVG ``transform`` attribute — see PR 50 note.  CSS transforms
-          // on SVG children only work in Chromium; the attribute form is
-          // portable across browsers.
-          <g transform={`rotate(${d.wind.directionDeg} 130 122)`}>
-            <line x1={130} y1={150} x2={130} y2={46} stroke={v.needle} strokeWidth={3} strokeLinecap="round" />
-            <polygon points="130,36 121,52 139,52" fill={v.needle} />
-          </g>
-        )}
-      </svg>
+      {/* Design v35 T3 swap: SVG compass + rosePetals + needle →
+          Highcharts WindRoseDial with styled-mode CSS.  Contained in
+          a flex-centre wrapper so the square dial sits centred in
+          the tile's remaining width. */}
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <WindRoseDial
+          roseWeights={d.wind.roseWeights}
+          directionDeg={d.wind.directionDeg}
+          speedMph={d.wind.speedMph}
+          size={210}
+        />
+      </div>
       <SectionLabel style={{ textAlign: 'center' }}>
         {d.wind.directionLabel ? `${d.wind.directionLabel} dominant` : 'no prevailing direction'}
         {d.wind.speedMph != null && ` · ${fmt(d.wind.speedMph, 0)} mph mean`}
