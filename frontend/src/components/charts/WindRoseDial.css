@@ -1,0 +1,107 @@
+/*
+ * WindRoseDial — styled-mode identity.
+ *
+ * Companion to the geometry in ``WindRoseDial.tsx``.  Design v35
+ * WIND-ROSE.md ships this stylesheet whole; every fill, stroke,
+ * opacity and font pulls from a theme token.  Scoped through
+ * ``.wind-rose`` so classic-mode charts on the same page can't
+ * inherit these rules.
+ *
+ * Target is the existing SVG rose: 16-point compass frame, petals in
+ * one accent colour at graduated opacity, and a live bearing needle
+ * on top.  Not stacked speed bins — see WIND-ROSE.md for why.
+ */
+
+.wind-rose .highcharts-background,
+.wind-rose .highcharts-plot-background,
+.wind-rose .highcharts-plot-border {
+  fill: transparent;
+  stroke: none;
+}
+
+/* ── Frame ──────────────────────────────────────────────────────────
+   Two concentric circles: the rim and one inner reference ring at
+   ~0.75 r.  The face is filled so the rose reads as an instrument
+   dial rather than a floating diagram. */
+
+.wind-rose .highcharts-pane {
+  fill: var(--chart-surface, #dccfa9);
+  stroke: var(--chart-grid-major, rgba(58, 45, 29, 0.20));
+  stroke-width: 1;
+}
+
+.wind-rose .highcharts-grid-line {
+  stroke: var(--rule-hair, rgba(58, 45, 29, 0.12));
+  stroke-width: 0.6;
+}
+
+.wind-rose .highcharts-axis-line {
+  stroke: transparent;
+}
+
+/* ── Graduations ────────────────────────────────────────────────────
+   Majors at the four cardinals, minors at the twelve inter-cardinals. */
+
+.wind-rose .highcharts-tick {
+  stroke: var(--color-text, #3a2d1d);
+  stroke-width: 1.6;
+  opacity: 0.6;
+}
+
+.wind-rose .highcharts-minor-tick {
+  stroke: var(--color-text, #3a2d1d);
+  stroke-width: 0.8;
+  opacity: 0.45;
+}
+
+.wind-rose .highcharts-xaxis-labels text {
+  fill: var(--color-text-secondary, rgba(58, 45, 29, 0.84));
+  font-family: var(--type-mono-family, "JetBrains Mono", monospace);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* Radial axis carries no numbers — a rose is about shape. */
+.wind-rose .highcharts-yaxis-labels {
+  display: none;
+}
+
+/* ── Petals ─────────────────────────────────────────────────────────
+   One accent fill at six graduated opacities.  Tiers come from
+   point.colorIndex (set in geometry), which Highcharts emits as
+   .highcharts-color-N. */
+
+.wind-rose .highcharts-series.wind-rose-petals .highcharts-point {
+  fill: var(--color-accent, #a85f24);
+  stroke: none;
+}
+
+.wind-rose .highcharts-series.wind-rose-petals .highcharts-color-0 { fill-opacity: 0.12; }
+.wind-rose .highcharts-series.wind-rose-petals .highcharts-color-1 { fill-opacity: 0.22; }
+.wind-rose .highcharts-series.wind-rose-petals .highcharts-color-2 { fill-opacity: 0.32; }
+.wind-rose .highcharts-series.wind-rose-petals .highcharts-color-3 { fill-opacity: 0.42; }
+.wind-rose .highcharts-series.wind-rose-petals .highcharts-color-4 { fill-opacity: 0.52; }
+.wind-rose .highcharts-series.wind-rose-petals .highcharts-color-5 { fill-opacity: 0.62; }
+
+/* ── Live needle ────────────────────────────────────────────────────
+   Rendered via chart.renderer in chart.events.render — a gauge dial
+   can't share a chart with a polar column series. */
+
+.wind-rose .wind-rose-needle {
+  fill: var(--color-accent, #a85f24);
+  stroke: none;
+}
+
+.wind-rose .wind-rose-hub {
+  fill: var(--color-accent, #a85f24);
+  stroke: var(--chart-surface, #dccfa9);
+  stroke-width: 1;
+}
+
+/* Calm: dimmed, not hidden.  Vane holds last-known bearing when the
+   anemometer stalls; the readout says "0 mph E" on purpose. */
+.wind-rose .wind-rose-needle.is-calm,
+.wind-rose .wind-rose-hub.is-calm {
+  opacity: 0.55;
+}

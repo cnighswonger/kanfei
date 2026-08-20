@@ -21,7 +21,7 @@ import {
   tnum, fmt, fmtInt, fmtTime, fs,
 } from './primitives';
 import type { DashboardData } from './types';
-import { compass, rosePetals } from '../utils/gauges';
+import WindRoseDial from '../components/charts/WindRoseDial';
 
 export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: string }> = ({
   d,
@@ -310,11 +310,6 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
 /* ─────────────────────────────────────────────────────────── 3. drift risk */
 
 export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
-  const c = compass(110, 110, 80, 98);
-  const petals = rosePetals(110, 110, 72, d.wind.roseWeights);
-  // See WindTile note — the vane's last-known direction beats a
-  // disappearing needle when speed drops to zero.
-  const showNeedle = d.wind.directionDeg != null;
   const bins = d.spray?.gustBins ?? [];
   const max = Math.max(1, ...bins);
 
@@ -323,29 +318,14 @@ export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       <TileHeading>Drift risk</TileHeading>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: s(10), minHeight: s(180) }}>
-        <svg viewBox="0 0 220 220" style={{ width: s(170), height: s(170), flexShrink: 0 }}>
-          <circle cx={110} cy={110} r={80} fill={v.chart.surface} stroke={v.rule} strokeWidth={1} />
-          {petals.map((p, i) => <path key={i} d={p.d} fill={v.accent} opacity={p.op} />)}
-          {c.ticks.map((k, i) => (
-            <line key={i} x1={k.x1} y1={k.y1} x2={k.x2} y2={k.y2} stroke={v.text} strokeOpacity={0.6} strokeWidth={k.sw} />
-          ))}
-          {c.labels.map((l, i) => (
-            <text key={i} x={l.x} y={l.y} textAnchor="middle" style={type('sectionLabel')} fill={v.textSecondary}>{l.label}</text>
-          ))}
-          {showNeedle && (
-            // SVG `transform` ATTRIBUTE with `rotate(angle cx cy)` —
-            // NOT CSS `transform` in inline style.  CSS transforms on
-            // SVG elements only work reliably in Chromium; Firefox and
-            // Safari don't map `transformOrigin` in px to the SVG
-            // coordinate system, so the needle rotates around the wrong
-            // point (or, in Safari, doesn't render at all).  The SVG
-            // attribute form is coordinate-system-native and portable.
-            <g transform={`rotate(${d.wind.directionDeg} 110 110)`}>
-              <line x1={110} y1={128} x2={110} y2={52} stroke={v.needle} strokeWidth={2.2} strokeLinecap="round" />
-              <polygon points="110,44 103,60 117,60" fill={v.needle} />
-            </g>
-          )}
-        </svg>
+        <div style={{ flexShrink: 0 }}>
+          <WindRoseDial
+            roseWeights={d.wind.roseWeights}
+            directionDeg={d.wind.directionDeg}
+            speedMph={d.wind.speedMph}
+            size={170}
+          />
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: s(6) }}>
             <span style={{ ...type('mono', fs(24)), ...tnum, color: v.text }}>{fmt(d.wind.speedMph, 0)}</span>
