@@ -1,3 +1,25 @@
+kanfei (0.1.0~beta64) unstable; urgency=medium
+
+  * Design v34 HISTORY.md tranche 2b: the substantive History page
+    rebuild.  The rail's Series list becomes multi-toggle — any
+    subset of the eight series plots at once.  Pressure sits on the
+    right yAxis with a dashed stroke so the units read as distinct;
+    everything else shares the primary left yAxis.  Series colours
+    come from the theme's ``--chart-series-*`` tokens.  The
+    Highcharts navigator sits under the chart and takes drag on
+    both handles to define an arbitrary window (superseding the
+    RangeStrip snippet).  CSV and PNG exports pipe through the
+    ``exportData`` module and follow both the visible window and
+    the enabled series.  The extremes table couples to the enabled
+    set — one row per active series with ``When`` cells derived
+    from the returned points.  New ``useMultiHistoricalData`` hook
+    fans out N history fetches in parallel with cancel-generation
+    protection.  Overlay checkboxes (day/night, rain events) hold
+    state without rendering yet; ``Same week last year`` stays
+    disabled with the 12-months-of-archive reason.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Wed, 20 Aug 2026 14:45:00 +0000
+
 kanfei (0.1.0~beta63) unstable; urgency=medium
 
   * Design v34 HISTORY.md tranche 2a: rebuild the History page's
