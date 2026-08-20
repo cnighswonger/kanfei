@@ -1,3 +1,22 @@
+kanfei (0.1.0~beta63) unstable; urgency=medium
+
+  * Design v34 HISTORY.md tranche 2a: rebuild the History page's
+    visual frame.  The title row now carries the preset buttons
+    (24 h / 7 days / 30 days / Year / Custom) and the CSV export;
+    the body is a 250 px control rail on the left and a chart +
+    extremes column on the right.  The rail's Series block is the
+    substantive change — eight rows, each carrying the current live
+    value from WeatherDataContext so an operator reads every current
+    reading without plotting anything.  Resolution + Overlay blocks
+    complete the rail; ``Same week last year`` is disabled until the
+    archive spans 12 months.  Rail is single-select this round
+    (clicking a row switches the plotted sensor, same behaviour as
+    the previous dropdown); the multi-series dual-axis chart, the
+    Highcharts navigator, the resolution-selector wire-through, and
+    CSV/PNG via exportData land in tranche 2b.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Wed, 20 Aug 2026 14:15:00 +0000
+
 kanfei (0.1.0~beta62) unstable; urgency=medium
 
   * Design v34 HIGHCHARTS.md tranche 1: install a Highcharts theme
