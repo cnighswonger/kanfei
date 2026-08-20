@@ -16,10 +16,14 @@ import { Fragment, useState, useMemo, useRef, useEffect } from "react";
 import Highcharts from "highcharts";
 import "highcharts/modules/exporting";
 import "highcharts/modules/export-data";
-// Navigator ships as a separate module; without this import
-// ``navigator: { enabled: true }`` is silently ignored at runtime
-// (no error, no strip).  Design v34 T2b bug caught at first smoke.
-import "highcharts/modules/navigator";
+// The in-chart navigator (the strip beneath the plot with two drag
+// handles) is a Highstock feature — ``modules/navigator`` is a
+// STANDALONE widget, not the chart-attached one, so importing it
+// leaves the chart's navigator silent.  Load the Stock module
+// instead; it registers the same Navigator + Scrollbar the chart
+// options object expects.  beta65 tried the wrong import; this is
+// the correct one.
+import "highcharts/modules/stock";
 import { HighchartsReact } from "highcharts-react-official";
 import { useMultiHistoricalData } from "../hooks/useMultiHistoricalData.ts";
 import { useWeatherData } from "../context/WeatherDataContext.tsx";
