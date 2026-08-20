@@ -84,6 +84,9 @@ export const SETTINGS_SEARCH_INDEX: SearchEntry[] = [
   { sectionId: "site_units__location", term: "Console location" },
   { sectionId: "site_units__location", term: "Rain gauge" },
   { sectionId: "site_units__location", term: "Rain collector" },
+  { sectionId: "site_units__location", term: "Yearly rain source" },
+  { sectionId: "site_units__location", term: "Yearly rain" },
+  { sectionId: "site_units__location", term: "Console reset" },
   { sectionId: "site_units__location", term: "Rain season" },
   { sectionId: "site_units__location", term: "Season rain" },
 

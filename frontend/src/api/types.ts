@@ -45,9 +45,24 @@ export interface BarometerData {
   trend_rate: number | null;
 }
 
+/**
+ * Yearly-rain readout, extended with provenance so the UI can annotate
+ * when the value is an archive-derived recomputation rather than what
+ * the console currently reports.  See services/rain_year.py.
+ * ``source`` is ``'console'`` or ``'archive'``.  ``detected_reset_at``
+ * is an ISO-8601 UTC timestamp of the most recent detected mid-year
+ * counter reset; when present, the console's yearly counter was zeroed
+ * on that date and the value here may or may not be the recomputed
+ * one depending on ``source``.
+ */
+export interface YearlyRainReading extends ValueWithUnit {
+  source?: "console" | "archive";
+  detected_reset_at?: string;
+}
+
 export interface RainData {
   daily: ValueWithUnit | null;
-  yearly: ValueWithUnit | null;
+  yearly: YearlyRainReading | null;
   rate: ValueWithUnit | null;
   yesterday?: ValueWithUnit | null;
   /** Rolling 7-day rainfall total from year-to-date counter diff. */
