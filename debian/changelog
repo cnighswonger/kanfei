@@ -1,3 +1,14 @@
+kanfei (0.1.0~beta66) unstable; urgency=medium
+
+  * History: swap the navigator import for ``modules/stock``.
+    beta65's ``modules/navigator`` registered a Highcharts standalone
+    Navigator widget, not the in-chart navigator strip.  The
+    chart-attached navigator is a Highstock feature, so
+    ``highcharts/modules/stock`` is the correct side-effect import
+    (chart constructor + options shape stay the same).
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Wed, 20 Aug 2026 15:15:00 +0000
+
 kanfei (0.1.0~beta65) unstable; urgency=medium
 
   * History: import ``highcharts/modules/navigator`` so the strip
