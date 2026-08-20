@@ -23,6 +23,7 @@ from ..services.solar_energy import (
 )
 from ..services.station_naming import resolve_station_name
 from ..services.uv_warning import classify_uv
+from ..services.rain_year import compute_yearly_rain
 from .config import get_effective_config
 
 router = APIRouter()
@@ -52,6 +53,26 @@ def _val(column: str, raw: int | None) -> dict | None:
     if raw is None:
         return None
     return {"value": convert(column, raw), "unit": SENSOR_UNITS.get(column, "")}
+
+
+def _yearly_val(result: dict) -> dict | None:
+    """Package a compute_yearly_rain() result as the wire shape.
+
+    Same ``{value, unit}`` shape as ``_val`` plus ``source`` and an
+    optional ``detected_reset_at``.  Consumers unaware of the extra
+    keys read the value + unit unchanged.
+    """
+    if result.get("value") is None:
+        return None
+    payload: dict = {
+        "value": convert("rain_yearly", result["value"]),
+        "unit": SENSOR_UNITS.get("rain_yearly", ""),
+        "source": result.get("source", "console"),
+    }
+    reset_at = result.get("detected_reset_at")
+    if reset_at:
+        payload["detected_reset_at"] = reset_at
+    return payload
 
 
 def _bounded(column: str, raw: int | None) -> dict | None:
@@ -112,6 +133,15 @@ def get_current(db: Session = Depends(get_db)):
     solar_j_per_m2 = compute_daily_solar_energy_j_per_m2(db)
     cfg = get_effective_config(db)
     solar_energy_unit = str(cfg.get("solar_energy_unit") or settings.units_solar_energy)
+    # Yearly rain — pick between the console counter and an
+    # archive-derived sum, per operator preference and reset detection.
+    # See services/rain_year.py.  ``rain_year_start`` isn't cached
+    # server-side today (it lives in the Vue's EEPROM); treat as None
+    # for now, which falls back to January 1 as the season boundary.
+    rain_yearly_source_mode = str(cfg.get("rain_yearly_source") or "auto")
+    yearly_result = compute_yearly_rain(
+        db, reading.rain_yearly, rain_yearly_source_mode, season_month=None,
+    )
     solar_energy_daily_value = joules_to_display_unit(solar_j_per_m2, solar_energy_unit)
     solar_energy_daily = (
         {"value": solar_energy_daily_value, "unit": solar_energy_unit}
@@ -155,7 +185,11 @@ def get_current(db: Session = Depends(get_db)):
         },
         "rain": {
             "daily": _val("rain_total", reading.rain_total),
-            "yearly": _val("rain_yearly", reading.rain_yearly),
+            # Yearly carries provenance so the UI can annotate when
+            # the value is an archive-derived recomputation rather
+            # than what the console currently shows.  Shape is
+            # ``{value, unit, source, detected_reset_at?}``.
+            "yearly": _yearly_val(yearly_result),
             "rate": _val("rain_rate", reading.rain_rate),
             "yesterday": _get_rain_yesterday(db),
             "weekly": get_weekly_delta(db, SensorReadingModel.rain_yearly, "rain_yearly"),

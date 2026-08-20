@@ -12,8 +12,9 @@
 import React from 'react';
 import { Tile, TileHeading, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt, fmtTime, s, fs, decimate } from './primitives';
 import type { DashboardData } from './types';
-import { compass, rosePetals, pathFor, ledgerGrid } from '../utils/gauges';
+import { pathFor, ledgerGrid } from '../utils/gauges';
 import WheelBarometer from '../components/charts/WheelBarometer';
+import WindRoseDial from '../components/charts/WindRoseDial';
 
 /* ───────────────────────────────────────────────────── 1. hero temperature */
 
@@ -226,44 +227,21 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
 /* ────────────────────────────────────────────────────────────────── 5. wind */
 
 export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
-  // Mock 1d: 250px rendered from a 300 viewBox — compass at 150,150 r=110.
   const SIZE = 250;
-  const c = compass(150, 150, 110, 132);
-  const petals = rosePetals(150, 150, 100, d.wind.roseWeights);
-  // Davis vanes keep pointing at the last-known direction when the
-  // anemometer stalls; the tile shows "0 mph E" so a hidden needle
-  // reads as "we lost the pointer" rather than "wind is calm".
-  // Gate on direction alone — a station without a vane reports null
-  // and the needle stays hidden then.
-  const showNeedle = d.wind.directionDeg != null;
 
   return (
     <Tile id="wind" style={style}>
       {/* Compass first, title inside the readout column — same pattern as the
-          barometer. No heading above the gauge. */}
+          barometer.  Design v35 T3 swapped the SVG compass + rosePetals +
+          needle for the Highcharts WindRoseDial; the readout column
+          below is unchanged. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: s(10), flex: 1, minHeight: 0 }}>
-        <svg width={SIZE} height={SIZE} viewBox="0 0 300 300" style={{ flexShrink: 0 }}>
-          <circle cx={150} cy={150} r={110} fill={v.chart.surface} stroke={v.rule} strokeWidth={1} />
-          <circle cx={150} cy={150} r={82} fill="none" stroke={v.ruleHair} strokeWidth={0.6} />
-          {petals.map((p, i) => <path key={i} d={p.d} fill={v.accent} opacity={p.op} />)}
-          {c.ticks.map((k, i) => (
-            <line key={i} x1={k.x1} y1={k.y1} x2={k.x2} y2={k.y2} stroke={v.text} strokeOpacity={0.6} strokeWidth={k.sw} />
-          ))}
-          {c.labels.map((l, i) => (
-            <text key={i} x={l.x} y={l.y} textAnchor="middle" style={type('sectionLabel')} fill={v.textSecondary}>{l.label}</text>
-          ))}
-          {showNeedle && (
-            // SVG ``transform`` attribute — CSS transforms on SVG
-            // elements are unreliable across browsers (Firefox / Safari
-            // don't map px-based ``transformOrigin`` to the SVG coord
-            // system).  See DriftRiskTile for the full note.
-            <g transform={`rotate(${d.wind.directionDeg} 150 150)`}>
-              <line x1={150} y1={174} x2={150} y2={74} stroke={v.needle} strokeWidth={2.6} strokeLinecap="round" />
-              <polygon points="150,62 142,80 158,80" fill={v.needle} />
-            </g>
-          )}
-          <circle cx={150} cy={150} r={3.5} fill={v.needle} />
-        </svg>
+        <WindRoseDial
+          roseWeights={d.wind.roseWeights}
+          directionDeg={d.wind.directionDeg}
+          speedMph={d.wind.speedMph}
+          size={SIZE}
+        />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), minWidth: 0 }}>
           <div style={{ ...type('title'), color: v.text }}>Wind</div>

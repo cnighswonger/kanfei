@@ -1,0 +1,118 @@
+/*
+ * WheelBarometer — styled-mode identity.
+ *
+ * Companion to the geometry in ``WheelBarometer.tsx``.  Colours and
+ * fonts pull from theme tokens so a theme switch reskins the wheel
+ * with no JS rebuild.  Every selector is scoped through
+ * ``.wheel-barometer``.
+ */
+
+.wheel-barometer .highcharts-background,
+.wheel-barometer .highcharts-plot-background,
+.wheel-barometer .highcharts-plot-border {
+  fill: transparent;
+  stroke: none;
+}
+
+/* ── Rim rings ──────────────────────────────────────────────────────
+   Two stroked concentric circles at 96.7 % / 88.7 % of pane radius
+   (theme ``dial`` group's gradOuter / gradInner).  Rendered as
+   zero-width bands whose stroke this stylesheet owns — Design v35
+   P4: filled bands at sub-percentage widths land on sub-pixel
+   boundaries and render unevenly.  A stroked ring is exact at any
+   size. */
+
+.wheel-barometer .highcharts-pane {
+  fill: transparent;
+  stroke: none;
+}
+
+.wheel-barometer .highcharts-pane.wheel-baro-rim-outer {
+  stroke: var(--chart-grid-major, rgba(58, 45, 29, 0.20));
+  stroke-width: 0.8;
+  fill: none;
+}
+
+.wheel-barometer .highcharts-pane.wheel-baro-rim-inner {
+  stroke: var(--rule-hair, rgba(58, 45, 29, 0.12));
+  stroke-width: 0.6;
+  fill: none;
+}
+
+/* ── Zone-ring separators ───────────────────────────────────────────
+   Four narrow radial slabs at the four zone boundaries.  Empty
+   between them; the labels overlaid on the ring identify each zone
+   by name, not by fill.  Design v35 P0. */
+
+.wheel-barometer .highcharts-plot-band.wheel-baro-separator {
+  fill: var(--chart-grid-major, rgba(58, 45, 29, 0.20));
+  opacity: 1;
+}
+
+/* ── Ticks + numerals ──────────────────────────────────────────────
+   Majors + minors sit INSIDE the rim (Design v35 P2), with the
+   numerals underneath.  ``sectionLabel`` role: mono, muted-ink. */
+
+.wheel-barometer .highcharts-axis-line {
+  stroke: transparent;
+}
+
+.wheel-barometer .highcharts-tick {
+  stroke: var(--color-text, #3a2d1d);
+  stroke-width: 1.6;
+}
+
+.wheel-barometer .highcharts-minor-tick {
+  stroke: var(--color-text-secondary, rgba(58, 45, 29, 0.84));
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.wheel-barometer .highcharts-axis-labels text {
+  fill: var(--color-text-secondary, rgba(58, 45, 29, 0.84));
+  font-family: var(--type-mono-family, "JetBrains Mono", monospace);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+/* ── Trend dial ─────────────────────────────────────────────────────
+   Short pale hand three hours back.  Ink-soft at 55 % opacity so it
+   reads as ambient, not a value.  Its pivot is hidden — the "now"
+   dial owns the pivot dot. */
+
+.wheel-barometer .highcharts-series.wheel-baro-trend .highcharts-dial {
+  fill: var(--color-text, #3a2d1d);
+  stroke: none;
+  fill-opacity: 0.28;
+}
+
+.wheel-barometer .highcharts-series.wheel-baro-trend .highcharts-pivot {
+  display: none;
+}
+
+/* ── Live needle ───────────────────────────────────────────────────
+   Accent-coloured pointer + a lightly emphasised pivot dot. */
+
+.wheel-barometer .highcharts-series.wheel-baro-now .highcharts-dial {
+  fill: var(--color-accent, #a85f24);
+  fill-opacity: 1;
+  stroke: none;
+}
+
+.wheel-barometer .highcharts-series.wheel-baro-now .highcharts-pivot {
+  fill: var(--color-accent, #a85f24);
+  stroke: var(--chart-surface, #dccfa9);
+  stroke-width: 1;
+}
+
+/* ── Zone label overlays ───────────────────────────────────────────
+   Rendered via ``chart.renderer.text()`` on the zone ring — small
+   mono caps, spaced to look like scale engraving. */
+
+.wheel-barometer .wheel-baro-zone-label {
+  fill: var(--color-text-secondary, rgba(58, 45, 29, 0.84));
+  font-family: var(--type-mono-family, "JetBrains Mono", monospace);
+  font-size: 9px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+}
