@@ -12,7 +12,8 @@
 import React from 'react';
 import { Tile, TileHeading, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt, fmtTime, s, fs, decimate } from './primitives';
 import type { DashboardData } from './types';
-import { wheelDial, compass, rosePetals, pathFor, ledgerGrid } from '../utils/gauges';
+import { compass, rosePetals, pathFor, ledgerGrid } from '../utils/gauges';
+import WheelBarometer from '../components/charts/WheelBarometer';
 
 /* ───────────────────────────────────────────────────── 1. hero temperature */
 
@@ -175,43 +176,22 @@ export const HistoryChartTile: React.FC<{ d: DashboardData; style?: React.CSSPro
 
 export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
   const size = 260;
-  const dial = d.barometer.inHg != null ? wheelDial(d.barometer.inHg, size) : null;
   const trend = d.barometer.trendInHgPer3h;
   const arrow = trend == null ? '' : trend > 0.005 ? '↑ rising' : trend < -0.005 ? '↓ falling' : '→ steady';
 
   return (
     <Tile id="barometer" style={style}>
       {/* ⚠ No heading above the gauge. In 1d the dial comes first and the title
-          lives at the top of the readout column beside it. */}
+          lives at the top of the readout column beside it.  Design v34 T3
+          swapped the SVG wheel for the Highcharts gauge in
+          ``components/charts/WheelBarometer.tsx``; the readout column
+          below is unchanged. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: s(10), flex: 1, minHeight: 0 }}>
-        {dial && (
-          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
-            <circle cx={dial.cx} cy={dial.cy} r={dial.rimOuter} fill="none" stroke={v.rule} strokeWidth={1.2} />
-            <circle cx={dial.cx} cy={dial.cy} r={dial.rimInner} fill="none" stroke={v.ruleHair} strokeWidth={0.6} />
-
-            {dial.minor.map((k, i) => (
-              <line key={`m${i}`} x1={k.x1} y1={k.y1} x2={k.x2} y2={k.y2} stroke={v.text} strokeOpacity={0.55} strokeWidth={0.8} strokeLinecap="round" />
-            ))}
-            {dial.major.map((k, i) => (
-              <line key={`M${i}`} x1={k.x1} y1={k.y1} x2={k.x2} y2={k.y2} stroke={v.text} strokeWidth={1.6} strokeLinecap="round" />
-            ))}
-            {dial.numerals.map((n, i) => (
-              <text key={`n${i}`} x={n.x} y={n.y} textAnchor="middle"
-                    style={{ ...type('sectionLabel'), letterSpacing: 0 }} fill={v.textSecondary}>{n.label}</text>
-            ))}
-            {dial.zones.map((z, i) => (
-              <text key={`z${i}`} x={z.x} y={z.y} textAnchor="middle"
-                    style={{ ...type('sectionLabel'), fontSize: 8 }} fill={v.textMuted}>{z.label}</text>
-            ))}
-
-            {/* pale trend hand 3 h back, THEN the live needle — movement, not just value */}
-            <line x1={dial.cx} y1={dial.cy} x2={dial.trend.x} y2={dial.trend.y}
-                  stroke={v.text} strokeOpacity={0.3} strokeWidth={1.6} strokeLinecap="round" />
-            <line x1={dial.cx} y1={dial.cy} x2={dial.tip.x} y2={dial.tip.y}
-                  stroke={v.needle} strokeWidth={2.4} strokeLinecap="round" />
-            <circle cx={dial.cx} cy={dial.cy} r={4} fill={v.needle} />
-          </svg>
-        )}
+        <WheelBarometer
+          inHg={d.barometer.inHg}
+          trendInHgPer3h={d.barometer.trendInHgPer3h}
+          size={size}
+        />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), minWidth: 0 }}>
           <div style={{ ...type('title'), color: v.text }}>Barometer</div>
