@@ -68,13 +68,20 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
     const inkSoft = readToken("--color-text-secondary", "rgba(58,45,29,0.84)");
     const accent = readToken("--color-accent", "#a85f24");
     const surface = readToken("--chart-surface", "#dccfa9");
-    const gridMinor = readToken("--chart-grid-minor", "rgba(58,45,29,0.10)");
+    const gridMajor = readToken("--chart-grid-major", "rgba(58,45,29,0.20)");
+    const ruleHair = readToken("--rule-hair", "rgba(58,45,29,0.12)");
 
     return {
       chart: {
         type: "gauge",
+        // The theme bridge sets ``plotBackgroundColor: t.surface`` as a
+        // default for every chart, which for a gauge paints a
+        // square filled rectangle behind the circular dial.  Force
+        // both to transparent here — the paper theme's card ground
+        // is what the operator sees behind the dial.
         backgroundColor: "transparent",
-        // Room for the zone labels that sit outside the tick ring.
+        plotBackgroundColor: "transparent",
+        plotBorderWidth: 0,
         spacing: [4, 4, 4, 4],
         height: size,
         width: size,
@@ -88,7 +95,25 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
         // clockwise, so ``-120`` = 8 o'clock, ``120`` = 4 o'clock.
         startAngle: -120,
         endAngle: 120,
-        background: [{ backgroundColor: "transparent", borderWidth: 0 }],
+        // Concentric ring backgrounds give the dial its instrument
+        // identity — a plain sweep with tick marks reads as generic
+        // Highcharts.  Two hairline rings at the outer edge match
+        // the SVG dial the paper themes shipped originally.  Fill
+        // stays transparent (the tile background is the ground).
+        background: [
+          {
+            outerRadius: "100%",
+            innerRadius: "99%",
+            backgroundColor: gridMajor,
+            borderWidth: 0,
+          },
+          {
+            outerRadius: "78%",
+            innerRadius: "77.5%",
+            backgroundColor: ruleHair,
+            borderWidth: 0,
+          },
+        ],
       },
       yAxis: {
         min: MIN_INHG,
@@ -118,10 +143,16 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
         // stay in the theme's palette — every band picks up the same
         // ``chart-surface`` fill; the label text is what identifies
         // each zone, not a colour code (Design v34 spec).
+        // Zone bands sit as a visible ring on the dial's inner
+        // face.  ``chart-grid-major`` at 20 % alpha is the paper
+        // themes' "readable but quiet" surface — chart-grid-minor
+        // at 10 % vanishes on cream ground, which is the "vanilla"
+        // read Chris flagged in the first cut.  Each band has the
+        // same fill; the label text is what identifies each zone.
         plotBands: ZONE_BANDS.map((band) => ({
           from: band.from,
           to: band.to,
-          color: gridMinor,
+          color: gridMajor,
           innerRadius: "55%",
           outerRadius: "62%",
         })),
