@@ -329,6 +329,34 @@ class Poller:
             # replace on each WS message — any field missing from the WS
             # payload but present in /api/current disappears from the tile
             # for a poll cycle, then reappears at the next REST refresh).
+            # Yearly rain: console value + reset detection + optional
+            # archive fallback.  Uses the DB session already open here
+            # rather than opening its own, matching how solar-energy /
+            # extremes are stitched into the broadcast.  See
+            # services/rain_year.compute_yearly_rain for the modes.
+            from ..services.rain_year import compute_yearly_rain
+            from ..models.sensor_meta import convert, SENSOR_UNITS
+            source_row = db.query(StationConfigModel).filter_by(
+                key="rain_yearly_source",
+            ).first()
+            source_mode = (source_row.value if source_row and source_row.value else "auto")
+            yearly_result = compute_yearly_rain(
+                db,
+                round(snapshot.rain_yearly * 10) if snapshot.rain_yearly is not None else None,
+                source_mode,
+                season_month=None,
+            )
+            if yearly_result.get("value") is None:
+                yearly_rain: Optional[dict] = None
+            else:
+                yearly_rain = {
+                    "value": convert("rain_yearly", yearly_result["value"]),
+                    "unit": SENSOR_UNITS.get("rain_yearly", "in"),
+                    "source": yearly_result.get("source", "console"),
+                }
+                if "detected_reset_at" in yearly_result:
+                    yearly_rain["detected_reset_at"] = yearly_result["detected_reset_at"]
+
             solar_j = compute_daily_solar_energy_j_per_m2(db)
             unit_row = db.query(StationConfigModel).filter_by(
                 key="solar_energy_unit",
@@ -356,6 +384,7 @@ class Poller:
                 yearly_extremes=yearly_extremes,
                 rain_weekly=rain_weekly,
                 et_weekly=et_weekly,
+                yearly_rain=yearly_rain,
             )
             # ``snapshot`` (the raw SensorSnapshot dataclass) rides
             # along so downstream consumers that need the flat SI
@@ -456,6 +485,7 @@ class Poller:
         yearly_extremes: Optional[dict] = None,
         rain_weekly: Optional[dict] = None,
         et_weekly: Optional[dict] = None,
+        yearly_rain: Optional[dict] = None,
     ) -> dict:
         """Convert a SensorSnapshot (SI) to a JSON-serializable dict for WebSocket.
 
@@ -549,10 +579,12 @@ class Poller:
                     {"value": _rain(snapshot.rain_daily), "unit": "in"}
                     if snapshot.rain_daily is not None else None
                 ),
-                "yearly": (
-                    {"value": _rain(snapshot.rain_yearly), "unit": "in"}
-                    if snapshot.rain_yearly is not None else None
-                ),
+                # Yearly may be either the console's counter or an
+                # archive-derived recomputation (see services/rain_year).
+                # ``yearly_rain`` is precomputed by _poll_once so this
+                # broadcast shape matches /api/current — a missing key
+                # here blinks the field to null in the WS-updated tile.
+                "yearly": yearly_rain,
                 "rate": (
                     {"value": _rain(snapshot.rain_rate), "unit": "in/hr"}
                     if snapshot.rain_rate is not None else None

@@ -4,6 +4,7 @@ import { fetchConfig, updateConfig, fetchSerialPorts, reconnectStation, fetchWea
 import type { NowcastPresetOption } from "../api/client.ts";
 import type { ConfigItem, WeatherLinkConfig, WeatherLinkCalibration, AlertThreshold, LocalUsageResponse, UsageStatus, DbStats, LogEntry } from "../api/types.ts";
 import { useTheme } from "../context/ThemeContext.tsx";
+import { useWeatherData } from "../context/WeatherDataContext.tsx";
 import { usePersona, PERSONAS, type Persona } from "../context/PersonaContext.tsx";
 import { useWeatherBackground } from "../context/WeatherBackgroundContext.tsx";
 import { themes } from "../themes/index.ts";
@@ -1823,6 +1824,7 @@ export default function Settings() {
   const { flags, refresh: refreshFeatureFlags } = useFeatureFlags();
   const { themeName, setThemeName } = useTheme();
   const { persona, setPersona } = usePersona();
+  const { currentConditions } = useWeatherData();
   const [timezone, setTimezoneState] = useState(getTimezone);
   const {
     enabled: bgEnabled,
@@ -3364,6 +3366,61 @@ export default function Settings() {
         isMobile={isMobile}
         registerSatellite={registerSatellite}
       />
+      {/* Yearly rain source — where the dashboard's "Year" figure
+          comes from.  ``auto`` (default) trusts the console until a
+          mid-year reset is detected in the last 30 days, then falls
+          back to summing daily rain from the archive.  See
+          backend/services/rain_year.py for the detection heuristic.
+          Card sits beside RainSeason because they answer adjacent
+          questions about the same counter. */}
+      <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
+        <h3 style={sectionTitle}>Yearly rain source</h3>
+        <p style={{ fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text-secondary)", fontFamily: "var(--font-body)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
+          Choose how the dashboard's <em>Year</em> figure is computed.
+          The Vue's yearly rain counter can be zeroed mid-year by a
+          firmware event or an operator action; a recomputation from
+          the archive stays honest through that.
+        </p>
+        <div style={fieldGroup}>
+          {[
+            { key: "auto", label: "Auto", hint: "Trust the console; fall back to archive when a mid-year reset is detected." },
+            { key: "console", label: "Console only", hint: "Always surface the console's yearly counter as-is." },
+            { key: "archive", label: "Archive only", hint: "Always sum daily rain from the archive; only as accurate as archive coverage." },
+          ].map((opt) => (
+            <label key={opt.key} style={{ ...radioLabel, alignItems: "flex-start", padding: "6px 0" }}>
+              <input
+                type="radio"
+                name="rain_yearly_source"
+                checked={(val("rain_yearly_source") || "auto") === opt.key}
+                onChange={() => updateField("rain_yearly_source", opt.key)}
+                style={{ marginTop: "3px" }}
+              />
+              <span>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: "calc(13px * var(--font-scale))", color: "var(--color-text)" }}>{opt.label}</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: "calc(11.5px * var(--font-scale))", color: "var(--color-text-muted)", marginTop: "2px", lineHeight: 1.4 }}>
+                  {opt.hint}
+                </div>
+              </span>
+            </label>
+          ))}
+        </div>
+        {currentConditions?.rain?.yearly?.detected_reset_at && (
+          <div style={{
+            marginTop: "12px",
+            padding: "10px 12px",
+            border: "0.8px solid var(--color-warning, #a85f24)",
+            background: "transparent",
+            fontFamily: "var(--font-body)",
+            fontSize: "calc(12.5px * var(--font-scale))",
+            color: "var(--color-text-secondary)",
+            lineHeight: 1.45,
+          }}>
+            Console yearly counter reset detected around {new Date(currentConditions.rain.yearly.detected_reset_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}.
+            {" "}
+            <strong>Auto</strong> and <strong>Archive</strong> both compensate; <strong>Console only</strong> would show the counter's post-reset value.
+          </div>
+        )}
+      </div>
       </>}
 
       {siteUnitsSection === "units" && <>

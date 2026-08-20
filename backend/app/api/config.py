@@ -59,6 +59,15 @@ _DEFAULTS: dict[str, object] = {
     "pressure_unit": settings.units_pressure,
     "wind_unit": settings.units_wind,
     "rain_unit": settings.units_rain,
+    # How the dashboard's ``Year`` figure gets computed.
+    # ``auto`` (default) trusts the console's yearly counter, falling
+    # back to a sum of archived daily rain when a mid-year console
+    # reset is detected in the last 30 days.  ``console`` always
+    # surfaces the console value (matches raw device behaviour).
+    # ``archive`` always sums from the archive (robust against future
+    # resets; only as accurate as archive coverage).  See
+    # services/rain_year.py for the detection heuristic.
+    "rain_yearly_source": "auto",
     "solar_energy_unit": settings.units_solar_energy,
     "metar_enabled": settings.metar_enabled,
     "metar_station": settings.metar_station_id,
