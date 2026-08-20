@@ -1,3 +1,42 @@
+kanfei (0.1.0~beta70) unstable; urgency=medium
+
+  * Rain: yearly-rain source with console-reset detection.  The Vue's
+    ``rain_yearly`` counter can be zeroed mid-year by a firmware
+    event, factory reset, or an operator action; the dashboard used
+    to silently understate the year figure whenever that happened
+    (vsits-02 saw it on 2026-08-15, dropping from 345 to 51
+    tenths-mm).  New ``services/rain_year.py`` walks 30 days of
+    stored samples for a mid-year drop, and — when detected —
+    optionally recomputes the yearly figure by summing archived
+    daily rain since the season boundary.  Per-station
+    ``rain_yearly_source`` selects between ``auto`` (default: trust
+    console, fall back to archive on detected reset), ``console``
+    (always the raw counter), or ``archive`` (always summed).  New
+    radio card in Settings › Site & Units › Location, with a
+    warning banner when a reset is detected on the current station.
+    Wire shape adds ``source`` + optional ``detected_reset_at`` to
+    ``rain.yearly``; consumers reading only value/unit are
+    unchanged.
+
+  * Charts (accumulated since beta69, deployed by rsync during
+    iteration and now formalised in this beta): Design v35/v37
+    tuning of the Highcharts wheel barometer (five zones marked by
+    four hairline separators between them, numerals inside the rim
+    at ``distance: -26``, minor ticks strengthened to 1 px at 0.5
+    opacity, zone labels 9 px on ``text-secondary``, needle at full
+    opacity, trend hand as a 28 %-alpha shadow); wind rose migrated
+    to a Highcharts styled-mode dial (polar column petals in six
+    accent-opacity tiers, live bearing needle overlaid via
+    ``chart.events.render``, calm-dimming at < 1 mph, ``circle``
+    grid interpolation so the frame reads round instead of
+    diamond); swapped into all three consumers at 250 px each; SVG
+    helpers ``wheelDial`` / ``compass`` / ``rosePetals`` /
+    ``humidityArc`` / ``uvArc`` retired from ``utils/gauges.ts``
+    (-200 lines).  Highcharts theme bridge now disables the export
+    burger by default; History opts back in for its CSV/PNG buttons.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Wed, 20 Aug 2026 20:15:00 +0000
+
 kanfei (0.1.0~beta69) unstable; urgency=medium
 
   * Design v34 HIGHCHARTS.md tranche 3: replace the SVG barometer
