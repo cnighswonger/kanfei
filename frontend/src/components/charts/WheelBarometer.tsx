@@ -1,28 +1,36 @@
 /**
- * Wheel barometer — Design v34 HIGHCHARTS.md tranche 3.
+ * Wheel barometer — Design v34 HIGHCHARTS.md tranche 3, styled-mode.
  *
- * Highcharts gauge replacement for ``utils/gauges.ts:wheelDial``.  A
- * 240° sweep opens downward from 8 o'clock to 4 o'clock through the
- * top, showing barometric pressure over a fixed 28.5–31.0 inHg range
- * with plotBand zones (STORMY / RAIN / CHANGE / FAIR / SET FAIR) and
- * two dials: a pale trend hand for the value three hours ago and an
- * accent live needle for the current reading.
+ * Highcharts gauge in ``chart.styledMode: true``: every colour and
+ * font lives in ``WheelBarometer.css`` against the theme's CSS
+ * custom properties, and this file owns geometry (angles, radii,
+ * ticks, dial widths).  The two-file split is the point — Design
+ * can iterate on the visual identity in CSS without a code change,
+ * and the paper themes' identity carries into the wheel without a
+ * per-token JS bridge.
  *
- * Both design decisions the spec calls out as easy to get wrong:
+ * The two spec calls Design flagged as easy to get wrong stay in
+ * geometry, not style:
  *
  * - **``min: 28.5, max: 31.0`` is fixed**, NOT the day's swing.  A
  *   station's real daily variation is on the order of 0.2 inHg; a
- *   dial auto-scaled to the day would turn noise into drama.  The
- *   fixed meteorological range is what makes needle position
- *   meaningful.
+ *   dial auto-scaled to the day would turn noise into drama.
  * - **``radius: '46%'`` on the trend dial + ``'66%'`` on the live
- *   one** — the pale short hand three hours back is what makes the
+ *   one** — the short pale hand three hours back is what makes the
  *   dial show *movement* rather than a value.
  */
 
 import { useMemo } from "react";
 import Highcharts from "highcharts";
 import "highcharts/highcharts-more";
+// Highcharts' base styled-mode stylesheet ships class-name rules
+// for every SVG element the library draws.  Import it once so the
+// wheel picks up the neutral defaults; ``WheelBarometer.css`` then
+// overrides the pieces we own.  Global import is fine — classic-
+// mode consumers ignore the classes because they paint with inline
+// attributes.
+import "highcharts/css/highcharts.css";
+import "./WheelBarometer.css";
 import { HighchartsReact } from "highcharts-react-official";
 import { useTheme } from "../../context/ThemeContext.tsx";
 
@@ -47,12 +55,6 @@ const ZONE_BANDS = [
   { from: 30.5, to: 31.0, label: "SET FAIR" },
 ];
 
-function readToken(name: string, fallback: string): string {
-  if (typeof document === "undefined") return fallback;
-  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return v || fallback;
-}
-
 export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBarometerProps) {
   const { themeName } = useTheme();
 
@@ -64,24 +66,13 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
         ? Math.max(MIN_INHG, Math.min(MAX_INHG, inHg - trendInHgPer3h))
         : null;
 
-    const ink = readToken("--color-text", "#3a2d1d");
-    const inkSoft = readToken("--color-text-secondary", "rgba(58,45,29,0.84)");
-    const accent = readToken("--color-accent", "#a85f24");
-    const surface = readToken("--chart-surface", "#dccfa9");
-    const gridMajor = readToken("--chart-grid-major", "rgba(58,45,29,0.20)");
-    const ruleHair = readToken("--rule-hair", "rgba(58,45,29,0.12)");
-
     return {
       chart: {
         type: "gauge",
-        // The theme bridge sets ``plotBackgroundColor: t.surface`` as a
-        // default for every chart, which for a gauge paints a
-        // square filled rectangle behind the circular dial.  Force
-        // both to transparent here — the paper theme's card ground
-        // is what the operator sees behind the dial.
-        backgroundColor: "transparent",
-        plotBackgroundColor: "transparent",
-        plotBorderWidth: 0,
+        // Styled mode: Highcharts stops emitting inline colour /
+        // font attributes and every element carries a class name
+        // instead.  Skinning happens in WheelBarometer.css.
+        styledMode: true,
         spacing: [4, 4, 4, 4],
         height: size,
         width: size,
@@ -95,23 +86,19 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
         // clockwise, so ``-120`` = 8 o'clock, ``120`` = 4 o'clock.
         startAngle: -120,
         endAngle: 120,
-        // Concentric ring backgrounds give the dial its instrument
-        // identity — a plain sweep with tick marks reads as generic
-        // Highcharts.  Two hairline rings at the outer edge match
-        // the SVG dial the paper themes shipped originally.  Fill
-        // stays transparent (the tile background is the ground).
+        // Two concentric ring backgrounds.  The CSS owns their
+        // stroke + opacity; here we just declare the radii.  The
+        // outer entry gets ``className: 'highcharts-pane-outer'``
+        // so the stylesheet can distinguish the two.
         background: [
           {
             outerRadius: "100%",
             innerRadius: "99%",
-            backgroundColor: gridMajor,
-            borderWidth: 0,
+            className: "highcharts-pane-outer",
           },
           {
             outerRadius: "78%",
             innerRadius: "77.5%",
-            backgroundColor: ruleHair,
-            borderWidth: 0,
           },
         ],
       },
@@ -122,100 +109,70 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
         minorTickInterval: 0.125,
         tickLength: 12,
         minorTickLength: 7,
+        // Widths stay here — they're geometry.  Colours come from
+        // the CSS.
         tickWidth: 1.6,
         minorTickWidth: 0.8,
-        tickColor: ink,
-        minorTickColor: inkSoft,
         lineWidth: 0,
         labels: {
           distance: 18,
-          style: {
-            color: inkSoft,
-            fontFamily: readToken("--type-mono-family", "'JetBrains Mono', monospace"),
-            fontSize: "11px",
-          },
           formatter: function () {
             const v = typeof this.value === "number" ? this.value : Number(this.value);
             return v.toFixed(1);
           },
         },
-        // Zone bands sit as an inner ring at ~57 % radius.  Colours
-        // stay in the theme's palette — every band picks up the same
-        // ``chart-surface`` fill; the label text is what identifies
-        // each zone, not a colour code (Design v34 spec).
-        // Zone bands sit as a visible ring on the dial's inner
-        // face.  ``chart-grid-major`` at 20 % alpha is the paper
-        // themes' "readable but quiet" surface — chart-grid-minor
-        // at 10 % vanishes on cream ground, which is the "vanilla"
-        // read Chris flagged in the first cut.  Each band has the
-        // same fill; the label text is what identifies each zone.
         plotBands: ZONE_BANDS.map((band) => ({
           from: band.from,
           to: band.to,
-          color: gridMajor,
           innerRadius: "55%",
           outerRadius: "62%",
+          // Every band shares one class — the CSS gives them all
+          // the same fill and the label text distinguishes the zones.
+          className: "wheel-baro-zone",
         })),
       },
       tooltip: { enabled: false },
       series: [
-        // Trend hand three hours back — the short pale dial.  Its
-        // whole job is to make the live needle read as *moving*
-        // rather than as an absolute value.  Hidden entirely when
-        // trend is unavailable.
         ...(trend3hAgo != null
           ? [{
               type: "gauge" as const,
               name: "trend",
+              className: "wheel-baro-trend",
               data: [trend3hAgo],
               dial: {
                 radius: "46%",
-                backgroundColor: inkSoft,
                 baseWidth: 2,
                 topWidth: 2,
                 rearLength: "0%",
               },
-              pivot: { radius: 0 },
               enableMouseTracking: false,
             }]
           : []),
         {
           type: "gauge" as const,
           name: "now",
+          className: "wheel-baro-now",
           data: [clampedNow],
           dial: {
             radius: "66%",
-            backgroundColor: accent,
             baseWidth: 3,
             topWidth: 1,
             rearLength: "0%",
           },
-          pivot: {
-            radius: 4,
-            backgroundColor: accent,
-            borderColor: surface,
-            borderWidth: 1,
-          },
+          pivot: { radius: 4 },
           enableMouseTracking: false,
         },
       ],
-      // Zone name labels ride on chart.events.render — HC has no
-      // native label-on-plotBand.  Positioned at the mid-angle of
-      // each band on an inner ring so they read as scale, not chrome.
-      // Recomputed on every render so a resize or theme change lands
-      // labels correctly.
-      chart_render: undefined, // (docstring anchor; real handler below)
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inHg, trendInHgPer3h, size, themeName]);
 
-  // Attach the zone-label renderer via chart.events.render.  Kept in
-  // an effect-free useMemo so React doesn't recreate the callback per
-  // paint and Highcharts doesn't re-bind it.
+  // Zone-name labels ride on chart.events.render — HC has no native
+  // label-on-plotBand.  In styled mode the ``.css()`` call would be a
+  // no-op; the label picks up its font/colour via a class on the
+  // element instead (see WheelBarometer.css).
   const optionsWithLabels = useMemo<Highcharts.Options | null>(() => {
     if (!options) return null;
-    const inkFaint = readToken("--color-text-muted", "rgba(58,45,29,0.62)");
-    const mono = readToken("--type-mono-family", "'JetBrains Mono', monospace");
     return {
       ...options,
       chart: {
@@ -225,25 +182,19 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
             const chart = this as Highcharts.Chart & {
               _wheelBaroLabels?: Highcharts.SVGElement[];
             };
-            // Clean up any prior labels from a previous render so we
-            // don't stack copies on resize / rescale.
             if (chart._wheelBaroLabels) {
               for (const el of chart._wheelBaroLabels) el.destroy();
             }
             const labels: Highcharts.SVGElement[] = [];
             const cx = chart.plotLeft + chart.plotWidth / 2;
-            // Pane bottom sits below the plot centre — Highcharts
-            // draws the gauge centred vertically with the pane at
-            // the middle.  Approximate the geometric centre as
-            // (plotLeft + plotWidth/2, plotTop + plotHeight * 0.55)
-            // — the 0.55 accounts for the 240° sweep leaving a
+            // The gauge centres vertically with the pane at the
+            // middle; 0.55 accounts for the 240° sweep leaving a
             // narrower top half than a full circle would.
             const cy = chart.plotTop + chart.plotHeight * 0.55;
             const r = Math.min(chart.plotWidth, chart.plotHeight) * 0.36;
             const sweepStart = -120;
             const sweepEnd = 120;
             for (const band of ZONE_BANDS) {
-              // Value → angle mapping across the -120..120 sweep.
               const mid = (band.from + band.to) / 2;
               const t = (mid - MIN_INHG) / (MAX_INHG - MIN_INHG);
               const angleDeg = sweepStart + t * (sweepEnd - sweepStart);
@@ -255,12 +206,7 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
                 .attr({
                   "text-anchor": "middle",
                   "dominant-baseline": "middle",
-                })
-                .css({
-                  color: inkFaint,
-                  fontFamily: mono,
-                  fontSize: "8px",
-                  letterSpacing: "1.4px",
+                  class: "wheel-baro-zone-label",
                 })
                 .add();
               labels.push(label);
@@ -278,8 +224,9 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
     );
   }
 
+  // The ``wheel-barometer`` scope class is what the CSS keys on.
   return (
-    <div style={{ width: size, height: size }}>
+    <div className="wheel-barometer" style={{ width: size, height: size }}>
       <HighchartsReact highcharts={Highcharts} options={optionsWithLabels} />
     </div>
   );

@@ -1,0 +1,104 @@
+/*
+ * WheelBarometer — styled-mode overrides.
+ *
+ * Design v34 T3 first cut ran in classic mode with colours + fonts
+ * threaded through options.  Chris flagged the result as "vanilla"
+ * and asked us to move to Highcharts' styled mode, which paints
+ * with SVG classes instead of inline attributes.  Every colour and
+ * font in this file consumes a theme token so the wheel picks up
+ * whichever theme applyThemeToDOM has published.
+ *
+ * All selectors are scoped through ``.wheel-barometer`` so a
+ * classic-mode chart elsewhere on the page can't inherit these
+ * rules.
+ */
+
+.wheel-barometer .highcharts-background {
+  fill: transparent;
+}
+
+.wheel-barometer .highcharts-plot-background {
+  fill: transparent;
+}
+
+/* Pane rings — the outer + inner concentric hairlines that give the
+   dial its instrument identity.  The classic-mode ``pane.background``
+   arrays don't apply in styled mode, so we render two invisible
+   backgrounds in options and let this stylesheet own the paint. */
+.wheel-barometer .highcharts-pane {
+  fill: transparent;
+  stroke: var(--rule-hair, rgba(58, 45, 29, 0.10));
+  stroke-width: 0.6;
+}
+
+.wheel-barometer .highcharts-pane-outer {
+  stroke: var(--chart-grid-major, rgba(58, 45, 29, 0.20));
+  stroke-width: 1.2;
+}
+
+/* Zone bands — a visible ring of five segments.  All five share the
+   same low-alpha fill; the labels identify each zone. */
+.wheel-barometer .highcharts-plot-band-wheel-baro-zone {
+  fill: var(--chart-grid-major, rgba(58, 45, 29, 0.20));
+  opacity: 1;
+}
+
+/* Ticks + labels — mono numerals in the muted-ink tone, matching the
+   paper themes' sectionLabel role. */
+.wheel-barometer .highcharts-axis-line {
+  stroke: transparent;
+}
+
+.wheel-barometer .highcharts-tick {
+  stroke: var(--color-text, #3a2d1d);
+  stroke-width: 1.6;
+}
+
+.wheel-barometer .highcharts-minor-tick {
+  stroke: var(--color-text-secondary, rgba(58, 45, 29, 0.84));
+  stroke-width: 0.8;
+  opacity: 0.7;
+}
+
+.wheel-barometer .highcharts-axis-labels text {
+  fill: var(--color-text-secondary, rgba(58, 45, 29, 0.84));
+  font-family: var(--type-mono-family, "JetBrains Mono", monospace);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+/* Trend dial — the short pale hand three hours back.  Ink-soft
+   colour + medium stroke so it reads as ambient, not as a value. */
+.wheel-barometer .highcharts-series.wheel-baro-trend .highcharts-dial {
+  fill: var(--color-text-secondary, rgba(58, 45, 29, 0.84));
+  stroke: none;
+  opacity: 0.55;
+}
+
+.wheel-barometer .highcharts-series.wheel-baro-trend .highcharts-pivot {
+  display: none;
+}
+
+/* Live needle — the accent-coloured pointer with a slightly
+   emphasised pivot dot. */
+.wheel-barometer .highcharts-series.wheel-baro-now .highcharts-dial {
+  fill: var(--color-accent, #a85f24);
+  stroke: none;
+}
+
+.wheel-barometer .highcharts-series.wheel-baro-now .highcharts-pivot {
+  fill: var(--color-accent, #a85f24);
+  stroke: var(--chart-surface, #dccfa9);
+  stroke-width: 1;
+}
+
+/* Zone label overlays rendered via chart.renderer.text().  Small mono
+   caps at the muted-ink tone, spaced enough to look like scale
+   engraving rather than chart chrome. */
+.wheel-barometer .wheel-baro-zone-label {
+  fill: var(--color-text-muted, rgba(58, 45, 29, 0.62));
+  font-family: var(--type-mono-family, "JetBrains Mono", monospace);
+  font-size: 8px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
