@@ -1,3 +1,20 @@
+kanfei (0.1.0~beta62) unstable; urgency=medium
+
+  * Design v34 HIGHCHARTS.md tranche 1: install a Highcharts theme
+    bridge.  A new ``highchartsTheme()`` reads the theme's
+    ``--color-*`` / ``--chart-*`` / ``--type-*-family`` custom
+    properties via getComputedStyle and returns a Highcharts.Options
+    object skinning chart chrome, axes, grid, tooltip, plot options
+    and the series colour cycle.  Installed via
+    ``Highcharts.setOptions(highchartsTheme())`` from
+    ``ThemeContext``'s theme-change effect, immediately after
+    ``applyThemeToDOM``.  No visible change for existing consumers
+    (they already resolve their tokens themselves before building
+    options); this consolidates the machinery so the History page
+    rebuild (tranche 2) can rely on it.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Wed, 20 Aug 2026 13:15:00 +0000
+
 kanfei (0.1.0~beta61) unstable; urgency=medium
 
   * Design v32 P2s.  RainSeason (Site & Units › Location) drops its
