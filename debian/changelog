@@ -1,3 +1,13 @@
+kanfei (0.1.0~beta65) unstable; urgency=medium
+
+  * History: import ``highcharts/modules/navigator`` so the strip
+    Design specced actually renders.  beta64 wired
+    ``navigator: { enabled: true }`` into the options object but
+    forgot the side-effect import; Highcharts silently swallowed
+    the option (no console error, no strip).
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Wed, 20 Aug 2026 15:00:00 +0000
+
 kanfei (0.1.0~beta64) unstable; urgency=medium
 
   * Design v34 HISTORY.md tranche 2b: the substantive History page
