@@ -184,7 +184,21 @@ def _aggregate(db, sensor, column, start_dt, end_dt, resolution,
         # never collapses and 24 h returns ~8k raw rows instead of ~288.
         # Force SQL integer division with `.op("/")`.
         bucket = func.cast(func.strftime("%s", ts_col), Integer).op("/")(300)
-        time_label = func.strftime("%Y-%m-%dT%H:%M:00", ts_col)
+        # ``time_label`` MUST express the bucket's START in absolute
+        # time — otherwise SQLite picks an arbitrary raw row from
+        # inside the group and its minute becomes the label.  For
+        # multi-series charts that means temp's 5-min bucket labels
+        # as ``12:44:00`` (nearest raw sample of temp), dew's same
+        # bucket labels as ``12:45:00`` (nearest raw sample of dew),
+        # and Highcharts plots them at different x coords — visible
+        # as a tooltip misalignment across series when the user drags
+        # the cursor.  Multiply the bucket back to unix seconds and
+        # format that as the bucket start.
+        bucket_start = bucket.op("*")(300)
+        time_label = func.strftime(
+            "%Y-%m-%dT%H:%M:00",
+            func.datetime(bucket_start, "unixepoch"),
+        )
         group_key = bucket
     elif resolution == "hourly":
         group_key = func.strftime("%Y-%m-%dT%H:00:00", ts_col)
