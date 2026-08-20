@@ -119,6 +119,10 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
         // clockwise, so ``-120`` = 8 o'clock, ``120`` = 4 o'clock.
         startAngle: -120,
         endAngle: 120,
+        // 92 % pane fills the available square more than HC's 85 %
+        // default and gives the ticks + numerals room to breathe.
+        // Design v38 DIFF-barometer-radial.md.
+        size: "92%",
         // Two concentric hairline rings.  Both pane.background
         // entries render as zero-width bands; the CSS strokes them
         // with the theme's rule / grid tokens.  Design v35 P4:
@@ -142,19 +146,31 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
         max: MAX_INHG,
         tickInterval: 0.5,
         minorTickInterval: 0.125,
-        tickLength: 12,
-        minorTickLength: 7,
+        // Radial budget — Design v38 DIFF-barometer-radial.md.  The
+        // dial has four label / graduation / rim systems competing
+        // in the same radial band; the budget lets each ring own
+        // its own range without collision.  Percentages of pane
+        // radius, from rim in:
+        //   96.7 %  outer rim stroke
+        //   88.7 → 96.7 %  graduations (majors span, minors half)
+        //   88.7 %  inner rim stroke
+        //   ~78 %  numerals
+        //   66 → 72 %  empty ring (breathing room)
+        //   58.5 %  zone-name labels
+        //   0 → 66 %  needle sweep (live @ 66 %, trend @ 46 %)
+        // The tick lengths below are chosen so majors stop at the
+        // inner rim and minors stop half-way to the numeral ring;
+        // both draw inward from the axis line at 96.7 %.
+        tickLength: 10,
+        minorTickLength: 5,
         tickWidth: 1.6,
-        minorTickWidth: 0.8,
+        minorTickWidth: 1,
         lineWidth: 0,
-        // Numerals inside the rim — Design v35 P2.  Positive
-        // ``distance`` pushes labels outward past the graduations,
-        // which crowds the outer rim and pushes zone names inward.
-        // Negative distance sits them under the ticks.  Paired with
-        // ``tickPosition: 'inside'`` so the graduations sit within
-        // the rim too — otherwise they default outward.
         labels: {
-          distance: -26,
+          // Negative distance = inside the axis line.  ``-24`` lands
+          // numerals near 78 % of radius on a 260 px face — inside
+          // the inner rim, outside the empty ring.
+          distance: -24,
           formatter: function () {
             const v = typeof this.value === "number" ? this.value : Number(this.value);
             return v.toFixed(1);
