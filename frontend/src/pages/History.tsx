@@ -1,45 +1,42 @@
 /**
- * History page — Design v34 HISTORY.md tranche 2a.
+ * History page — Design v34 HISTORY.md tranches 2a + 2b.
  *
- * The visual frame Design specced: a 250 px control rail on the left,
- * chart + extremes cards on the right, and a title row that carries
- * the preset buttons + CSV/PNG exports.  The rail's series list
- * doubles as a live readout — each row shows the current value even
- * when the series isn't plotted.
- *
- * Scope kept small this round (2a): the chart still plots one sensor
- * at a time (single-select radio behaviour under the multi-toggle
- * visual affordance).  Tranche 2b lands the multi-series dual-axis
- * chart, the Highcharts navigator (replacing Design's RangeStrip
- * snippet), the resolution-selector wiring (fixes the 8,125-points-
- * for-a-288-point-view bug), CSV/PNG via exportData, and the
- * ``Same week last year`` gate on data availability.
+ * One chart replacing eight.  The rail's Series list is both the
+ * plot control and a live-value readout; any subset of eight series
+ * can plot at once.  Pressure lands on the right yAxis with a
+ * dashed stroke; every other series shares the left yAxis.  The
+ * Highcharts navigator handles arbitrary-window selection (Design's
+ * v35 HIGHCHARTS.md superseded the RangeStrip snippet with the
+ * navigator).  CSV / PNG exports pipe through Highcharts'
+ * ``exportData`` module so they follow the visible window and the
+ * enabled series without a bespoke endpoint.
  */
 
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo, useRef, useEffect } from "react";
 import Highcharts from "highcharts";
+import "highcharts/modules/exporting";
+import "highcharts/modules/export-data";
 import { HighchartsReact } from "highcharts-react-official";
-import { useHistoricalData } from "../hooks/useHistoricalData.ts";
+import { useMultiHistoricalData } from "../hooks/useMultiHistoricalData.ts";
 import { useWeatherData } from "../context/WeatherDataContext.tsx";
 import { UNIT_LABELS } from "../utils/constants.ts";
 import { getHighchartsTimeConfig, resolveTimezone } from "../utils/timezone.ts";
-import { computeYAxisScale } from "../utils/chartScaling.ts";
 import { useIsMobile } from "../hooks/useIsMobile.ts";
 
 /**
- * Series definition — the eight rows in the Series rail.  Each entry
- * says how to plot the series (``sensor`` key for
- * ``useHistoricalData``, ``unit`` for axis / tooltip suffix) and how
- * to pull its live value out of ``currentConditions`` for the rail
- * readout.  Colours are the theme's ``--chart-series-*`` tokens.
+ * Series definition — the eight rows in the Series rail.  ``rightAxis``
+ * marks the series that lives on the pressure axis; everything else
+ * shares the primary left axis (mixed units in the shared case is a
+ * known limitation, accepted for tranche 2b because the default
+ * temp/dew/pressure trio is Design's canonical case).
  */
 interface SeriesDef {
   id: string;
   label: string;
   sensor: string;
   unit: string;
-  color: string;
-  /** Reads the current live value from CurrentConditions for the rail. */
+  colorVar: string;
+  rightAxis?: boolean;
   live: (cc: import("../api/types.ts").CurrentConditions | null) => number | null;
 }
 
@@ -49,7 +46,7 @@ const SERIES: SeriesDef[] = [
     label: "Temperature",
     sensor: "temperature_outside",
     unit: "F",
-    color: "var(--chart-series-temp, #4c8dff)",
+    colorVar: "--chart-series-temp",
     live: (cc) => cc?.temperature?.outside?.value ?? null,
   },
   {
@@ -57,7 +54,7 @@ const SERIES: SeriesDef[] = [
     label: "Dew point",
     sensor: "dew_point",
     unit: "F",
-    color: "var(--chart-series-dew, #5ec9a7)",
+    colorVar: "--chart-series-dew",
     live: (cc) => cc?.derived?.dew_point?.value ?? null,
   },
   {
@@ -65,7 +62,8 @@ const SERIES: SeriesDef[] = [
     label: "Pressure",
     sensor: "barometer",
     unit: "inHg",
-    color: "var(--chart-series-pressure, #f5c451)",
+    colorVar: "--chart-series-pressure",
+    rightAxis: true,
     live: (cc) => cc?.barometer?.value ?? null,
   },
   {
@@ -73,7 +71,7 @@ const SERIES: SeriesDef[] = [
     label: "Humidity",
     sensor: "humidity_outside",
     unit: "%",
-    color: "var(--chart-series-humidity, #b28dff)",
+    colorVar: "--chart-series-humidity",
     live: (cc) => cc?.humidity?.outside?.value ?? null,
   },
   {
@@ -81,7 +79,7 @@ const SERIES: SeriesDef[] = [
     label: "Wind speed",
     sensor: "wind_speed",
     unit: "mph",
-    color: "var(--chart-series-wind, #ff7a6b)",
+    colorVar: "--chart-series-wind",
     live: (cc) => cc?.wind?.speed?.value ?? null,
   },
   {
@@ -89,7 +87,7 @@ const SERIES: SeriesDef[] = [
     label: "Rain",
     sensor: "rain_daily",
     unit: "in",
-    color: "var(--chart-series-rain, #3ddc84)",
+    colorVar: "--chart-series-rain",
     live: (cc) => cc?.rain?.daily?.value ?? null,
   },
   {
@@ -97,7 +95,7 @@ const SERIES: SeriesDef[] = [
     label: "Solar / UV",
     sensor: "solar_radiation",
     unit: "W/m²",
-    color: "var(--chart-series-solar, #f0a020)",
+    colorVar: "--chart-series-solar",
     live: (cc) => cc?.solar_radiation?.value ?? null,
   },
   {
@@ -105,15 +103,12 @@ const SERIES: SeriesDef[] = [
     label: "ET",
     sensor: "et_daily",
     unit: "in",
-    color: "var(--chart-series-et, #a0a0a0)",
+    colorVar: "--chart-series-et",
     live: (cc) => cc?.et_daily?.value ?? null,
   },
 ];
 
-// DEFAULT_ACTIVE lands in tranche 2b when the rail switches from
-// single-select to a Set<string> — the three default-on series
-// (``temperature``, ``dew_point``, ``pressure``) will populate the
-// chart on first mount.
+const DEFAULT_ACTIVE = new Set(["temperature", "dew_point", "pressure"]);
 
 type Preset = "24h" | "7d" | "30d" | "year" | "custom";
 type Resolution = "raw" | "5m" | "hourly" | "daily";
@@ -148,13 +143,34 @@ const RESOLUTIONS: { key: Resolution; label: string }[] = [
   { key: "daily", label: "Daily" },
 ];
 
-// Compact number formatting for the rail's live-value readout.  Long
-// integers (rain-yearly counts, solar radiation) get 0 decimals; the
-// rest get 1 or 2 depending on unit convention (pressure runs to 2).
-function fmtValue(n: number | null, unit: string): string {
+// Compact number formatting for the rail and extremes readouts.
+function fmtValue(n: number | null | undefined, unit: string): string {
   if (n == null || !Number.isFinite(n)) return "—";
   const digits = unit === "inHg" ? 2 : unit === "%" || unit === "mph" || unit === "W/m²" ? 0 : 1;
   return `${n.toFixed(digits)} ${UNIT_LABELS[unit] ?? unit}`.trim();
+}
+
+// Find the timestamp of the earliest point matching a target value.
+// The summary API returns min/max as bare numbers; the extremes table's
+// ``When`` column needs a timestamp, and walking the points is cheap
+// enough at the sizes we deal with (~2000 max after resolution
+// bucketing).
+function findTimestampAt(points: import("../api/types.ts").HistoryPoint[], target: number | null): string | null {
+  if (target == null) return null;
+  for (const p of points) {
+    if (p.value != null && Math.abs(p.value - target) < 1e-9) return p.timestamp;
+  }
+  return null;
+}
+
+function fmtWhen(iso: string | null, tz: string): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+    timeZone: tz,
+  });
 }
 
 export default function History() {
@@ -163,98 +179,155 @@ export default function History() {
 
   const [preset, setPreset] = useState<Preset>("24h");
   const [resolution, setResolution] = useState<Resolution>("5m");
-  // Phase 2a: rail is single-select under the multi-toggle affordance.
-  // Phase 2b flips this to a ``Set<string>`` and drives a dual-axis
-  // multi-series chart; the initial value stays ``temperature`` so
-  // the same code path handles first-load without special-casing.
-  const [activeSeries, setActiveSeries] = useState<string>("temperature");
+  const [activeSet, setActiveSet] = useState<Set<string>>(new Set(DEFAULT_ACTIVE));
 
-  // Overlay checkboxes are visual scaffolding this round — the state
-  // is held so Phase 2b can wire it to the chart without changing the
-  // component shape.
   const [overlayDayNight, setOverlayDayNight] = useState(false);
   const [overlayRainEvents, setOverlayRainEvents] = useState(false);
   const [overlaySameWeekLastYear, setOverlaySameWeekLastYear] = useState(false);
 
   const { start, end } = useMemo(() => presetRange(preset), [preset]);
 
-  const activeSeriesDef = SERIES.find((s) => s.id === activeSeries) ?? SERIES[0];
-  const { data, summary, loading, error } = useHistoricalData(
-    activeSeriesDef.sensor,
+  const activeSeries = useMemo(
+    () => SERIES.filter((s) => activeSet.has(s.id)),
+    [activeSet],
+  );
+  const activeSensors = useMemo(
+    () => activeSeries.map((s) => s.sensor),
+    [activeSeries],
+  );
+
+  const { series: fetched, loading, error } = useMultiHistoricalData(
+    activeSensors,
     start,
     end,
     resolution,
   );
 
   const tz = resolveTimezone();
+  const chartRef = useRef<HighchartsReact.RefObject>(null);
+
+  // Total point count across every active series' returned points.
+  // Feeds the rail's ``resolution`` note ("2,016 points at 5-minute
+  // buckets. Raw would draw 60,480.") — an operator sees whether the
+  // resolution actually shrank the payload.
+  const totalPoints = useMemo(() => {
+    let n = 0;
+    for (const [, s] of fetched) n += s.data.length;
+    return n;
+  }, [fetched]);
 
   const chartOptions: Highcharts.Options = useMemo(() => {
-    const seriesData: [number, number | null][] = data
-      .map((p) => {
-        const x = new Date(p.timestamp).getTime();
-        if (!Number.isFinite(x)) return null;
-        const y = p.value != null && Number.isFinite(p.value) ? p.value : null;
-        return [x, y] as [number, number | null];
-      })
-      .filter((pt): pt is [number, number | null] => pt !== null);
+    // Read the theme's chart-series colours as concrete strings.
+    // ``highchartsTheme()`` is already installed via ThemeContext, so
+    // the axis/grid/tooltip skinning comes from there — this block
+    // only overrides the per-series colour cycle so an operator's
+    // series identity matches the rail swatches.
+    const readColor = (v: string): string => {
+      if (typeof document === "undefined") return "";
+      return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    };
 
-    const yValues: number[] = [];
-    if (summary?.min != null) yValues.push(summary.min);
-    if (summary?.max != null) yValues.push(summary.max);
-    if (yValues.length === 0) {
-      for (const [, y] of seriesData) if (y != null && Number.isFinite(y)) yValues.push(y);
-    }
-    const yScale = computeYAxisScale(activeSeriesDef.sensor, yValues);
-    const unitLabel = UNIT_LABELS[activeSeriesDef.unit] ?? ` ${activeSeriesDef.unit}`;
+    const hcSeries: Highcharts.SeriesOptionsType[] = activeSeries.map((def) => {
+      const points = fetched.get(def.sensor)?.data ?? [];
+      const data: [number, number | null][] = points
+        .map((p) => {
+          const x = new Date(p.timestamp).getTime();
+          if (!Number.isFinite(x)) return null;
+          const y = p.value != null && Number.isFinite(p.value) ? p.value : null;
+          return [x, y] as [number, number | null];
+        })
+        .filter((pt): pt is [number, number | null] => pt !== null);
+      const color = readColor(def.colorVar) || readColor("--chart-trace") || "#a85f24";
+      return {
+        type: "line" as const,
+        name: def.label,
+        data,
+        color,
+        yAxis: def.rightAxis ? 1 : 0,
+        // Dashed on the right axis so a user reading the plot knows
+        // which trace speaks pressure units without hunting for a
+        // legend — matches the HIGHCHARTS.md guidance for right-axis
+        // series.
+        dashStyle: def.rightAxis ? ("Dash" as const) : ("Solid" as const),
+        lineWidth: 1.8,
+        marker: { enabled: false },
+      };
+    });
 
     return {
       time: getHighchartsTimeConfig(),
       chart: {
-        type: "areaspline",
-        height: isMobile ? 280 : 400,
-        zooming: { type: "x" },
-        ...(isMobile ? { spacing: [8, 4, 8, 4] } : {}),
+        height: isMobile ? 320 : 400,
+        zooming: { type: "x" as const },
       },
       accessibility: { enabled: false },
-      xAxis: { type: "datetime", crosshair: true },
-      yAxis: {
-        title: isMobile ? { text: undefined } : { text: activeSeriesDef.label },
-        softMin: yScale.softMin,
-        softMax: yScale.softMax,
-        ...(yScale.tickInterval != null && { tickInterval: yScale.tickInterval }),
-      },
-      tooltip: {
-        shared: true,
-        valueSuffix: unitLabel,
-        xDateFormat: "%b %e, %Y %l:%M %p",
-      },
-      plotOptions: {
-        areaspline: {
-          fillOpacity: 0.15,
-          lineWidth: 2,
-          marker: { enabled: false, radius: 3 },
-          states: { hover: { lineWidth: 3 } },
-          threshold: null,
-        },
-      },
-      series: [
+      xAxis: { type: "datetime" as const, crosshair: true },
+      yAxis: [
         {
-          type: "areaspline" as const,
-          name: activeSeriesDef.label,
-          data: seriesData,
-          // Series colour comes from the ``chart-series-*`` token via a
-          // getComputedStyle read (avoids the ``var()``-into-Highcharts
-          // pitfall from HIGHCHARTS.md).  Fall back to the theme's
-          // trace token, which is always concrete.
-          color: (typeof document !== "undefined"
-            ? getComputedStyle(document.documentElement).getPropertyValue(
-                `--chart-series-${activeSeriesDef.id === "temperature" ? "temp" : activeSeriesDef.id}`,
-              ).trim()
-            : "") || getComputedStyle(document.documentElement).getPropertyValue("--chart-trace").trim() || "#a85f24",
+          title: { text: undefined },
+          opposite: false,
+        },
+        {
+          title: { text: undefined },
+          opposite: true,
+          gridLineWidth: 0,
         },
       ],
+      legend: { enabled: false },
+      tooltip: {
+        shared: true,
+        xDateFormat: "%b %e, %Y %l:%M %p",
+      },
+      // Navigator: Highcharts' built-in brush.  Design's HISTORY.md v35
+      // supersedes the RangeStrip snippet with this.
+      navigator: {
+        enabled: !isMobile,
+        adaptToUpdatedData: true,
+        maskFill: "rgba(154,110,43,0.14)",
+        outlineColor: "var(--color-accent, #9a6e2b)",
+      },
+      scrollbar: { enabled: false },
+      // Export module — Highcharts adds a burger menu by default; hide
+      // it because Design ships CSV / PNG as explicit buttons in the
+      // title row.  We call ``chart.exportChart`` / ``chart.downloadCSV``
+      // from those buttons directly.
+      exporting: { enabled: true, buttons: { contextButton: { enabled: false } } },
+      series: hcSeries,
     };
-  }, [data, summary, activeSeriesDef, tz, isMobile]);
+  }, [activeSeries, fetched, isMobile]);
+
+  // The exporting + export-data modules both extend Highcharts.Chart
+  // at runtime but the typings don't merge in the ambient .d.ts,
+  // so the calls go through a narrow cast.
+  const handleExportPNG = () => {
+    const c = chartRef.current?.chart as unknown as
+      | { exportChart?: (opt: { type: string }, extra?: unknown) => void }
+      | undefined;
+    c?.exportChart?.({ type: "image/png" }, {});
+  };
+  const handleExportCSV = () => {
+    const c = chartRef.current?.chart as unknown as
+      | { downloadCSV?: () => void }
+      | undefined;
+    c?.downloadCSV?.();
+  };
+
+  // Force the chart to reflow whenever the container width changes —
+  // Highcharts otherwise keeps its initial width until the window
+  // resizes, so switching series or resolution can leave a chart
+  // narrower than the card.
+  useEffect(() => {
+    chartRef.current?.chart?.reflow();
+  }, [activeSensors.length, resolution, preset]);
+
+  const toggleSeries = (id: string) => {
+    setActiveSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   // ── styles ───────────────────────────────────────────────────────
 
@@ -293,7 +366,7 @@ export default function History() {
     height: "10px",
     flexShrink: 0,
     background: active ? color : "transparent",
-    border: active ? "none" : `1px solid var(--rule-hair, rgba(58,45,29,0.20))`,
+    border: active ? "none" : `1px solid var(--rule-hair, rgba(58,45,29,0.22))`,
   });
 
   const presetButton = (active: boolean): React.CSSProperties => ({
@@ -315,13 +388,9 @@ export default function History() {
     padding: "6px 10px",
   });
 
-  const exportLink = (): React.CSSProperties => ({
-    ...presetButton(false),
-    textDecoration: "none",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-  });
+  const chartHeaderLine = activeSeries.length === 0
+    ? "No series selected"
+    : activeSeries.map((s) => s.label).join(", ");
 
   // ── render ───────────────────────────────────────────────────────
 
@@ -358,9 +427,9 @@ export default function History() {
         >
           History
         </h2>
-        {summary?.count != null && (
+        {totalPoints > 0 && (
           <span style={sectionLabel}>
-            {summary.count.toLocaleString()} records
+            {totalPoints.toLocaleString()} records
           </span>
         )}
         <div style={{ marginLeft: "auto", display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -375,13 +444,8 @@ export default function History() {
             </button>
           ))}
           <span style={{ width: "14px" }} aria-hidden="true" />
-          <a
-            href={`/api/export?sensors=${encodeURIComponent(activeSeriesDef.sensor)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&resolution=${encodeURIComponent(resolution)}`}
-            download
-            style={exportLink()}
-          >
-            CSV
-          </a>
+          <button type="button" style={presetButton(false)} onClick={handleExportCSV}>CSV</button>
+          <button type="button" style={presetButton(false)} onClick={handleExportPNG}>PNG</button>
         </div>
       </div>
 
@@ -399,37 +463,22 @@ export default function History() {
       >
         {/* Rail column */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          {/* Series block — borderless.  Rail rows double as a live
-              readout: every series shows its current value even when
-              the row isn't the selected plot (tranche 2b flips this
-              from single-select to multi-toggle). */}
           <div>
             <div style={sectionLabel}>Series</div>
             {SERIES.map((s) => {
-              const isActive = s.id === activeSeries;
+              const isActive = activeSet.has(s.id);
               const live = fmtValue(s.live(currentConditions), s.unit);
               return (
                 <button
                   key={s.id}
                   type="button"
-                  onClick={() => setActiveSeries(s.id)}
+                  onClick={() => toggleSeries(s.id)}
                   style={seriesRow(isActive)}
+                  aria-pressed={isActive}
                 >
-                  <span
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      minWidth: 0,
-                    }}
-                  >
-                    <span style={swatch(s.color, isActive)} />
-                    <span
-                      style={{
-                        fontFamily: "var(--font-body)",
-                        fontSize: "calc(13px * var(--font-scale))",
-                      }}
-                    >
+                  <span style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                    <span style={swatch(`var(${s.colorVar}, var(--chart-trace, #a85f24))`, isActive)} />
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: "calc(13px * var(--font-scale))" }}>
                       {s.label}
                     </span>
                   </span>
@@ -438,9 +487,7 @@ export default function History() {
                       fontFamily: "var(--font-mono, var(--font-body))",
                       fontSize: "calc(12.5px * var(--font-scale))",
                       fontVariantNumeric: "tabular-nums",
-                      color: isActive
-                        ? "var(--color-text)"
-                        : "var(--color-text-muted)",
+                      color: isActive ? "var(--color-text)" : "var(--color-text-muted)",
                     }}
                   >
                     {live}
@@ -450,7 +497,6 @@ export default function History() {
             })}
           </div>
 
-          {/* Resolution block — borderless. */}
           <div>
             <div style={sectionLabel}>Resolution</div>
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
@@ -474,33 +520,24 @@ export default function History() {
                 letterSpacing: 0,
               }}
             >
-              {summary?.count != null
-                ? `${summary.count.toLocaleString()} points at ${resolution === "raw" ? "raw" : resolution} resolution.`
-                : "Loading…"}
+              {totalPoints > 0
+                ? `${totalPoints.toLocaleString()} points at ${resolution === "raw" ? "raw" : resolution} resolution.`
+                : loading
+                ? "Loading…"
+                : "No points."}
             </div>
           </div>
 
-          {/* Overlay block — borderless.  Checkboxes hold state for
-              Phase 2b; Same-week-last-year is disabled with reason
-              until the archive spans 12 months. */}
           <div>
             <div style={sectionLabel}>Overlay</div>
             <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={overlayDayNight}
-                onChange={(e) => setOverlayDayNight(e.target.checked)}
-              />
+              <input type="checkbox" checked={overlayDayNight} onChange={(e) => setOverlayDayNight(e.target.checked)} />
               <span style={{ fontFamily: "var(--font-body)", fontSize: "calc(13px * var(--font-scale))" }}>
                 Day / night shading
               </span>
             </label>
             <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={overlayRainEvents}
-                onChange={(e) => setOverlayRainEvents(e.target.checked)}
-              />
+              <input type="checkbox" checked={overlayRainEvents} onChange={(e) => setOverlayRainEvents(e.target.checked)} />
               <span style={{ fontFamily: "var(--font-body)", fontSize: "calc(13px * var(--font-scale))" }}>
                 Rain events
               </span>
@@ -509,12 +546,7 @@ export default function History() {
               style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", cursor: "not-allowed", opacity: 0.55 }}
               title="Needs 12 months of archive. Available after 2027-01-01."
             >
-              <input
-                type="checkbox"
-                checked={overlaySameWeekLastYear}
-                onChange={(e) => setOverlaySameWeekLastYear(e.target.checked)}
-                disabled
-              />
+              <input type="checkbox" checked={overlaySameWeekLastYear} onChange={(e) => setOverlaySameWeekLastYear(e.target.checked)} disabled />
               <span style={{ fontFamily: "var(--font-body)", fontSize: "calc(13px * var(--font-scale))" }}>
                 Same week last year
               </span>
@@ -522,19 +554,17 @@ export default function History() {
           </div>
         </div>
 
-        {/* Chart column: chart + extremes cards.  Range strip is
-            deferred to tranche 2b (Highcharts navigator, not the
-            RangeStrip snippet). */}
+        {/* Chart column */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 }}>
           <div style={cardStyle}>
             <div style={{ fontFamily: "var(--font-body)", fontSize: "calc(15px * var(--font-scale))", color: "var(--color-text)", marginBottom: "8px" }}>
-              {activeSeriesDef.label}
+              {chartHeaderLine}
               <span style={{ ...sectionLabel, display: "inline", marginLeft: "12px" }}>
                 {PRESETS.find((p) => p.key === preset)?.label}
               </span>
             </div>
             {loading && (
-              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: isMobile ? 280 : 400 }}>
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: isMobile ? 320 : 400 }}>
                 <div
                   style={{
                     width: "36px",
@@ -549,24 +579,21 @@ export default function History() {
               </div>
             )}
             {error && (
-              <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: isMobile ? 280 : 400, gap: "8px" }}>
+              <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: isMobile ? 320 : 400, gap: "8px" }}>
                 <span style={{ color: "var(--color-danger)" }}>Failed to load data</span>
                 <span style={{ color: "var(--color-text-muted)", fontSize: "calc(13px * var(--font-scale))" }}>{error}</span>
               </div>
             )}
-            {!loading && !error && data.length === 0 && (
-              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: isMobile ? 280 : 400, color: "var(--color-text-muted)" }}>
-                No data available for the selected range.
+            {!loading && !error && activeSeries.length === 0 && (
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: isMobile ? 320 : 400, color: "var(--color-text-muted)" }}>
+                Select one or more series from the rail.
               </div>
             )}
-            {!loading && !error && data.length > 0 && (
-              <HighchartsReact highcharts={Highcharts} options={chartOptions} />
+            {!loading && !error && activeSeries.length > 0 && (
+              <HighchartsReact ref={chartRef} highcharts={Highcharts} options={chartOptions} />
             )}
           </div>
 
-          {/* Extremes card.  Phase 2a shows the summary's high/low for
-              the selected series only — Phase 2b lets multi-series
-              enabled state drive one row per active series. */}
           <div style={cardStyle}>
             <div
               style={{
@@ -574,6 +601,7 @@ export default function History() {
                 gridTemplateColumns: isMobile ? "1fr 1fr" : "231px 178px 178px 178px 178px",
                 gap: "10px",
                 fontFamily: "var(--font-body)",
+                alignItems: "baseline",
               }}
             >
               <div style={sectionLabel}>Metric</div>
@@ -585,30 +613,40 @@ export default function History() {
                   <div style={sectionLabel}>When</div>
                 </>
               )}
-              <div style={{ fontSize: "calc(13px * var(--font-scale))" }}>
-                {activeSeriesDef.label}
-              </div>
-              {!isMobile && (
-                <>
-                  <div style={{ fontFamily: "var(--font-mono, var(--font-body))", fontVariantNumeric: "tabular-nums" }}>
-                    {summary?.max != null ? fmtValue(summary.max, activeSeriesDef.unit) : "—"}
-                  </div>
-                  <div style={{ fontFamily: "var(--font-mono, var(--font-body))", color: "var(--color-text-muted)" }}>
-                    —
-                  </div>
-                  <div style={{ fontFamily: "var(--font-mono, var(--font-body))", fontVariantNumeric: "tabular-nums" }}>
-                    {summary?.min != null ? fmtValue(summary.min, activeSeriesDef.unit) : "—"}
-                  </div>
-                  <div style={{ fontFamily: "var(--font-mono, var(--font-body))", color: "var(--color-text-muted)" }}>
-                    —
-                  </div>
-                </>
-              )}
-              {isMobile && (
-                <div style={{ fontFamily: "var(--font-mono, var(--font-body))" }}>
-                  {summary?.max != null ? `H ${fmtValue(summary.max, activeSeriesDef.unit)}` : "—"}
-                  {" · "}
-                  {summary?.min != null ? `L ${fmtValue(summary.min, activeSeriesDef.unit)}` : "—"}
+              {activeSeries.map((def) => {
+                const s = fetched.get(def.sensor);
+                const hiTs = findTimestampAt(s?.data ?? [], s?.summary?.max ?? null);
+                const loTs = findTimestampAt(s?.data ?? [], s?.summary?.min ?? null);
+                return (
+                  <Fragment key={def.id}>
+                    <div style={{ fontSize: "calc(13px * var(--font-scale))" }}>{def.label}</div>
+                    {!isMobile && (
+                      <>
+                        <div style={{ fontFamily: "var(--font-mono, var(--font-body))", fontVariantNumeric: "tabular-nums" }}>
+                          {fmtValue(s?.summary?.max ?? null, def.unit)}
+                        </div>
+                        <div style={{ fontFamily: "var(--font-mono, var(--font-body))", color: "var(--color-text-muted)" }}>
+                          {fmtWhen(hiTs, tz)}
+                        </div>
+                        <div style={{ fontFamily: "var(--font-mono, var(--font-body))", fontVariantNumeric: "tabular-nums" }}>
+                          {fmtValue(s?.summary?.min ?? null, def.unit)}
+                        </div>
+                        <div style={{ fontFamily: "var(--font-mono, var(--font-body))", color: "var(--color-text-muted)" }}>
+                          {fmtWhen(loTs, tz)}
+                        </div>
+                      </>
+                    )}
+                    {isMobile && (
+                      <div style={{ fontFamily: "var(--font-mono, var(--font-body))" }}>
+                        H {fmtValue(s?.summary?.max ?? null, def.unit)} · L {fmtValue(s?.summary?.min ?? null, def.unit)}
+                      </div>
+                    )}
+                  </Fragment>
+                );
+              })}
+              {activeSeries.length === 0 && (
+                <div style={{ gridColumn: "1 / -1", color: "var(--color-text-muted)", fontSize: "calc(13px * var(--font-scale))" }}>
+                  No series selected.
                 </div>
               )}
             </div>
