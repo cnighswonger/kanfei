@@ -1,3 +1,20 @@
+kanfei (0.1.0~beta68) unstable; urgency=medium
+
+  * History (backend): 5-minute bucket labels now land on the actual
+    bucket start.  The ``time_label`` column in the 5m aggregate
+    query used ``strftime`` on the raw timestamp of an arbitrary row
+    inside each bucket — so two sensors sampled at different phases
+    inside the same 5-minute window returned different labels for
+    that window.  Highcharts placed the series at slightly different
+    x positions and dragging the cursor across the chart caught
+    whichever tooltip was nearest — visible as cross-series
+    misalignment.  Compute the label from ``bucket * 300`` unixepoch
+    so it's identity-independent.  Regression test added:
+    ``test_5m_labels_land_on_bucket_starts`` asserts every returned
+    label ends ``:00Z`` and its minute is a multiple of five.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Wed, 20 Aug 2026 15:45:00 +0000
+
 kanfei (0.1.0~beta67) unstable; urgency=medium
 
   * Charts: theme the Highcharts navigator, scrollbar, and range
