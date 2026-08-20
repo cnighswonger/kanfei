@@ -575,7 +575,7 @@ export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
           roseWeights={d.wind.roseWeights}
           directionDeg={d.wind.directionDeg}
           speedMph={d.wind.speedMph}
-          size={210}
+          size={250}
         />
       </div>
       <SectionLabel style={{ textAlign: 'center' }}>

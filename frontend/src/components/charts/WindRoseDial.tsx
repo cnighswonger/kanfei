@@ -102,7 +102,9 @@ export default function WindRoseDial({
         styledMode: true,
         height: size,
         width: size,
-        spacing: [4, 4, 4, 4],
+        // Room for the cardinal labels at distance 14 — Design v37
+        // note: at [4,4,4,4] E and W get clipped at the tile edges.
+        spacing: [10, 10, 10, 10],
       },
       title: { text: undefined },
       credits: { enabled: false },
@@ -141,11 +143,13 @@ export default function WindRoseDial({
       yAxis: {
         min: 0,
         max: AXIS_MAX,
-        gridLineInterpolation: "polygon" as unknown as "circle",
-        // Highcharts' polygon interpolation with 16 categories draws
-        // as effectively a circle.  ``circle`` explicitly is not in
-        // the type but is accepted at runtime; the polygon fallback
-        // renders identically at 16 sides.
+        // ``circle``, NOT ``polygon``.  Design v37 P0: a polygon
+        // frame draws straight edges between N/E/S/W and the rose
+        // reads as a diamond.  This is the single line that decides
+        // whether the instrument looks round.  The type union
+        // narrows to ``'polygon'`` in some Highcharts type versions,
+        // so we cast — the runtime accepts ``'circle'`` unchanged.
+        gridLineInterpolation: "circle" as unknown as "polygon",
         tickPositions: [INNER_RING, AXIS_MAX],
         labels: { enabled: false },
         endOnTick: false,

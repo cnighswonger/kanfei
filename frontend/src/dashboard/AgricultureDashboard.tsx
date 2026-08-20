@@ -323,7 +323,7 @@ export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
             roseWeights={d.wind.roseWeights}
             directionDeg={d.wind.directionDeg}
             speedMph={d.wind.speedMph}
-            size={170}
+            size={250}
           />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), minWidth: 0 }}>
