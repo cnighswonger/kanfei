@@ -1,214 +1,32 @@
 /**
- * Gauge and chart geometry — the part prose specs can't carry.
+ * Chart geometry — the part prose specs can't carry.
  *
- * Every function is pure: numbers in, plain coordinate objects out. No React, no
- * three.js, no charting library. Render the output with whatever you like; the
- * mock renders it as inline SVG.
+ * Design v34/v35 HIGHCHARTS.md tranches 3 + 4 retired every gauge /
+ * dial / arc drawing function that once lived here.  What's left is
+ * the trace + grid + scoring geometry Highcharts doesn't replace:
  *
- * WHY THIS FILE EXISTS
- * The screen specs describe what each tile *shows*. They cannot describe a dial's
- * sweep, its tick radii, or where a needle pivots — so a reimplementation from
- * prose alone produces flat cards with numbers in them. That is the failure this
- * module prevents. These are the exact values the mocks render.
+ * - ``pathFor`` builds an SVG polyline path for a value series (still
+ *   used by the small SVG trend widgets in tiles.tsx and Weather
+ *   Nerd's temp/dew/baro three-up chart).
+ * - ``ledgerGrid`` builds the 12×9 rule grid overlaid on those traces.
+ * - ``scoreSprayHours`` rates a 24 h forecast against agricultural
+ *   spray constraints — pure data, no rendering.
+ * - ``makeTimeAxis`` / ``bodyArc`` / ``moonTerminator`` power the
+ *   astronomy day-arc plate and moon-phase diagram: diagrams, not
+ *   charts, and Highcharts has no sensible expression for either.
  *
- * Ratio constants live in each theme's `dial` group (`gradOuter`, `gradInner`,
- * `numeral`, `zone`, `needle`, `trendHand`) so a theme can retune the dial
- * without touching this file. Pass `theme.dial` as the last argument.
+ * Retired in tranche 4 (2026-08-20): ``wheelDial`` (→
+ * WheelBarometer.tsx), ``compass`` + ``rosePetals`` (→
+ * WindRoseDial.tsx), ``humidityArc`` / ``uvArc`` (unused after the
+ * gauge redesign).  Their theme-side ``DialRatios`` /
+ * ``DEFAULT_DIAL`` / ``WheelDial`` companion types went with them.
  */
-
-export interface DialRatios {
-  gradOuter: number;
-  gradInner: number;
-  numeral: number;
-  zone: number;
-  needle: number;
-  trendHand: number;
-}
-
-/** The shipping ratios, if you need a default. Same in all five themes. */
-export const DEFAULT_DIAL: DialRatios = {
-  gradOuter: 0.967,
-  gradInner: 0.887,
-  numeral: 0.747,
-  zone: 0.573,
-  needle: 0.66,
-  trendHand: 0.46,
-};
 
 export interface Point { x: number; y: number }
 export interface Tick { x1: number; y1: number; x2: number; y2: number; sw?: number }
 export interface Label extends Point { label: string }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-
-/* ────────────────────────────────────────────────────────────── barometer dial */
-
-export interface WheelDial {
-  cx: number; cy: number;
-  rimOuter: number; rimInner: number;
-  major: Tick[]; minor: Tick[];
-  numerals: Label[]; zones: Label[];
-  tip: Point; trend: Point;
-}
-
-/**
- * Wheel barometer — the Everyday dashboard's hero, and the single element that
- * most defines the redesign. Ported from `BarometerDial()` in
- * kanfei-phone-sensor `docs/mocks/v1-instrument.jsx`.
- *
- * A **240° sweep starting at −210°** (so it opens downward, like a real aneroid),
- * 21 graduations with every 4th major, numerals every major, five named pressure
- * zones on an inner ring, and a pale trend hand 3 h behind the live needle.
- *
- * Range is 28.5–31.0 inHg. That is deliberate: a station's real daily swing is
- * ~0.2 in, so a dial scaled to the day would read as noise. The fixed
- * meteorological range is what makes the needle position meaningful.
- *
- * Render order matters — rim pair, minor ticks, major ticks, numerals, zones,
- * trend hand, needle, hub cap. Drawing the needle before the ticks looks wrong.
- */
-export function wheelDial(
-  value: number,
-  size: number,
-  d: DialRatios = DEFAULT_DIAL,
-): WheelDial {
-  const r = size / 2, cx = r, cy = r;
-  const SWEEP_START = -210, SWEEP_RANGE = 240;
-  const LO = 28.5, HI = 31.0;
-
-  const frac = Math.max(0, Math.min(1, (value - LO) / (HI - LO)));
-  const angleAt = (f: number) => SWEEP_START + SWEEP_RANGE * f;
-  const polar = (deg: number, radius: number): Point => {
-    const a = (deg * Math.PI) / 180;
-    return { x: r2(cx + radius * Math.cos(a)), y: r2(cy + radius * Math.sin(a)) };
-  };
-
-  const major: Tick[] = [], minor: Tick[] = [], numerals: Label[] = [];
-  for (let i = 0; i <= 20; i++) {
-    const f = i / 20, a = angleAt(f), isMajor = i % 4 === 0;
-    const p1 = polar(a, r - 5);
-    const p2 = polar(a, isMajor ? r - 17 : r - 12);
-    (isMajor ? major : minor).push({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, sw: isMajor ? 2 : 1 });
-    if (isMajor) {
-      const lp = polar(a, r * d.numeral);
-      numerals.push({ x: lp.x, y: r2(lp.y + 4), label: (LO + f * (HI - LO)).toFixed(1) });
-    }
-  }
-
-  // Zone names sit on their own ring, well inside the numerals, or they collide.
-  const zones: Label[] = ([
-    ['STORMY', 0.08], ['RAIN', 0.28], ['CHANGE', 0.5], ['FAIR', 0.72], ['SET FAIR', 0.93],
-  ] as [string, number][]).map(([label, f]) => {
-    const p = polar(angleAt(f), r * d.zone);
-    return { label, x: p.x, y: r2(p.y + 3) };
-  });
-
-  return {
-    cx, cy,
-    rimOuter: r2(r * d.gradOuter),
-    rimInner: r2(r * d.gradInner),
-    major, minor, numerals, zones,
-    tip: polar(angleAt(frac), r * d.needle),
-    trend: polar(angleAt(Math.max(0, frac - 0.12)), r * d.trendHand),
-  };
-}
-
-/* ───────────────────────────────────────────────────────── compass + wind rose */
-
-/**
- * 16-point compass, ported from the shipping `WindCompass.tsx`. Ticks step by
- * 22.5° from north; every 4th is major (cardinal) and gets a label, every 2nd is
- * mid-length.
- *
- * ⚠ `labelR` must be **outside** `outerR`, or the cardinal letters overlap the
- * tick marks and become illegible. In the mocks `outerR` 74 pairs with `labelR`
- * 92; 80 pairs with 98. This was a real defect found in review — don't tighten it.
- */
-export function compass(cx: number, cy: number, outerR: number, labelR: number) {
-  const CARDINALS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-  const ticks: Tick[] = [], labels: Label[] = [];
-  CARDINALS.forEach((label, i) => {
-    const rad = ((i * 22.5 - 90) * Math.PI) / 180;
-    const major = i % 4 === 0, mid = i % 2 === 0;
-    const inner = major ? outerR - 14 : mid ? outerR - 10 : outerR - 6;
-    ticks.push({
-      x1: r2(cx + inner * Math.cos(rad)), y1: r2(cy + inner * Math.sin(rad)),
-      x2: r2(cx + outerR * Math.cos(rad)), y2: r2(cy + outerR * Math.sin(rad)),
-      sw: major ? 2 : 1,
-    });
-    if (major) labels.push({ label, x: r2(cx + labelR * Math.cos(rad)), y: r2(cy + labelR * Math.sin(rad) + 4) });
-  });
-  return { ticks, labels };
-}
-
-/**
- * Wind-rose petals — one wedge per 16th, radius proportional to how much of the
- * window blew from that sector. Feed it a normalised 16-element distribution
- * (max = 1); `weights` here is a 4 h sample with a WSW-dominant pattern.
- *
- * Petals start at r=14, not 0, so light sectors stay visible instead of
- * collapsing into the hub. Opacity tracks weight as well as radius — the double
- * encoding is what makes the prevailing direction readable at a glance.
- */
-export function rosePetals(cx: number, cy: number, maxR: number, weights?: number[]) {
-  const w = weights ?? [0.05,0.04,0.03,0.03,0.05,0.06,0.08,0.10,0.18,0.34,0.62,1.0,0.78,0.42,0.20,0.09];
-  return w.map((weight, i) => {
-    const a0 = ((i * 22.5 - 11.25 - 90) * Math.PI) / 180;
-    const a1 = ((i * 22.5 + 11.25 - 90) * Math.PI) / 180;
-    const r = 14 + weight * (maxR - 14);
-    const x0 = r2(cx + r * Math.cos(a0)), y0 = r2(cy + r * Math.sin(a0));
-    const x1 = r2(cx + r * Math.cos(a1)), y1 = r2(cy + r * Math.sin(a1));
-    return {
-      d: `M ${cx} ${cy} L ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1} Z`,
-      op: r2(0.12 + weight * 0.5),
-    };
-  });
-}
-
-/* ──────────────────────────────────────────────────────────────── half-circle arcs */
-
-/**
- * Humidity arc — left-to-right semicircle, matching the shipping
- * `HumidityGauge.tsx` mapping. Colour interpolates cool→warm across 60–100%.
- */
-export function humidityArc(value: number, lo = 0, hi = 100) {
-  const cx = 150, cy = 120, r = 108, sw = 18;
-  const pt = (f: number, radius: number): Point => {
-    const a = Math.PI * (1 - f);
-    return { x: r2(cx + radius * Math.cos(a)), y: r2(cy - radius * Math.sin(a)) };
-  };
-  const arc = (f0: number, f1: number) => {
-    const p0 = pt(f0, r), p1 = pt(f1, r);
-    return `M ${p0.x} ${p0.y} A ${r} ${r} 0 ${f1 - f0 >= 0.999 ? 1 : 0} 1 ${p1.x} ${p1.y}`;
-  };
-  const span = hi - lo;
-  const frac = Math.max(0, Math.min(1, (value - lo) / span));
-  const ticks: { lx: number; ly: number; label: string }[] = [];
-  for (let v = lo; v <= hi; v += 5) {
-    const p = pt((v - lo) / span, r - sw - 8);
-    ticks.push({ lx: p.x, ly: r2(p.y + 3), label: String(v) });
-  }
-  const t = (value - 60) / 40;
-  return {
-    trackPath: arc(0, 1),
-    fillPath: arc(0, frac),
-    ticks,
-    color: `rgb(${Math.round(34 - 10 * t)}, ${Math.round(150 + 50 * t)}, ${Math.round(200 + 40 * t)})`,
-  };
-}
-
-/** UV arc — 0–14 across the top half. Same construction, smaller radius. */
-export function uvArc(uv: number, cx = 90, cy = 94, r = 58) {
-  const pt = (f: number): Point => {
-    const a = Math.PI * (1 - f);
-    return { x: r2(cx + r * Math.cos(a)), y: r2(cy - r * Math.sin(a)) };
-  };
-  const arc = (f0: number, f1: number) => {
-    const p0 = pt(f0), p1 = pt(f1);
-    return `M ${p0.x} ${p0.y} A ${r} ${r} 0 ${f1 - f0 >= 0.999 ? 1 : 0} 1 ${p1.x} ${p1.y}`;
-  };
-  return { trackPath: arc(0, 1), fillPath: arc(0, Math.min(uv / 14, 0.998)) };
-}
 
 /* ─────────────────────────────────────────────────────────────────────── traces */
 
