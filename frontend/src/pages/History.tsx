@@ -16,6 +16,10 @@ import { Fragment, useState, useMemo, useRef, useEffect } from "react";
 import Highcharts from "highcharts";
 import "highcharts/modules/exporting";
 import "highcharts/modules/export-data";
+// Navigator ships as a separate module; without this import
+// ``navigator: { enabled: true }`` is silently ignored at runtime
+// (no error, no strip).  Design v34 T2b bug caught at first smoke.
+import "highcharts/modules/navigator";
 import { HighchartsReact } from "highcharts-react-official";
 import { useMultiHistoricalData } from "../hooks/useMultiHistoricalData.ts";
 import { useWeatherData } from "../context/WeatherDataContext.tsx";
