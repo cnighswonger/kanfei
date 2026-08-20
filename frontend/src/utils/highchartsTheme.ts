@@ -89,6 +89,11 @@ export function highchartsTheme(): Highcharts.Options {
     // swatch that fights the trace for attention.
     legend: { enabled: false },
     credits: { enabled: false },
+    // Kill the export burger by default — Design v35 flagged it as
+    // the highest-contrast element in the barometer tile.  History
+    // explicitly opts back in (``exporting: { enabled: true, ... }``
+    // in its per-chart options).
+    exporting: { enabled: false },
     xAxis: {
       lineColor: t.gridMajor,
       tickColor: t.gridMajor,
