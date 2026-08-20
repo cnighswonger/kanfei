@@ -1,3 +1,23 @@
+kanfei (0.1.0~beta69) unstable; urgency=medium
+
+  * Design v34 HIGHCHARTS.md tranche 3: replace the SVG barometer
+    wheel with a Highcharts gauge.  New
+    ``components/charts/WheelBarometer.tsx`` renders the 240° sweep
+    Design specced (start -120°, end 120°), the fixed
+    meteorological range 28.5-31.0 inHg (NOT day-swing — auto-scale
+    would turn 0.2 inHg of diurnal noise into drama), a pale trend
+    dial at 46 % radius for the value three hours back (derived
+    from the already-computed ``trendInHgPer3h``), and the accent
+    live needle at 66 % radius.  Zone bands (STORMY / RAIN /
+    CHANGE / FAIR / SET FAIR) render as plot bands on an inner
+    ring, with text labels overlaid via ``chart.events.render``.
+    Wind rose swap (also in T3) and the ``gauges.ts`` retirement
+    (T4) are separate future rounds — the wheel is the one Design
+    specifically flagged as high-risk-of-subtle-wrong, so it ships
+    alone for review.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Wed, 20 Aug 2026 16:00:00 +0000
+
 kanfei (0.1.0~beta68) unstable; urgency=medium
 
   * History (backend): 5-minute bucket labels now land on the actual
