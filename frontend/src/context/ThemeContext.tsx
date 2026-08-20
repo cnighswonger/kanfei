@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import Highcharts from 'highcharts';
 import { themes, defaultTheme, type Theme } from '../themes';
 import { readUIPref, writeUIPref, syncUIPrefs } from '../utils/uiPrefs';
+import { highchartsTheme } from '../utils/highchartsTheme';
 
 interface ThemeContextValue {
   theme: Theme;
@@ -219,6 +221,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     applyThemeToDOM(theme);
+    // Highcharts token bridge (Design v34 HIGHCHARTS.md, tranche 1).
+    // Order matters: applyThemeToDOM writes the CSS vars to :root
+    // synchronously, and highchartsTheme() reads them via
+    // getComputedStyle on the same event-loop turn.  setOptions
+    // updates the default options object every subsequent chart
+    // inherits — already-mounted charts do NOT auto-repaint, so a
+    // theme swap while a chart is on screen keeps the old skin until
+    // the chart re-renders (data change, resize, remount).  That's
+    // acceptable given the flat-tokens-only surface here; the
+    // existing consumers memoise their options on theme name.
+    Highcharts.setOptions(highchartsTheme());
   }, [theme]);
 
   // Reconcile with backend on mount
