@@ -96,3 +96,26 @@ def test_raw_returns_every_sample():
     # 60 min * 6 per min = 360 raw points.  Boundary rows can drop
     # from spike detection (LAG/LEAD null at the edges); allow one.
     assert 359 <= len(body["points"]) <= 360
+
+
+def test_5m_labels_land_on_bucket_starts():
+    """Regression: two sensors sampled at different phases within the
+    same 5-minute bucket must return *identical* timestamps for that
+    bucket.  Before this fix, ``time_label`` was ``strftime(...ts_col)``
+    on a raw row SQLite picked from each group — so temperature's
+    12:40-bucket labelled as ``12:44:00`` and dew's same bucket
+    labelled as ``12:45:00``.  Highcharts then drew the two series
+    at slightly different x positions (visible as a tooltip drift
+    across series when the user dragged the cursor).
+    """
+    _seed_raw(hours=1, per_minute=6)
+    start, end = _range(1)
+    r = client.get(f"/api/history?sensor=outside_temp&start={start}&end={end}&resolution=5m")
+    body = r.json()
+    # Every returned label must be a bucket START — minute ends in
+    # 0 or 5 (5-minute grid) and seconds are ``:00``.
+    for pt in body["points"]:
+        ts = pt["timestamp"]
+        assert ts.endswith(":00Z"), f"seconds not :00 for {ts}"
+        minute = int(ts[14:16])
+        assert minute % 5 == 0, f"minute {minute} not a 5-minute-grid multiple ({ts})"
