@@ -1,248 +1,231 @@
+/**
+ * History page — Design v34 HISTORY.md tranche 2a.
+ *
+ * The visual frame Design specced: a 250 px control rail on the left,
+ * chart + extremes cards on the right, and a title row that carries
+ * the preset buttons + CSV/PNG exports.  The rail's series list
+ * doubles as a live readout — each row shows the current value even
+ * when the series isn't plotted.
+ *
+ * Scope kept small this round (2a): the chart still plots one sensor
+ * at a time (single-select radio behaviour under the multi-toggle
+ * visual affordance).  Tranche 2b lands the multi-series dual-axis
+ * chart, the Highcharts navigator (replacing Design's RangeStrip
+ * snippet), the resolution-selector wiring (fixes the 8,125-points-
+ * for-a-288-point-view bug), CSV/PNG via exportData, and the
+ * ``Same week last year`` gate on data availability.
+ */
+
 import { useState, useMemo } from "react";
 import Highcharts from "highcharts";
 import { HighchartsReact } from "highcharts-react-official";
 import { useHistoricalData } from "../hooks/useHistoricalData.ts";
-import {
-  SENSOR_DISPLAY_NAMES,
-  UNIT_LABELS,
-} from "../utils/constants.ts";
+import { useWeatherData } from "../context/WeatherDataContext.tsx";
+import { UNIT_LABELS } from "../utils/constants.ts";
 import { getHighchartsTimeConfig, resolveTimezone } from "../utils/timezone.ts";
 import { computeYAxisScale } from "../utils/chartScaling.ts";
 import { useIsMobile } from "../hooks/useIsMobile.ts";
-import WindHistory from "../components/charts/WindHistory.tsx";
-import SolarEnergyDailyChart from "../components/charts/SolarEnergyDailyChart.tsx";
 
-// --- Sensor unit mapping (sensor key -> unit string) ---
-
-const SENSOR_UNITS: Record<string, string> = {
-  temperature_inside: "F",
-  temperature_outside: "F",
-  humidity_inside: "%",
-  humidity_outside: "%",
-  wind_speed: "mph",
-  wind_gust: "mph",
-  wind_direction: "deg",
-  barometer: "inHg",
-  rain_daily: "in",
-  rain_yearly: "in",
-  rain_rate: "in",
-  solar_radiation: "W/m\u00B2",
-  uv_index: "",
-  heat_index: "F",
-  dew_point: "F",
-  wind_chill: "F",
-  feels_like: "F",
-  et_daily: "in",
-  et_monthly: "in",
-  et_yearly: "in",
-};
-
-// --- Date range helpers ---
-
-type Preset = "1h" | "12h" | "24h" | "7d" | "30d" | "custom";
-
-function isoLocal(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+/**
+ * Series definition — the eight rows in the Series rail.  Each entry
+ * says how to plot the series (``sensor`` key for
+ * ``useHistoricalData``, ``unit`` for axis / tooltip suffix) and how
+ * to pull its live value out of ``currentConditions`` for the rail
+ * readout.  Colours are the theme's ``--chart-series-*`` tokens.
+ */
+interface SeriesDef {
+  id: string;
+  label: string;
+  sensor: string;
+  unit: string;
+  color: string;
+  /** Reads the current live value from CurrentConditions for the rail. */
+  live: (cc: import("../api/types.ts").CurrentConditions | null) => number | null;
 }
 
-const PRESET_HOURS: Record<Preset, number> = {
-  "1h": 1, "12h": 12, "24h": 24, "7d": 168, "30d": 720, custom: 24,
+const SERIES: SeriesDef[] = [
+  {
+    id: "temperature",
+    label: "Temperature",
+    sensor: "temperature_outside",
+    unit: "F",
+    color: "var(--chart-series-temp, #4c8dff)",
+    live: (cc) => cc?.temperature?.outside?.value ?? null,
+  },
+  {
+    id: "dew_point",
+    label: "Dew point",
+    sensor: "dew_point",
+    unit: "F",
+    color: "var(--chart-series-dew, #5ec9a7)",
+    live: (cc) => cc?.derived?.dew_point?.value ?? null,
+  },
+  {
+    id: "pressure",
+    label: "Pressure",
+    sensor: "barometer",
+    unit: "inHg",
+    color: "var(--chart-series-pressure, #f5c451)",
+    live: (cc) => cc?.barometer?.value ?? null,
+  },
+  {
+    id: "humidity",
+    label: "Humidity",
+    sensor: "humidity_outside",
+    unit: "%",
+    color: "var(--chart-series-humidity, #b28dff)",
+    live: (cc) => cc?.humidity?.outside?.value ?? null,
+  },
+  {
+    id: "wind_speed",
+    label: "Wind speed",
+    sensor: "wind_speed",
+    unit: "mph",
+    color: "var(--chart-series-wind, #ff7a6b)",
+    live: (cc) => cc?.wind?.speed?.value ?? null,
+  },
+  {
+    id: "rain",
+    label: "Rain",
+    sensor: "rain_daily",
+    unit: "in",
+    color: "var(--chart-series-rain, #3ddc84)",
+    live: (cc) => cc?.rain?.daily?.value ?? null,
+  },
+  {
+    id: "solar",
+    label: "Solar / UV",
+    sensor: "solar_radiation",
+    unit: "W/m²",
+    color: "var(--chart-series-solar, #f0a020)",
+    live: (cc) => cc?.solar_radiation?.value ?? null,
+  },
+  {
+    id: "et",
+    label: "ET",
+    sensor: "et_daily",
+    unit: "in",
+    color: "var(--chart-series-et, #a0a0a0)",
+    live: (cc) => cc?.et_daily?.value ?? null,
+  },
+];
+
+// DEFAULT_ACTIVE lands in tranche 2b when the rail switches from
+// single-select to a Set<string> — the three default-on series
+// (``temperature``, ``dew_point``, ``pressure``) will populate the
+// chart on first mount.
+
+type Preset = "24h" | "7d" | "30d" | "year" | "custom";
+type Resolution = "raw" | "5m" | "hourly" | "daily";
+
+const PRESET_HOURS: Record<Exclude<Preset, "custom">, number> = {
+  "24h": 24,
+  "7d": 168,
+  "30d": 720,
+  "year": 8760,
 };
 
 function presetRange(preset: Preset): { start: string; end: string } {
   const now = new Date();
   const end = now.toISOString();
-  let start: Date;
-  switch (preset) {
-    case "1h":
-      start = new Date(now.getTime() - 1 * 60 * 60 * 1000);
-      break;
-    case "12h":
-      start = new Date(now.getTime() - 12 * 60 * 60 * 1000);
-      break;
-    case "24h":
-      start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      break;
-    case "7d":
-      start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      break;
-    case "30d":
-      start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      break;
-    default:
-      start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  }
-  return { start: start.toISOString(), end };
+  const hours = preset === "custom" ? 24 : PRESET_HOURS[preset];
+  const start = new Date(now.getTime() - hours * 3_600_000).toISOString();
+  return { start, end };
 }
 
-// --- Shared styles ---
+const PRESETS: { key: Preset; label: string }[] = [
+  { key: "24h", label: "24 h" },
+  { key: "7d", label: "7 days" },
+  { key: "30d", label: "30 days" },
+  { key: "year", label: "Year" },
+  { key: "custom", label: "Custom" },
+];
 
-const cardStyle: React.CSSProperties = {
-  background: "var(--color-bg-card)",
-  borderRadius: "var(--gauge-border-radius)",
-  border: "1px solid var(--color-border)",
-  padding: "20px",
-  marginBottom: "16px",
-};
+const RESOLUTIONS: { key: Resolution; label: string }[] = [
+  { key: "raw", label: "Raw" },
+  { key: "5m", label: "5 min" },
+  { key: "hourly", label: "Hourly" },
+  { key: "daily", label: "Daily" },
+];
 
-const labelStyle: React.CSSProperties = {
-  fontSize: "calc(13px * var(--font-scale))",
-  fontFamily: "var(--font-body)",
-  color: "var(--color-text-secondary)",
-  marginBottom: "6px",
-  display: "block",
-};
-
-const selectStyle: React.CSSProperties = {
-  fontFamily: "var(--font-body)",
-  fontSize: "calc(14px * var(--font-scale))",
-  padding: "8px 12px",
-  borderRadius: "6px",
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-secondary)",
-  color: "var(--color-text)",
-  outline: "none",
-  cursor: "pointer",
-  minWidth: "180px",
-};
-
-const presetBtnBase: React.CSSProperties = {
-  fontFamily: "var(--font-body)",
-  fontSize: "calc(13px * var(--font-scale))",
-  padding: "6px 14px",
-  borderRadius: "6px",
-  border: "1px solid var(--color-border)",
-  cursor: "pointer",
-  transition: "background 0.15s, color 0.15s",
-};
-
-const inputStyle: React.CSSProperties = {
-  fontFamily: "var(--font-body)",
-  fontSize: "calc(14px * var(--font-scale))",
-  padding: "8px 12px",
-  borderRadius: "6px",
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-secondary)",
-  color: "var(--color-text)",
-  outline: "none",
-  colorScheme: "dark",
-};
-
-// --- Component ---
+// Compact number formatting for the rail's live-value readout.  Long
+// integers (rain-yearly counts, solar radiation) get 0 decimals; the
+// rest get 1 or 2 depending on unit convention (pressure runs to 2).
+function fmtValue(n: number | null, unit: string): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  const digits = unit === "inHg" ? 2 : unit === "%" || unit === "mph" || unit === "W/m²" ? 0 : 1;
+  return `${n.toFixed(digits)} ${UNIT_LABELS[unit] ?? unit}`.trim();
+}
 
 export default function History() {
   const isMobile = useIsMobile();
-  const sensorKeys = Object.keys(SENSOR_DISPLAY_NAMES);
-  const [sensor, setSensor] = useState(sensorKeys[0] ?? "temperature_inside");
+  const { currentConditions } = useWeatherData();
+
   const [preset, setPreset] = useState<Preset>("24h");
-  const [resolution, setResolution] = useState("5m");
+  const [resolution, setResolution] = useState<Resolution>("5m");
+  // Phase 2a: rail is single-select under the multi-toggle affordance.
+  // Phase 2b flips this to a ``Set<string>`` and drives a dual-axis
+  // multi-series chart; the initial value stays ``temperature`` so
+  // the same code path handles first-load without special-casing.
+  const [activeSeries, setActiveSeries] = useState<string>("temperature");
 
-  // Custom date range state
-  const defaultCustom = presetRange("24h");
-  const [customStart, setCustomStart] = useState(
-    isoLocal(new Date(defaultCustom.start)),
-  );
-  const [customEnd, setCustomEnd] = useState(
-    isoLocal(new Date(defaultCustom.end)),
-  );
+  // Overlay checkboxes are visual scaffolding this round — the state
+  // is held so Phase 2b can wire it to the chart without changing the
+  // component shape.
+  const [overlayDayNight, setOverlayDayNight] = useState(false);
+  const [overlayRainEvents, setOverlayRainEvents] = useState(false);
+  const [overlaySameWeekLastYear, setOverlaySameWeekLastYear] = useState(false);
 
-  // Compute effective start/end
-  const { start, end } = useMemo(() => {
-    if (preset === "custom") {
-      return {
-        start: new Date(customStart).toISOString(),
-        end: new Date(customEnd).toISOString(),
-      };
-    }
-    return presetRange(preset);
-  }, [preset, customStart, customEnd]);
+  const { start, end } = useMemo(() => presetRange(preset), [preset]);
 
-  const isWindCombined = sensor === "wind_combined";
-  const isSolarEnergyDaily = sensor === "solar_energy_daily";
+  const activeSeriesDef = SERIES.find((s) => s.id === activeSeries) ?? SERIES[0];
   const { data, summary, loading, error } = useHistoricalData(
-    isWindCombined || isSolarEnergyDaily ? "" : sensor,
+    activeSeriesDef.sensor,
     start,
     end,
     resolution,
   );
 
-  // Build Highcharts options
   const tz = resolveTimezone();
+
   const chartOptions: Highcharts.Options = useMemo(() => {
-    const root = document.documentElement;
-    const cs = getComputedStyle(root);
-    const textColor = cs.getPropertyValue("--color-text").trim();
-    const textMuted = cs.getPropertyValue("--color-text-muted").trim();
-    const accent = cs.getPropertyValue("--color-accent").trim();
-    const bgCard = cs.getPropertyValue("--color-bg-card-solid").trim() || cs.getPropertyValue("--color-bg-card").trim();
-    const borderColor = cs.getPropertyValue("--color-border").trim();
-
-    const unitKey = SENSOR_UNITS[sensor] ?? "";
-    const unitLabel = UNIT_LABELS[unitKey] ?? (unitKey ? ` ${unitKey}` : "");
-
     const seriesData: [number, number | null][] = data
       .map((p) => {
         const x = new Date(p.timestamp).getTime();
         if (!Number.isFinite(x)) return null;
-        const y = (p.value != null && Number.isFinite(p.value)) ? p.value : null;
+        const y = p.value != null && Number.isFinite(p.value) ? p.value : null;
         return [x, y] as [number, number | null];
       })
       .filter((pt): pt is [number, number | null] => pt !== null);
 
-    // Use true min/max from API summary when available (aggregated data
-    // returns bucket averages, so point values don't reflect true extremes)
     const yValues: number[] = [];
     if (summary?.min != null) yValues.push(summary.min);
     if (summary?.max != null) yValues.push(summary.max);
     if (yValues.length === 0) {
-      // Fallback to point values (raw resolution or missing summary)
-      for (const [, y] of seriesData) {
-        if (y !== null && Number.isFinite(y)) yValues.push(y);
-      }
+      for (const [, y] of seriesData) if (y != null && Number.isFinite(y)) yValues.push(y);
     }
-    const yScale = computeYAxisScale(sensor, yValues);
+    const yScale = computeYAxisScale(activeSeriesDef.sensor, yValues);
+    const unitLabel = UNIT_LABELS[activeSeriesDef.unit] ?? ` ${activeSeriesDef.unit}`;
 
     return {
       time: getHighchartsTimeConfig(),
       chart: {
         type: "areaspline",
         height: isMobile ? 280 : 400,
-        backgroundColor: bgCard,
-        style: { fontFamily: "var(--font-body)" },
         zooming: { type: "x" },
         ...(isMobile ? { spacing: [8, 4, 8, 4] } : {}),
       },
-      title: { text: undefined },
       accessibility: { enabled: false },
-      credits: { enabled: false },
-      xAxis: {
-        type: "datetime",
-        lineColor: borderColor,
-        tickColor: borderColor,
-        labels: { style: { color: textMuted, fontSize: isMobile ? "calc(9px * var(--font-scale))" : "calc(11px * var(--font-scale))" } },
-        crosshair: true,
-      },
+      xAxis: { type: "datetime", crosshair: true },
       yAxis: {
-        title: isMobile
-          ? { text: undefined }
-          : {
-              text: `${SENSOR_DISPLAY_NAMES[sensor] ?? sensor} (${unitLabel.trim()})`,
-              style: { color: textMuted, fontSize: "calc(12px * var(--font-scale))" },
-            },
-        gridLineColor: borderColor,
-        labels: { style: { color: textMuted, fontSize: isMobile ? "calc(9px * var(--font-scale))" : "calc(11px * var(--font-scale))" } },
+        title: isMobile ? { text: undefined } : { text: activeSeriesDef.label },
         softMin: yScale.softMin,
         softMax: yScale.softMax,
         ...(yScale.tickInterval != null && { tickInterval: yScale.tickInterval }),
       },
-      legend: { enabled: false },
       tooltip: {
         shared: true,
         valueSuffix: unitLabel,
-        backgroundColor: bgCard,
-        borderColor: borderColor,
-        style: { color: textColor, fontSize: "calc(12px * var(--font-scale))" },
         xDateFormat: "%b %e, %Y %l:%M %p",
       },
       plotOptions: {
@@ -257,269 +240,301 @@ export default function History() {
       series: [
         {
           type: "areaspline" as const,
-          name: SENSOR_DISPLAY_NAMES[sensor] ?? sensor,
+          name: activeSeriesDef.label,
           data: seriesData,
-          color: accent,
+          // Series colour comes from the ``chart-series-*`` token via a
+          // getComputedStyle read (avoids the ``var()``-into-Highcharts
+          // pitfall from HIGHCHARTS.md).  Fall back to the theme's
+          // trace token, which is always concrete.
+          color: (typeof document !== "undefined"
+            ? getComputedStyle(document.documentElement).getPropertyValue(
+                `--chart-series-${activeSeriesDef.id === "temperature" ? "temp" : activeSeriesDef.id}`,
+              ).trim()
+            : "") || getComputedStyle(document.documentElement).getPropertyValue("--chart-trace").trim() || "#a85f24",
         },
       ],
     };
-  }, [data, summary, sensor, tz, isMobile]);
+  }, [data, summary, activeSeriesDef, tz, isMobile]);
 
-  const presets: { key: Preset; label: string }[] = [
-    { key: "1h", label: "1 Hour" },
-    { key: "12h", label: "12 Hours" },
-    { key: "24h", label: "24 Hours" },
-    { key: "7d", label: "7 Days" },
-    { key: "30d", label: "30 Days" },
-    { key: "custom", label: "Custom" },
-  ];
+  // ── styles ───────────────────────────────────────────────────────
 
-  const resolutions = [
-    { value: "raw", label: "Raw" },
-    { value: "5m", label: "5 min" },
-    { value: "hourly", label: "Hourly" },
-    { value: "daily", label: "Daily" },
-  ];
+  const cardStyle: React.CSSProperties = {
+    border: "0.8px solid var(--color-border)",
+    background: "var(--color-bg-card, transparent)",
+    padding: "18px 20px",
+  };
+
+  const sectionLabel: React.CSSProperties = {
+    fontFamily: "var(--font-mono, var(--font-body))",
+    fontSize: "calc(10px * var(--font-scale))",
+    letterSpacing: "1.6px",
+    textTransform: "uppercase",
+    color: "var(--color-text-muted)",
+    margin: "0 0 10px 0",
+  };
+
+  const seriesRow = (active: boolean): React.CSSProperties => ({
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "10px",
+    width: "100%",
+    padding: "9px 11px",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    textAlign: "left",
+    borderBottom: `0.8px solid var(--rule-hair, rgba(58,45,29,0.10))`,
+    color: active ? "var(--color-text)" : "var(--color-text-secondary)",
+  });
+
+  const swatch = (color: string, active: boolean): React.CSSProperties => ({
+    width: "10px",
+    height: "10px",
+    flexShrink: 0,
+    background: active ? color : "transparent",
+    border: active ? "none" : `1px solid var(--rule-hair, rgba(58,45,29,0.20))`,
+  });
+
+  const presetButton = (active: boolean): React.CSSProperties => ({
+    fontFamily: "var(--font-body)",
+    fontSize: "calc(12.5px * var(--font-scale))",
+    padding: "7px 12px",
+    height: "30px",
+    background: active ? "var(--color-text)" : "var(--color-bg-secondary)",
+    color: active ? "var(--color-bg)" : "var(--color-text)",
+    border: active
+      ? `0.8px solid var(--color-accent)`
+      : `0.8px solid var(--rule-hair, rgba(58,45,29,0.22))`,
+    cursor: "pointer",
+    borderRadius: 0,
+  });
+
+  const resolutionButton = (active: boolean): React.CSSProperties => ({
+    ...presetButton(active),
+    padding: "6px 10px",
+  });
+
+  const exportLink = (): React.CSSProperties => ({
+    ...presetButton(false),
+    textDecoration: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+  });
+
+  // ── render ───────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <div style={{ flexShrink: 0, padding: isMobile ? "4px 12px 0" : "4px 24px 0" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        padding: isMobile ? "12px 12px 16px" : "20px 26px 22px",
+        gap: "16px",
+      }}
+    >
+      {/* Title row */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "16px",
+          flexWrap: "wrap",
+          padding: "0 0 12px 0",
+          borderBottom: "1.6px solid var(--color-text)",
+        }}
+      >
         <h2
-          className="dashboard-heading"
           style={{
-            margin: "0 0 16px 0",
-            fontSize: "calc(24px * var(--font-scale))",
+            margin: 0,
             fontFamily: "var(--font-heading)",
+            fontStyle: "italic",
+            fontSize: "calc(26px * var(--font-scale))",
             color: "var(--color-text)",
           }}
         >
           History
         </h2>
+        {summary?.count != null && (
+          <span style={sectionLabel}>
+            {summary.count.toLocaleString()} records
+          </span>
+        )}
+        <div style={{ marginLeft: "auto", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {PRESETS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              style={presetButton(preset === p.key)}
+              onClick={() => setPreset(p.key)}
+            >
+              {p.label}
+            </button>
+          ))}
+          <span style={{ width: "14px" }} aria-hidden="true" />
+          <a
+            href={`/api/export?sensors=${encodeURIComponent(activeSeriesDef.sensor)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&resolution=${encodeURIComponent(resolution)}`}
+            download
+            style={exportLink()}
+          >
+            CSV
+          </a>
+        </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: isMobile ? "0 12px 12px" : "0 24px 24px" }}>
-      {/* Controls card */}
-      <div style={{ ...cardStyle, padding: isMobile ? "12px" : "20px" }}>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: isMobile ? "column" : "row",
-            flexWrap: "wrap",
-            gap: isMobile ? "12px" : "16px",
-            alignItems: isMobile ? "stretch" : "flex-end",
-          }}
-        >
-          {/* Sensor selector */}
+      {/* Body: rail + chart column */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "250px 1fr",
+          gap: "20px",
+          flex: 1,
+          minHeight: 0,
+          overflow: "auto",
+          alignItems: "start",
+        }}
+      >
+        {/* Rail column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* Series block — borderless.  Rail rows double as a live
+              readout: every series shows its current value even when
+              the row isn't the selected plot (tranche 2b flips this
+              from single-select to multi-toggle). */}
           <div>
-            <label style={labelStyle}>Sensor</label>
-            <select
-              style={{ ...selectStyle, width: isMobile ? "100%" : undefined, minWidth: isMobile ? 0 : "180px" }}
-              value={sensor}
-              onChange={(e) => setSensor(e.target.value)}
-            >
-              {sensorKeys.map((key) => (
-                <option key={key} value={key}>
-                  {SENSOR_DISPLAY_NAMES[key]}
-                </option>
-              ))}
-            </select>
+            <div style={sectionLabel}>Series</div>
+            {SERIES.map((s) => {
+              const isActive = s.id === activeSeries;
+              const live = fmtValue(s.live(currentConditions), s.unit);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setActiveSeries(s.id)}
+                  style={seriesRow(isActive)}
+                >
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      minWidth: 0,
+                    }}
+                  >
+                    <span style={swatch(s.color, isActive)} />
+                    <span
+                      style={{
+                        fontFamily: "var(--font-body)",
+                        fontSize: "calc(13px * var(--font-scale))",
+                      }}
+                    >
+                      {s.label}
+                    </span>
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono, var(--font-body))",
+                      fontSize: "calc(12.5px * var(--font-scale))",
+                      fontVariantNumeric: "tabular-nums",
+                      color: isActive
+                        ? "var(--color-text)"
+                        : "var(--color-text-muted)",
+                    }}
+                  >
+                    {live}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Date range presets */}
+          {/* Resolution block — borderless. */}
           <div>
-            <label style={labelStyle}>Date Range</label>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(6, auto)",
-              gap: "6px",
-            }}>
-              {presets.map((p) => (
+            <div style={sectionLabel}>Resolution</div>
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              {RESOLUTIONS.map((r) => (
                 <button
-                  key={p.key}
-                  style={{
-                    ...presetBtnBase,
-                    padding: isMobile ? "8px 6px" : "6px 14px",
-                    fontSize: isMobile ? "calc(12px * var(--font-scale))" : "calc(13px * var(--font-scale))",
-                    background:
-                      preset === p.key
-                        ? "var(--color-accent)"
-                        : "var(--color-bg-secondary)",
-                    color:
-                      preset === p.key
-                        ? "#fff"
-                        : "var(--color-text-secondary)",
-                    borderColor:
-                      preset === p.key
-                        ? "var(--color-accent)"
-                        : "var(--color-border)",
-                  }}
-                  onClick={() => setPreset(p.key)}
+                  key={r.key}
+                  type="button"
+                  style={resolutionButton(resolution === r.key)}
+                  onClick={() => setResolution(r.key)}
                 >
-                  {p.label}
+                  {r.label}
                 </button>
               ))}
             </div>
+            <div
+              style={{
+                ...sectionLabel,
+                marginTop: "8px",
+                marginBottom: 0,
+                textTransform: "none",
+                letterSpacing: 0,
+              }}
+            >
+              {summary?.count != null
+                ? `${summary.count.toLocaleString()} points at ${resolution === "raw" ? "raw" : resolution} resolution.`
+                : "Loading…"}
+            </div>
           </div>
 
-          {/* Resolution + CSV row */}
-          <div style={{
-            display: "flex",
-            gap: isMobile ? "10px" : "16px",
-            alignItems: "flex-end",
-          }}>
-            <div style={{ flex: isMobile ? 1 : undefined }}>
-              <label style={labelStyle}>Resolution</label>
-              <select
-                style={{ ...selectStyle, width: isMobile ? "100%" : undefined, minWidth: isMobile ? 0 : "180px" }}
-                value={resolution}
-                onChange={(e) => setResolution(e.target.value)}
-              >
-                {resolutions.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              {!isMobile && <label style={labelStyle}>&nbsp;</label>}
-              <a
-                href={`/api/export?sensors=${encodeURIComponent(sensor)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&resolution=${encodeURIComponent(resolution)}`}
-                download
-                style={{
-                  ...presetBtnBase,
-                  padding: isMobile ? "8px 12px" : "6px 14px",
-                  background: "var(--color-bg-secondary)",
-                  color: "var(--color-text-secondary)",
-                  textDecoration: "none",
-                  display: "inline-block",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                CSV
-              </a>
-            </div>
+          {/* Overlay block — borderless.  Checkboxes hold state for
+              Phase 2b; Same-week-last-year is disabled with reason
+              until the archive spans 12 months. */}
+          <div>
+            <div style={sectionLabel}>Overlay</div>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={overlayDayNight}
+                onChange={(e) => setOverlayDayNight(e.target.checked)}
+              />
+              <span style={{ fontFamily: "var(--font-body)", fontSize: "calc(13px * var(--font-scale))" }}>
+                Day / night shading
+              </span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={overlayRainEvents}
+                onChange={(e) => setOverlayRainEvents(e.target.checked)}
+              />
+              <span style={{ fontFamily: "var(--font-body)", fontSize: "calc(13px * var(--font-scale))" }}>
+                Rain events
+              </span>
+            </label>
+            <label
+              style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", cursor: "not-allowed", opacity: 0.55 }}
+              title="Needs 12 months of archive. Available after 2027-01-01."
+            >
+              <input
+                type="checkbox"
+                checked={overlaySameWeekLastYear}
+                onChange={(e) => setOverlaySameWeekLastYear(e.target.checked)}
+                disabled
+              />
+              <span style={{ fontFamily: "var(--font-body)", fontSize: "calc(13px * var(--font-scale))" }}>
+                Same week last year
+              </span>
+            </label>
           </div>
         </div>
 
-        {/* Custom date inputs */}
-        {preset === "custom" && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: isMobile ? "column" : "row",
-              gap: isMobile ? "10px" : "16px",
-              marginTop: "12px",
-              flexWrap: "wrap",
-              alignItems: isMobile ? "stretch" : "flex-end",
-            }}
-          >
-            <div>
-              <label style={labelStyle}>Start</label>
-              <input
-                type="datetime-local"
-                style={{ ...inputStyle, width: isMobile ? "100%" : undefined }}
-                value={customStart}
-                onChange={(e) => setCustomStart(e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>End</label>
-              <input
-                type="datetime-local"
-                style={{ ...inputStyle, width: isMobile ? "100%" : undefined }}
-                value={customEnd}
-                onChange={(e) => setCustomEnd(e.target.value)}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Summary stats bar */}
-      {!loading && !error && summary && (summary.min != null || summary.max != null) && (
-        <div
-          style={{
-            ...cardStyle,
-            padding: isMobile ? "10px 12px" : "12px 20px",
-            display: "flex",
-            gap: isMobile ? "16px" : "32px",
-            flexWrap: "wrap",
-            alignItems: "center",
-          }}
-        >
-          {summary.max != null && (
-            <div>
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>High </span>
-              <span style={{ fontSize: "calc(16px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", fontWeight: "bold" }}>
-                {summary.max}{(UNIT_LABELS[SENSOR_UNITS[sensor] ?? ""] ?? "").trim()}
+        {/* Chart column: chart + extremes cards.  Range strip is
+            deferred to tranche 2b (Highcharts navigator, not the
+            RangeStrip snippet). */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 }}>
+          <div style={cardStyle}>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: "calc(15px * var(--font-scale))", color: "var(--color-text)", marginBottom: "8px" }}>
+              {activeSeriesDef.label}
+              <span style={{ ...sectionLabel, display: "inline", marginLeft: "12px" }}>
+                {PRESETS.find((p) => p.key === preset)?.label}
               </span>
             </div>
-          )}
-          {summary.min != null && (
-            <div>
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Low </span>
-              <span style={{ fontSize: "calc(16px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", fontWeight: "bold" }}>
-                {summary.min}{(UNIT_LABELS[SENSOR_UNITS[sensor] ?? ""] ?? "").trim()}
-              </span>
-            </div>
-          )}
-          {summary.avg != null && (
-            <div>
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Avg </span>
-              <span style={{ fontSize: "calc(16px * var(--font-scale))", fontFamily: "var(--font-heading)", color: "var(--color-text)", fontWeight: "bold" }}>
-                {summary.avg}{(UNIT_LABELS[SENSOR_UNITS[sensor] ?? ""] ?? "").trim()}
-              </span>
-            </div>
-          )}
-          {summary.count > 0 && (
-            <div style={{ marginLeft: "auto" }}>
-              <span style={{ fontSize: "calc(11px * var(--font-scale))", fontFamily: "var(--font-body)", color: "var(--color-text-muted)" }}>
-                {summary.count.toLocaleString()} points
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Chart area */}
-      <div style={cardStyle}>
-        {isWindCombined ? (
-          <div style={{ height: isMobile ? 320 : 440 }}>
-            <WindHistory
-              hours={preset === "custom"
-                ? Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 3_600_000))
-                : PRESET_HOURS[preset]}
-              height={isMobile ? 320 : 440}
-            />
-          </div>
-        ) : isSolarEnergyDaily ? (
-          <div style={{ height: isMobile ? 320 : 440 }}>
-            <SolarEnergyDailyChart
-              // Convert the selected preset/custom range to a whole-day count,
-              // clamped to the endpoint's [1, 366] window.  Sub-day presets
-              // still render as a single-day bar (today so far).
-              days={Math.max(1, Math.min(
-                366,
-                Math.ceil(
-                  (new Date(end).getTime() - new Date(start).getTime()) / 86_400_000,
-                ) || 1,
-              ))}
-              height={isMobile ? 320 : 440}
-            />
-          </div>
-        ) : (
-          <>
             {loading && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  height: isMobile ? "280px" : "400px",
-                }}
-              >
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: isMobile ? 280 : 400 }}>
                 <div
                   style={{
                     width: "36px",
@@ -533,57 +548,72 @@ export default function History() {
                 <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
               </div>
             )}
-
             {error && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  height: isMobile ? "280px" : "400px",
-                  flexDirection: "column",
-                  gap: "8px",
-                }}
-              >
-                <span
-                  style={{ color: "var(--color-danger)", fontSize: "calc(16px * var(--font-scale))" }}
-                >
-                  Failed to load data
-                </span>
-                <span
-                  style={{
-                    color: "var(--color-text-muted)",
-                    fontSize: "calc(13px * var(--font-scale))",
-                    maxWidth: "400px",
-                    textAlign: "center",
-                  }}
-                >
-                  {error}
-                </span>
+              <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: isMobile ? 280 : 400, gap: "8px" }}>
+                <span style={{ color: "var(--color-danger)" }}>Failed to load data</span>
+                <span style={{ color: "var(--color-text-muted)", fontSize: "calc(13px * var(--font-scale))" }}>{error}</span>
               </div>
             )}
-
             {!loading && !error && data.length === 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  height: isMobile ? "280px" : "400px",
-                  color: "var(--color-text-muted)",
-                  fontSize: "calc(14px * var(--font-scale))",
-                }}
-              >
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: isMobile ? 280 : 400, color: "var(--color-text-muted)" }}>
                 No data available for the selected range.
               </div>
             )}
-
             {!loading && !error && data.length > 0 && (
               <HighchartsReact highcharts={Highcharts} options={chartOptions} />
             )}
-          </>
-        )}
-      </div>
+          </div>
+
+          {/* Extremes card.  Phase 2a shows the summary's high/low for
+              the selected series only — Phase 2b lets multi-series
+              enabled state drive one row per active series. */}
+          <div style={cardStyle}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr 1fr" : "231px 178px 178px 178px 178px",
+                gap: "10px",
+                fontFamily: "var(--font-body)",
+              }}
+            >
+              <div style={sectionLabel}>Metric</div>
+              {!isMobile && (
+                <>
+                  <div style={sectionLabel}>High</div>
+                  <div style={sectionLabel}>When</div>
+                  <div style={sectionLabel}>Low</div>
+                  <div style={sectionLabel}>When</div>
+                </>
+              )}
+              <div style={{ fontSize: "calc(13px * var(--font-scale))" }}>
+                {activeSeriesDef.label}
+              </div>
+              {!isMobile && (
+                <>
+                  <div style={{ fontFamily: "var(--font-mono, var(--font-body))", fontVariantNumeric: "tabular-nums" }}>
+                    {summary?.max != null ? fmtValue(summary.max, activeSeriesDef.unit) : "—"}
+                  </div>
+                  <div style={{ fontFamily: "var(--font-mono, var(--font-body))", color: "var(--color-text-muted)" }}>
+                    —
+                  </div>
+                  <div style={{ fontFamily: "var(--font-mono, var(--font-body))", fontVariantNumeric: "tabular-nums" }}>
+                    {summary?.min != null ? fmtValue(summary.min, activeSeriesDef.unit) : "—"}
+                  </div>
+                  <div style={{ fontFamily: "var(--font-mono, var(--font-body))", color: "var(--color-text-muted)" }}>
+                    —
+                  </div>
+                </>
+              )}
+              {isMobile && (
+                <div style={{ fontFamily: "var(--font-mono, var(--font-body))" }}>
+                  {summary?.max != null ? `H ${fmtValue(summary.max, activeSeriesDef.unit)}` : "—"}
+                  {" · "}
+                  {summary?.min != null ? `L ${fmtValue(summary.min, activeSeriesDef.unit)}` : "—"}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
