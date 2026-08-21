@@ -1,25 +1,23 @@
 /**
- * Wheel barometer — Design v34 HIGHCHARTS.md tranche 3, styled-mode.
+ * Wheel barometer — Design v43 (14a).
  *
- * Highcharts gauge in ``chart.styledMode: true``: every colour and
- * font lives in ``WheelBarometer.css`` against the theme's CSS
- * custom properties, and this file owns geometry (angles, radii,
- * ticks, dial widths, zone-ring boundaries).  The two-file split is
- * the point — Design can iterate on the visual identity in CSS
- * without a code change.
+ * One label system on the plate: three numerals in the pockets the
+ * sweep cannot reach (28.5 / 30.0 / 31.0).  Zone words moved off
+ * the plate and into a separate strip beneath (see
+ * ``BarometerZoneStrip`` in the tile).  One copper arc over the
+ * currently-active zone replaces the old zone annulus + word ring.
  *
- * The two spec calls Design flagged as easy to get wrong stay in
- * geometry, not style:
+ * The ordering rule that v39–v42 kept missing:
+ * **needle tip < numeral inner bound.**  Labels sit outboard of
+ * the sweep; the pointer never strikes them.  Enforced here as
+ * ``RING.needle < RING.numeralInner``.
  *
- * - **``min: 28.5, max: 31.0`` is fixed**, NOT the day's swing.  A
- *   station's real daily variation is on the order of 0.2 inHg; a
- *   dial auto-scaled to the day would turn noise into drama.
- * - **``radius: '46%'`` on the trend dial + ``'66%'`` on the live
- *   one** — the short pale hand three hours back is what makes the
- *   dial show *movement* rather than a value.
+ * All geometry in fractions of the pane radius R (which equals the
+ * chart's radius since pane.size = 100 %) so the same table holds at
+ * any size.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Highcharts from "highcharts";
 import "highcharts/highcharts-more";
 import "highcharts/css/highcharts.css";
@@ -33,6 +31,11 @@ interface WheelBarometerProps {
   /** Trend in inHg per 3 h.  Used to derive the trend-dial value
    *  (three-hours-ago = now − trend); ``null`` hides the trend dial. */
   trendInHgPer3h: number | null;
+  /** Initial drawing precision in viewBox units (Design v43 step 6).
+   *  Physical size comes from the parent — the instrument fills its
+   *  container and a ``ResizeObserver`` re-renders HC when the
+   *  container's actual pixel size changes.  ``size`` is used only as
+   *  the first-render seed before the observer fires. */
   size: number;
 }
 
@@ -41,30 +44,42 @@ const MIN_INHG = 28.5;
 const MAX_INHG = 31.0;
 
 /**
- * Zone ring boundaries.  Ratios of the pane radius.  Stated as
- * constants so plot bands, hairline separators and the label ring
- * all read the same numbers — Design v35 DIFF-barometer-beta69.md P1.
+ * Radial geometry, as fractions of the pane radius R.  Design v43
+ * DIFF-barometer-v43.md.  Ordered outside-in; the invariant that
+ * matters across every render is ``needle < numeralInner`` —
+ * numerals sit outboard of the sweep so the pointer cannot strike
+ * them.  Values pulled directly from Design's measurable mock
+ * (baro-14a.html); do not tune individually.
  */
-const ZONE_RING_INNER = 0.55;
-const ZONE_RING_OUTER = 0.62;
-const ZONE_RING_MID = (ZONE_RING_INNER + ZONE_RING_OUTER) / 2;
+const RING = {
+  rim: 0.962,            // hairline circle, weight-bearing edge
+  numeralCenter: 0.820,  // label anchor radius — mock's actual glyph centre
+  // ``activeArc`` sits so its INNER edge kisses ``tickOuter``: arc
+  // inner = activeArc − activeArcWidth/2 = 0.720.  The mock's tick
+  // outer tips just touch the arc's inner edge; keep the two
+  // constrained together on any future re-tune.
+  activeArc: 0.737,      // centre of the copper active-zone arc
+  activeArcWidth: 0.033,
+  tickOuter: 0.720,      // axis line — ticks draw inward from here
+  majorTick: 0.095,      // length inward, as fraction of R
+  minorTick: 0.048,
+  needle: 0.648,         // tip radius — MUST be inboard of numeral glyph
+  needleTail: 0.133,
+  hub: 0.044,            // copper disc at the centre
+  hubPip: 0.015,         // paper pip inset on the hub (Design 14a)
+  numeralSize: 0.086,    // font-size, in fractions of R
+} as const;
 
-/**
- * Rim ring radii (fraction of pane radius).  0.967 outer + 0.887
- * inner match the SVG barometer's ``gradOuter`` / ``gradInner``
- * theme ratios so the two renderings are interchangeable.
- */
-const RIM_OUTER = 0.967;
-const RIM_INNER = 0.887;
-
-/**
- * Half-width in inHg of the hairline separators between zones.
- * ~1 px at a 260 px gauge; Design's Option B: instead of five
- * contiguous same-fill bands (which read as one continuous arc),
- * four thin separators mark the four boundaries and the ring is
- * *implied* by its divisions, not by a fill.
- */
-const SEPARATOR_HALFWIDTH = 0.004;
+// Enforce the ordering rule at import time.  A future edit that
+// crosses these two values would silently re-introduce the
+// needle-strikes-numeral bug that v39–v42 kept chasing.  The real
+// clearance is `numeralCenter - numeralSize/2`, so the invariant
+// checks against the numeral's inner glyph edge, not its centre.
+if (RING.needle >= RING.numeralCenter - RING.numeralSize / 2) {
+  throw new Error(
+    "WheelBarometer: needle tip must sit inboard of numeral inner edge.",
+  );
+}
 
 const ZONE_BANDS = [
   { from: 28.5, to: 29.0, label: "STORMY" },
@@ -74,15 +89,50 @@ const ZONE_BANDS = [
   { from: 30.5, to: 31.0, label: "SET FAIR" },
 ];
 
-function zoneAt(value: number): string {
+/** The zone containing ``value`` — single source of truth used by
+ *  the active-arc plotBand, the "Zone: fair" readout sentence, and
+ *  the strip's active-cell highlight. */
+export function activeZone(value: number | null): typeof ZONE_BANDS[number] | null {
+  if (value == null || !Number.isFinite(value)) return null;
   for (const band of ZONE_BANDS) {
-    if (value >= band.from && value < band.to) return band.label.toLowerCase();
+    if (value >= band.from && value < band.to) return band;
   }
-  return value >= MAX_INHG ? ZONE_BANDS[ZONE_BANDS.length - 1].label.toLowerCase() : "";
+  return value >= MAX_INHG ? ZONE_BANDS[ZONE_BANDS.length - 1] : null;
 }
+
+export { ZONE_BANDS, MIN_INHG, MAX_INHG };
+
+/** All six majors get numerals — needle tip at 0.648 R sits 0.129 R
+ *  inboard of the numeral glyph edge at 0.777 R, so pointer/label
+ *  collision is structurally impossible and the plate reads as a
+ *  proper meteorological scale rather than three landmarks with a
+ *  perceived bulge in the middle. */
 
 export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBarometerProps) {
   const { themeName } = useTheme();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [renderSize, setRenderSize] = useState<number>(size);
+
+  // Container-fill (Design v43 step 6): watch the parent's physical
+  // width in device px and re-render HC when it changes.  Everything
+  // downstream (RING radii, tickLength, pivot.radius) scales with
+  // ``renderSize`` — one scale system, no ``--k`` threading through
+  // instrument code.  Strokes that must stay 1 device px are already
+  // pinned via ``vector-effect: non-scaling-stroke`` in the CSS.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = Math.round(entry.contentRect.width);
+        if (w > 0) {
+          setRenderSize((prev) => (Math.abs(w - prev) > 1 ? w : prev));
+        }
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const options = useMemo<Highcharts.Options | null>(() => {
     if (inHg == null || !Number.isFinite(inHg)) return null;
@@ -92,85 +142,166 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
         ? Math.max(MIN_INHG, Math.min(MAX_INHG, inHg - trendInHgPer3h))
         : null;
 
+    const R = renderSize / 2;
+    const zone = activeZone(clampedNow);
+
+    // HC gauge draws its axis line on the pane rim; making the pane
+    // radius equal to ``tickOuter * R`` puts the tick ring on the
+    // pane's edge.  Everything else expresses its radius as a
+    // percentage of that pane radius via ``pctOfPane``.
+    const paneSizePct = RING.tickOuter * 100;
+    const pctOfPane = (r: number) => `${(r / RING.tickOuter) * 100}%`;
+
+    // Angle for a value on the [-120°, +120°] sweep.  Shared by the
+    // custom needle and the custom active arc so the two can't drift.
+    const angleForValue = (v: number) =>
+      (-120 + ((v - MIN_INHG) / (MAX_INHG - MIN_INHG)) * 240) * (Math.PI / 180);
+
+    // Custom render hook — draws the copper active arc, the live
+    // needle, and the hub + paper pip as raw SVG (Design mock
+    // topology).  HC's own plotBand annulus, ``.wheel-baro-now``
+    // dial polygon, and pivot are hidden via CSS.  Keeps the trend
+    // hand as a HC dial (design keeps trend as an optional aux
+    // series; #2 of Chris' fix-list is out of scope).
+    const drawOverlay = function (this: unknown) {
+      const chart = this as any;
+      const paneObj = chart?.pane?.[0];
+      const paneCenter = paneObj?.center;
+      if (!paneCenter || paneCenter.length < 3) return;
+      // ``paneObj.center`` = [cx, cy, size] where ``size`` is the
+      // pane DIAMETER in pixels.  (yAxis.len on a gauge returns the
+      // axis arc length, not the pane radius — do not use it here.)
+      // paneObj.center coords are relative to the plot area; shift
+      // by (plotLeft, plotTop) so they land in the SVG's own
+      // coordinate system where chart.renderer draws.
+      const [rawCx, rawCy, paneSizePx] = paneCenter;
+      const cx = rawCx + (chart.plotLeft ?? 0);
+      const cy = rawCy + (chart.plotTop ?? 0);
+      const paneR = paneSizePx / 2;
+      if (!paneR) return;
+      const R_ = paneR / RING.tickOuter;
+
+      if (chart._baroOverlay) {
+        chart._baroOverlay.destroy();
+      }
+      const g = chart.renderer.g("wheel-baro-overlay").add();
+      chart._baroOverlay = g;
+
+      // Active-zone arc — stroked <path> at r=activeArc, thickness
+      // = activeArcWidth * R.  Matches the mock's <path> stroke
+      // (uniform crisp line, not an annulus fill).
+      if (zone) {
+        const a0 = angleForValue(zone.from);
+        const a1 = angleForValue(zone.to);
+        const arcR = RING.activeArc * R_;
+        const x0 = cx + arcR * Math.sin(a0);
+        const y0 = cy - arcR * Math.cos(a0);
+        const x1 = cx + arcR * Math.sin(a1);
+        const y1 = cy - arcR * Math.cos(a1);
+        const largeArc = a1 - a0 > Math.PI ? 1 : 0;
+        chart.renderer
+          .path([
+            "M", x0, y0,
+            "A", arcR, arcR, 0, largeArc, 1, x1, y1,
+          ])
+          .attr({
+            "stroke-width": RING.activeArcWidth * R_,
+            "stroke-linecap": "butt",
+          })
+          .addClass("wheel-baro-custom-arc")
+          .add(g);
+      }
+
+      // Live needle — a straight line with round caps.  Runs from
+      // (−needleTail * R) behind the hub out to (+needle * R) at
+      // the tip.
+      const aNow = angleForValue(clampedNow);
+      const sinN = Math.sin(aNow);
+      const cosN = Math.cos(aNow);
+      const tipX = cx + RING.needle * R_ * sinN;
+      const tipY = cy - RING.needle * R_ * cosN;
+      const backX = cx - RING.needleTail * R_ * sinN;
+      const backY = cy + RING.needleTail * R_ * cosN;
+      chart.renderer
+        .path(["M", backX, backY, "L", tipX, tipY])
+        .attr({
+          "stroke-width": 2.4,
+          "stroke-linecap": "round",
+        })
+        .addClass("wheel-baro-custom-needle")
+        .add(g);
+
+      // Hub + pip — copper disc with a paper-colour dot inset.
+      chart.renderer
+        .circle(cx, cy, RING.hub * R_)
+        .addClass("wheel-baro-custom-hub")
+        .add(g);
+      chart.renderer
+        .circle(cx, cy, RING.hubPip * R_)
+        .addClass("wheel-baro-custom-pip")
+        .add(g);
+    };
+
     return {
       chart: {
         type: "gauge",
-        // Styled mode: Highcharts stops emitting inline colour /
-        // font attributes and every element carries a class name.
         styledMode: true,
         spacing: [4, 4, 4, 4],
-        height: size,
-        width: size,
+        height: renderSize,
+        width: renderSize,
+        events: {
+          render: drawOverlay,
+        },
       },
       title: { text: undefined },
       credits: { enabled: false },
-      // Design v35 review: gauge doesn't need the full a11y module,
-      // but silently disabling it isn't defensible either.  The
-      // wrapper div carries ``aria-hidden`` and the readout column
-      // beside the tile is the accessible content.
       accessibility: { enabled: false },
-      // Kill the export burger — Design flagged it as the highest-
-      // contrast element in the tile in the beta69 review.  History
-      // still exports; that's the one opt-in.
       exporting: { enabled: false },
       pane: {
-        // 240° sweep opening downward — 8 o'clock to 4 o'clock
-        // through 12.  Highcharts pane angles run from 12 o'clock
-        // clockwise, so ``-120`` = 8 o'clock, ``120`` = 4 o'clock.
         startAngle: -120,
         endAngle: 120,
-        // 92 % pane fills the available square more than HC's 85 %
-        // default and gives the ticks + numerals room to breathe.
-        // Design v38 DIFF-barometer-radial.md.
-        size: "92%",
-        // Two concentric hairline rings.  Both pane.background
-        // entries render as zero-width bands; the CSS strokes them
-        // with the theme's rule / grid tokens.  Design v35 P4:
-        // ratios come from the theme's ``dial`` group so the SVG
-        // and HC renderings stay interchangeable.
+        size: `${paneSizePct}%`,
         background: [
           {
-            outerRadius: `${RIM_OUTER * 100}%`,
-            innerRadius: `${RIM_OUTER * 100}%`,
-            className: "wheel-baro-rim-outer",
-          },
-          {
-            outerRadius: `${RIM_INNER * 100}%`,
-            innerRadius: `${RIM_INNER * 100}%`,
-            className: "wheel-baro-rim-inner",
+            outerRadius: pctOfPane(RING.rim),
+            innerRadius: pctOfPane(RING.rim),
+            className: "wheel-baro-rim",
           },
         ],
       },
       yAxis: {
         min: MIN_INHG,
         max: MAX_INHG,
+        // HC gauge yAxes default to ``offset: '-20%'`` (RadialAxis.js
+        // line 218), which pushes the axis line — and therefore the
+        // tick ring — 20 % of the pane radius inboard of the rim.
+        // That silently subverts the RING geometry: a ``tickOuter``
+        // of 0.720 rendered at 0.577 R.  Force to 0 so the tick
+        // ring lands exactly where ``pane.size`` places the pane rim.
+        offset: 0,
         tickInterval: 0.5,
-        minorTickInterval: 0.125,
-        // Radial budget — Design v38 DIFF-barometer-radial.md.  The
-        // dial has four label / graduation / rim systems competing
-        // in the same radial band; the budget lets each ring own
-        // its own range without collision.  Percentages of pane
-        // radius, from rim in:
-        //   96.7 %  outer rim stroke
-        //   88.7 → 96.7 %  graduations (majors span, minors half)
-        //   88.7 %  inner rim stroke
-        //   ~78 %  numerals
-        //   66 → 72 %  empty ring (breathing room)
-        //   58.5 %  zone-name labels
-        //   0 → 66 %  needle sweep (live @ 66 %, trend @ 46 %)
-        // The tick lengths below are chosen so majors stop at the
-        // inner rim and minors stop half-way to the numeral ring;
-        // both draw inward from the axis line at 96.7 %.
-        tickLength: 10,
-        minorTickLength: 5,
-        tickWidth: 1.6,
-        minorTickWidth: 1,
+        // HC's radial-axis wrapper forces ``minorTickInterval`` to
+        // ``'auto'`` on gauge yAxes unless ``minorTicks`` is set
+        // explicitly (see RadialAxis.js wrapAxisGetMinorTickInterval).
+        // ``auto`` then divides ``tickInterval`` by the default
+        // ``minorTicksPerMajor: 10``, which drew 50 minor ticks vs
+        // the mock's 20.  Both flags must be set together.
+        minorTicks: true,
+        minorTickInterval: 0.1,
+        // Tick lengths are in px; convert from the R-fraction spec.
+        tickLength: RING.majorTick * R,
+        minorTickLength: RING.minorTick * R,
+        tickWidth: 1.4,
+        minorTickWidth: 0.8,
         lineWidth: 0,
+        // HC's ``labels.distance`` positions the label centre, not
+        // its inner envelope.  Mock's numerals sit at r ≈ 0.82 R
+        // (glyph centre); distance = numeralCenter − tickOuter.
+        // Constant across the three visible angles — mock spread
+        // is 0.79 – 0.82 R across 30.0 / 28.5 / 31.0, all within
+        // 3 px at any realistic size, so no per-numeral rewrite.
         labels: {
-          // Negative distance = inside the axis line.  ``-24`` lands
-          // numerals near 78 % of radius on a 260 px face — inside
-          // the inner rim, outside the empty ring.
-          distance: -24,
+          distance: (RING.numeralCenter - RING.tickOuter) * R,
           formatter: function () {
             const v = typeof this.value === "number" ? this.value : Number(this.value);
             return v.toFixed(1);
@@ -178,17 +309,9 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
         },
         tickPosition: "inside",
         minorTickPosition: "inside",
-        // Hairline separators, NOT contiguous fills.  Five same-fill
-        // bands read as one unbroken arc (Design v35 P0); four
-        // narrow separators at the four boundaries divide the ring
-        // by implication and let the ring itself stay empty.
-        plotBands: ZONE_BANDS.slice(1).map((band) => ({
-          from: band.from - SEPARATOR_HALFWIDTH,
-          to: band.from + SEPARATOR_HALFWIDTH,
-          innerRadius: `${ZONE_RING_INNER * 100}%`,
-          outerRadius: `${ZONE_RING_OUTER * 100}%`,
-          className: "wheel-baro-separator",
-        })),
+        // No plotBands — the active-zone arc is drawn by the custom
+        // render hook so it renders as a crisp stroke, not a wide
+        // annulus fill.  Endpoints still derive from ``activeZone``.
       },
       tooltip: { enabled: false },
       series: [
@@ -199,120 +322,76 @@ export default function WheelBarometer({ inHg, trendInHgPer3h, size }: WheelBaro
               className: "wheel-baro-trend",
               data: [trend3hAgo],
               dial: {
-                radius: "46%",
+                // Trend hand at same ratio-of-needle as the SVG dial
+                // used (0.46/0.66 ≈ 0.70 of needle length).
+                radius: `${(RING.needle * 0.70 / RING.tickOuter) * 100}%`,
                 baseWidth: 2,
                 topWidth: 2,
                 rearLength: "0%",
               },
-              // No data label on either dial — the readout column
-              // beside the gauge is the value; the dial is position.
               dataLabels: { enabled: false },
               enableMouseTracking: false,
             }]
           : []),
         {
+          // The now-series stays in the chart so HC keeps a valid
+          // data point for the axis, but the dial + pivot are hidden
+          // via CSS — the visible needle and hub come from the
+          // custom render hook above.
           type: "gauge" as const,
           name: "now",
           className: "wheel-baro-now",
           data: [clampedNow],
           dial: {
-            radius: "66%",
-            baseWidth: 3,
-            topWidth: 1,
-            rearLength: "0%",
+            radius: pctOfPane(RING.needle),
+            baseWidth: 2.4,
+            topWidth: 2.4,
+            rearLength: pctOfPane(RING.needleTail),
           },
-          pivot: { radius: 4 },
+          pivot: {
+            radius: RING.hub * R,
+          },
           dataLabels: { enabled: false },
           enableMouseTracking: false,
         },
       ],
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inHg, trendInHgPer3h, size, themeName]);
+  }, [inHg, trendInHgPer3h, renderSize, themeName]);
 
-  // Zone-name labels ride on chart.events.render — HC has no native
-  // label-on-plotBand.  Design v35 P1: read geometry from ``pane.center``
-  // + the axis's own ``startAngleRad`` / ``endAngleRad`` so a size /
-  // sweep / pane change moves bands and labels together.
-  const optionsWithLabels = useMemo<Highcharts.Options | null>(() => {
-    if (!options) return null;
-    return {
-      ...options,
-      chart: {
-        ...options.chart,
-        events: {
-          render: function () {
-            const chart = this as Highcharts.Chart & {
-              _wheelBaroLabels?: Highcharts.SVGElement[];
-              pane?: Array<{ center: number[] }>;
-            };
-            if (chart._wheelBaroLabels) {
-              for (const el of chart._wheelBaroLabels) el.destroy();
-            }
-            const pane = chart.pane?.[0];
-            const axis = chart.yAxis?.[0] as Highcharts.Axis & {
-              startAngleRad: number;
-              endAngleRad: number;
-            };
-            if (!pane || !axis) {
-              chart._wheelBaroLabels = [];
-              return;
-            }
-            // pane.center is [x, y, diameter, innerDiameter] in
-            // plot-area pixels.  ``startAngleRad`` already carries
-            // the -90° offset (0 rad points up), so no extra rotation.
-            const [pcx, pcy, diameter] = pane.center as unknown as number[];
-            const cx = chart.plotLeft + pcx;
-            const cy = chart.plotTop + pcy;
-            const rLabel = (diameter / 2) * ZONE_RING_MID;
-            const a0 = axis.startAngleRad;
-            const a1 = axis.endAngleRad;
-            const labels = ZONE_BANDS.map((band) => {
-              const mid = (band.from + band.to) / 2;
-              const t = (mid - MIN_INHG) / (MAX_INHG - MIN_INHG);
-              const ang = a0 + t * (a1 - a0);
-              const x = cx + Math.cos(ang) * rLabel;
-              // +3 nudges the baseline to optical centre;
-              // dominant-baseline is unreliable in the Highcharts
-              // renderer across browsers.
-              const y = cy + Math.sin(ang) * rLabel + 3;
-              return chart.renderer
-                .text(band.label, x, y)
-                .attr({
-                  "text-anchor": "middle",
-                  class: "wheel-baro-zone-label",
-                })
-                .add();
-            });
-            chart._wheelBaroLabels = labels;
-          },
-        },
-      },
-    };
-  }, [options]);
+  // Container-fill: outer div stretches to whatever slot the tile
+  // hands us (Design v43 step 6).  The tile is authoritative for
+  // physical size via its own ``s()`` unit; the instrument brings no
+  // intrinsic dimensions of its own.
+  const containerStyle: React.CSSProperties = {
+    width: "100%",
+    height: "100%",
+  };
 
-  if (!optionsWithLabels) {
+  if (!options) {
     return (
       <div
+        ref={containerRef}
         className="wheel-barometer"
         aria-hidden="true"
-        style={{ width: size, height: size }}
+        style={containerStyle}
       />
     );
   }
 
   return (
     <div
+      ref={containerRef}
       className="wheel-barometer"
       aria-hidden="true"
       aria-label={
         inHg != null
-          ? `Barometric pressure ${inHg.toFixed(2)} inches of mercury, zone ${zoneAt(inHg)}.`
+          ? `Barometric pressure ${inHg.toFixed(2)} inches of mercury, zone ${activeZone(inHg)?.label.toLowerCase() ?? ""}.`
           : undefined
       }
-      style={{ width: size, height: size }}
+      style={containerStyle}
     >
-      <HighchartsReact highcharts={Highcharts} options={optionsWithLabels} />
+      <HighchartsReact highcharts={Highcharts} options={options} />
     </div>
   );
 }

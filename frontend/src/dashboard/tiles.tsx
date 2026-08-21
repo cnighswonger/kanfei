@@ -13,7 +13,7 @@ import React from 'react';
 import { Tile, TileHeading, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt, fmtTime, s, fs, decimate } from './primitives';
 import type { DashboardData } from './types';
 import { pathFor, ledgerGrid } from '../utils/gauges';
-import WheelBarometer from '../components/charts/WheelBarometer';
+import WheelBarometer, { ZONE_BANDS, MIN_INHG, MAX_INHG, activeZone } from '../components/charts/WheelBarometer';
 import WindRoseDial from '../components/charts/WindRoseDial';
 
 /* ───────────────────────────────────────────────────── 1. hero temperature */
@@ -176,23 +176,31 @@ export const HistoryChartTile: React.FC<{ d: DashboardData; style?: React.CSSPro
 /* ─────────────────────────────────────────────────────────── 4. barometer */
 
 export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
-  const size = 260;
+  // Dial size dropped 260 → 210 in Design v43 to make room for the
+  // zone strip below.  Numerals + zone words no longer share the
+  // plate — words leave for the strip; three numerals remain on
+  // the dial in pockets the needle sweep cannot reach.
+  const size = 210;
   const trend = d.barometer.trendInHgPer3h;
   const arrow = trend == null ? '' : trend > 0.005 ? '↑ rising' : trend < -0.005 ? '↓ falling' : '→ steady';
+  const zone = activeZone(d.barometer.inHg);
 
   return (
     <Tile id="barometer" style={style}>
-      {/* ⚠ No heading above the gauge. In 1d the dial comes first and the title
-          lives at the top of the readout column beside it.  Design v34 T3
-          swapped the SVG wheel for the Highcharts gauge in
-          ``components/charts/WheelBarometer.tsx``; the readout column
-          below is unchanged. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: s(10), flex: 1, minHeight: 0 }}>
-        <WheelBarometer
-          inHg={d.barometer.inHg}
-          trendInHgPer3h={d.barometer.trendInHgPer3h}
-          size={size}
-        />
+        {/* Container-fill wrapper (Design v43 step 6): tile owns
+            physical size in ``s()`` units (viewport-scaled); the
+            instrument fills 100 % of the slot and rebuilds via
+            ResizeObserver when the wrapper changes size.  Kills the
+            raw-pixel gap that made the dial drift from the tile at
+            other viewport heights. */}
+        <div style={{ width: s(size), aspectRatio: '1', flexShrink: 0 }}>
+          <WheelBarometer
+            inHg={d.barometer.inHg}
+            trendInHgPer3h={d.barometer.trendInHgPer3h}
+            size={size}
+          />
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), minWidth: 0 }}>
           <div style={{ ...type('title'), color: v.text }}>Barometer</div>
@@ -205,7 +213,6 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
           <SectionLabel color={v.accent}>
             {arrow}{trend != null && ` · ${trend > 0 ? '+' : ''}${trend.toFixed(3)} in / 3h`}
           </SectionLabel>
-          {/* The log's voice: a sentence, not a stack of labelled numbers. */}
           <div style={{ ...type('body', fs(12.5)), color: v.textSecondary, lineHeight: 1.4, textWrap: 'pretty' }}>
             {d.barometer.zone && `Zone: ${d.barometer.zone.toLowerCase()}. `}
             {d.barometer.hPa != null && `${fmt(d.barometer.hPa, 1)} hPa, compensated for elevation.`}
@@ -219,6 +226,48 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Zone strip — full tile width, five cells, columns weighted
+          by each zone's share of the 2.5-inHg range so the strip is
+          a legend AND an unrolled scale.  Active cell picks up the
+          copper wash + a 2 px copper rule on its top edge
+          overlapping the strip's 1 px separator.  Design v43. */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: ZONE_BANDS.map(
+            (b) => `${((b.to - b.from) / (MAX_INHG - MIN_INHG)).toFixed(3)}fr`,
+          ).join(' '),
+          borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
+          marginTop: s(8),
+        }}
+      >
+        {ZONE_BANDS.map((b, i) => {
+          const isActive = zone?.label === b.label;
+          return (
+            <div
+              key={b.label}
+              style={{
+                ...type('sectionLabel'),
+                padding: `${s(6)} 0`,
+                textAlign: 'center',
+                color: isActive ? v.accent : v.textSecondary,
+                opacity: isActive ? 1 : 0.55,
+                background: isActive
+                  ? `color-mix(in oklab, var(--color-accent) 8%, transparent)`
+                  : 'transparent',
+                borderTop: isActive
+                  ? `2px solid var(--color-accent)`
+                  : 'none',
+                marginTop: isActive ? '-2px' : 0,
+                borderLeft: i === 0 ? 'none' : `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
+              }}
+            >
+              {b.label}
+            </div>
+          );
+        })}
       </div>
     </Tile>
   );
@@ -299,7 +348,19 @@ export const RainTile: React.FC<{ d: DashboardData; title?: string; style?: Reac
     <div style={{ marginTop: 'auto' }}>
       <Row label="Today" value={fmt(d.rain.todayIn, 2, ' in')} />
       <Row label="Yesterday" value={fmt(d.rain.yesterdayIn, 2, ' in')} />
-      <Row label="Year" value={fmt(d.rain.yearIn, 2, ' in')} last />
+      {/* Year figure carries provenance when it's an archive-derived
+          recomputation — Design v41.  The banner in Settings explains
+          the situation once; the inline label explains the number
+          every time someone reads it, which is where ``0.21 in`` was
+          suspicious for three rounds. */}
+      <Row
+        label="Year"
+        value={
+          fmt(d.rain.yearIn, 2, ' in') +
+          (d.rain.yearSource === 'archive' ? ' (archive)' : '')
+        }
+        last
+      />
     </div>
   </Tile>
 );

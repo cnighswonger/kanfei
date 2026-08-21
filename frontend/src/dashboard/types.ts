@@ -85,6 +85,15 @@ export interface DashboardData {
     todayIn: number | null;
     yesterdayIn: number | null;
     yearIn: number | null;
+    /**
+     * Provenance for ``yearIn``.  ``'console'`` = raw Vue counter;
+     * ``'archive'`` = summed from stored daily rain since the season
+     * boundary because a mid-year console reset was detected.  See
+     * backend ``services/rain_year.py``.  Displayed inline next to
+     * the Year figure so an operator reading the value can tell
+     * where it came from — Design v41.
+     */
+    yearSource?: "console" | "archive";
     /** 24 hourly totals in inches, oldest first. */
     hourlyIn: (number | null)[];
   };

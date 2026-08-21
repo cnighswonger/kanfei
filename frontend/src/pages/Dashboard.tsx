@@ -490,6 +490,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       todayIn: cc?.rain?.daily?.value ?? null,
       yesterdayIn: cc?.rain?.yesterday?.value ?? null,
       yearIn: cc?.rain?.yearly?.value ?? null,
+      yearSource: cc?.rain?.yearly?.source,
       hourlyIn: s.hourlyRain,
     },
     solar: {
