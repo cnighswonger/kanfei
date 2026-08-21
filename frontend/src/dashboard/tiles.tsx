@@ -213,17 +213,23 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
           <SectionLabel color={v.accent}>
             {arrow}{trend != null && ` · ${trend > 0 ? '+' : ''}${trend.toFixed(3)} in / 3h`}
           </SectionLabel>
-          <div style={{ ...type('body', fs(12.5)), color: v.textSecondary, lineHeight: 1.4, textWrap: 'pretty' }}>
-            {d.barometer.zone && `Zone: ${d.barometer.zone.toLowerCase()}. `}
-            {d.barometer.hPa != null && `${fmt(d.barometer.hPa, 1)} hPa, compensated for elevation.`}
-          </div>
-          <div style={{ display: 'flex', gap: s(16), marginTop: 'auto', paddingTop: s(8), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
-            <span style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary }}>
-              H {fmt(d.barometer.todayHigh, 2)} {fmtTime(d.barometer.todayHighAt)}
-            </span>
-            <span style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary }}>
-              L {fmt(d.barometer.todayLow, 2)} {fmtTime(d.barometer.todayLowAt)}
-            </span>
+          {/* hPa summary + today's H/L, Design v43.  Zone name lives
+              on the dial + strip; the readout drops it to avoid
+              triplicating the same word.  Everything mono 11 px in
+              secondary ink except the values (H 30.04 / L 29.97),
+              which stay in primary so the row has hierarchy. */}
+          <div style={{ marginTop: 'auto', paddingTop: s(9), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`, display: 'flex', flexDirection: 'column', gap: s(7) }}>
+            {d.barometer.hPa != null && (
+              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary, letterSpacing: '0.4px' }}>
+                {fmt(d.barometer.hPa, 1)} hPa · sea-level
+              </div>
+            )}
+            <div style={{ ...type('mono', fs(11)), ...tnum, color: v.text, whiteSpace: 'nowrap', letterSpacing: '0.6px' }}>
+              H {fmt(d.barometer.todayHigh, 2)}{' '}
+              <span style={{ color: v.textSecondary }}>{fmtTime(d.barometer.todayHighAt)}</span>
+              {'  '}L {fmt(d.barometer.todayLow, 2)}{' '}
+              <span style={{ color: v.textSecondary }}>{fmtTime(d.barometer.todayLowAt)}</span>
+            </div>
           </div>
         </div>
       </div>
