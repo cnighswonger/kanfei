@@ -21,6 +21,7 @@ import {
   tnum, fmt, fmtInt, fmtTime, fs,
 } from './primitives';
 import type { DashboardData } from './types';
+import { COMPASS_NAME } from './tiles';
 import WindRoseDial from '../components/charts/WindRoseDial';
 
 export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: string }> = ({
@@ -331,9 +332,36 @@ export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
             <span style={{ ...type('mono', fs(24)), ...tnum, color: v.text }}>{fmt(d.wind.speedMph, 0)}</span>
             <SectionLabel>mph {d.wind.directionLabel ?? ''}</SectionLabel>
           </div>
-          <div style={{ ...type('body', fs(12.5)), color: v.textSecondary, lineHeight: 1.4, textWrap: 'pretty' }}>
-            {d.wind.gustMph != null && `Gusting ${fmt(d.wind.gustMph, 0)}. `}
-            {d.wind.peakMph != null && `Peak ${fmt(d.wind.peakMph, 0)} mph${d.wind.peakAt ? ` at ${d.wind.peakAt}` : ''}.`}
+          {/* Direction detail + peak/gust — same shape as the
+              Everyday wind tile.  Mono sub-line in secondary for
+              context, mono value line with primary values and
+              secondary times. */}
+          <div style={{ paddingTop: s(9), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`, display: 'flex', flexDirection: 'column', gap: s(7) }}>
+            {(d.wind.directionLabel || d.wind.directionDeg != null) && (
+              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary, letterSpacing: '0.4px' }}>
+                {d.wind.directionLabel && (COMPASS_NAME[d.wind.directionLabel] ?? d.wind.directionLabel)}
+                {d.wind.directionLabel && d.wind.directionDeg != null && ' · '}
+                {d.wind.directionDeg != null && `${Math.round(d.wind.directionDeg)}°`}
+              </div>
+            )}
+            {/* Narrow readout column — stack Peak and Gust as two
+                lines rather than forcing them onto one row with
+                nowrap.  Value primary, time secondary; matches the
+                Everyday wind tile's ink discipline without its
+                width assumption. */}
+            {d.wind.peakMph != null && (
+              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.text, letterSpacing: '0.6px' }}>
+                Peak {fmt(d.wind.peakMph, 0)}{' '}
+                {d.wind.peakAt && (
+                  <span style={{ color: v.textSecondary }}>{fmtTime(d.wind.peakAt)}</span>
+                )}
+              </div>
+            )}
+            {d.wind.gustMph != null && (
+              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.text, letterSpacing: '0.6px' }}>
+                Gust {fmt(d.wind.gustMph, 0)}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -365,8 +365,10 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
   );
 };
 
-/** Full compass names for the log's prose line. */
-const COMPASS_NAME: Record<string, string> = {
+/** Full compass names for the log's prose line.  Exported so the
+ *  Agriculture drift-risk tile can render the same expanded label
+ *  under the same style contract without duplicating the table. */
+export const COMPASS_NAME: Record<string, string> = {
   N: 'North', NNE: 'North-northeast', NE: 'Northeast', ENE: 'East-northeast',
   E: 'East', ESE: 'East-southeast', SE: 'Southeast', SSE: 'South-southeast',
   S: 'South', SSW: 'South-southwest', SW: 'Southwest', WSW: 'West-southwest',
