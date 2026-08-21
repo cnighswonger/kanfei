@@ -31,22 +31,39 @@ export const HeroTemperatureTile: React.FC<{ d: DashboardData; style?: React.CSS
       </span>
     </div>
 
-    {d.forecast.zambretti && (
-      <div style={{ ...type('title'), color: v.text, lineHeight: 1.25, textWrap: 'pretty' }}>
-        {d.forecast.zambretti}
+    {/* Humidity sits with the temperature — both are primary sensor
+        readings, and the pair states what the outside air is doing
+        without borrowing space from the derived block (Design v44). */}
+    {d.outside.humidityPct != null && (
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: s(8), paddingTop: s(11), marginTop: s(4), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
+        <span style={{ ...type('mono', fs(27)), ...tnum, color: v.text, lineHeight: 1, letterSpacing: '-0.5px' }}>
+          {fmt(d.outside.humidityPct, 0)}
+        </span>
+        <SectionLabel>% RH</SectionLabel>
       </div>
     )}
-    <SectionLabel>
-      Zambretti{d.forecast.confidencePct != null && ` · ${Math.round(d.forecast.confidencePct)}% confidence`}
-    </SectionLabel>
 
-    {/* high/low chips sit directly under the confidence label. flexShrink:0 and
-        NO overflow clip — an earlier overflow:hidden here sliced the chips in
-        half rather than fitting them. Each chip truncates its own timestamp
-        instead. */}
-    <div style={{ display: 'flex', gap: s(8), marginTop: s(2), minWidth: 0, flexShrink: 0 }}>
-      <Chip label="High" value={fmt(d.outside.highF, 1, '°')} at={d.outside.highAt} tone={v.danger} />
-      <Chip label="Low" value={fmt(d.outside.lowF, 1, '°')} at={d.outside.lowAt} tone={v.sky} />
+    {/* Verdict + Zambretti label + H/L chips anchor to the column
+        foot with margin-top: auto so the space between humidity and
+        the verdict absorbs any leftover column height. */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), marginTop: 'auto' }}>
+      {d.forecast.zambretti && (
+        <div style={{ ...type('title'), color: v.text, lineHeight: 1.25, textWrap: 'pretty' }}>
+          {d.forecast.zambretti}
+        </div>
+      )}
+      <SectionLabel>
+        Zambretti{d.forecast.confidencePct != null && ` · ${Math.round(d.forecast.confidencePct)}% confidence`}
+      </SectionLabel>
+
+      {/* high/low chips sit directly under the confidence label. flexShrink:0 and
+          NO overflow clip — an earlier overflow:hidden here sliced the chips in
+          half rather than fitting them. Each chip truncates its own timestamp
+          instead. */}
+      <div style={{ display: 'flex', gap: s(8), marginTop: s(2), minWidth: 0, flexShrink: 0 }}>
+        <Chip label="High" value={fmt(d.outside.highF, 1, '°')} at={d.outside.highAt} tone={v.danger} />
+        <Chip label="Low" value={fmt(d.outside.lowF, 1, '°')} at={d.outside.lowAt} tone={v.sky} />
+      </div>
     </div>
   </Tile>
 );
@@ -78,14 +95,18 @@ const Chip: React.FC<{ label: string; value: string; at?: string | null; tone: s
 
 export const DerivedConditionsTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
   <Tile id="derived-conditions" style={style}>
-    <TileHeading>Derived conditions</TileHeading>
-    {/* A left-aligned ruled table. Six rows, ~30px each — NOT a centred 2-up grid.
-        Humidity leads because the four temperature derivatives below it
-        (feels-like, heat index, dew point, wind chill) all take humidity
-        as an input — showing the raw value alongside them lets the reader
-        see where the numbers come from. */}
+    {/* Five rows, ~30px each — humidity is a sensor reading, not a
+        derivation, so it lives on the outside-air column with the
+        temperature figure.  A provenance line on the header names
+        the two inputs the derivatives below were computed from
+        (Design v44). */}
+    <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(12) }}>
+      <span>Derived conditions</span>
+      <span style={{ ...type('sectionLabel'), ...tnum, color: v.textSecondary, whiteSpace: 'nowrap' }}>
+        FROM {fmt(d.outside.tempF, 1)} °F / {fmt(d.outside.humidityPct, 0)} %
+      </span>
+    </TileHeading>
     <div>
-      <Row label="Humidity" value={fmt(d.outside.humidityPct, 0, '%')} />
       <Row label="Feels like" value={fmt(d.outside.feelsLikeF, 1, ' °F')} />
       <Row label="Heat index" value={fmt(d.outside.heatIndexF, 1, ' °F')} />
       <Row label="Dew point" value={fmt(d.outside.dewPointF, 1, ' °F')} valueColor={v.sky} />

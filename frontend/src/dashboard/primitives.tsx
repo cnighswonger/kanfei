@@ -406,8 +406,8 @@ export const Row: React.FC<{
       borderBottom: last ? 'none' : `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
     }}
   >
-    <span style={{ ...type('body'), color: v.textSecondary }}>{label}</span>
-    <span style={{ ...type('mono'), ...tnum, color: valueColor }}>{value}</span>
+    <span style={{ ...type('body'), color: v.textSecondary, whiteSpace: 'nowrap' }}>{label}</span>
+    <span style={{ ...type('mono'), ...tnum, color: valueColor, whiteSpace: 'nowrap' }}>{value}</span>
   </div>
 );
 
