@@ -79,8 +79,13 @@ const Chip: React.FC<{ label: string; value: string; at?: string | null; tone: s
 export const DerivedConditionsTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
   <Tile id="derived-conditions" style={style}>
     <TileHeading>Derived conditions</TileHeading>
-    {/* A left-aligned ruled table. Five rows, ~30px each — NOT a centred 2-up grid. */}
+    {/* A left-aligned ruled table. Six rows, ~30px each — NOT a centred 2-up grid.
+        Humidity leads because the four temperature derivatives below it
+        (feels-like, heat index, dew point, wind chill) all take humidity
+        as an input — showing the raw value alongside them lets the reader
+        see where the numbers come from. */}
     <div>
+      <Row label="Humidity" value={fmt(d.outside.humidityPct, 0, '%')} />
       <Row label="Feels like" value={fmt(d.outside.feelsLikeF, 1, ' °F')} />
       <Row label="Heat index" value={fmt(d.outside.heatIndexF, 1, ' °F')} />
       <Row label="Dew point" value={fmt(d.outside.dewPointF, 1, ' °F')} valueColor={v.sky} />
@@ -306,22 +311,32 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
             </span>
             <SectionLabel>mph {d.wind.directionLabel ?? ''}</SectionLabel>
           </div>
-          <div style={{ ...type('body', fs(12.5)), color: v.textSecondary, lineHeight: 1.4, textWrap: 'pretty' }}>
-            {d.wind.directionLabel && (COMPASS_NAME[d.wind.directionLabel] ?? d.wind.directionLabel)}
-            {d.wind.gustMph != null && `, gusting ${fmt(d.wind.gustMph, 0)}`}
-            {(d.wind.directionLabel || d.wind.gustMph != null) && '. '}
-            {d.wind.peakMph != null && `Peak ${fmt(d.wind.peakMph, 0)} mph${d.wind.peakAt ? ` at ${fmtTime(d.wind.peakAt)}` : ''}.`}
-          </div>
-          <div style={{ display: 'flex', gap: s(16), marginTop: 'auto', paddingTop: s(8), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
-            {d.wind.directionDeg != null && (
-              <span style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary }}>
-                {Math.round(d.wind.directionDeg)}°
-              </span>
+          {/* Direction detail + peak/gust, mirrors the barometer
+              right column: one mono sub-line in secondary ink for
+              context, one mono line with values in primary and
+              times/units in secondary for hierarchy. */}
+          <div style={{ marginTop: 'auto', paddingTop: s(9), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`, display: 'flex', flexDirection: 'column', gap: s(7) }}>
+            {(d.wind.directionLabel || d.wind.directionDeg != null) && (
+              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary, letterSpacing: '0.4px' }}>
+                {d.wind.directionLabel && (COMPASS_NAME[d.wind.directionLabel] ?? d.wind.directionLabel)}
+                {d.wind.directionLabel && d.wind.directionDeg != null && ' · '}
+                {d.wind.directionDeg != null && `${Math.round(d.wind.directionDeg)}°`}
+              </div>
             )}
-            <span style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary }}>
-              Humidity {fmt(d.outside.humidityPct, 0, '%')}
-              {d.outside.insideHumidityPct != null && ` · inside ${fmt(d.outside.insideHumidityPct, 0, '%')}`}
-            </span>
+            {(d.wind.peakMph != null || d.wind.gustMph != null) && (
+              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.text, whiteSpace: 'nowrap', letterSpacing: '0.6px' }}>
+                {d.wind.peakMph != null && (
+                  <>
+                    Peak {fmt(d.wind.peakMph, 0)}{' '}
+                    {d.wind.peakAt && (
+                      <span style={{ color: v.textSecondary }}>{fmtTime(d.wind.peakAt)}</span>
+                    )}
+                  </>
+                )}
+                {d.wind.peakMph != null && d.wind.gustMph != null && '  '}
+                {d.wind.gustMph != null && <>Gust {fmt(d.wind.gustMph, 0)}</>}
+              </div>
+            )}
           </div>
         </div>
       </div>
