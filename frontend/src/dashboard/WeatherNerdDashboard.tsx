@@ -604,8 +604,14 @@ export const SolarEnergyTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     >
       <SectionLabel>Solar energy · 14 days</SectionLabel>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: s(118) }}>
+        {/* Index from the end so ``today`` is always the rightmost
+            slot regardless of how much history the adapter returns —
+            a short series (say 9 of 14) reads as absent bars on the
+            left, not a mid-chart highlight labelled 'today'.  ``rx``
+            dropped because the SVG is ``preserveAspectRatio="none"``,
+            which turns a uniform corner radius into an ellipse. */}
         {Array.from({ length: 14 }, (_, i) => {
-          const val = days[i] ?? 0;
+          const val = days[days.length - 14 + i] ?? 0;
           const h = val > 0 ? (val / max) * 76 : 0;
           return (
             <rect
@@ -614,9 +620,8 @@ export const SolarEnergyTile: React.FC<{ d: DashboardData }> = ({ d }) => {
               y={82 - h}
               width={24}
               height={h}
-              rx={2}
               fill={v.warning}
-              opacity={i === days.length - 1 ? 1 : 0.55}
+              opacity={i === 13 ? 1 : 0.55}
             />
           );
         })}
@@ -674,8 +679,12 @@ export const ConsoleExtremesTile: React.FC<{ d: DashboardData }> = ({ d }) => {
 
       {/* Two columns of ruled rows — the mock's 212/212 split. */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: s(20) }}>
-        {pairs.map(([label, value], i) => (
-          <Row key={label} label={label} value={value} last={i >= pairs.length - 2} />
+        {/* No ``last`` on the pairs rows — the table continues below
+            with ``Baro offset`` and ``vs reference``, so dropping a
+            hairline here made the third visual row look like the end
+            and the two calibration rows look like a second table. */}
+        {pairs.map(([label, value]) => (
+          <Row key={label} label={label} value={value} />
         ))}
         <Row
           label="Baro offset"
