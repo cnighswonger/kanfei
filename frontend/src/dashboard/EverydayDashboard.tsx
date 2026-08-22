@@ -16,8 +16,9 @@
  *   footer                 27
  */
 import React from 'react';
-import { v, type, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, fmtTime, s, scaleVar, CONTENT_CAP } from './primitives';
+import { v, type, SectionLabel, TileHeading, Row, Tile, fmt, fmtInt, fmtTime, s, st, scaleVar, CONTENT_CAP } from './primitives';
 import type { DashboardData } from './types';
+import { PersonaFooter } from './PersonaFooter';
 import {
   HeroTemperatureTile, DerivedConditionsTile, HistoryChartTile, BarometerTile,
   WindTile, RainTile, SolarUvTile, AlmanacTile, RainfallByHourTile,
@@ -42,7 +43,10 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
     <div
       style={{
         ...scaleVar(1120),
-        padding: `${s(24)} ${s(30)} ${s(20)}`,
+        // Bottom padding in ``st()`` so the footer's y-position is
+        // identical across personas (``s()`` is per-persona --k, ``st()``
+        // is shared --kt).
+        padding: `${s(24)} ${s(30)} ${st(20)}`,
         display: 'flex',
         flexDirection: 'column',
         gap: s(20),
@@ -133,26 +137,10 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
       <ConsoleAndLinkTile d={d} />
     </div>
 
-    {/* ── footer strip, 27 ────────────────────────────────────────────────── */}
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderTop: `${v.ruleWidth} solid ${v.rule}`,
-        paddingTop: s(8),
-        marginTop: 'auto',
-        ...CONTENT_CAP,
-      }}
-    >
-      <SectionLabel>
-        Kanfei v{d.station.appVersion ?? '1.0.0'} · {themeLabel}
-        {d.station.intervalSeconds != null && ` · logged every ${d.station.intervalSeconds} s`}
-      </SectionLabel>
-      <span style={{ ...type('sectionLabel'), ...tnum, color: v.textMuted }}>
-        Last update {fmtTime(d.station.lastPoll)}
-      </span>
-    </div>
+    {/* Provenance strip — shared across the three personas so the
+        same station reports the same fields regardless of view.
+        See ``PersonaFooter.tsx`` for why spacing is in ``st()``. */}
+    <PersonaFooter d={d} themeLabel={themeLabel} />
     </div>
   </main>
 );

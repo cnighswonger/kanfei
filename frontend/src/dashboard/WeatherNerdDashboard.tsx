@@ -19,9 +19,10 @@
  */
 import React from 'react';
 import {
-  v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, fmtTime, decimate, niceTicks,
+  v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, decimate, niceTicks,
 } from './primitives';
 import type { DashboardData, NerdResolution } from './types';
+import { PersonaFooter } from './PersonaFooter';
 import { pathFor } from '../utils/gauges';
 import WindRoseDial from '../components/charts/WindRoseDial';
 
@@ -36,7 +37,9 @@ export const WeatherNerdDashboard: React.FC<{
     <div
       style={{
         ...scaleVar(DESIGN_HEIGHT),
-        padding: `${s(20)} ${s(24)} ${s(24)}`,
+        // Bottom padding in ``st()`` so the persona footer's
+        // y-position matches across all three personas.
+        padding: `${s(20)} ${s(24)} ${st(20)}`,
         display: 'flex',
         flexDirection: 'column',
         gap: s(16),
@@ -117,49 +120,20 @@ export const WeatherNerdDashboard: React.FC<{
         <ConsoleExtremesTile d={d} />
       </div>
 
-      {/* ── footer strip, 42 ─────────────────────────────────────────────── */}
-      {/* Rule, not a box.  The provenance line is metadata about the
-          page; every other persona's footer is a top-rule, not a
-          full-width rounded box around six mono-caps fragments
-          (Design v46 §3). */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: s(20),
-          flexWrap: 'wrap',
-          borderTop: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-          padding: `${s(12)} 0 0`,
-          marginTop: 'auto',
-          ...CONTENT_CAP,
-        }}
-      >
-        <span style={{ ...type('sectionLabel'), color: v.text, display: 'inline-flex', alignItems: 'center', gap: s(8) }}>
-          <span
-            style={{
-              width: st(7),
-              height: st(7),
-              borderRadius: '50%',
-              background: d.station.transmittersOk ? v.success : v.danger,
-              display: 'inline-block',
-            }}
-          />
-          {d.station.console ?? '—'}
-          {d.station.model && ` · ${d.station.model}`}
-          {d.station.firmware && ` · FW ${d.station.firmware}`}
-        </span>
-        <SectionLabel>
-          archive {fmtInt(d.station.archiveRecords, ' rows')}
-          {d.station.intervalSeconds != null && ` · ${Math.round(d.station.intervalSeconds / 60) || 1} min`}
-        </SectionLabel>
-        {d.nerd?.dbSizeMB != null && <SectionLabel>DB {fmt(d.nerd.dbSizeMB, 1, ' MB')}</SectionLabel>}
-        {d.nerd?.uploadTargets && <SectionLabel>{d.nerd.uploadTargets} uploading</SectionLabel>}
-        {d.nerd?.ipcStatus && <SectionLabel>{d.nerd.ipcStatus}</SectionLabel>}
-        {themeLabel && <SectionLabel>{themeLabel}</SectionLabel>}
-        <SectionLabel style={{ marginLeft: 'auto' }}>
-          clock {d.station.clock ?? '—'} · last poll {fmtTime(d.station.lastPoll)}
-        </SectionLabel>
-      </div>
+      {/* Shared provenance strip — see ``PersonaFooter.tsx``.  Weather
+          nerd carries three extra chips (DB size, upload targets, IPC
+          status) that the other personas don't have. */}
+      <PersonaFooter
+        d={d}
+        themeLabel={themeLabel}
+        extraChips={
+          <>
+            {d.nerd?.dbSizeMB != null && <SectionLabel>DB {fmt(d.nerd.dbSizeMB, 1, ' MB')}</SectionLabel>}
+            {d.nerd?.uploadTargets && <SectionLabel>{d.nerd.uploadTargets} uploading</SectionLabel>}
+            {d.nerd?.ipcStatus && <SectionLabel>{d.nerd.ipcStatus}</SectionLabel>}
+          </>
+        }
+      />
     </div>
   </main>
 );

@@ -22,6 +22,7 @@ import {
 } from './primitives';
 import type { DashboardData } from './types';
 import { COMPASS_NAME } from './tiles';
+import { PersonaFooter } from './PersonaFooter';
 import WindRoseDial from '../components/charts/WindRoseDial';
 
 export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: string }> = ({
@@ -32,7 +33,9 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
     <div
       style={{
         ...scaleVar(928),
-        padding: `${s(22)} ${s(28)} ${s(20)}`,
+        // Bottom padding in ``st()`` so the persona footer's
+        // y-position matches across all three personas.
+        padding: `${s(22)} ${s(28)} ${st(20)}`,
         display: 'flex',
         flexDirection: 'column',
         gap: s(16),
@@ -99,29 +102,8 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
         <FieldScheduleTile d={d} />
       </div>
 
-      {/* ── footer strip, 27 ──────────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderTop: `${v.ruleWidth} solid ${v.rule}`,
-          paddingTop: s(8),
-          marginTop: 'auto',
-          ...CONTENT_CAP,
-        }}
-      >
-        <SectionLabel>
-          Kanfei v{d.station.appVersion ?? '1.0.0'} · {themeLabel} · {d.station.console} · FW{' '}
-          {d.station.firmware} · TX{' '}
-          <span style={{ color: d.station.transmittersOk ? v.success : v.danger }}>
-            {d.station.transmittersOk ? 'ok' : 'fault'}
-          </span>
-        </SectionLabel>
-        <span style={{ ...type('sectionLabel'), ...tnum, color: v.textMuted }}>
-          Last update {fmtTime(d.station.lastPoll)}
-        </span>
-      </div>
+      {/* Shared provenance strip — see ``PersonaFooter.tsx``. */}
+      <PersonaFooter d={d} themeLabel={themeLabel} />
     </div>
   </main>
 );
