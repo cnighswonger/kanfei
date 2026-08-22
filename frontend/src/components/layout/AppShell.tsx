@@ -2,7 +2,6 @@ import { useState, useEffect, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
-import Footer from './Footer';
 import WeatherBackground from '../WeatherBackground';
 import { useWeatherBackground } from '../../context/WeatherBackgroundContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -27,13 +26,11 @@ const CHANNEL_LABELS: Record<string, string> = {
 interface AppShellProps {
   children: ReactNode;
   connected?: boolean;
-  lastUpdate?: Date | null;
 }
 
 export default function AppShell({
   children,
   connected = false,
-  lastUpdate = null,
 }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { enabled } = useWeatherBackground();
@@ -213,7 +210,6 @@ export default function AppShell({
             )}
             {children}
           </div>
-          <Footer lastUpdate={lastUpdate} />
         </main>
       </div>
     </>

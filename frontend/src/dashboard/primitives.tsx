@@ -20,7 +20,7 @@ import React from 'react';
  * `s(n)` expresses every size as n × `--k`, a px-valued scale unit derived from the
  * viewport height against the mock's 1120px of main content:
  *
- *     --k: clamp(0.92px, calc((100vh - var(--chrome-height, 94px)) / 1120), 1.5px)
+ *     --k: clamp(0.92px, calc((100vh - var(--chrome-height, 65px)) / 1120), 1.5px)
  *
  * ⚠ Deliberately `vh`, NOT `cqh`. Container query units need a definite height on
  * the container; the app shell's <main> is content-sized, so `100cqh` was invalid,
@@ -28,7 +28,8 @@ import React from 'react';
  * precisely the dead space that was left under the footer. `vh` is always definite.
  *
  * `--chrome-height` is everything vertical the dashboard does NOT own: the 60px
- * header plus the ~34px status bar. The shell should set it; 94px is the default.
+ * header plus the 5px main marginTop.  The shell should set it via
+ * ``index.css``; 65px is the default, matching the paper-theme header.
  *
  * Height-based, not width-based: the vertical budget must fit exactly, and scaling
  * by width on a wide monitor overshoots into a scrollbar. Widths stay fluid (`fr`,
@@ -93,10 +94,10 @@ const CANONICAL_HEIGHT_FOR_TYPE = 1120;
  * flex band, opening the voids under Drift risk and Water balance).
  */
 export const scaleVar = (designHeight: number): React.CSSProperties => {
-  const canonicalK = `calc((100vh - var(--chrome-height, 94px)) / ${CANONICAL_HEIGHT_FOR_TYPE})`;
+  const canonicalK = `calc((100vh - var(--chrome-height, 65px)) / ${CANONICAL_HEIGHT_FOR_TYPE})`;
   return {
     ['--k' as string]:
-      `clamp(0.92px, calc((100vh - var(--chrome-height, 94px)) / ${designHeight}), 1.8px)`,
+      `clamp(0.92px, calc((100vh - var(--chrome-height, 65px)) / ${designHeight}), 1.8px)`,
     ['--kt' as string]:
       `clamp(${canonicalK}, calc((100vw - var(--sidebar-width, 220px)) / ${CANONICAL_WIDTH}), calc(${canonicalK} * 1.35))`,
   };
