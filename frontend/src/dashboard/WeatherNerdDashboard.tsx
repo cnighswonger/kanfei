@@ -19,7 +19,7 @@
  */
 import React from 'react';
 import {
-  v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, Row, Tile, tnum, fmt, fmtInt, fmtTime, decimate, niceTicks,
+  v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, fmtTime, decimate, niceTicks,
 } from './primitives';
 import type { DashboardData, NerdResolution } from './types';
 import { pathFor } from '../utils/gauges';
@@ -76,9 +76,12 @@ export const WeatherNerdDashboard: React.FC<{
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: s(16),
           minHeight: s(147),
-          // stretch, not start: the four cards read as one instrument row, so they
-          // share a height. They grow together if any provenance line wraps.
-          alignItems: 'stretch',
+          // start, not stretch (Design v46 §2).  Borderless cells shouldn't
+          // stretch — a stretched borderless cell opens margin-top: auto voids
+          // inside itself.  The 'shared instrument-row height' argument only
+          // held while the cells were boxes; once they aren't, stretch is the
+          // wrong default.
+          alignItems: 'start',
           ...CONTENT_CAP,
         }}
       >
@@ -98,12 +101,12 @@ export const WeatherNerdDashboard: React.FC<{
           gridTemplateColumns: '406fr 406fr 487fr',
           gap: s(16),
           minHeight: s(293),
-          // stretch, not start: these three tiles are BORDERED. A row of
-          // boxes at unequal heights reads as sloppy; sharing a height lets
-          // the tallest content set it. Open (borderless) rows use 'start'
-          // — there stretching would push margin-top:auto footers down and
-          // open visible voids with no box to contain them.
-          alignItems: 'stretch',
+          // start, not stretch (Design v46 §2).  With the tiles now
+          // borderless — separated only by their TileHeading underlines —
+          // stretching them would open margin-top: auto voids with no
+          // box to contain them, exactly the failure mode the old
+          // comment warned against for open rows.
+          alignItems: 'start',
           ...CONTENT_CAP,
         }}
       >
@@ -113,15 +116,18 @@ export const WeatherNerdDashboard: React.FC<{
       </div>
 
       {/* ── footer strip, 42 ─────────────────────────────────────────────── */}
+      {/* Rule, not a box.  The provenance line is metadata about the
+          page; every other persona's footer is a top-rule, not a
+          full-width rounded box around six mono-caps fragments
+          (Design v46 §3). */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: s(20),
           flexWrap: 'wrap',
-          border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-          borderRadius: v.radiusCard,
-          padding: `${s(12)} ${s(18)}`,
+          borderTop: `${v.ruleHairWidth} solid ${v.ruleHair}`,
+          padding: `${s(12)} 0 0`,
           ...CONTENT_CAP,
         }}
       >
@@ -164,18 +170,26 @@ export const WeatherNerdDashboard: React.FC<{
  * That last line is the persona's whole point — a nerd wants to know *how* the
  * number was arrived at, so every card says where it came from.
  */
-const StatCard: React.FC<{
+/** Four derived readouts in one scanning row — hairline-separated,
+ *  no boxes.  Design v46 §2 applies v45's flat-cell treatment here:
+ *  bordered cards on ``v.surface`` read as four clickable things,
+ *  which they are not.  ``border: 'none'`` is set explicitly because
+ *  ``Tile`` publishes ``border: var(--tile-border, none)`` and the
+ *  dark theme fills that token — an implicit-omit would re-box the
+ *  cells on that theme. */
+const StatCell: React.FC<{
   id: string;
   kicker: string;
+  first?: boolean;
   children: React.ReactNode;
-}> = ({ id, kicker, children }) => (
+}> = ({ id, kicker, first, children }) => (
   <Tile
     id={id}
     style={{
-      border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-      background: v.surface,
-      borderRadius: v.radiusCard,
-      padding: `${s(16)} ${s(18)}`,
+      border: 'none',
+      borderLeft: first ? 'none' : `${v.ruleHairWidth} solid ${v.ruleHair}`,
+      background: 'none',
+      padding: `${s(4)} ${s(20)} ${s(4)} ${first ? '0px' : s(20)}`,
       gap: s(4),
     }}
   >
@@ -218,7 +232,7 @@ export const PressureCard: React.FC<{ d: DashboardData }> = ({ d }) => {
   const tone = t == null ? v.textSecondary : t > 0.005 ? v.success : t < -0.005 ? v.danger : v.textSecondary;
   const arrow = t == null ? '' : t > 0.005 ? '↑' : t < -0.005 ? '↓' : '→';
   return (
-    <StatCard id="nerd-pressure" kicker="Pressure">
+    <StatCell id="nerd-pressure" kicker="Pressure" first>
       <BigFigure>{fmt(d.barometer.inHg, 2)}</BigFigure>
       <div style={{ ...type('mono', fs(12)), ...tnum, color: tone }}>
         {t == null ? '—' : `${arrow} ${t > 0 ? '+' : ''}${t.toFixed(3)} in/3h`}
@@ -228,12 +242,12 @@ export const PressureCard: React.FC<{ d: DashboardData }> = ({ d }) => {
         {d.nerd?.altimeterInHg != null && ` · altimeter ${fmt(d.nerd.altimeterInHg, 2)}`}
         {d.nerd?.seaLevelHPa != null && ` · SLP ${fmt(d.nerd.seaLevelHPa, 1)}`}
       </Provenance>
-    </StatCard>
+    </StatCell>
   );
 };
 
 export const ThetaECard: React.FC<{ d: DashboardData }> = ({ d }) => (
-  <StatCard id="nerd-theta-e" kicker="Theta-E">
+  <StatCell id="nerd-theta-e" kicker="Theta-E">
     <BigFigure>{fmt(d.outside.thetaEK, 1)}</BigFigure>
     <div style={{ ...type('mono', fs(12)), ...tnum, color: v.textSecondary }}>
       K
@@ -244,11 +258,11 @@ export const ThetaECard: React.FC<{ d: DashboardData }> = ({ d }) => (
       {d.nerd?.mixingRatioGKg != null && ` · mixing ratio ${fmt(d.nerd.mixingRatioGKg, 1)} g/kg`}
       {d.nerd?.lclFt != null && ` · LCL ~${fmtInt(d.nerd.lclFt)} ft`}
     </Provenance>
-  </StatCard>
+  </StatCell>
 );
 
 export const ForecastAgreementCard: React.FC<{ d: DashboardData }> = ({ d }) => (
-  <StatCard id="nerd-agreement" kicker="Zambretti / NWS">
+  <StatCell id="nerd-agreement" kicker="Zambretti / NWS">
     <div style={{ ...type('body', fs(17)), color: v.text, lineHeight: 1.25, textWrap: 'pretty' }}>
       {d.forecast.zambretti ?? '—'}
     </div>
@@ -259,7 +273,7 @@ export const ForecastAgreementCard: React.FC<{ d: DashboardData }> = ({ d }) => 
     {d.nerd?.agreementRate30d != null && (
       <Provenance>Zambretti and NWS have agreed {Math.round(d.nerd.agreementRate30d)}% of the last 30 days</Provenance>
     )}
-  </StatCard>
+  </StatCell>
 );
 
 export const ReceptionCard: React.FC<{ d: DashboardData }> = ({ d }) => {
@@ -267,7 +281,7 @@ export const ReceptionCard: React.FC<{ d: DashboardData }> = ({ d }) => {
   const pct = r?.pct ?? null;
   const tone = pct == null ? v.text : pct >= 98 ? v.success : pct >= 92 ? v.warning : v.danger;
   return (
-    <StatCard id="nerd-reception" kicker={`Reception · ${r?.windowLabel ?? 'last hour'}`}>
+    <StatCell id="nerd-reception" kicker={`Reception · ${r?.windowLabel ?? 'last hour'}`}>
       <BigFigure color={tone}>
         {pct == null ? '—' : fmt(pct, 1)}
         {pct != null && <span style={{ ...type('display', fs(16)), color: v.textSecondary }}>%</span>}
@@ -276,7 +290,7 @@ export const ReceptionCard: React.FC<{ d: DashboardData }> = ({ d }) => {
         {fmtInt(r?.received, ' received')} · {fmtInt(r?.missed, ' missed')} · CRC {r?.crcErrors ?? '—'} · resync{' '}
         {r?.resyncs ?? '—'}
       </div>
-    </StatCard>
+    </StatCell>
   );
 };
 
@@ -367,9 +381,11 @@ export const NerdChartTile: React.FC<{
         ...CONTENT_CAP,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: s(16) }}>
-        <SectionLabel>Temperature, dew point &amp; pressure · 24 h</SectionLabel>
-        {/* Resolution + export, from the existing History page controls. */}
+      {/* Sentence-case serif italic heading + underline rule via
+          ``TileHeading``, with the resolution + CSV controls floated
+          right along the same baseline (Design v46 §1). */}
+      <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(16) }}>
+        <span>Temperature, dew point &amp; pressure · 24 h</span>
         <div style={{ display: 'flex', gap: s(6) }}>
           {(['Raw', '5 min', 'Hourly', 'Daily'] as const).map((label) => {
             const active = label === (d.nerd?.resolution ?? '5 min');
@@ -385,7 +401,7 @@ export const NerdChartTile: React.FC<{
           })}
           <ChartButton emphasis>CSV</ChartButton>
         </div>
-      </div>
+      </TileHeading>
 
       {/*
         Two layers, deliberately:
@@ -558,14 +574,11 @@ export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile
       id="nerd-wind-rose"
       style={{
-        border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-        background: v.surface,
-        borderRadius: v.radiusCard,
         padding: `${s(18)} ${s(20)}`,
         gap: s(10),
       }}
     >
-      <SectionLabel>Wind rose · 4 h</SectionLabel>
+      <TileHeading>Wind rose · 4 h</TileHeading>
       {/* Design v35 T3 swap: SVG compass + rosePetals + needle →
           Highcharts WindRoseDial with styled-mode CSS.  Contained in
           a flex-centre wrapper so the square dial sits centred in
@@ -595,14 +608,11 @@ export const SolarEnergyTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile
       id="nerd-solar"
       style={{
-        border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-        background: v.surface,
-        borderRadius: v.radiusCard,
         padding: `${s(18)} ${s(20)}`,
         gap: s(10),
       }}
     >
-      <SectionLabel>Solar energy · 14 days</SectionLabel>
+      <TileHeading>Solar energy · 14 days</TileHeading>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: s(118) }}>
         {/* Index from the end so ``today`` is always the rightmost
             slot regardless of how much history the adapter returns —
@@ -668,14 +678,11 @@ export const ConsoleExtremesTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile
       id="nerd-extremes"
       style={{
-        border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-        background: v.surface,
-        borderRadius: v.radiusCard,
         padding: `${s(18)} ${s(20)}`,
         gap: s(10),
       }}
     >
-      <SectionLabel>Console extremes &amp; calibration</SectionLabel>
+      <TileHeading>Console extremes &amp; calibration</TileHeading>
 
       {/* Two columns of ruled rows — the mock's 212/212 split. */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: s(20) }}>
@@ -714,17 +721,20 @@ export const ConsoleExtremesTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         />
       </div>
 
-      {/* The METAR line: a mono block on the sunken ground, selectable as one
-          string so it can be copied into a decoder. */}
-      <div style={{ marginTop: 'auto', paddingTop: s(10), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
+      {/* METAR line: mono, ``userSelect: 'all'`` so it copies as one
+          string.  Sunken fill kept (Design v46 §4) as the visible
+          target for the select, but border + borderRadius dropped —
+          once the tile is open, that inner box was the only remaining
+          card on this section and read as the tile's own frame.
+          ``marginTop: auto`` removed too: a start-aligned borderless
+          tile is content-height, so the auto-push has nothing to do. */}
+      <div style={{ paddingTop: s(10), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
         <SectionLabel style={{ marginBottom: s(6) }}>METAR output</SectionLabel>
         <div
           style={{
             ...type('mono', fs(12)),
             color: v.text,
             background: v.sunken,
-            border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-            borderRadius: v.radiusCard,
             padding: `${s(10)} ${s(12)}`,
             letterSpacing: '0.3px',
             wordBreak: 'break-word',
