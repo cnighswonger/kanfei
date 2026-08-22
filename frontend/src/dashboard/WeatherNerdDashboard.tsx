@@ -218,8 +218,8 @@ const StatCell: React.FC<{
  * was being synthesised by the browser — a smeared faux-bold that read
  * as a fourth typeface.
  */
-const BigFigure: React.FC<{ children: React.ReactNode; color?: string }> = ({ children, color = v.text }) => (
-  <div style={{ ...type('display', fs(34)), ...tnum, color, lineHeight: 1.05 }}>{children}</div>
+const BigFigure: React.FC<{ children: React.ReactNode; color?: string; size?: number }> = ({ children, color = v.text, size = 28 }) => (
+  <div style={{ ...type('display', fs(size)), ...tnum, color, lineHeight: 1.05 }}>{children}</div>
 );
 
 /** Plain-language provenance line — body 11px, secondary ink. */
@@ -229,12 +229,19 @@ const Provenance: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 export const PressureCard: React.FC<{ d: DashboardData }> = ({ d }) => {
   const t = d.barometer.trendInHgPer3h;
-  const tone = t == null ? v.textSecondary : t > 0.005 ? v.success : t < -0.005 ? v.danger : v.textSecondary;
   const arrow = t == null ? '' : t > 0.005 ? '↑' : t < -0.005 ? '↓' : '→';
   return (
     <StatCell id="nerd-pressure" kicker="Pressure" first>
-      <BigFigure>{fmt(d.barometer.inHg, 2)}</BigFigure>
-      <div style={{ ...type('mono', fs(12)), ...tnum, color: tone }}>
+      {/* Pressure with its 3-h rate is the persona's premise number;
+          it leads the stat row at ``fs(44)`` (Design v46 §8). */}
+      <BigFigure size={44}>{fmt(d.barometer.inHg, 2)}</BigFigure>
+      {/* Rate is neutral in ink — ``success``/``danger`` on this
+          screen mean station health (reception %, transmitters ok,
+          calibration tolerance).  Falling pressure is weather, not
+          a fault; colouring it red was the dashboard editorialising.
+          The ↑ ↓ → glyph carries direction unambiguously
+          (Design v46 §9). */}
+      <div style={{ ...type('mono', fs(12)), ...tnum, color: v.textSecondary }}>
         {t == null ? '—' : `${arrow} ${t > 0 ? '+' : ''}${t.toFixed(3)} in/3h`}
       </div>
       <Provenance>
@@ -263,7 +270,12 @@ export const ThetaECard: React.FC<{ d: DashboardData }> = ({ d }) => (
 
 export const ForecastAgreementCard: React.FC<{ d: DashboardData }> = ({ d }) => (
   <StatCell id="nerd-agreement" kicker="Zambretti / NWS">
-    <div style={{ ...type('body', fs(17)), color: v.text, lineHeight: 1.25, textWrap: 'pretty' }}>
+    {/* Zambretti sentence — italic serif, same voice as the hero
+        Zambretti and Spray's verdictNote.  The rest of the stat
+        row is display-scale figures; this card's headline is a
+        sentence, and ``type('title')`` is the sentence form of
+        the same italic-serif voice (Design v46 §8). */}
+    <div style={{ ...type('title'), color: v.text, lineHeight: 1.2, textWrap: 'pretty' }}>
       {d.forecast.zambretti ?? '—'}
     </div>
     <div style={{ ...type('mono', fs(12)), ...tnum, color: v.accent }}>
