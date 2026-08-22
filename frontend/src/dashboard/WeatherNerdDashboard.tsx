@@ -62,18 +62,22 @@ export const WeatherNerdDashboard: React.FC<{
         minHeight: 0,
       }}
     >
-      {/* Corner plate, as Everyday — this screen is dense, so sit the
-          plate up higher and drop opacity a shade so it doesn't clip
-          against the footer or compete with the console-extremes tile
-          (DIFF-2b v27 cosmetic). */}
+      {/* Corner plate, right-anchored to the chart band.  v46 §2
+          removed ``ConsoleExtremesTile``'s fill, so the old
+          bottom-anchored plate now shows through the extremes table
+          and the METAR block.  Move the plate up to sit against the
+          chart tile only: ``top: s(163)`` = below the stat row + gap
+          (147 + 16), ``height: s(340)`` = chart minHeight, so the
+          plate's bottom edge lands at the chart / three-up boundary
+          and never bleeds into the three-up's data.  Design v48 §4. */}
       <div
         aria-hidden
         style={{
           position: 'absolute',
           right: 0,
-          bottom: s(60),
+          top: s(163),
           width: s(380),
-          height: s(260),
+          height: s(340),
           zIndex: -2,
           backgroundImage: 'var(--surface-plate)',
           backgroundSize: 'contain',
@@ -244,10 +248,24 @@ export const PressureCard: React.FC<{ d: DashboardData }> = ({ d }) => {
       <div style={{ ...type('mono', fs(12)), ...tnum, color: v.textSecondary }}>
         {t == null ? '—' : `${arrow} ${t > 0 ? '+' : ''}${t.toFixed(3)} in/3h`}
       </div>
+      {/* Print only what differs from the figure above.  Altimeter
+          and sea-level pressure are worth showing only when they
+          disagree with the station figure at rounding precision
+          (0.005 inHg / 0.05 hPa) — otherwise the line demonstrates
+          the opposite of its own point.  If the three agree at
+          higher precision than the sensor can resolve, that's
+          an adapter finding worth chasing separately.
+          Design v48 §2. */}
       <Provenance>
-        {fmt(d.barometer.hPa, 1, ' hPa')}
-        {d.nerd?.altimeterInHg != null && ` · altimeter ${fmt(d.nerd.altimeterInHg, 2)}`}
-        {d.nerd?.seaLevelHPa != null && ` · SLP ${fmt(d.nerd.seaLevelHPa, 1)}`}
+        {[
+          d.barometer.hPa != null && `${fmt(d.barometer.hPa, 1)} hPa`,
+          d.nerd?.altimeterInHg != null &&
+            Math.abs(d.nerd.altimeterInHg - (d.barometer.inHg ?? 0)) >= 0.005 &&
+            `altimeter ${fmt(d.nerd.altimeterInHg, 2)}`,
+          d.nerd?.seaLevelHPa != null &&
+            Math.abs(d.nerd.seaLevelHPa - (d.barometer.hPa ?? 0)) >= 0.05 &&
+            `SLP ${fmt(d.nerd.seaLevelHPa, 1)}`,
+        ].filter(Boolean).join(' · ')}
       </Provenance>
     </StatCell>
   );
@@ -298,8 +316,15 @@ export const ReceptionCard: React.FC<{ d: DashboardData }> = ({ d }) => {
         {pct == null ? '—' : fmt(pct, 1)}
         {pct != null && <span style={{ ...type('display', fs(16)), color: v.textSecondary }}>%</span>}
       </BigFigure>
+      {/* Counter line carries its own scope word — the kicker
+          ``windowLabel`` describes the percentage above (which is
+          averaged over that window in the adapter), but ``received``
+          / ``missed`` / ``CRC`` / ``resync`` are the console's raw
+          RXCHECK totals since last reset.  Without ``since reset``,
+          23,078 received under a ``last hour`` kicker read as an
+          impossible number.  Design v48 §1. */}
       <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary }}>
-        {fmtInt(r?.received, ' received')} · {fmtInt(r?.missed, ' missed')} · CRC {r?.crcErrors ?? '—'} · resync{' '}
+        {fmtInt(r?.received, ' received since reset')} · {fmtInt(r?.missed, ' missed')} · CRC {r?.crcErrors ?? '—'} · resync{' '}
         {r?.resyncs ?? '—'}
       </div>
     </StatCell>

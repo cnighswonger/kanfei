@@ -429,7 +429,19 @@ function toDashboardData(s: AdapterSources): DashboardData {
         (status as { elevation_ft?: number | null } | null)?.elevation_ft ?? null,
       intervalSeconds: status?.poll_interval ?? null,
       clock: status?.station_time ?? "",
-      lastPoll: clock(status?.last_poll) ?? "",
+      // 24-hour ``HH:MM`` — the persona footer prints this next to
+      // the console clock, which is 24-hour too.  Two formats for
+      // the same instant on a machine-provenance strip is confusing;
+      // Design v48 §3.  H / L chips still use ``clock()``'s 12-hour
+      // output, which is the user-facing setting.
+      lastPoll: (() => {
+        const iso = status?.last_poll;
+        if (!iso) return "";
+        const d = new Date(iso);
+        return Number.isNaN(d.getTime())
+          ? String(iso)
+          : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+      })(),
       // Strip the ``(FW …)`` tail — the Weather Nerd + Everyday
       // footers append firmware as its own column, and a raw
       // ``Vantage Vue (FW 4.33)`` here doubles firmware to

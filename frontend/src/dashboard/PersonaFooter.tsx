@@ -26,7 +26,7 @@
  */
 
 import React from 'react';
-import { v, type, st, SectionLabel, fmtInt, fmtTime, CONTENT_CAP } from './primitives';
+import { v, type, st, SectionLabel, fmtInt, CONTENT_CAP } from './primitives';
 import type { DashboardData } from './types';
 
 interface PersonaFooterProps {
@@ -38,7 +38,34 @@ interface PersonaFooterProps {
   extraChips?: React.ReactNode;
 }
 
-export const PersonaFooter: React.FC<PersonaFooterProps> = ({ d, themeLabel, extraChips }) => (
+/** Parse an ``HH:MM[:SS]`` string (the raw console clock format) to
+ *  minute-of-day.  Returns null on missing / malformed input. */
+const parseConsoleClock = (s: string | null | undefined): { hh: number; mm: number } | null => {
+  if (!s) return null;
+  const m = /^(\d{1,2}):(\d{2})/.exec(s);
+  return m ? { hh: +m[1], mm: +m[2] } : null;
+};
+
+/** Wrapped signed drift in minutes on a 24-h clock — a console
+ *  reading 23:58 against a browser at 00:03 is +5, not −1435. */
+const wrappedDrift = (consoleMin: number, browserMin: number): number => {
+  const raw = consoleMin - browserMin;
+  if (raw > 720) return raw - 1440;
+  if (raw < -720) return raw + 1440;
+  return raw;
+};
+
+export const PersonaFooter: React.FC<PersonaFooterProps> = ({ d, themeLabel, extraChips }) => {
+  const consoleHM = parseConsoleClock(d.station.clock);
+  const consoleStr = consoleHM
+    ? `${String(consoleHM.hh).padStart(2, '0')}:${String(consoleHM.mm).padStart(2, '0')}`
+    : '—';
+  const now = new Date();
+  const browserMin = now.getHours() * 60 + now.getMinutes();
+  const driftMin = consoleHM ? wrappedDrift(consoleHM.hh * 60 + consoleHM.mm, browserMin) : null;
+  const showDrift = driftMin != null && Math.abs(driftMin) >= 1;
+  const warnDrift = driftMin != null && Math.abs(driftMin) >= 5;
+  return (
   <div
     style={{
       display: 'flex',
@@ -80,8 +107,24 @@ export const PersonaFooter: React.FC<PersonaFooterProps> = ({ d, themeLabel, ext
     </SectionLabel>
     {extraChips}
     {themeLabel && <SectionLabel>{themeLabel}</SectionLabel>}
+    {/* Clock line, all 24-hour, seconds and date dropped.
+        ``station.clock`` was rendered as the console's raw
+        ``HH:MM:SS`` while ``lastPoll`` went through
+        ``toLocaleTimeString`` (12-hour) — two formats for the same
+        instant, on the strip whose whole job is machine provenance.
+        Naming the console-vs-browser drift turns what looked like a
+        rendering lag into real station information.  Design v48 §3. */}
     <SectionLabel style={{ marginLeft: 'auto' }}>
-      clock {d.station.clock ?? '—'} · last poll {fmtTime(d.station.lastPoll)}
+      console clock {consoleStr}
+      {showDrift && (
+        <span style={warnDrift ? { color: v.warning } : undefined}>
+          {' · '}
+          {Math.abs(driftMin!)} min {driftMin! > 0 ? 'ahead' : 'behind'}
+        </span>
+      )}
+      {' · last poll '}
+      {d.station.lastPoll || '—'}
     </SectionLabel>
   </div>
-);
+  );
+};

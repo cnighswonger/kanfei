@@ -29,7 +29,7 @@ export interface DashboardData {
     elevationFt: number | null;
     intervalSeconds: number | null;   // 10
     clock: string;         // '14:41:03'
-    lastPoll: string;      // '2:41:05 PM'
+    lastPoll: string;      // 24-hour 'HH:MM', formatted in the adapter
     console: string;       // 'Vantage Vue'
     model: string;         // '6351'
     firmware: string;      // '1.90'
