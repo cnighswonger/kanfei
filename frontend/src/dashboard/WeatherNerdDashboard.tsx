@@ -386,19 +386,23 @@ export const NerdChartTile: React.FC<{
           right along the same baseline (Design v46 §1). */}
       <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(16) }}>
         <span>Temperature, dew point &amp; pressure · 24 h</span>
-        <div style={{ display: 'flex', gap: s(6) }}>
-          {(['Raw', '5 min', 'Hourly', 'Daily'] as const).map((label) => {
-            const active = label === (d.nerd?.resolution ?? '5 min');
-            return (
-              <ChartButton
-                key={label}
-                active={active}
-                onClick={onResolutionChange ? () => onResolutionChange(label) : undefined}
-              >
-                {label}
-              </ChartButton>
-            );
-          })}
+        <div style={{ display: 'flex', gap: s(10), alignItems: 'baseline' }}>
+          <ChartButtonGroup>
+            {(['Raw', '5 min', 'Hourly', 'Daily'] as const).map((label, i) => {
+              const active = label === (d.nerd?.resolution ?? '5 min');
+              return (
+                <ChartButton
+                  key={label}
+                  segmented
+                  first={i === 0}
+                  active={active}
+                  onClick={onResolutionChange ? () => onResolutionChange(label) : undefined}
+                >
+                  {label}
+                </ChartButton>
+              );
+            })}
+          </ChartButtonGroup>
           <ChartButton emphasis>CSV</ChartButton>
         </div>
       </TileHeading>
@@ -541,12 +545,31 @@ const LegendKey: React.FC<{ color: string; dashed?: boolean; children: React.Rea
   </span>
 );
 
+/** ChartButton, two modes (Design v46 §7):
+ *
+ * ``segmented`` (default in the resolution group) — the button
+ * lives inside a shared bordered container.  No per-button
+ * border except a left hairline divider between siblings.  Active
+ * = accent text + a 2 px accent bottom border via inset box-shadow
+ * (so it sits over the container's own bottom border rather than
+ * pushing everything below down by 2 px).  Inactive =
+ * ``textSecondary`` on transparent.  Kills the filled-copper
+ * primary that put the page's strongest contrast on its weakest
+ * control.
+ *
+ * ``emphasis`` (CSV, sitting outside the group) — a standalone
+ * bordered chip.  A different kind of action (export, not a
+ * view-mode toggle), so the treatment is different and it's
+ * placed after a ``s(10)`` gap outside the segmented container.
+ */
 const ChartButton: React.FC<{
   active?: boolean;
+  segmented?: boolean;
+  first?: boolean;
   emphasis?: boolean;
   onClick?: () => void;
   children: React.ReactNode;
-}> = ({ active, emphasis, onClick, children }) => (
+}> = ({ active, segmented, first, emphasis, onClick, children }) => (
   <button
     type="button"
     onClick={onClick}
@@ -555,16 +578,37 @@ const ChartButton: React.FC<{
       letterSpacing: 'normal',
       textTransform: 'none',
       padding: `${s(5)} ${s(12)}`,
-      borderRadius: 'var(--radius-control, 0px)',
-      border: `${v.ruleHairWidth} solid ${active ? v.accent : v.ruleHair}`,
-      background: active ? v.accent : v.sunken,
-      color: active ? v.bg : emphasis ? v.text : v.textSecondary,
+      borderRadius: segmented ? 0 : 'var(--radius-control, 0px)',
+      border: segmented
+        ? 'none'
+        : `${v.ruleHairWidth} solid ${v.ruleHair}`,
+      borderLeft: segmented && !first
+        ? `${v.ruleHairWidth} solid ${v.ruleHair}`
+        : undefined,
+      background: 'transparent',
+      color: active ? v.accent : emphasis ? v.text : v.textSecondary,
       fontWeight: active ? 600 : 400,
+      boxShadow: segmented && active
+        ? `inset 0 -2px 0 ${v.accent}`
+        : 'none',
       cursor: 'pointer',
     }}
   >
     {children}
   </button>
+);
+
+/** Bordered container around the segmented resolution buttons. */
+const ChartButtonGroup: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div
+    style={{
+      display: 'inline-flex',
+      border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
+      borderRadius: 'var(--radius-control, 0px)',
+    }}
+  >
+    {children}
+  </div>
 );
 
 /* ───────────────────────────────────────────────────────── the three-up */
