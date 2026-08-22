@@ -625,6 +625,26 @@ const ChartButtonGroup: React.FC<{ children: React.ReactNode }> = ({ children })
 
 /* ───────────────────────────────────────────────────────── the three-up */
 
+/** 16 compass sectors, north-first clockwise — matches
+ *  ``bucketWindDirection()`` in ``Dashboard.tsx`` and ``CARDINALS``
+ *  in ``WindRoseDial.tsx``.  Kept adjacent to the caption that
+ *  consumes it so a future divergence would be obvious. */
+const ROSE_DIRS = [
+  'N','NNE','NE','ENE','E','ESE','SE','SSE',
+  'S','SSW','SW','WSW','W','WNW','NW','NNW',
+];
+
+/** Peak sector in a normalised rose-weights array.  Returns null if
+ *  the series is empty or all-zero (no data yet).  ``% 16`` rounds
+ *  the bucket index; the input is 16-long so it's a passthrough,
+ *  but the form is robust to any future re-bucketing.  Design v47 §1. */
+const dominantSector = (weights: (number | null | undefined)[] | null | undefined): string | null => {
+  if (!weights?.length) return null;
+  let best = -1, at = -1;
+  weights.forEach((w, i) => { if (w != null && w > best) { best = w; at = i; } });
+  return best > 0 && at >= 0 ? ROSE_DIRS[Math.round((at / weights.length) * 16) % 16] : null;
+};
+
 export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   return (
     <Tile
@@ -648,7 +668,15 @@ export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         />
       </div>
       <SectionLabel style={{ textAlign: 'center' }}>
-        {d.wind.directionLabel ? `${d.wind.directionLabel} dominant` : 'no prevailing direction'}
+        {/* Dominant sector derives from the same ``roseWeights``
+            series that drew the petals, not from ``directionLabel``
+            (which is the *instantaneous* vane reading and, when the
+            Vue anemometer stalls at 1 mph mean, a held value rather
+            than a current one).  A caption computed from the graphic
+            can't contradict it — Design v47 §1. */}
+        {dominantSector(d.wind.roseWeights)
+          ? `${dominantSector(d.wind.roseWeights)} dominant`
+          : 'no prevailing direction'}
         {d.wind.speedMph != null && ` · ${fmt(d.wind.speedMph, 0)} mph mean`}
         {d.wind.peakMph != null && ` · ${fmt(d.wind.peakMph, 0)} peak`}
       </SectionLabel>
