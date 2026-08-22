@@ -29,7 +29,17 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
   d,
   themeLabel,
 }) => (
-  <main data-dashboard="agriculture" style={{ minWidth: 0, overflow: 'hidden' }}>
+  <main
+    data-dashboard="agriculture"
+    style={{
+      minWidth: 0,
+      overflow: 'hidden',
+      // Fill the shell's main area — see EverydayDashboard.
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+    }}
+  >
     <div
       style={{
         ...scaleVar(928),
@@ -43,8 +53,9 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
         isolation: 'isolate',
         minWidth: 0,
         boxSizing: 'border-box',
-        // Pin the footer to the viewport bottom — see EverydayDashboard.
-        minHeight: 'calc(100vh - var(--chrome-height, 65px))',
+        // Fill the shell main area — see EverydayDashboard.
+        flex: 1,
+        minHeight: 0,
       }}
     >
       {/* Agriculture's plate is FULL-BLEED within main, unlike Everyday's corner
@@ -66,6 +77,17 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
         }}
       />
 
+      {/* Content region — see EverydayDashboard for the rationale. */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: s(16),
+        }}
+      >
       {/* ── title row, 46 ─────────────────────────────────────────────────── */}
       <div
         style={{
@@ -100,6 +122,7 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
         <DriftRiskTile d={d} />
         <WaterBalanceTile d={d} />
         <FieldScheduleTile d={d} />
+      </div>
       </div>
 
       {/* Shared provenance strip — see ``PersonaFooter.tsx``. */}

@@ -38,6 +38,15 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
       // main just must not clip or stretch its child.
       minWidth: 0,
       overflow: 'hidden',
+      // Fill the shell's main area so the inner scale wrapper can
+      // grow to that exact height via ``flex: 1``.  Without this,
+      // the persona sizes to its content and the footer sits at
+      // whatever y the content stack ends at — which differs by
+      // persona at any viewport where ``--k`` isn't the same for
+      // all three (the floor-clamp region around 900-1200 vh).
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
     }}
   >
     <div
@@ -54,13 +63,20 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
         isolation: 'isolate',
         minWidth: 0,
         boxSizing: 'border-box',
-        // Pin the footer to the bottom of the viewport regardless of
-        // how tall this persona's content is.  Combined with
-        // ``marginTop: 'auto'`` on the footer strip, the persona fills
-        // the viewport height and the footer sits at its floor —
-        // switching personas no longer jumps the provenance strip
-        // to a different vertical position.
-        minHeight: 'calc(100vh - var(--chrome-height, 65px))',
+        // Fill the shell's main area exactly (not the viewport
+        // minus a fallback chrome).  Combined with the parent
+        // ``flex: 1`` above and the content-region wrapper below
+        // (which absorbs overflow), the footer always sits at the
+        // shell main's bottom edge regardless of persona content
+        // height or ``--k`` clamp state.
+        //
+        // ``minHeight: 0`` is what makes ``flex: 1`` actually
+        // constrain the wrapper to its allocated space — flex
+        // items default to ``min-height: auto`` (content-sized),
+        // so without this the wrapper grows past its allocation
+        // whenever its content is taller.
+        flex: 1,
+        minHeight: 0,
       }}
     >
     {/* Corner plate — 400×280, bottom-right of MAIN, behind content.
@@ -85,6 +101,23 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
       }}
     />
 
+    {/* Content region — takes the flex slack from the outer wrapper
+        and clips anything past its own height (viewports too short
+        to fit the composition).  ``PersonaFooter`` is the next
+        sibling and so always sits at the shell-main bottom edge,
+        regardless of whether the content ran short of that height
+        (footer pushed down by content-region's ``flex: 1``) or over
+        (content-region clips, footer stays in view). */}
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: s(20),
+      }}
+    >
     {/* ── title row, 51 — carries a solid 1.6px rule beneath it ───────────── */}
     <div
       style={{
@@ -135,6 +168,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
     <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), minHeight: s(150), alignItems: 'start', ...CONTENT_CAP }}>
       <RainfallByHourTile d={d} />
       <ConsoleAndLinkTile d={d} />
+    </div>
     </div>
 
     {/* Provenance strip — shared across the three personas so the

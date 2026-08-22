@@ -33,7 +33,17 @@ export const WeatherNerdDashboard: React.FC<{
   themeLabel: string;
   onResolutionChange?: (r: NerdResolution) => void;
 }> = ({ d, themeLabel, onResolutionChange }) => (
-  <main data-dashboard="weather_nerd" style={{ minWidth: 0, overflow: 'hidden' }}>
+  <main
+    data-dashboard="weather_nerd"
+    style={{
+      minWidth: 0,
+      overflow: 'hidden',
+      // Fill the shell's main area — see EverydayDashboard.
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+    }}
+  >
     <div
       style={{
         ...scaleVar(DESIGN_HEIGHT),
@@ -47,8 +57,9 @@ export const WeatherNerdDashboard: React.FC<{
         isolation: 'isolate',
         minWidth: 0,
         boxSizing: 'border-box',
-        // Pin the footer to the viewport bottom — see EverydayDashboard.
-        minHeight: 'calc(100vh - var(--chrome-height, 65px))',
+        // Fill the shell main area — see EverydayDashboard.
+        flex: 1,
+        minHeight: 0,
       }}
     >
       {/* Corner plate, as Everyday — this screen is dense, so sit the
@@ -74,6 +85,17 @@ export const WeatherNerdDashboard: React.FC<{
         }}
       />
 
+      {/* Content region — see EverydayDashboard for the rationale. */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: s(16),
+        }}
+      >
       {/* ── stat row, 147 ─────────────────────────────────────────────────── */}
       <div
         style={{
@@ -118,6 +140,7 @@ export const WeatherNerdDashboard: React.FC<{
         <WindRoseTile d={d} />
         <SolarEnergyTile d={d} />
         <ConsoleExtremesTile d={d} />
+      </div>
       </div>
 
       {/* Shared provenance strip — see ``PersonaFooter.tsx``.  Weather
