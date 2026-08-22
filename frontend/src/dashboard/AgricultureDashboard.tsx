@@ -43,9 +43,9 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
     <div
       style={{
         ...scaleVar(928),
-        // Bottom padding in ``st()`` so the persona footer's
-        // y-position matches across all three personas.
-        padding: `${s(22)} ${s(28)} ${st(20)}`,
+        // Bottom + side paddings in ``st()`` so the footer's
+        // left, right and bottom edges match across personas.
+        padding: `${s(22)} ${st(30)} ${st(20)}`,
         display: 'flex',
         flexDirection: 'column',
         gap: s(16),

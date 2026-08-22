@@ -47,9 +47,9 @@ export const WeatherNerdDashboard: React.FC<{
     <div
       style={{
         ...scaleVar(DESIGN_HEIGHT),
-        // Bottom padding in ``st()`` so the persona footer's
-        // y-position matches across all three personas.
-        padding: `${s(20)} ${s(24)} ${st(20)}`,
+        // Bottom + side paddings in ``st()`` so the footer's
+        // left, right and bottom edges match across personas.
+        padding: `${s(20)} ${st(30)} ${st(20)}`,
         display: 'flex',
         flexDirection: 'column',
         gap: s(16),

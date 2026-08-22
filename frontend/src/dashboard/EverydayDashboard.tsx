@@ -52,10 +52,11 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
     <div
       style={{
         ...scaleVar(1120),
-        // Bottom padding in ``st()`` so the footer's y-position is
-        // identical across personas (``s()`` is per-persona --k, ``st()``
-        // is shared --kt).
-        padding: `${s(24)} ${s(30)} ${st(20)}`,
+        // Bottom + side paddings in ``st()`` so the footer's left,
+        // right and bottom edges land at the same physical pixels
+        // across personas (``s()`` is per-persona ``--k``, ``st()``
+        // is shared ``--kt``).  Top padding stays per-persona.
+        padding: `${s(24)} ${st(30)} ${st(20)}`,
         display: 'flex',
         flexDirection: 'column',
         gap: s(20),
