@@ -50,6 +50,13 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
         isolation: 'isolate',
         minWidth: 0,
         boxSizing: 'border-box',
+        // Pin the footer to the bottom of the viewport regardless of
+        // how tall this persona's content is.  Combined with
+        // ``marginTop: 'auto'`` on the footer strip, the persona fills
+        // the viewport height and the footer sits at its floor —
+        // switching personas no longer jumps the provenance strip
+        // to a different vertical position.
+        minHeight: 'calc(100vh - var(--chrome-height, 65px))',
       }}
     >
     {/* Corner plate — 400×280, bottom-right of MAIN, behind content.
@@ -134,6 +141,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
         justifyContent: 'space-between',
         borderTop: `${v.ruleWidth} solid ${v.rule}`,
         paddingTop: s(8),
+        marginTop: 'auto',
         ...CONTENT_CAP,
       }}
     >

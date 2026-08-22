@@ -44,6 +44,8 @@ export const WeatherNerdDashboard: React.FC<{
         isolation: 'isolate',
         minWidth: 0,
         boxSizing: 'border-box',
+        // Pin the footer to the viewport bottom — see EverydayDashboard.
+        minHeight: 'calc(100vh - var(--chrome-height, 65px))',
       }}
     >
       {/* Corner plate, as Everyday — this screen is dense, so sit the
@@ -128,6 +130,7 @@ export const WeatherNerdDashboard: React.FC<{
           flexWrap: 'wrap',
           borderTop: `${v.ruleHairWidth} solid ${v.ruleHair}`,
           padding: `${s(12)} 0 0`,
+          marginTop: 'auto',
           ...CONTENT_CAP,
         }}
       >
