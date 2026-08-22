@@ -200,22 +200,38 @@ export const SprayVerdictTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         </span>
       </div>
 
-      {/* Verdict: serif italic 54px in the semantic colour, sentence beside it. */}
+      {/* Verdict: serif italic 54px in the semantic colour.
+          MARGINAL is the widest state at eight glyphs; the slot is
+          pinned to that width so shorter states (GO, NO-GO) don't
+          reflow the sentence beside them.  A layout that moves when
+          the answer changes reads worse than one that runs slightly
+          loose (Design v45 q1). */}
       <div style={{ display: 'flex', alignItems: 'center', gap: s(18) }}>
         <span
           style={{
             ...type('display', fs(54)),
             color: v[VERDICT_TONE(sp?.verdict) as 'success' | 'warning' | 'danger'],
             lineHeight: 1,
+            display: 'inline-block',
+            minWidth: st(240),
           }}
         >
           {sp?.verdict ? sp.verdict.toUpperCase().replace('NOGO', 'NO-GO') : '—'}
         </span>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: s(3), minWidth: 0 }}>
-          <span style={{ ...type('body', fs(16)), color: v.text }}>{sp?.verdictNote ?? 'No product selected'}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: s(4), minWidth: 0 }}>
+          {/* Verdict sentence — italic serif ~17 px, same voice as
+              the hero Zambretti sentence (Design v45 q3). */}
+          <span style={{ ...type('title', fs(17)), color: v.text, lineHeight: 1.2 }}>
+            {sp?.verdictNote ?? 'No product selected'}
+          </span>
+          {/* Caution — an actionable constraint read immediately
+              before deciding to spray.  Mono ~11 px, sentence case,
+              copper marker at line head.  Not tracked caps (those
+              are reserved for fixed metadata like model or window). */}
           {sp?.caution && (
-            <span style={{ ...type('body', fs(12.5)), color: v.text }}>
-              <span style={{ color: v.danger }}>▲</span> {sp.caution}
+            <span style={{ ...type('mono', fs(11)), color: v.text, letterSpacing: '0.2px', lineHeight: 1.4 }}>
+              <span style={{ color: v.accent, marginRight: s(4) }}>▲</span>
+              {sp.caution}
             </span>
           )}
         </div>
@@ -446,20 +462,19 @@ export const FieldScheduleTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile id="field-schedule" style={{ gap: s(8) }}>
       <TileHeading>Field &amp; schedule</TileHeading>
 
-      {/* No fixed height: the cells contain --kt-scaled text inside a --k-scaled
-          box, so pinning the height makes them overflow and crowd the label below.
-          Let the grid size to its content; the tile's flex gap does the spacing. */}
-      {/* Solid rule + sunken fill on each cell.  A 1px dotted border at
-          24% ink is invisible over the engraving plate — the boxes
-          disappeared entirely in the earlier render. */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(10) }}>
-        {cells.map(([label, value, tone]) => (
+      {/* Flat scan grid, four across — vertical hairlines separate the
+          cells on their inner edges; no outer box, no fill.  Bordered
+          boxes read as clickable, which these are not.  ``align-items:
+          start`` so a borderless row starts at its content rather than
+          stretching and opening voids inside cells (Design v45 q2). */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', alignItems: 'start' }}>
+        {cells.map(([label, value, tone], i) => (
           <div
             key={label}
             style={{
-              border: `1px solid ${v.ruleHair}`,
-              background: v.chart.surface,
-              padding: `${s(10)} ${s(12)}`,
+              padding: `${s(2)} ${s(10)}`,
+              minHeight: s(48),
+              borderLeft: i === 0 ? 'none' : `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
             }}
           >
             <SectionLabel>{label}</SectionLabel>
