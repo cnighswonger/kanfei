@@ -23,7 +23,21 @@ export interface Reading {
   text?: string;
 }
 
+/** User-selected display units from ``station_config``.  Populated
+ *  in ``toDashboardData`` from a single one-shot fetch of the config,
+ *  so every tile reads the same value and none of them has to know
+ *  where the value came from. */
+export type PressureUnit = 'inHg' | 'hPa';
+
 export interface DashboardData {
+  /** Display-unit preferences (see the type above).  Consumers should
+   *  read ``d.units.pressure`` rather than hardcoding a unit and
+   *  should pull the corresponding numeric value from ``barometer``
+   *  (``inHg`` or ``hPa``) — both are always populated so switching
+   *  units is a formatting decision, not a data fetch. */
+  units: {
+    pressure: PressureUnit;
+  };
   station: {
     name: string;          // 'Sanford, NC'
     elevationFt: number | null;

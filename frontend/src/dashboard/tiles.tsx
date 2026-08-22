@@ -210,6 +210,17 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
   const trend = d.barometer.trendInHgPer3h;
   const arrow = trend == null ? '' : trend > 0.005 ? '↑ rising' : trend < -0.005 ? '↓ falling' : '→ steady';
   const zone = activeZone(d.barometer.inHg);
+  // Honor the user's unit choice from station_config.  Values on
+  // ``d.barometer`` are always both ``inHg`` and ``hPa``; the choice
+  // decides which one leads the readout.  Trend gets unit-converted
+  // via 33.8639 hPa/inHg so the "in / 3h" annotation matches.
+  const pu = d.units.pressure;
+  const main = pu === 'hPa' ? d.barometer.hPa : d.barometer.inHg;
+  const mainDigits = pu === 'hPa' ? 1 : 2;
+  const trendConverted = trend == null ? null : pu === 'hPa' ? trend * 33.8639 : trend;
+  const trendDigits = pu === 'hPa' ? 1 : 3;
+  const trendUnit = pu === 'hPa' ? 'hPa' : 'in';
+  const trendEpsilon = pu === 'hPa' ? 0.5 : 0.005;
 
   return (
     <Tile id="barometer" style={style}>
@@ -232,28 +243,48 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
           <div style={{ ...type('title'), color: v.text }}>Barometer</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: s(6) }}>
             <span style={{ ...type('mono', fs(34)), ...tnum, color: v.text, lineHeight: 1 }}>
-              {fmt(d.barometer.inHg, 2)}
+              {fmt(main, mainDigits)}
             </span>
-            <SectionLabel>inHg</SectionLabel>
+            <SectionLabel>{pu}</SectionLabel>
           </div>
           <SectionLabel color={v.accent}>
-            {arrow}{trend != null && ` · ${trend > 0 ? '+' : ''}${trend.toFixed(3)} in / 3h`}
+            {arrow}
+            {trendConverted != null &&
+              Math.abs(trendConverted) >= trendEpsilon &&
+              ` · ${trendConverted > 0 ? '+' : ''}${trendConverted.toFixed(trendDigits)} ${trendUnit} / 3h`}
           </SectionLabel>
-          {/* hPa summary + today's H/L, Design v43.  Zone name lives
-              on the dial + strip; the readout drops it to avoid
-              triplicating the same word.  Everything mono 11 px in
-              secondary ink except the values (H 30.04 / L 29.97),
-              which stay in primary so the row has hierarchy. */}
+          {/* Sub-line + today's H/L, Design v43.  Zone name lives on
+              the dial + strip; the readout drops it to avoid
+              triplicating the same word.  Sub-line shows the OTHER
+              unit as context (``hPa · sea-level`` when inHg leads,
+              ``inHg · station`` when hPa leads).  H / L values track
+              the user's unit choice; conversion uses 33.8639
+              hPa/inHg since the raw fields are inHg. */}
           <div style={{ marginTop: 'auto', paddingTop: s(9), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`, display: 'flex', flexDirection: 'column', gap: s(7) }}>
-            {d.barometer.hPa != null && (
+            {pu === 'inHg' && d.barometer.hPa != null && (
               <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary, letterSpacing: '0.4px' }}>
                 {fmt(d.barometer.hPa, 1)} hPa · sea-level
               </div>
             )}
+            {pu === 'hPa' && d.barometer.inHg != null && (
+              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary, letterSpacing: '0.4px' }}>
+                {fmt(d.barometer.inHg, 2)} inHg · station
+              </div>
+            )}
             <div style={{ ...type('mono', fs(11)), ...tnum, color: v.text, whiteSpace: 'nowrap', letterSpacing: '0.6px' }}>
-              H {fmt(d.barometer.todayHigh, 2)}{' '}
+              H {fmt(
+                pu === 'hPa' && d.barometer.todayHigh != null
+                  ? d.barometer.todayHigh * 33.8639
+                  : d.barometer.todayHigh,
+                mainDigits,
+              )}{' '}
               <span style={{ color: v.textSecondary }}>{fmtTime(d.barometer.todayHighAt)}</span>
-              {'  '}L {fmt(d.barometer.todayLow, 2)}{' '}
+              {'  '}L {fmt(
+                pu === 'hPa' && d.barometer.todayLow != null
+                  ? d.barometer.todayLow * 33.8639
+                  : d.barometer.todayLow,
+                mainDigits,
+              )}{' '}
               <span style={{ color: v.textSecondary }}>{fmtTime(d.barometer.todayLowAt)}</span>
             </div>
           </div>

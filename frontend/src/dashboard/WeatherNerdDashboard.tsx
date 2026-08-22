@@ -234,11 +234,18 @@ const Provenance: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 export const PressureCard: React.FC<{ d: DashboardData }> = ({ d }) => {
   const t = d.barometer.trendInHgPer3h;
   const arrow = t == null ? '' : t > 0.005 ? '↑' : t < -0.005 ? '↓' : '→';
+  const pu = d.units.pressure;
+  const main = pu === 'hPa' ? d.barometer.hPa : d.barometer.inHg;
+  const mainDigits = pu === 'hPa' ? 1 : 2;
+  const trendConverted = t == null ? null : pu === 'hPa' ? t * 33.8639 : t;
+  const trendDigits = pu === 'hPa' ? 1 : 3;
+  const trendUnit = pu === 'hPa' ? 'hPa' : 'in';
   return (
     <StatCell id="nerd-pressure" kicker="Pressure" first>
       {/* Pressure with its 3-h rate is the persona's premise number;
-          it leads the stat row at ``fs(44)`` (Design v46 §8). */}
-      <BigFigure size={44}>{fmt(d.barometer.inHg, 2)}</BigFigure>
+          it leads the stat row at ``fs(44)`` (Design v46 §8).  User's
+          unit choice controls which of ``inHg`` / ``hPa`` leads. */}
+      <BigFigure size={44}>{fmt(main, mainDigits)}</BigFigure>
       {/* Rate is neutral in ink — ``success``/``danger`` on this
           screen mean station health (reception %, transmitters ok,
           calibration tolerance).  Falling pressure is weather, not
@@ -246,19 +253,21 @@ export const PressureCard: React.FC<{ d: DashboardData }> = ({ d }) => {
           The ↑ ↓ → glyph carries direction unambiguously
           (Design v46 §9). */}
       <div style={{ ...type('mono', fs(12)), ...tnum, color: v.textSecondary }}>
-        {t == null ? '—' : `${arrow} ${t > 0 ? '+' : ''}${t.toFixed(3)} in/3h`}
+        {trendConverted == null
+          ? '—'
+          : `${arrow} ${trendConverted > 0 ? '+' : ''}${trendConverted.toFixed(trendDigits)} ${trendUnit}/3h`}
       </div>
-      {/* Print only what differs from the figure above.  Altimeter
-          and sea-level pressure are worth showing only when they
-          disagree with the station figure at rounding precision
-          (0.005 inHg / 0.05 hPa) — otherwise the line demonstrates
-          the opposite of its own point.  If the three agree at
-          higher precision than the sensor can resolve, that's
-          an adapter finding worth chasing separately.
-          Design v48 §2. */}
+      {/* Print only what differs from the figure above.  Terms drop
+          from the provenance line when they agree with the display
+          figure at rounding precision, so the line stops
+          demonstrating the opposite of its own point.  Under hPa
+          the alternate unit is ``inHg`` on the station; under
+          inHg the alternate is ``hPa`` sea-level (Design v48 §2). */}
       <Provenance>
         {[
-          d.barometer.hPa != null && `${fmt(d.barometer.hPa, 1)} hPa`,
+          pu === 'hPa'
+            ? d.barometer.inHg != null && `${fmt(d.barometer.inHg, 2)} inHg`
+            : d.barometer.hPa != null && `${fmt(d.barometer.hPa, 1)} hPa`,
           d.nerd?.altimeterInHg != null &&
             Math.abs(d.nerd.altimeterInHg - (d.barometer.inHg ?? 0)) >= 0.005 &&
             `altimeter ${fmt(d.nerd.altimeterInHg, 2)}`,
@@ -352,7 +361,16 @@ export const NerdChartTile: React.FC<{
   // 0.2 in daily span holds only ~20 distinct values.  Binned to 600
   // each value repeats ~30× and draws as a stair-step tread.  200 is
   // enough to render smoothly without over-plotting.
-  const baro = decimate(d.nerd?.historyInHg ?? [], 200).filter((n): n is number => n != null);
+  const pu = d.units.pressure;
+  const baroInHg = decimate(d.nerd?.historyInHg ?? [], 200).filter((n): n is number => n != null);
+  // Honor the user's unit choice on the right axis.  Convert once at
+  // series construction; the rest of the axis math (pad, lo/hi, tick
+  // formatting) then works in whatever unit the reader picked.
+  const baro = pu === 'hPa' ? baroInHg.map((v) => v * 33.8639) : baroInHg;
+  const baroTickDigits = pu === 'hPa' ? 1 : 2;
+  const baroFallbackLo = pu === 'hPa' ? 29.8 * 33.8639 : 29.8;
+  const baroFallbackHi = pu === 'hPa' ? 30.2 * 33.8639 : 30.2;
+  const baroMinPad = pu === 'hPa' ? 0.04 * 33.8639 : 0.04;
 
   // Temperature and dew point share a domain; pressure gets its own right axis —
   // a 0.35 inHg span and a 30 °F span cannot share a scale meaningfully.
@@ -360,9 +378,9 @@ export const NerdChartTile: React.FC<{
   const pad = all.length ? Math.max(2, (Math.max(...all) - Math.min(...all)) * 0.12) : 2;
   const lo = all.length ? Math.min(...all) - pad : 0;
   const hi = all.length ? Math.max(...all) + pad : 1;
-  const bPad = baro.length ? Math.max(0.04, (Math.max(...baro) - Math.min(...baro)) * 0.2) : 0.1;
-  const bLo = baro.length ? Math.min(...baro) - bPad : 29.8;
-  const bHi = baro.length ? Math.max(...baro) + bPad : 30.2;
+  const bPad = baro.length ? Math.max(baroMinPad, (Math.max(...baro) - Math.min(...baro)) * 0.2) : baroMinPad;
+  const bLo = baro.length ? Math.min(...baro) - bPad : baroFallbackLo;
+  const bHi = baro.length ? Math.max(...baro) + bPad : baroFallbackHi;
 
   const t = temps.length ? pathFor(temps, PL, CW - PR, PT, CH - PB, lo, hi) : null;
   const dw = dews.length ? pathFor(dews, PL, CW - PR, PT, CH - PB, lo, hi) : null;
@@ -400,7 +418,7 @@ export const NerdChartTile: React.FC<{
         .map((val, i) => ({
           key: `P${i}`,
           y: (CH - PB) - ((val - bLo) / (bHi - bLo)) * (CH - PB - PT),
-          label: val.toFixed(2),
+          label: val.toFixed(baroTickDigits),
         }))
         .filter((g) => inPlot(g.y))
     : [];
@@ -554,7 +572,7 @@ export const NerdChartTile: React.FC<{
         <LegendKey color={v.accent}>Temperature °F</LegendKey>
         <LegendKey color={v.chart.traceSecondary}>Dew point °F</LegendKey>
         <LegendKey color={v.chart.trace} dashed>
-          Pressure inHg, right axis
+          Pressure {pu}, right axis
         </LegendKey>
         <SectionLabel style={{ marginLeft: 'auto' }}>
           {fmtInt(d.history.sampleCount, ' samples')} · drag to zoom

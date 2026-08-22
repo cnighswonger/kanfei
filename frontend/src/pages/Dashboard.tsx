@@ -217,6 +217,9 @@ interface AdapterSources {
   /** Which resolution the chart series were fetched at.  Echoed back into
    *  ``d.nerd.resolution`` so the button strip lights the right choice. */
   nerdResolution: NerdResolution;
+  /** User's display-unit choice for pressure.  Fetched once from
+   *  ``station_config`` and echoed into ``d.units.pressure``. */
+  pressureUnit: 'inHg' | 'hPa';
 }
 
 interface SprayAdapterInputs {
@@ -416,6 +419,9 @@ function toDashboardData(s: AdapterSources): DashboardData {
   const gustMph = speedMph != null && gustRaw != null && gustRaw <= speedMph ? null : gustRaw;
 
   return {
+    units: {
+      pressure: s.pressureUnit,
+    },
     station: {
       // Prefer /api/station's station_name (public, no admin round-trip);
       // fall back to /api/config's city+state, then to the empty string
@@ -985,6 +991,12 @@ export default function Dashboard() {
   );
   const [hourlyRain, setHourlyRain] = useState<(number | null)[]>(() => Array<null>(24).fill(null));
   const [siteName, setSiteName] = useState<string | null>(null);
+  // User's display-unit preference for pressure — hPa or inHg.
+  // Read once at startup from station_config; the barometer readouts
+  // and the pressure column of the derived chart use it.
+  const [pressureUnit, setPressureUnit] = useState<'inHg' | 'hPa'>(
+    () => (cacheLoad<'inHg' | 'hPa'>('kanfei.dashboard.pressureUnit.v1') ?? 'inHg'),
+  );
   const [spray, setSpray] = useState<SprayAdapterInputs | null>(() => cacheLoad<SprayAdapterInputs>("kanfei.dashboard.spray.v1"));
   // Weather Nerd chart resolution — persisted so the choice sticks across
   // refresh.  The window scales with the resolution so each choice returns a
@@ -1085,8 +1097,16 @@ export default function Dashboard() {
         if (cityItem?.value) parts.push(String(cityItem.value));
         if (stateItem?.value) parts.push(String(stateItem.value));
         setSiteName(parts.join(", ") || (nameItem?.value ? String(nameItem.value) : null));
+        // Display-unit preferences.  Barometer keeps both ``inHg``
+        // and ``hPa`` on ``DashboardData.barometer``; the choice
+        // controls which one leads the readout, not what we fetch.
+        const pu = items.find((i) => i.key === "pressure_unit")?.value;
+        if (pu === "hPa" || pu === "inHg") {
+          setPressureUnit(pu);
+          cacheSave("kanfei.dashboard.pressureUnit.v1", pu);
+        }
       })
-      .catch(() => { /* falls back to empty string in adapter */ });
+      .catch(() => { /* falls back to empty string / inHg default */ });
     return () => { cancelled = true; };
   }, []);
   const [baroOffsetInHg, setBaroOffsetInHg] = useState<number | null>(
@@ -1290,8 +1310,9 @@ export default function Dashboard() {
         metar,
         baroRef,
         nerdResolution,
+        pressureUnit,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, windDir4h, siteName, spray, baroOffsetInHg, signalWindow, solar14d, metar, baroRef, nerdResolution],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, windDir4h, siteName, spray, baroOffsetInHg, signalWindow, solar14d, metar, baroRef, nerdResolution, pressureUnit],
   );
 
   // Persona dispatch.  Each layout owns its plate, its scale unit, and
