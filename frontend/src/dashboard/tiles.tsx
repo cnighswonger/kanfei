@@ -261,16 +261,11 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
               the user's unit choice; conversion uses 33.8639
               hPa/inHg since the raw fields are inHg. */}
           <div style={{ marginTop: 'auto', paddingTop: s(9), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`, display: 'flex', flexDirection: 'column', gap: s(7) }}>
-            {pu === 'inHg' && d.barometer.hPa != null && (
-              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary, letterSpacing: '0.4px' }}>
-                {fmt(d.barometer.hPa, 1)} hPa · sea-level
-              </div>
-            )}
-            {pu === 'hPa' && d.barometer.inHg != null && (
-              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary, letterSpacing: '0.4px' }}>
-                {fmt(d.barometer.inHg, 2)} inHg · station
-              </div>
-            )}
+            {/* No "other unit" sub-line — the user picked their unit
+                in Settings, and printing the alternate is exactly the
+                mixing-units complaint that motivated the pressure
+                switch.  Main figure + H/L already carry the reading;
+                anyone who wants both toggles ``pressure_unit``. */}
             <div style={{ ...type('mono', fs(11)), ...tnum, color: v.text, whiteSpace: 'nowrap', letterSpacing: '0.6px' }}>
               H {fmt(
                 pu === 'hPa' && d.barometer.todayHigh != null

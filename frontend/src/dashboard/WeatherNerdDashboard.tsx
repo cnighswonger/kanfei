@@ -257,23 +257,20 @@ export const PressureCard: React.FC<{ d: DashboardData }> = ({ d }) => {
           ? '—'
           : `${arrow} ${trendConverted > 0 ? '+' : ''}${trendConverted.toFixed(trendDigits)} ${trendUnit}/3h`}
       </div>
-      {/* Print only what differs from the figure above.  Terms drop
-          from the provenance line when they agree with the display
-          figure at rounding precision, so the line stops
-          demonstrating the opposite of its own point.  Under hPa
-          the alternate unit is ``inHg`` on the station; under
-          inHg the alternate is ``hPa`` sea-level (Design v48 §2). */}
+      {/* Print altimeter and sea-level pressure only when they
+          disagree with the station reading at rounding precision —
+          Design v48 §2's filter, minus the alternate-unit term that
+          spelled out the station figure in the OTHER unit (the
+          reader picked a unit; the provenance line was undoing that
+          choice on the widest line in the row). */}
       <Provenance>
         {[
-          pu === 'hPa'
-            ? d.barometer.inHg != null && `${fmt(d.barometer.inHg, 2)} inHg`
-            : d.barometer.hPa != null && `${fmt(d.barometer.hPa, 1)} hPa`,
           d.nerd?.altimeterInHg != null &&
             Math.abs(d.nerd.altimeterInHg - (d.barometer.inHg ?? 0)) >= 0.005 &&
-            `altimeter ${fmt(d.nerd.altimeterInHg, 2)}`,
+            `altimeter ${fmt(d.nerd.altimeterInHg, 2)} inHg`,
           d.nerd?.seaLevelHPa != null &&
             Math.abs(d.nerd.seaLevelHPa - (d.barometer.hPa ?? 0)) >= 0.05 &&
-            `SLP ${fmt(d.nerd.seaLevelHPa, 1)}`,
+            `SLP ${fmt(d.nerd.seaLevelHPa, 1)} hPa`,
         ].filter(Boolean).join(' · ')}
       </Provenance>
     </StatCell>
