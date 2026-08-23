@@ -469,7 +469,13 @@ export const AlmanacTile: React.FC<{ d: DashboardData; style?: React.CSSProperti
         value={
           <>
             {d.almanac.dayLength ?? '—'}
-            {d.almanac.dayLengthDelta && <span style={{ color: v.danger }}> {d.almanac.dayLengthDelta}</span>}
+            {d.almanac.dayLengthDelta && (
+              /* Neutral ink — days shortening in late August is the
+                 calendar, not a fault.  Red on this page means
+                 station health.  The ``-`` sign already carries
+                 direction.  Design v50 §7. */
+              <span style={{ color: v.textSecondary }}> {d.almanac.dayLengthDelta}</span>
+            )}
           </>
         }
       />

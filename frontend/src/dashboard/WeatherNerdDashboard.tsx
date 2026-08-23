@@ -257,14 +257,18 @@ export const PressureCard: React.FC<{ d: DashboardData }> = ({ d }) => {
           ? '—'
           : `${arrow} ${trendConverted > 0 ? '+' : ''}${trendConverted.toFixed(trendDigits)} ${trendUnit}/3h`}
       </div>
-      {/* Print altimeter and sea-level pressure only when they
-          disagree with the station reading at rounding precision —
-          Design v48 §2's filter, minus the alternate-unit term that
-          spelled out the station figure in the OTHER unit (the
-          reader picked a unit; the provenance line was undoing that
-          choice on the widest line in the row). */}
+      {/* ``hPa`` (or the alternate) prints unconditionally — it's a
+          unit conversion of the display figure, not a duplicate.
+          Altimeter and SLP filter out when they agree with the
+          station reading at rounding precision so the line stops
+          restating the display figure twice more.  Design v48 §2
+          filter kept for altimeter / SLP; v50 §6 restored the
+          alternate-unit line that over-suppressed under v48 §2. */}
       <Provenance>
         {[
+          pu === 'hPa'
+            ? d.barometer.inHg != null && `${fmt(d.barometer.inHg, 2)} inHg`
+            : d.barometer.hPa != null && `${fmt(d.barometer.hPa, 1)} hPa`,
           d.nerd?.altimeterInHg != null &&
             Math.abs(d.nerd.altimeterInHg - (d.barometer.inHg ?? 0)) >= 0.005 &&
             `altimeter ${fmt(d.nerd.altimeterInHg, 2)} inHg`,

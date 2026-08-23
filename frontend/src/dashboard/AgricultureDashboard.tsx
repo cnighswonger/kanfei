@@ -205,8 +205,12 @@ export const SprayVerdictTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         gap: s(12),
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(12) }}>
-        <SectionLabel>Product</SectionLabel>
+      {/* Product name floats right on the same baseline as the
+          verdict kicker below.  Old ``PRODUCT`` label removed —
+          Design v49's ``PRODUCT · STATION NOW`` kicker names the
+          basis of the verdict; a second bare ``PRODUCT`` label
+          just prints the word twice (Design v50 §2). */}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: s(12) }}>
         <span style={{ ...type('body', fs(12.5)), color: v.text }}>
           {/* The em-dash clause only appears when there IS a category — otherwise
               the line reads 'Fungicide (Protectant) — null'. */}
@@ -307,7 +311,23 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         gap: s(10),
       }}
     >
-      <SectionLabel>Forecast · Next 24 hours</SectionLabel>
+      {/* When the forecast API returns rows starting at tomorrow's
+          00:00 (no rows for tonight's remaining hours), the strip
+          begins mid-day rather than at now.  Own it in the label
+          instead of silently starting at midnight — a strip that
+          begins in 3.5 hours with no visual break reads as beginning
+          now (Design v50 §3). */}
+      <SectionLabel>
+        Forecast · {(() => {
+          const first = cells[0]?.at;
+          if (!first) return 'Next 24 hours';
+          const firstDay = new Date(first);
+          const today = new Date();
+          return firstDay.getDate() !== today.getDate() || firstDay.getMonth() !== today.getMonth()
+            ? 'Tomorrow'
+            : 'Next 24 hours';
+        })()}
+      </SectionLabel>
 
       {/* Cells at FULL opacity — any wash puts the scale out of step with its own
           legend swatches below. */}
@@ -355,7 +375,25 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         </div>
         <div>
           <SectionLabel>Next window</SectionLabel>
-          <div style={{ ...type('mono', fs(17)), ...tnum, color: v.text }}>{fmtRange(d.spray?.nextWindow)}</div>
+          {/* Day prefix on its own line so the time range never wraps
+              mid-value.  ``Tomorrow 12:00 AM – 1:00 AM`` is the widest
+              string this readout can produce and it wraps whenever
+              the window is tomorrow — i.e. every evening.  Splitting
+              lets Best window today and Next window keep the same
+              value typography (Design v50 §5). */}
+          {(() => {
+            const raw = d.spray?.nextWindow;
+            if (!raw) return <div style={{ ...type('mono', fs(17)), ...tnum, color: v.text }}>—</div>;
+            const m = /^([A-Za-z]+)\s+(\d.*)$/.exec(raw);
+            return m ? (
+              <>
+                <SectionLabel>{m[1]}</SectionLabel>
+                <div style={{ ...type('mono', fs(17)), ...tnum, color: v.text, whiteSpace: 'nowrap' }}>{m[2]}</div>
+              </>
+            ) : (
+              <div style={{ ...type('mono', fs(17)), ...tnum, color: v.text, whiteSpace: 'nowrap' }}>{raw}</div>
+            );
+          })()}
         </div>
       </div>
     </Tile>

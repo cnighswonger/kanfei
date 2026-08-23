@@ -108,19 +108,12 @@ function pickNearestReference(
  * ~28 chars and breaks chip / row layouts.  ``primitives.fmtTime()`` in
  * the view is a defensive backstop; this is the primary formatter.
  */
-function clock(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
-
-/** 24-hour ``HH:MM`` variant.  Used for readouts that pair with
- *  the header and footer clocks (Peak-gust marker on the wind
- *  and drift-risk tiles).  Window readouts stay on ``clock()``'s
- *  12-hour output — Design v49 §3 keeps them as a spoken time
- *  the farmer reads as a plan. */
+/** 24-hour ``HH:MM`` from an ISO instant.  Used everywhere a
+ *  timestamp is machine provenance rather than a spoken plan —
+ *  Peak marker, extremes (Everyday HIGH/LOW, barometer H/L,
+ *  todayHighAt/todayLowAt), and lastPoll.  Spray-window readouts
+ *  are the deliberate 12-hour holdouts and format inline in
+ *  ``AgricultureDashboard.tsx`` (Design v49 §3, v50 §8). */
 function clock24(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -451,8 +444,9 @@ function toDashboardData(s: AdapterSources): DashboardData {
       // 24-hour ``HH:MM`` — the persona footer prints this next to
       // the console clock, which is 24-hour too.  Two formats for
       // the same instant on a machine-provenance strip is confusing;
-      // Design v48 §3.  H / L chips still use ``clock()``'s 12-hour
-      // output, which is the user-facing setting.
+      // Design v48 §3.  All extremes (highAt, lowAt, todayHighAt,
+      // todayLowAt, peakAt) use ``clock24()`` for the same reason;
+      // spray-window readouts stay 12-hour by design (v49 §3).
       lastPoll: (() => {
         const iso = status?.last_poll;
         if (!iso) return "";
@@ -489,9 +483,13 @@ function toDashboardData(s: AdapterSources): DashboardData {
       insideTempF: cc?.temperature?.inside?.value ?? null,
       insideHumidityPct: cc?.humidity?.inside?.value ?? null,
       highF: cc?.daily_extremes?.outside_temp_hi?.value ?? null,
-      highAt: clock(cc?.daily_extremes?.outside_temp_hi?.at),
+      // Extremes are machine timestamps (H at 3:12 PM), not spoken
+      // times a farmer reads as a plan — take them to 24-hour to
+      // match the header, footer and Peak marker (Design v50 §8).
+      // Window readouts stay 12-hour, per Design v49 §3.
+      highAt: clock24(cc?.daily_extremes?.outside_temp_hi?.at),
       lowF: cc?.daily_extremes?.outside_temp_lo?.value ?? null,
-      lowAt: clock(cc?.daily_extremes?.outside_temp_lo?.at),
+      lowAt: clock24(cc?.daily_extremes?.outside_temp_lo?.at),
     },
     barometer: {
       inHg: cc?.barometer?.value ?? null,
@@ -503,9 +501,9 @@ function toDashboardData(s: AdapterSources): DashboardData {
         cc?.barometer?.trend_rate ?? trendPer3h(s.historyBarometer),
       zone: baroZone(cc?.barometer?.value ?? null),
       todayHigh: cc?.daily_extremes?.barometer_hi?.value ?? null,
-      todayHighAt: clock(cc?.daily_extremes?.barometer_hi?.at),
+      todayHighAt: clock24(cc?.daily_extremes?.barometer_hi?.at),
       todayLow: cc?.daily_extremes?.barometer_lo?.value ?? null,
-      todayLowAt: clock(cc?.daily_extremes?.barometer_lo?.at),
+      todayLowAt: clock24(cc?.daily_extremes?.barometer_lo?.at),
     },
     wind: {
       speedMph,
@@ -972,15 +970,17 @@ function buildSprayBlock(
   // window you can no longer use, printed in green at display size,
   // was the page's most confident-looking bad advice (Design v49 §1).
   const bestWindowToday = (() => {
+    // ``null`` reserved for "no product" (no window array) — that's
+    // the em-dash's own meaning ("we don't know").  With a product
+    // selected, always answer in words: either the range that's
+    // still usable, or ``None left today``.  An em-dash used for a
+    // real "no window" answer reads as a failed lookup
+    // (Design v50 §4).
+    if (!window.length) return null;
     const today = goRuns.find(
       (r) => r.start.getTime() < startOfTomorrow.getTime() && r.end.getTime() > nowMs,
     );
-    if (today) return formatRun(today);
-    // ``None left today`` reserves the space so the SPRAY WINDOW
-    // tile's grid doesn't reflow when the window closes for the day.
-    return goRuns.some((r) => r.start.getTime() < startOfTomorrow.getTime())
-      ? "None left today"
-      : null;
+    return today ? formatRun(today) : "None left today";
   })();
 
   return {

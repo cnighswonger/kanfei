@@ -9,11 +9,18 @@
  * So: one layout component serves both paper themes. Do NOT fork this file per
  * theme; the theme supplies the fonts, rules, and inks.
  *
- * Geometry (frame 1600×1180, header 60, main padding 24px 30px 20px, gap 20):
- *   title row              51
- *   band A   739 / 547    787     left gap 20, right gap 18
- *   band B   739 / 547    150
- *   footer                 27
+ * Geometry (frame 1600×1240, header 60, main padding 24px 30px 20px, gap 20).
+ * The declared band heights below are LIVE-DOM measurements from the
+ * authenticated view — the mock's numbers (787 / 150) undercounted every tile
+ * once real data landed, and the scaleVar / minHeight budget was ~90 px light
+ * so ``overflow: hidden`` on the content region clipped Console clock and Last
+ * poll off the last tile.  Design v50 §1 remeasured against HEAD; update these
+ * numbers again if a tile's content shape changes.
+ *
+ *   title row               51
+ *   band A   739 / 547    ~845    left column taller: hero 270 + chart 357 + rain/solar 178 (+2*gap 40)
+ *   band B   739 / 547    ~182    Console & link, 8 rows in 2 cols
+ *   footer                  27
  */
 import React from 'react';
 import { v, type, SectionLabel, TileHeading, Row, Tile, fmt, fmtInt, fmtTime, s, st, scaleVar, CONTENT_CAP } from './primitives';
@@ -51,7 +58,16 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
   >
     <div
       style={{
-        ...scaleVar(1120),
+        // Design height was declared 1120 against the mock, but every
+        // band-A tile renders taller with live data — hero row ~270 vs
+        // s(205), history chart ~357 vs s(269), rain/solar ~178 vs
+        // s(159); Console & link's eight rows in a 2-col grid come
+        // out at ~182 against s(150).  Total ~1230 in design space
+        // against a 1120 budget, so ``overflow: hidden`` on the
+        // content-region was clipping Console clock and Last poll off
+        // the last tile.  Bumped to 1240 (measured 1230, rounded up
+        // to the next 10) per Design v50 §1.
+        ...scaleVar(1240),
         // Bottom + side paddings in ``st()`` so the footer's left,
         // right and bottom edges land at the same physical pixels
         // across personas (``s()`` is per-persona ``--k``, ``st()``
@@ -88,7 +104,12 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
       style={{
         position: 'absolute',
         right: 0,
-        bottom: s(60),
+        // Raised from ``bottom: s(60)`` — the plate at 400×280 sat
+        // under band B's Console & link readouts (``Product 6351``,
+        // ``Console battery 4.66 V``).  ``s(200)`` clears the band
+        // B tiles and keeps the plate at the top of band B's row
+        // (Design v50 §9).
+        bottom: s(200),
         width: s(400),
         height: s(280),
         zIndex: -1,
@@ -141,17 +162,17 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
       </SectionLabel>
     </div>
 
-    {/* ── band A, 787 ─────────────────────────────────────────────────────── */}
+    {/* ── band A, ~845 (left column taller than right at start-align) ────── */}
     <div data-band="a" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), alignItems: 'start', ...CONTENT_CAP }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: s(20), minWidth: 0 }}>
-        <div style={{ display: 'flex', gap: s(28), minHeight: s(205) }}>
+        <div style={{ display: 'flex', gap: s(28), minHeight: s(270) }}>
           <HeroTemperatureTile d={d} style={{ width: s(340), flexShrink: 0 }} />
           <DerivedConditionsTile d={d} style={{ flex: 1, minWidth: 0 }} />
         </div>
 
-        <HistoryChartTile d={d} style={{ minHeight: s(269) }} />
+        <HistoryChartTile d={d} style={{ minHeight: s(357) }} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(24), minHeight: s(159), alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(24), minHeight: s(178), alignItems: 'start' }}>
           {/* 1d titles this 'Rain ledger', not 'Rain' */}
           <RainTile d={d} title="Rain ledger" />
           <SolarUvTile d={d} />
@@ -159,14 +180,14 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: s(18), minWidth: 0 }}>
-        <BarometerTile d={d} style={{ minHeight: s(280) }} />
-        <WindTile d={d} style={{ minHeight: s(220) }} />
+        <BarometerTile d={d} style={{ minHeight: s(320) }} />
+        <WindTile d={d} style={{ minHeight: s(250) }} />
         <AlmanacTile d={d} style={{ minHeight: s(159) }} />
       </div>
     </div>
 
-    {/* ── band B, 150 ─────────────────────────────────────────────────────── */}
-    <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), minHeight: s(150), alignItems: 'start', ...CONTENT_CAP }}>
+    {/* ── band B, ~182 (Console & link, 8 rows in a 2-col grid) ─────────── */}
+    <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), minHeight: s(182), alignItems: 'start', ...CONTENT_CAP }}>
       <RainfallByHourTile d={d} />
       <ConsoleAndLinkTile d={d} />
     </div>
