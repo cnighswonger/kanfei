@@ -116,6 +116,19 @@ function clock(iso: string | null | undefined): string | null {
     : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+/** 24-hour ``HH:MM`` variant.  Used for readouts that pair with
+ *  the header and footer clocks (Peak-gust marker on the wind
+ *  and drift-risk tiles).  Window readouts stay on ``clock()``'s
+ *  12-hour output — Design v49 §3 keeps them as a spoken time
+ *  the farmer reads as a plan. */
+function clock24(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
 /**
  * Barometer zone label — matches ``wheelDial()``'s zone words at
  * their sweep midpoints.  Below ~28.95 stormy, above ~30.56 set fair;
@@ -500,7 +513,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       directionLabel: cc?.wind?.cardinal ?? null,
       gustMph,
       peakMph: cc?.daily_extremes?.wind_speed_hi?.value ?? null,
-      peakAt: clock(cc?.daily_extremes?.wind_speed_hi?.at),
+      peakAt: clock24(cc?.daily_extremes?.wind_speed_hi?.at),
       roseWeights: bucketWindDirection(s.windDir4h),
     },
     rain: {
@@ -830,48 +843,81 @@ function buildSprayBlock(
       }
     : null;
   const rainFreeHours = product?.rain_free_hours ?? 0;
-  const window = constraints
+  // Sort forecast rows by their absolute ``iso`` so a backend that
+  // returns them out of order (or crosses midnight in a way ``hour``
+  // alone can't represent) still orders correctly.  Truncate to
+  // 24 rows starting at the first row with ``iso >= now`` — the
+  // strip must always begin at "now", not at whatever the backend
+  // decided the window opened at.  Design v49 §1.
+  const scoredAll = constraints
     ? scoreSprayHours(
-        forecast.slice(0, 24).map((r, i) => {
-          // Rain within the required rain-free window ahead: look at the
-          // next ``rainFreeHours`` forecast rows starting at row i and
-          // sum precipitation.  If any is > 0, this cell fails rain-free.
-          const ahead = forecast.slice(i, i + Math.max(1, rainFreeHours));
-          const rainWithinWindow = ahead.some((row) => (row.precip ?? 0) > 0);
-          return {
-            hour: r.hour,
-            temp: r.temp ?? 0,
-            wind: Math.max(r.wind ?? 0, r.gust ?? 0),
-            rh: r.rh ?? 0,
-            rainWithinWindow,
-          };
-        }),
+        forecast
+          .slice()
+          .sort((a, b) => (a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0))
+          .map((r, i, sortedRows) => {
+            const ahead = sortedRows.slice(i, i + Math.max(1, rainFreeHours));
+            const rainWithinWindow = ahead.some((row) => (row.precip ?? 0) > 0);
+            return {
+              at: r.iso,
+              hour: r.hour,
+              temp: r.temp ?? 0,
+              wind: Math.max(r.wind ?? 0, r.gust ?? 0),
+              rh: r.rh ?? 0,
+              rainWithinWindow,
+            };
+          }),
         constraints,
-      ).map((c) => ({ hour: c.hour, label: c.label, state: c.state }))
+      )
     : [];
+  const nowMs = Date.now();
+  const window = scoredAll
+    .filter((c) => new Date(c.at).getTime() >= nowMs - 60 * 60 * 1000)
+    .slice(0, 24)
+    .map((c) => ({ at: c.at, hour: c.hour, label: c.label, state: c.state }));
 
-  // First contiguous ``go`` run that is NOT the current one.  If the
-  // window opens with a go run, skip past its end and start looking
-  // there (that leading run is the ``bestWindowToday`` — showing it
-  // again as "Next window" is redundant).  Format both endpoints as
-  // clock times to match Design's ``bestWindowToday`` shape
-  // ("2:00 AM – 6:00 AM"); the raw ``label`` from ``scoreSprayHours``
-  // is a short-form axis tick ("7a"), not user prose.
-  const nextWindow = (() => {
-    if (!window.length) return null;
+  // Best / next windows read off ``at`` so a run that crosses
+  // midnight can be named honestly ("Tomorrow 6:00 – 8:00 AM").
+  // Both readouts stay in 12-hour spoken time — Design v49 §3 keeps
+  // window figures as a plan a farmer reads, not a machine
+  // timestamp.
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTomorrow = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
+  const startOfDayAfter = new Date(startOfToday.getTime() + 48 * 60 * 60 * 1000);
+  const dayPrefix = (atMs: number): string =>
+    atMs >= startOfDayAfter.getTime()
+      ? `${new Date(atMs).toLocaleDateString(undefined, { weekday: "short" })} `
+      : atMs >= startOfTomorrow.getTime()
+        ? "Tomorrow "
+        : "";
+
+  // Group ``window`` cells into contiguous ``go`` runs so the two
+  // readouts can filter or seek by run.
+  const goRuns: { start: Date; end: Date }[] = [];
+  {
     let i = 0;
-    // Skip the leading go run — it's today's best window.
-    while (i < window.length && window[i].state === "go") i++;
-    // Skip forward to the next go cell.
-    while (i < window.length && window[i].state !== "go") i++;
-    if (i >= window.length) return null;
-    const start = window[i].hour;
-    // Find the end of this go run.
-    let j = i;
-    while (j + 1 < window.length && window[j + 1].state === "go") j++;
-    // The window ends at the START of the next hour after the last go cell.
-    const endHour = (window[j].hour + 1) % 24;
-    return `${fmtHour12(start)} – ${fmtHour12(endHour)}`;
+    while (i < window.length) {
+      while (i < window.length && window[i].state !== "go") i++;
+      if (i >= window.length) break;
+      const start = new Date(window[i].at);
+      let j = i;
+      while (j + 1 < window.length && window[j + 1].state === "go") j++;
+      // Run ends at the start of the hour after the last go cell.
+      const end = new Date(new Date(window[j].at).getTime() + 60 * 60 * 1000);
+      goRuns.push({ start, end });
+      i = j + 1;
+    }
+  }
+  const formatRun = (run: { start: Date; end: Date }): string =>
+    `${dayPrefix(run.start.getTime())}${fmtHour12(run.start.getHours())} – ${fmtHour12(run.end.getHours())}`;
+
+  // Next window is the first run whose START is in the future.  A
+  // run currently open (start ≤ now < end) is described by the
+  // ``caution`` line below and by ``bestWindowToday``; showing it
+  // again as "Next window" would be redundant.
+  const nextWindow = (() => {
+    const run = goRuns.find((r) => r.start.getTime() > nowMs);
+    return run ? formatRun(run) : null;
   })();
 
   const applications = outcomes.slice(0, 4).map((o) => ({
@@ -902,15 +948,10 @@ function buildSprayBlock(
     : null;
 
   // Verdict-column caution note (mock 3c: "▲ Window closes 6:40 PM").
-  // Only when the current hour is a go: name the time the leading go
-  // run ends.  If the run continues past the 24 h horizon, or the
-  // current hour isn't a go, leave null (nothing to caution about).
+  // Show only when a run is currently open — start ≤ now < end.
   const caution = (() => {
-    if (!window.length || window[0].state !== "go") return null;
-    let k = 0;
-    while (k < window.length && window[k].state === "go") k++;
-    if (k >= window.length) return null; // the strip has no close inside 24 h
-    return `Window closes ${fmtHour12(window[k].hour)}`;
+    const open = goRuns.find((r) => r.start.getTime() <= nowMs && r.end.getTime() > nowMs);
+    return open ? `Window closes ${fmtHour12(open.end.getHours())}` : null;
   })();
 
   // Product name may already contain the category ("Fungicide
@@ -924,13 +965,22 @@ function buildSprayBlock(
     !!categoryLabel &&
     product.name.toLowerCase().includes(categoryLabel.toLowerCase());
 
-  // Best window may collapse to a zero-length range when today has no
-  // "go" hours (start === end).  A degenerate range reads as a real
-  // answer — worse than admitting there isn't one (DIFF-3c.md).
+  // Best window today = the first go run whose START is on today's
+  // date (local) AND whose END is still in the future.  If today has
+  // no such run — either today's runs all closed before now, or the
+  // window has no go cells at all today — say so explicitly.  A
+  // window you can no longer use, printed in green at display size,
+  // was the page's most confident-looking bad advice (Design v49 §1).
   const bestWindowToday = (() => {
-    const w = evaluation?.optimal_window;
-    if (!w || !w.start || !w.end || w.start === w.end) return null;
-    return `${w.start} – ${w.end}`;
+    const today = goRuns.find(
+      (r) => r.start.getTime() < startOfTomorrow.getTime() && r.end.getTime() > nowMs,
+    );
+    if (today) return formatRun(today);
+    // ``None left today`` reserves the space so the SPRAY WINDOW
+    // tile's grid doesn't reflow when the window closes for the day.
+    return goRuns.some((r) => r.start.getTime() < startOfTomorrow.getTime())
+      ? "None left today"
+      : null;
   })();
 
   return {

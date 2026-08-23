@@ -58,20 +58,28 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
         minHeight: 0,
       }}
     >
-      {/* Agriculture's plate is FULL-BLEED within main, unlike Everyday's corner
-          plate — the consent engraving sits behind the whole advisory. `contain`
-          at 50% 30%, opacity 0.13, z-index -2. */}
+      {/* Agriculture's plate — the consent engraving sits behind the
+          advisory.  Design v49 §4: clip to the upper band and drop
+          opacity to Everyday's 0.09.  Previously the plate ran the
+          full height at 0.13 and washed the drift-risk, water-balance
+          and field-schedule readouts (v46/v45 removed the tile fills
+          that used to hide it).  ``bottom: 50%`` cuts the plate off
+          above the lower band; ``contain`` at ``50% 15%`` keeps it
+          anchored near the top of that remaining strip. */}
       <div
         aria-hidden
         style={{
           position: 'absolute',
-          inset: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: '50%',
           zIndex: -2,
           backgroundImage: 'var(--surface-plate-wide, var(--surface-plate))',
           backgroundSize: 'contain',
-          backgroundPosition: '50% 30%',
+          backgroundPosition: '50% 15%',
           backgroundRepeat: 'no-repeat',
-          opacity: 0.13,
+          opacity: 0.09,
           filter: 'sepia(0.55) contrast(1.05) saturate(0.9)',
           mixBlendMode: 'multiply',
         }}
@@ -215,17 +223,25 @@ export const SprayVerdictTile: React.FC<{ d: DashboardData }> = ({ d }) => {
           the answer changes reads worse than one that runs slightly
           loose (Design v45 q1). */}
       <div style={{ display: 'flex', alignItems: 'center', gap: s(18) }}>
-        <span
-          style={{
-            ...type('display', fs(54)),
-            color: v[VERDICT_TONE(sp?.verdict) as 'success' | 'warning' | 'danger'],
-            lineHeight: 1,
-            display: 'inline-block',
-            minWidth: st(240),
-          }}
-        >
-          {sp?.verdict ? sp.verdict.toUpperCase().replace('NOGO', 'NO-GO') : '—'}
-        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: s(4), minWidth: st(240) }}>
+          {/* State the basis in the kicker so the reader knows this
+              verdict scores live station values — the forecast strip
+              on the right carries its own kicker for Open-Meteo
+              hourly.  Two labelled instruments that can differ
+              honestly, not one screen contradicting itself
+              (Design v49 §2). */}
+          <SectionLabel>Product · Station now</SectionLabel>
+          <span
+            style={{
+              ...type('display', fs(54)),
+              color: v[VERDICT_TONE(sp?.verdict) as 'success' | 'warning' | 'danger'],
+              lineHeight: 1,
+              display: 'inline-block',
+            }}
+          >
+            {sp?.verdict ? sp.verdict.toUpperCase().replace('NOGO', 'NO-GO') : '—'}
+          </span>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: s(4), minWidth: 0 }}>
           {/* Verdict sentence — italic serif ~17 px, same voice as
               the hero Zambretti sentence (Design v45 q3). */}
@@ -291,7 +307,7 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         gap: s(10),
       }}
     >
-      <SectionLabel>Next 24 hours</SectionLabel>
+      <SectionLabel>Forecast · Next 24 hours</SectionLabel>
 
       {/* Cells at FULL opacity — any wash puts the scale out of step with its own
           legend swatches below. */}
@@ -321,7 +337,21 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(14), marginTop: 'auto', paddingTop: s(10), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
         <div>
           <SectionLabel>Best window today</SectionLabel>
-          <div style={{ ...type('mono', fs(17)), ...tnum, color: v.success }}>{fmtRange(d.spray?.bestWindowToday)}</div>
+          {/* Green only for a real, still-usable window.  A past
+              state ("None left today") stays in secondary ink so
+              the page's most confident element isn't advice you
+              can no longer act on (Design v49 §1). */}
+          <div
+            style={{
+              ...type('mono', fs(17)),
+              ...tnum,
+              color: d.spray?.bestWindowToday && d.spray.bestWindowToday !== 'None left today'
+                ? v.success
+                : v.textSecondary,
+            }}
+          >
+            {fmtRange(d.spray?.bestWindowToday)}
+          </div>
         </div>
         <div>
           <SectionLabel>Next window</SectionLabel>
@@ -497,7 +527,11 @@ export const FieldScheduleTile: React.FC<{ d: DashboardData }> = ({ d }) => {
           <Row
             key={`${r.product}${i}`}
             label={`${r.product} · ${r.when}`}
-            value={<span style={{ color: v[STATUS_TONE[r.status]] }}>{r.status === 'nogo' ? 'no-go' : r.status}</span>}
+            value={
+              <span style={{ color: v[STATUS_TONE[r.status]] }}>
+                {r.status === 'nogo' ? 'No-go' : r.status === 'go' ? 'Go' : 'Pending'}
+              </span>
+            }
             last={i === (sp?.schedule.length ?? 0) - 1}
           />
         ))}

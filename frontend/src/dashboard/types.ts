@@ -163,8 +163,12 @@ export interface DashboardData {
       limit: string;                 // '≤ 10 mph'
       pass: boolean;
     }[];
-    /** 24 hourly cells, from scoreSprayHours() in utils/gauges.ts */
-    window: { hour: number; label: string; state: 'go' | 'marginal' | 'nogo' }[];
+    /** Hourly forecast cells, from ``scoreSprayHours()`` in
+     *  ``utils/gauges.ts``.  ``at`` is the absolute start-of-hour
+     *  instant (ISO) — cells are sorted by ``at`` and the strip
+     *  starts at the first cell with ``at >= now``, so a 24 h
+     *  window crossing midnight orders correctly. */
+    window: { at: string; hour: number; label: string; state: 'go' | 'marginal' | 'nogo' }[];
     bestWindowToday: string | null;  // '2:40 – 6:40 PM'
     nextWindow: string | null;       // 'Tomorrow 7:10 AM'
     /** Gust frequency histogram, 2 mph bins, last 4 h. */
