@@ -31,6 +31,57 @@ function formatTime(iso: string | null): string {
   }
 }
 
+/**
+ * Stall-detection thresholds for the Last Poll badge (sub-issue #474
+ * of umbrella #472).  ``warning`` matches `/api/health`'s recovery
+ * boundary — divergent numbers here would mean the operator sees the
+ * frontend "clear" a stall the daemon's watchdog is still working on.
+ * ``danger`` is a separate operator affordance: at 15 min the
+ * likelihood the daemon is genuinely wedged (rather than a slow poll)
+ * is high enough that we say so explicitly.
+ */
+const WARN_INTERVAL_MULTIPLIER = 3;
+const WARN_FALLBACK_SECONDS = 180;
+const DANGER_SECONDS = 900;
+
+interface StallState {
+  /** null when the badge is quiet (no lastPoll, or within threshold). */
+  highlight: "warning" | "danger" | null;
+  /** Suffix appended after the formatted timestamp; "" when quiet. */
+  suffix: string;
+}
+
+/**
+ * How stale is the last poll, relative to now?  Returns an operator
+ * affordance for the Last Poll row.  Umbrella #472 documented the
+ * failure mode this exists to surface: when the poller's serial write
+ * wedges in the kernel, the timestamp freezes but nothing else on
+ * screen signals it.
+ */
+function computeLastPollStall(
+  iso: string | null,
+  pollIntervalSec: number | null | undefined,
+  nowMs: number,
+): StallState {
+  if (!iso) return { highlight: null, suffix: "" };
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return { highlight: null, suffix: "" };
+  const ageSec = (nowMs - ts) / 1000;
+  const warnAt =
+    pollIntervalSec && pollIntervalSec > 0
+      ? WARN_INTERVAL_MULTIPLIER * pollIntervalSec
+      : WARN_FALLBACK_SECONDS;
+  if (ageSec < warnAt) return { highlight: null, suffix: "" };
+  const ageMin = Math.max(1, Math.round(ageSec / 60));
+  if (ageSec >= DANGER_SECONDS) {
+    return {
+      highlight: "danger",
+      suffix: ` — stalled ~${ageMin}m (logger may be wedged)`,
+    };
+  }
+  return { highlight: "warning", suffix: ` — stalled ~${ageMin}m` };
+}
+
 interface StationClockComponents {
   year: number | null;
   month: number;
@@ -107,6 +158,23 @@ export default function StationStatus() {
     const id = setInterval(() => setTick((n) => n + 1), 1000);
     return () => clearInterval(id);
   }, [components, readAnchor]);
+
+  // Separate re-tick so the Last Poll stall badge (sub-issue #474) can
+  // move without a fresh stationStatus arriving — the failure mode
+  // it exists to surface is precisely that stationStatus stops
+  // arriving.  10 s is well below the 3-min warning threshold and
+  // 15-min danger threshold, so no visible latency in the transition.
+  useEffect(() => {
+    if (!stationStatus?.last_poll) return;
+    const id = setInterval(() => setTick((n) => n + 1), 10_000);
+    return () => clearInterval(id);
+  }, [stationStatus?.last_poll]);
+
+  const lastPollStall = computeLastPollStall(
+    stationStatus?.last_poll ?? null,
+    stationStatus?.poll_interval,
+    Date.now(),
+  );
 
   const stationClockDisplay =
     components != null && readAnchor != null
@@ -221,7 +289,15 @@ export default function StationStatus() {
     },
     {
       label: "Last Poll",
-      value: formatTime(stationStatus?.last_poll ?? null),
+      // Sub-issue #474 of umbrella #472.  When the poller's serial
+      // write wedges in the kernel, the timestamp freezes; the badge
+      // tint + suffix name the failure explicitly instead of leaving
+      // the reader to notice the number stopped moving.  Thresholds
+      // match `/api/health` (from #473) so the frontend affordance
+      // and the external monitor tell the same story.
+      value:
+        formatTime(stationStatus?.last_poll ?? null) + lastPollStall.suffix,
+      highlight: lastPollStall.highlight,
     },
   ];
 
