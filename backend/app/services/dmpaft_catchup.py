@@ -21,6 +21,28 @@ Scope:
 - Duty-cycle safe: hardware I/O is bounded by ``max_records`` and
   the caller runs this as a background task so the poll cadence
   isn't blocked.
+
+Operational assumption:
+
+- The console's clock and the daemon's process timezone are the same.
+  ``LoggerDaemon._connect`` syncs the console from ``datetime.now()``
+  on every reconnect, so this holds for a normal deployment.  A
+  containerised daemon running under a different ``TZ`` than the
+  physical location it manages would land backfilled records at a
+  UTC offset for each ``TZ`` mismatch (Codex R1 note on #477); the
+  live-poll path already has the same latent assumption, so this
+  module doesn't introduce a new class of failure.
+
+DST caveat:
+
+- The ambiguous fall-back hour maps both wall-clock instances to the
+  earlier UTC instant via ``fold=0`` (Python default); the nonexistent
+  spring-forward hour is normalised by the tzinfo rather than
+  rejected.  A single reconnect that crosses either boundary can
+  therefore misplace up to one archive interval's worth of rows on
+  the chart.  Not addressed here — the fix would need a station
+  timezone setting we don't have — but a targeted test is worth adding
+  if this ever becomes visible in a real trace.
 """
 
 import json
@@ -212,34 +234,43 @@ def _project_to_sensor_reading(
     ``sensor_readings`` snapshot columns; the hi/lo companions
     aren't stored in the live path so they're dropped here too.
 
-    Rain fields are intentionally NULL for the same reason
+    The calculation helpers (``heat_index``, ``dew_point`` etc.) each
+    require **tenths-scale** inputs to match the storage convention;
+    scale first, then pass tenths in, then store the helper's return
+    directly.  Getting this wrong writes visibly wrong derived
+    columns (see Codex R1 on #477: passing raw SI gave ``dew_point``
+    off by two orders of magnitude and inverted sign).  Rain fields
+    are intentionally NULL for the same reason
     ``archive_sync._project_to_sensor_reading`` leaves them NULL:
     ``rain_total`` is a daily-cumulative counter with no meaningful
     baseline reconstructible from period deltas across a gap.
     """
-    outside_temp_c = rec.outside_temp_avg
-    inside_temp_c = rec.inside_temp
+    # Storage-scale (tenths) copies of every input the helpers use.
+    # These ARE the values that go into the DB row too — one scale
+    # step, not two.
+    outside_temp = _tenths(rec.outside_temp_avg)
+    inside_temp = _tenths(rec.inside_temp)
     outside_hum = rec.outside_humidity
     inside_hum = rec.inside_humidity
-    wind_speed_ms = rec.wind_speed_avg
-    wind_gust_ms = rec.wind_speed_hi
+    wind_speed = _tenths(rec.wind_speed_avg)
+    wind_gust = _tenths(rec.wind_speed_hi)
     wind_dir = rec.wind_dir_prevailing
-    barometer_hpa = rec.barometer
+    barometer = _tenths(rec.barometer)
 
     hi = dp = wc = fl = theta = None
-    if outside_temp_c is not None and outside_hum is not None:
-        hi = _tenths(heat_index(outside_temp_c, outside_hum))
-        dp = _tenths(dew_point(outside_temp_c, outside_hum))
-        if barometer_hpa is not None:
-            theta = _tenths(equivalent_potential_temperature(
-                outside_temp_c, outside_hum, barometer_hpa,
-            ))
-    if outside_temp_c is not None and wind_speed_ms is not None:
-        wc = _tenths(wind_chill(outside_temp_c, wind_speed_ms))
-    if (outside_temp_c is not None
+    if outside_temp is not None and outside_hum is not None:
+        hi = heat_index(outside_temp, outside_hum)
+        dp = dew_point(outside_temp, outside_hum)
+        if barometer is not None:
+            theta = equivalent_potential_temperature(
+                outside_temp, outside_hum, barometer,
+            )
+    if outside_temp is not None and wind_speed is not None:
+        wc = wind_chill(outside_temp, wind_speed)
+    if (outside_temp is not None
             and outside_hum is not None
-            and wind_speed_ms is not None):
-        fl = _tenths(feels_like(outside_temp_c, outside_hum, wind_speed_ms))
+            and wind_speed is not None):
+        fl = feels_like(outside_temp, outside_hum, wind_speed)
 
     # Backfilled rows are flagged in extra_json so a debugger tracing
     # a chart anomaly can tell "this cell came from DMPAFT catchup"
@@ -250,14 +281,14 @@ def _project_to_sensor_reading(
     return SensorReadingModel(
         timestamp=ts_utc,
         station_type=station_type_code,
-        inside_temp=_tenths(inside_temp_c),
-        outside_temp=_tenths(outside_temp_c),
+        inside_temp=inside_temp,
+        outside_temp=outside_temp,
         inside_humidity=inside_hum,
         outside_humidity=outside_hum,
-        wind_speed=_tenths(wind_speed_ms),
-        wind_gust=_tenths(wind_gust_ms),
+        wind_speed=wind_speed,
+        wind_gust=wind_gust,
         wind_direction=wind_dir,
-        barometer=_tenths(barometer_hpa),
+        barometer=barometer,
         solar_radiation=rec.solar_radiation,
         uv_index=_tenths(rec.uv_index),
         heat_index=hi,

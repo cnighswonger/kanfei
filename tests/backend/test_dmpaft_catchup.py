@@ -137,17 +137,35 @@ class TestInsertion:
         finally:
             db.close()
 
-    async def test_computes_dew_point_and_heat_index_like_live_poller(self):
-        """A backfilled row that omits derived values would show a
-        broken derived-conditions trace across the gap.  Same
-        calculation the poller runs; result is stored in tenths."""
+    async def test_derived_values_match_live_poller_helpers_exactly(self):
+        """Codex R1 on #477 caught the class of bug this pins: the
+        calculation helpers take TENTHS inputs, so passing raw SI
+        gave `dew_point` off by two orders of magnitude and inverted
+        sign.  The right shape is scale-first, call helpers on
+        tenths, store the return directly.  This test computes what
+        the live poller would compute for the same fixture and
+        insists the catchup path stored EXACTLY that."""
+        from app.services.calculations import (
+            dew_point,
+            equivalent_potential_temperature,
+            feels_like,
+            heat_index,
+            wind_chill,
+        )
         drv = _FakeVantageDriver(records=[_mk_record(10)])
         await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
         db = SessionLocal()
         try:
             row = db.query(SensorReadingModel).one()
-            assert row.dew_point is not None
-            assert row.heat_index is not None
+            # Fixture: outside_temp 22.5 °C, hum 60 %, wind 2.5 m/s,
+            # baro 1013.2 hPa.  In storage tenths: 225, 60, 25, 10132.
+            assert row.dew_point == dew_point(225, 60)
+            assert row.heat_index == heat_index(225, 60)
+            assert row.wind_chill == wind_chill(225, 25)
+            assert row.feels_like == feels_like(225, 60, 25)
+            assert row.theta_e == equivalent_potential_temperature(
+                225, 60, 10132,
+            )
         finally:
             db.close()
 
@@ -225,6 +243,43 @@ class TestGuards:
         )
         n = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
         assert n == MAX_BACKFILL_RECORDS
+
+    async def test_cap_preserves_oldest_records_drops_newest_tail(self):
+        """DMPAFT streams pages from the first-new-record forward, so
+        ``records[:max_records]`` keeps the OLDEST records and drops
+        the newest tail if the driver returns more than the cap
+        (Codex R1 on #477 asked for this explicit).  Losing older
+        data would put a hole in the middle of the reconnect gap;
+        losing newer data means the next successful poll fills that
+        edge instead.  The less-harmful failure mode."""
+        # Each fixture record's timestamp is its unique tag; steps of
+        # one minute keep them all distinct, and DMPAFT semantically
+        # returns them in oldest-first order.  Newest-first index 0
+        # corresponds to the OLDEST wall-clock instant.
+        recs = [_mk_record(MAX_BACKFILL_RECORDS + 2 - m) for m in range(
+            MAX_BACKFILL_RECORDS + 3,
+        )]
+        drv = _FakeVantageDriver(records=recs)
+        n = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        assert n == MAX_BACKFILL_RECORDS
+
+        db = SessionLocal()
+        try:
+            rows = db.query(SensorReadingModel.timestamp).all()
+            stored_ts = {r[0] for r in rows}
+            # Oldest is recs[0] (minutes_ago = MAX+2).  Must be kept.
+            oldest_utc = _to_utc_naive(recs[0].timestamp)
+            assert oldest_utc in stored_ts, (
+                "Cap dropped the OLDEST record; should drop the newest tail"
+            )
+            # Newest three are recs[-3:].  Must be dropped.
+            for rec in recs[-3:]:
+                dropped_utc = _to_utc_naive(rec.timestamp)
+                assert dropped_utc not in stored_ts, (
+                    f"Cap kept newest record (ts {dropped_utc}); should drop"
+                )
+        finally:
+            db.close()
 
     async def test_dmpaft_raise_becomes_warning_not_crash(self):
         """Called from a background task in `_bg_dmpaft_catchup`; a
