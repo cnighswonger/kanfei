@@ -45,6 +45,7 @@ from app.protocol.serial_port import list_serial_ports
 from app.protocol.constants import STATION_NAMES, DAVIS_LEGAL_ARCHIVE_PERIODS
 from app.services.poller import Poller
 from app.services.archive_sync import async_sync_archive
+from app.services.dmpaft_catchup import async_backfill_from_vantage
 from app.ipc.server import IPCServer
 from app.ipc import protocol as ipc
 from app.services.wunderground import WundergroundUploader
@@ -191,6 +192,30 @@ def _create_driver(driver_type: str, config: dict) -> StationDriver:
 # --------------- Logger Daemon ---------------
 
 
+# Poll-stall watchdog thresholds (sub-issue #475 of umbrella #472).
+# Kept module-level (not inside LoggerDaemon) so tests can monkey-patch
+# them to accelerate the recovery path without spinning real time.
+#
+# Multiplier over the poller's configured interval: a single slow poll
+# (archive sync taking a few seconds, momentary serial contention) must
+# not trip the watchdog.  Same 3× threshold as /api/health so an
+# external monitor's paging boundary matches the daemon's self-recovery
+# boundary — a 503 that clears on its own means the watchdog did its
+# job.
+POLL_STALL_MULTIPLIER = 3
+# How often the watchdog wakes to re-evaluate.  10 s is well below a
+# typical 10 s poll interval's 3× threshold; picking a shorter tick
+# doesn't buy earlier detection because ``poll_stall_seconds`` is
+# monotonic between poller completions.
+WATCHDOG_TICK_SECONDS = 10
+# Hard ceiling on how long we wait for ``driver.disconnect()`` after a
+# stall.  The whole point of the watchdog is to recover from a wedged
+# _io_lock; if disconnect itself waits on that same lock (which the
+# vantage driver does — see #476), we must not wait indefinitely.  A
+# timeout here is the trigger for the exit-for-systemd backstop.
+FORCED_DISCONNECT_TIMEOUT = 5.0
+
+
 class LoggerDaemon:
     """Main logger daemon — station owner, poller, IPC server."""
 
@@ -199,6 +224,18 @@ class LoggerDaemon:
         self.poller: Optional[Poller] = None
         self.poller_task: Optional[asyncio.Task] = None
         self._midnight_task: Optional[asyncio.Task] = None
+        # Poll-stall watchdog (sub-issue #475 of umbrella #472).
+        # Started alongside the daemon's stop_event wait; cancelled in
+        # shutdown().  Its liveness signal is ``poll_stall_seconds``
+        # from Poller.stats (added in #473).  See ``_watchdog_loop``
+        # for the recovery action and why it may os._exit on a stuck
+        # disconnect.
+        self._watchdog_task: Optional[asyncio.Task] = None
+        # Prevents two watchdog ticks racing into overlapping
+        # reconnects if the tick cadence is faster than a reconnect
+        # takes to run.  Also blocks an operator-initiated reconnect
+        # via IPC from colliding with a watchdog-initiated one.
+        self._reconnect_lock = asyncio.Lock()
         self.ipc_server: Optional[IPCServer] = None
         self.state_file = Path(settings.db_path).parent / ".logger_state.json"
         # Cached hardware config (read at connect, updated on write)
@@ -248,12 +285,28 @@ class LoggerDaemon:
             signal.signal(signal.SIGINT, lambda *_: stop_event.set())
             signal.signal(signal.SIGTERM, lambda *_: stop_event.set())
 
+        # Poll-stall watchdog — runs for the daemon's lifetime, not per
+        # driver connection.  It handles the "no driver connected" case
+        # internally so it's safe to start even if auto-connect above
+        # failed; the same instance recovers when a subsequent operator
+        # connect fires.
+        self._watchdog_task = asyncio.create_task(self._watchdog_loop())
+
         logger.info("Logger daemon ready (IPC port %d)", settings.ipc_port)
         await stop_event.wait()
         await self.shutdown()
 
     async def shutdown(self) -> None:
         logger.info("Shutting down logger daemon...")
+        if self._watchdog_task:
+            self._watchdog_task.cancel()
+            try:
+                await asyncio.wait_for(
+                    asyncio.shield(self._watchdog_task), timeout=2.0,
+                )
+            except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
+                pass
+            self._watchdog_task = None
         await self._teardown_driver()
         if self.ipc_server:
             await self.ipc_server.stop()
@@ -312,6 +365,20 @@ class LoggerDaemon:
 
             station_type_code = link.station_model.value if link.station_model else 0
 
+        # Vantage-side console-archive catchup (sub-issue #477 of umbrella
+        # #472).  Legacy stations run their own SRAM-walking backfill via
+        # ``_bg_archive_sync`` above; Vantage exposes ``async_dmpaft`` and
+        # gets its own bridge that writes into ``sensor_readings`` so the
+        # /api/history chart is continuous across a poll gap.  Runs in the
+        # background so a re-connect after a stall (or a fresh startup)
+        # doesn't block on the archive round-trip.  Same call site works
+        # for both the initial connect AND the watchdog-forced reconnect
+        # from #475 — no separate wiring needed in ``_forced_reconnect``.
+        if hasattr(self.driver, "async_dmpaft"):
+            asyncio.create_task(
+                self._bg_dmpaft_catchup(station_type_code),
+            )
+
         # Sync station clock to system time — gated on capability, not on
         # driver type.  Before #296 this was inside the `link is not None`
         # block above, so Vantage never got an on-connect sync and had to
@@ -363,6 +430,134 @@ class LoggerDaemon:
 
         self._midnight_task = asyncio.create_task(self._midnight_rain_reset_loop())
 
+    # ---- Poll-stall watchdog (sub-issue #475) ----
+
+    async def _watchdog_loop(self) -> None:
+        """Periodically check the poller's liveness clock; force a
+        driver reconnect when it stops advancing.
+
+        The signal is ``poll_stall_seconds`` on ``Poller.stats``,
+        introduced in #473.  It is populated as soon as the poller's
+        run loop enters (age-since-start until the first cycle
+        completes, then age-since-last-completion), so this catches
+        both a startup wedge and a mid-run stall with one check.
+        """
+        logger.info(
+            "Watchdog started (tick %ds, stall threshold %d × poll_interval)",
+            WATCHDOG_TICK_SECONDS, POLL_STALL_MULTIPLIER,
+        )
+        try:
+            while True:
+                await asyncio.sleep(WATCHDOG_TICK_SECONDS)
+                try:
+                    await self._watchdog_tick()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    # A watchdog whose own logic can crash and take
+                    # itself out is worse than a wedge it's supposed
+                    # to catch.  Log and keep ticking.
+                    logger.exception("Watchdog tick raised — continuing")
+        except asyncio.CancelledError:
+            logger.info("Watchdog stopped")
+            raise
+
+    async def _watchdog_tick(self) -> None:
+        """One evaluation of the poller's liveness clock."""
+        poller = self.poller
+        if poller is None:
+            return  # not connected; nothing to watch
+        stats = poller.stats
+        stall = stats.get("poll_stall_seconds")
+        if stall is None:
+            return  # very short window before run() has been scheduled
+        threshold = POLL_STALL_MULTIPLIER * max(1, poller.poll_interval)
+        if stall <= threshold:
+            return
+
+        logger.warning(
+            "Poll stall detected: %.0fs since last completion "
+            "(threshold %ds); forcing reconnect",
+            stall, threshold,
+        )
+        await self._forced_reconnect()
+
+    async def _forced_reconnect(self) -> None:
+        """Tear the driver down with a bounded disconnect and reconnect
+        on the same port/baud.  Called from the watchdog on stall.
+
+        Serialises against operator-initiated reconnects via the shared
+        ``_reconnect_lock`` — two clients (watchdog + human) both
+        trying to swing the driver's state at once is a broken
+        invariant, and the loser silently does nothing rather than
+        double-teardown.
+        """
+        if self._reconnect_lock.locked():
+            logger.warning(
+                "Reconnect already in progress; watchdog tick skipped",
+            )
+            return
+        async with self._reconnect_lock:
+            # Read port/baud from the current DB config.  These params
+            # are recorded on the reconnect but not authoritative:
+            # ``_connect`` re-reads the full effective config and
+            # ``_create_driver`` uses that (driver_type + its own
+            # port/baud), so an operator config edit between the
+            # stall and the watchdog tick takes effect on recovery.
+            # That is intentional — recovery should honour the latest
+            # committed intent, not the stale intent that was running
+            # when the poll wedged (Codex R1 clarification on #475).
+            try:
+                port, baud = self._get_serial_config()
+            except Exception as exc:
+                logger.error(
+                    "Watchdog cannot read serial config for reconnect: %s",
+                    exc,
+                )
+                return
+
+            # Bounded teardown.  ``_teardown_driver`` cancels the
+            # poller task and calls ``driver.disconnect()`` without a
+            # timeout; a wedged _io_lock (the class of failure #472
+            # captured, driver work in #476) means disconnect itself
+            # blocks forever.  Wrap the whole teardown in a hard
+            # timeout so the watchdog can't hang on the recovery it
+            # was meant to perform.
+            try:
+                await asyncio.wait_for(
+                    self._teardown_driver(),
+                    timeout=FORCED_DISCONNECT_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                # Teardown itself is stuck — the driver's close path
+                # is broken.  Reconnecting on the same port with an fd
+                # that may still be held by the wedged thread would
+                # give a fresh handshake that also wedges.  systemd
+                # restarts us cleanly on non-zero exit; that IS the
+                # backstop this watchdog exists to hand off to.
+                logger.critical(
+                    "Forced disconnect exceeded %.1fs — driver close is "
+                    "wedged; exiting so systemd restarts the daemon",
+                    FORCED_DISCONNECT_TIMEOUT,
+                )
+                logging.shutdown()
+                os._exit(1)
+
+            try:
+                await self._connect(port, baud)
+                # ``_connect`` schedules the DMPAFT catchup task (#477)
+                # for Vantage drivers as part of its post-handshake
+                # sequence, so the recovered daemon fills the gap from
+                # the console's ring buffer automatically — no
+                # additional wiring needed here.
+                logger.info("Watchdog reconnect complete")
+            except Exception as exc:
+                logger.error(
+                    "Watchdog reconnect failed: %s — daemon will keep "
+                    "retrying via subsequent stall detections",
+                    exc,
+                )
+
     async def _teardown_driver(self) -> None:
         if self._midnight_task:
             self._midnight_task.cancel()
@@ -394,6 +589,28 @@ class LoggerDaemon:
             logger.info("Archive sync: %d new records", n)
         except Exception as exc:
             logger.warning("Archive sync failed: %s", exc)
+
+    async def _bg_dmpaft_catchup(self, station_type_code: int) -> None:
+        """Background wrapper for the Vantage-side console-archive
+        catchup (sub-issue #477).  Kept as a thin adapter around the
+        service function so the catchup logic stays out of the
+        daemon's lifecycle file — same shape as ``_bg_archive_sync``
+        above.
+
+        Failure is logged and swallowed: a busted backfill must never
+        take down a healthy connect or a watchdog-forced reconnect.
+        The gap it fails to fill is exactly the failure ``/api/health``
+        will already be surfacing.
+        """
+        drv = self.driver
+        if drv is None or not hasattr(drv, "async_dmpaft"):
+            return
+        try:
+            n = await async_backfill_from_vantage(drv, station_type_code)
+            if n:
+                logger.info("DMPAFT catchup: %d records inserted", n)
+        except Exception as exc:
+            logger.warning("DMPAFT catchup errored: %s", exc)
 
     # ---- rain state persistence ----
 
@@ -1209,17 +1426,26 @@ class LoggerDaemon:
         return {"found": False, "attempts": attempts}
 
     async def _h_connect(self, msg: dict) -> dict[str, Any]:
-        await self._teardown_driver()
-        await self._connect(msg["port"], msg["baud"])
+        # Serialise against the watchdog's ``_forced_reconnect`` so an
+        # operator ``connect`` command can't overlap an in-flight
+        # stall-recovery attempt (Codex R1 on #475).  Unlike the
+        # watchdog — which skips its tick when the lock is held (a
+        # concurrent reconnect is already fixing the same problem) —
+        # an operator asked for this reconnect, so we wait our turn
+        # instead of returning silently.
+        async with self._reconnect_lock:
+            await self._teardown_driver()
+            await self._connect(msg["port"], msg["baud"])
         return {
             "success": True,
             "station_type": self.driver.station_name if self.driver else "Unknown",
         }
 
     async def _h_reconnect(self, _msg: dict) -> dict[str, Any]:
-        port, baud = self._get_serial_config()
-        await self._teardown_driver()
-        await self._connect(port, baud)
+        async with self._reconnect_lock:
+            port, baud = self._get_serial_config()
+            await self._teardown_driver()
+            await self._connect(port, baud)
         return {
             "success": True,
             "station_type": self.driver.station_name if self.driver else "Unknown",

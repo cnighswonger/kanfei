@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter
 
-from . import current, history, export, config, station, forecast, astronomy, output, setup, weatherlink, backgrounds, spray, usage, db_admin, logs, backup, public_data, telegram, discord_bot as discord_bot_api, auth as auth_api, map_data, mute, ingest
+from . import current, history, export, config, station, forecast, astronomy, output, setup, weatherlink, backgrounds, spray, usage, db_admin, logs, backup, public_data, telegram, discord_bot as discord_bot_api, auth as auth_api, map_data, mute, ingest, health
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,7 @@ api_router.include_router(auth_api.router)
 api_router.include_router(map_data.router)
 api_router.include_router(mute.router)
 api_router.include_router(ingest.router)
+api_router.include_router(health.router)
 
 # Nowcast API — full version requires kanfei-nowcast, lite version is built-in.
 try:
