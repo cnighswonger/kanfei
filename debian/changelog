@@ -1,3 +1,46 @@
+kanfei (0.1.0~beta72) unstable; urgency=medium
+
+  * Follow-up to the beta71 logger observability + auto-recovery work
+    (umbrella #472): the poll-stall watchdog now recovers from a
+    driverless state too.  Caught during the 2026-08-23 vsits-02
+    smoke test: after a stall-triggered forced reconnect where
+    ``_connect`` failed because the USB endpoint was gone (I pulled
+    the cable to reproduce the original 2026-08-23 wedge),
+    ``_teardown_driver`` had already set ``self.poller = None``,
+    and every subsequent watchdog tick fell through the
+    ``poller is None`` guard the tick used to open with.  The
+    daemon then sat idle for 4+ minutes even after I replugged; only
+    an operator ``reconnect`` IPC command brought it back.
+
+    ``_watchdog_tick`` now has a two-state design.  State A is the
+    original stall detector, unchanged in behaviour.  State B fires
+    a reconnect when ``self.driver is None`` and setup is complete,
+    guarded to skip when the reconnect lock is already held or when
+    the driver is present but mid-init inside ``_connect``.  Same
+    10 s tick cadence.  Result: after any failed watchdog
+    reconnect, the daemon keeps trying to reconnect on its own and
+    heals as soon as the underlying hardware is back — no more
+    operator IPC nudge required.  Post-fix smoke on vsits-02
+    confirmed the sequence: unplug → stall detected → forced
+    reconnect fails → State B logs 10-second reconnect attempts →
+    replug → next tick completes the reconnect + DMPAFT catchup
+    automatically → ``/api/health`` flips back to 200 → live polls
+    resume.  Log line on the failed-reconnect path is retuned to
+    point at the actual retry branch instead of the misleading
+    "stall detections" phrasing the beta71 commit shipped.
+
+    Not addressed in this beta: bounded backoff on repeated failed
+    reconnects.  10 s cadence is low enough that a truly
+    disconnected station only costs about six error log rows per
+    minute — a state machine for backoff is worth doing later but
+    not urgent.
+
+    Also unchanged from beta71's "not-in-this-beta" list: the deep
+    root fix (#476 bounded serial write in the vantage driver) still
+    wants hardware-in-the-loop soak time before merge.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Sat, 23 Aug 2026 21:35:00 +0000
+
 kanfei (0.1.0~beta71) unstable; urgency=medium
 
   * Logger silent-stall observability + auto-recovery (umbrella #472).

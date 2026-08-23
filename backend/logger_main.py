@@ -589,7 +589,8 @@ class LoggerDaemon:
             except Exception as exc:
                 logger.error(
                     "Watchdog reconnect failed: %s — daemon will keep "
-                    "retrying via subsequent stall detections",
+                    "retrying via the watchdog's driverless-recovery "
+                    "branch (State B in _watchdog_tick, #482)",
                     exc,
                 )
 
