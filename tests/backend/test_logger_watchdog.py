@@ -41,27 +41,37 @@ class _FakePoller:
         return {"poll_stall_seconds": self._stall}
 
 
+class _FakeDriver:
+    """Minimal driver stub — the watchdog only reads ``connected``."""
+
+    def __init__(self, connected: bool = True):
+        self.connected = connected
+
+
 @pytest.fixture
-def daemon() -> LoggerDaemon:
+def daemon(monkeypatch) -> LoggerDaemon:
     """Fresh daemon; no driver attached.  Individual tests stub in
-    just the moving parts they need."""
-    return LoggerDaemon()
+    just the moving parts they need.
+
+    ``_is_setup_complete`` returns True by default so State-B
+    reconnect logic can be exercised without wiring the DB.  Tests
+    that need the false path monkey-patch it themselves.
+    """
+    d = LoggerDaemon()
+    monkeypatch.setattr(d, "_is_setup_complete", lambda: True)
+    return d
 
 
-class TestWatchdogTick:
-    async def test_noop_when_no_poller(self, daemon):
-        """Before setup / after disconnect the poller is None.  A tick
-        that fires in this window must not raise, and must not try to
-        reconnect (there is nothing to reconnect to)."""
-        daemon.poller = None
-        daemon._forced_reconnect = AsyncMock()
-        await daemon._watchdog_tick()
-        daemon._forced_reconnect.assert_not_called()
+class TestWatchdogTickStallDetector:
+    """State A: driver connected, poller running.  This is the
+    original responsibility — detect a stalled poll clock and trigger
+    a forced reconnect."""
 
     async def test_noop_when_stall_is_null(self, daemon):
         """Very short window between poller-constructed and run-loop
         -entered.  Treat as ok: the next tick will already see a
         concrete age and evaluate normally."""
+        daemon.driver = _FakeDriver(connected=True)
         daemon.poller = _FakePoller(stall_seconds=None)
         daemon._forced_reconnect = AsyncMock()
         await daemon._watchdog_tick()
@@ -70,6 +80,7 @@ class TestWatchdogTick:
     async def test_noop_when_stall_below_threshold(self, daemon):
         """Same 3 × poll_interval boundary as /api/health — 29 s of a
         10 s cycle is jitter, not stall."""
+        daemon.driver = _FakeDriver(connected=True)
         daemon.poller = _FakePoller(stall_seconds=29.0, poll_interval=10)
         daemon._forced_reconnect = AsyncMock()
         await daemon._watchdog_tick()
@@ -78,6 +89,7 @@ class TestWatchdogTick:
     async def test_forces_reconnect_when_stall_above_threshold(self, daemon):
         """3 × 10 s = 30 s; 31 s trips.  The watchdog's whole reason
         for existing — surface parity with /api/health at #473."""
+        daemon.driver = _FakeDriver(connected=True)
         daemon.poller = _FakePoller(stall_seconds=31.0, poll_interval=10)
         daemon._forced_reconnect = AsyncMock()
         await daemon._watchdog_tick()
@@ -88,10 +100,80 @@ class TestWatchdogTick:
         a driver bug that reports poll_interval=0 must not silently
         disable the watchdog by driving the threshold to 0 either.
         With floor=1 and multiplier=3, threshold=3s; 10 s trips."""
+        daemon.driver = _FakeDriver(connected=True)
         daemon.poller = _FakePoller(stall_seconds=10.0, poll_interval=0)
         daemon._forced_reconnect = AsyncMock()
         await daemon._watchdog_tick()
         daemon._forced_reconnect.assert_called_once()
+
+
+class TestWatchdogTickDriverlessRecovery:
+    """State B: driver is None because a prior reconnect (initial or
+    watchdog-forced) failed.  Uncovered by the 2026-08-23 vsits-02
+    smoke test: the daemon sat idle for minutes because subsequent
+    ticks fell through the ``poller is None`` guard the tick used to
+    open with.  The new branch keeps trying so the daemon heals once
+    the underlying hardware is back."""
+
+    async def test_reconnects_when_driver_is_none_and_setup_complete(self, daemon):
+        daemon.driver = None
+        daemon.poller = None
+        daemon._forced_reconnect = AsyncMock()
+        await daemon._watchdog_tick()
+        daemon._forced_reconnect.assert_called_once()
+
+    async def test_skips_when_setup_incomplete(self, daemon, monkeypatch):
+        """Fresh install waiting for the setup wizard — nothing to
+        connect to yet, and a spurious reconnect attempt would drop
+        errors into the journal for no reason."""
+        daemon.driver = None
+        daemon.poller = None
+        monkeypatch.setattr(daemon, "_is_setup_complete", lambda: False)
+        daemon._forced_reconnect = AsyncMock()
+        await daemon._watchdog_tick()
+        daemon._forced_reconnect.assert_not_called()
+
+    async def test_skips_when_driver_mid_init(self, daemon):
+        """``_connect`` sets ``self.driver = _create_driver(...)``
+        before ``driver.connect()`` completes.  A watchdog tick that
+        fires in that window sees ``driver is not None`` but
+        ``driver.connected is False``.  State A's guard on
+        ``driver.connected`` skips it; State B's guard on
+        ``self.driver is None`` also skips it.  Result: no
+        spurious re-entrant reconnect during the very startup we
+        would otherwise interrupt."""
+        daemon.driver = _FakeDriver(connected=False)
+        daemon.poller = None
+        daemon._forced_reconnect = AsyncMock()
+        await daemon._watchdog_tick()
+        daemon._forced_reconnect.assert_not_called()
+
+    async def test_skips_when_reconnect_lock_already_held(self, daemon):
+        """Prior tick still running its own teardown+connect (or an
+        operator IPC reconnect in flight).  A parallel State-B fire
+        would double-teardown the same driver."""
+        daemon.driver = None
+        daemon.poller = None
+        daemon._forced_reconnect = AsyncMock()
+        # Acquire the lock as a stand-in for "another reconnect in
+        # progress."  ``asyncio.Lock`` is per-loop; borrowing it in
+        # the same test task is fine because we release before the
+        # test ends.
+        async with daemon._reconnect_lock:
+            await daemon._watchdog_tick()
+            daemon._forced_reconnect.assert_not_called()
+
+    async def test_state_a_still_wins_over_state_b_when_both_apply(self, daemon):
+        """A live poller reporting stall > threshold with driver
+        connected must take the stall path, not the driverless-
+        recovery path.  If state B ran here the daemon would tear
+        down a healthy poller unnecessarily."""
+        daemon.driver = _FakeDriver(connected=True)
+        daemon.poller = _FakePoller(stall_seconds=1.0, poll_interval=10)
+        daemon._forced_reconnect = AsyncMock()
+        await daemon._watchdog_tick()
+        # Stall below threshold — must NOT reconnect via either path.
+        daemon._forced_reconnect.assert_not_called()
 
 
 class TestForcedReconnect:

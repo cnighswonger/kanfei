@@ -463,22 +463,57 @@ class LoggerDaemon:
             raise
 
     async def _watchdog_tick(self) -> None:
-        """One evaluation of the poller's liveness clock."""
+        """One evaluation of the poller's liveness clock, or — when the
+        driver is torn down after a failed prior reconnect — a
+        keep-trying-to-reconnect trigger.
+
+        The 2026-08-23 vsits-02 smoke test (umbrella #472) surfaced the
+        second branch as a real gap: after a stall-triggered reconnect
+        where ``_connect`` fails (USB not yet re-attached, permissions,
+        transient hardware fault), ``_teardown_driver`` has already
+        cleared ``self.poller``.  Every subsequent tick used to fall
+        through the ``poller is None`` guard and do nothing — the
+        daemon sat idle until an operator hit ``reconnect`` over IPC.
+        The reconnect-when-driverless branch below closes that hole
+        without changing the stall-detection semantics.
+        """
+        # State A: driver is up and poller is running — the stall
+        # detector this method was originally written for.  This must
+        # run first so a live poller isn't accidentally torn down by
+        # the state-B path when its stall clock hasn't tripped yet.
+        driver = self.driver
         poller = self.poller
-        if poller is None:
-            return  # not connected; nothing to watch
-        stats = poller.stats
-        stall = stats.get("poll_stall_seconds")
-        if stall is None:
-            return  # very short window before run() has been scheduled
-        threshold = POLL_STALL_MULTIPLIER * max(1, poller.poll_interval)
-        if stall <= threshold:
+        if poller is not None and driver is not None and driver.connected:
+            stats = poller.stats
+            stall = stats.get("poll_stall_seconds")
+            if stall is None:
+                return  # brief window before poller.run() is scheduled
+            threshold = POLL_STALL_MULTIPLIER * max(1, poller.poll_interval)
+            if stall <= threshold:
+                return
+            logger.warning(
+                "Poll stall detected: %.0fs since last completion "
+                "(threshold %ds); forcing reconnect",
+                stall, threshold,
+            )
+            await self._forced_reconnect()
             return
 
-        logger.warning(
-            "Poll stall detected: %.0fs since last completion "
-            "(threshold %ds); forcing reconnect",
-            stall, threshold,
+        # State B: no driver connected (or driver present but not yet
+        # connected).  If setup is complete, keep trying to reconnect
+        # on the tick cadence so a failed prior recovery eventually
+        # heals when the underlying hardware is back.  The
+        # ``_reconnect_lock`` guard prevents overlapping with a
+        # concurrent operator connect / a prior tick that is still
+        # running its own teardown+connect.
+        if self.driver is not None:
+            return  # driver mid-init inside _connect; skip
+        if not self._is_setup_complete():
+            return  # fresh install waiting for setup wizard
+        if self._reconnect_lock.locked():
+            return  # another reconnect is already in flight
+        logger.info(
+            "Watchdog: driver not connected; attempting reconnect",
         )
         await self._forced_reconnect()
 
