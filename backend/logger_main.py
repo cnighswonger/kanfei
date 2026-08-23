@@ -45,6 +45,7 @@ from app.protocol.serial_port import list_serial_ports
 from app.protocol.constants import STATION_NAMES, DAVIS_LEGAL_ARCHIVE_PERIODS
 from app.services.poller import Poller
 from app.services.archive_sync import async_sync_archive
+from app.services.dmpaft_catchup import async_backfill_from_vantage
 from app.ipc.server import IPCServer
 from app.ipc import protocol as ipc
 from app.services.wunderground import WundergroundUploader
@@ -364,6 +365,20 @@ class LoggerDaemon:
 
             station_type_code = link.station_model.value if link.station_model else 0
 
+        # Vantage-side console-archive catchup (sub-issue #477 of umbrella
+        # #472).  Legacy stations run their own SRAM-walking backfill via
+        # ``_bg_archive_sync`` above; Vantage exposes ``async_dmpaft`` and
+        # gets its own bridge that writes into ``sensor_readings`` so the
+        # /api/history chart is continuous across a poll gap.  Runs in the
+        # background so a re-connect after a stall (or a fresh startup)
+        # doesn't block on the archive round-trip.  Same call site works
+        # for both the initial connect AND the watchdog-forced reconnect
+        # from #475 — no separate wiring needed in ``_forced_reconnect``.
+        if hasattr(self.driver, "async_dmpaft"):
+            asyncio.create_task(
+                self._bg_dmpaft_catchup(station_type_code),
+            )
+
         # Sync station clock to system time — gated on capability, not on
         # driver type.  Before #296 this was inside the `link is not None`
         # block above, so Vantage never got an on-connect sync and had to
@@ -530,10 +545,11 @@ class LoggerDaemon:
 
             try:
                 await self._connect(port, baud)
-                # Hook for sub-issue #477 (DMPAFT catchup on
-                # reconnect): once landed, run the archive backfill
-                # here so the recovered daemon fills the gap from the
-                # console's own ring buffer.
+                # ``_connect`` schedules the DMPAFT catchup task (#477)
+                # for Vantage drivers as part of its post-handshake
+                # sequence, so the recovered daemon fills the gap from
+                # the console's ring buffer automatically — no
+                # additional wiring needed here.
                 logger.info("Watchdog reconnect complete")
             except Exception as exc:
                 logger.error(
@@ -573,6 +589,28 @@ class LoggerDaemon:
             logger.info("Archive sync: %d new records", n)
         except Exception as exc:
             logger.warning("Archive sync failed: %s", exc)
+
+    async def _bg_dmpaft_catchup(self, station_type_code: int) -> None:
+        """Background wrapper for the Vantage-side console-archive
+        catchup (sub-issue #477).  Kept as a thin adapter around the
+        service function so the catchup logic stays out of the
+        daemon's lifecycle file — same shape as ``_bg_archive_sync``
+        above.
+
+        Failure is logged and swallowed: a busted backfill must never
+        take down a healthy connect or a watchdog-forced reconnect.
+        The gap it fails to fill is exactly the failure ``/api/health``
+        will already be surfacing.
+        """
+        drv = self.driver
+        if drv is None or not hasattr(drv, "async_dmpaft"):
+            return
+        try:
+            n = await async_backfill_from_vantage(drv, station_type_code)
+            if n:
+                logger.info("DMPAFT catchup: %d records inserted", n)
+        except Exception as exc:
+            logger.warning("DMPAFT catchup errored: %s", exc)
 
     # ---- rain state persistence ----
 
