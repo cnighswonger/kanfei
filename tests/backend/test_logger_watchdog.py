@@ -170,6 +170,65 @@ class TestForcedReconnect:
         # Reconnect must NOT have been attempted after the exit trigger.
         connect_mock.assert_not_called()
 
+    async def test_ipc_reconnect_serialised_with_watchdog(
+        self, daemon, monkeypatch,
+    ):
+        """The Codex R1 blocker on #475: `_reconnect_lock` was
+        documented as serialising IPC-initiated reconnects against
+        watchdog-initiated ones, but the handlers bypassed it.  This
+        test pins the fix: an operator ``reconnect`` command that
+        arrives mid-stall-recovery WAITS for the watchdog to finish
+        rather than tearing down the same driver in parallel."""
+        monkeypatch.setattr(
+            daemon, "_get_serial_config", lambda: ("/dev/null", 19200),
+        )
+        order: list[str] = []
+        watchdog_teardown_gate = asyncio.Event()
+
+        async def _watchdog_teardown():
+            order.append("wd:teardown-start")
+            await watchdog_teardown_gate.wait()
+            order.append("wd:teardown-end")
+
+        async def _connect(port, baud):
+            order.append(f"connect({port})")
+
+        daemon._teardown_driver = _watchdog_teardown
+        daemon._connect = _connect
+
+        # Watchdog acquires the lock; is parked inside teardown.
+        wd_task = asyncio.create_task(daemon._forced_reconnect())
+        await asyncio.sleep(0)  # let wd_task acquire lock and enter teardown
+        assert order == ["wd:teardown-start"]
+
+        # Operator reconnect arrives concurrently — it must wait for
+        # the watchdog to release the lock, not run its own teardown
+        # in parallel.
+        op_task = asyncio.create_task(daemon._h_reconnect({}))
+        # Give the operator a tick to try to acquire the lock.
+        await asyncio.sleep(0)
+        # Watchdog is still in teardown; the operator's teardown has
+        # NOT started yet.
+        assert order == ["wd:teardown-start"]
+
+        # Release the watchdog's teardown.  It finishes, connects,
+        # releases the lock; only THEN does the operator's turn run.
+        watchdog_teardown_gate.set()
+        # Swap the teardown for a fast one so the operator's turn
+        # doesn't block on the same gate.
+        async def _fast_teardown():
+            order.append("op:teardown")
+        daemon._teardown_driver = _fast_teardown
+
+        await asyncio.gather(wd_task, op_task)
+        assert order == [
+            "wd:teardown-start",
+            "wd:teardown-end",
+            "connect(/dev/null)",  # watchdog reconnect
+            "op:teardown",
+            "connect(/dev/null)",  # operator reconnect
+        ]
+
     async def test_reconnect_failure_is_logged_and_swallowed(
         self, daemon, monkeypatch, caplog,
     ):

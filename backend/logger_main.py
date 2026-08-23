@@ -483,10 +483,15 @@ class LoggerDaemon:
             )
             return
         async with self._reconnect_lock:
-            # Snapshot the port/baud BEFORE teardown clears the driver.
-            # After a stall the DB might still be reachable so we could
-            # re-read config, but the config we started with is what
-            # the operator asked for and what should come back up.
+            # Read port/baud from the current DB config.  These params
+            # are recorded on the reconnect but not authoritative:
+            # ``_connect`` re-reads the full effective config and
+            # ``_create_driver`` uses that (driver_type + its own
+            # port/baud), so an operator config edit between the
+            # stall and the watchdog tick takes effect on recovery.
+            # That is intentional — recovery should honour the latest
+            # committed intent, not the stale intent that was running
+            # when the poll wedged (Codex R1 clarification on #475).
             try:
                 port, baud = self._get_serial_config()
             except Exception as exc:
@@ -1383,17 +1388,26 @@ class LoggerDaemon:
         return {"found": False, "attempts": attempts}
 
     async def _h_connect(self, msg: dict) -> dict[str, Any]:
-        await self._teardown_driver()
-        await self._connect(msg["port"], msg["baud"])
+        # Serialise against the watchdog's ``_forced_reconnect`` so an
+        # operator ``connect`` command can't overlap an in-flight
+        # stall-recovery attempt (Codex R1 on #475).  Unlike the
+        # watchdog — which skips its tick when the lock is held (a
+        # concurrent reconnect is already fixing the same problem) —
+        # an operator asked for this reconnect, so we wait our turn
+        # instead of returning silently.
+        async with self._reconnect_lock:
+            await self._teardown_driver()
+            await self._connect(msg["port"], msg["baud"])
         return {
             "success": True,
             "station_type": self.driver.station_name if self.driver else "Unknown",
         }
 
     async def _h_reconnect(self, _msg: dict) -> dict[str, Any]:
-        port, baud = self._get_serial_config()
-        await self._teardown_driver()
-        await self._connect(port, baud)
+        async with self._reconnect_lock:
+            port, baud = self._get_serial_config()
+            await self._teardown_driver()
+            await self._connect(port, baud)
         return {
             "success": True,
             "station_type": self.driver.station_name if self.driver else "Unknown",
