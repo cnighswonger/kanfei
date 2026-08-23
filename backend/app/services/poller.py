@@ -60,6 +60,18 @@ class Poller:
         self._station_type_code = station_type_code
         self._running = False
         self._last_poll: Optional[datetime] = None
+        # ``_last_poll`` is set the instant a poll returns a snapshot
+        # (before DB writes and broadcast).  ``_last_poll_completed_at``
+        # advances only after ``_process_reading`` returns — i.e. after
+        # DB write, broadcast, and any downstream uploaders complete.
+        # A watchdog can only trust the second one as a liveness signal
+        # (issue #473 / umbrella #472).
+        self._last_poll_completed_at: Optional[datetime] = None
+        # Advances every time a ``sensor_update`` message is handed to
+        # the broadcast callback.  If ``_last_poll_completed_at`` is
+        # advancing but this one isn't, the broadcast plumbing is stuck
+        # even though the poller is doing its job.
+        self._last_broadcast_at: Optional[datetime] = None
         self._last_rain_daily: Optional[float] = None
         self._last_rain_tip_time: Optional[datetime] = None
         self._rain_rate_in_per_hr: float = 0.0
@@ -74,8 +86,20 @@ class Poller:
 
     @property
     def stats(self) -> dict:
+        now = datetime.now(timezone.utc)
+        completed = self._last_poll_completed_at
+        broadcast = self._last_broadcast_at
         return {
             "last_poll": self._last_poll.isoformat() if self._last_poll else None,
+            "last_poll_completed_at": completed.isoformat() if completed else None,
+            "last_broadcast_at": broadcast.isoformat() if broadcast else None,
+            # None until the first successful poll completes.  Callers
+            # decide their own "stall" threshold — /api/health treats
+            # None as "not stalled yet" during startup and applies
+            # ``> 3 * poll_interval`` once ``completed`` is set.
+            "poll_stall_seconds": (
+                (now - completed).total_seconds() if completed else None
+            ),
             "crc_errors": self._crc_errors,
             "timeouts": self._timeouts,
             "uptime_seconds": int(time.time() - self._start_time),
@@ -114,6 +138,13 @@ class Poller:
                         snapshot.outside_temp, snapshot.wind_speed, snapshot.barometer,
                     )
                     await self._process_reading(snapshot)
+                    # Advance the liveness clock ONLY after
+                    # ``_process_reading`` returns — DB write, broadcast,
+                    # and uploaders all completed.  A watchdog checking
+                    # this timestamp can tell the poller is truly making
+                    # progress, not just that a single serial read went
+                    # through and something downstream is wedged.
+                    self._last_poll_completed_at = datetime.now(timezone.utc)
                 else:
                     self._timeouts += 1
                     logger.warning("Poll returned no data (timeout #%d)", self._timeouts)
@@ -351,6 +382,7 @@ class Poller:
                 "data": data_dict,
                 "snapshot": snapshot,
             })
+            self._last_broadcast_at = datetime.now(timezone.utc)
 
             # Reload thresholds each cycle so config changes take effect
             self.reload_alert_thresholds()
