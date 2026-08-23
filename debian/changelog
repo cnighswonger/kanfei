@@ -1,3 +1,71 @@
+kanfei (0.1.0~beta71) unstable; urgency=medium
+
+  * Logger silent-stall observability + auto-recovery (umbrella #472).
+    On 2026-08-23 the vantage driver's serial write got stuck in the
+    kernel's ``tty_wait_until_sent`` after a USB re-enumerate; the
+    poller went quiet for 5 hours, ``sensor_update`` broadcasts
+    stopped, the Weather Nerd Reception tile em-dashed, and nothing
+    surfaced the failure — ``is_available()`` and the ``status`` IPC
+    both still returned ``connected: true``.  Four coordinated fixes
+    land here:
+
+    - **#473 / PR #478** — poll-liveness telemetry.  Track
+      ``last_poll_completed_at`` (advanced only after
+      ``_process_reading`` finishes DB write + broadcast + uploaders)
+      and ``last_broadcast_at`` on ``Poller.stats``; surface a
+      derived ``poll_stall_seconds`` alongside them.  New anonymous
+      ``GET /api/health`` returns 200 when the poller has completed
+      a cycle within ``3 × poll_interval`` (fallback 30 s during
+      startup) and a structured 503 with the same shape otherwise —
+      external monitors (Nagios, Uptime Kuma, Discord probe) can
+      page on the exact failure mode #472 documented.
+
+    - **#475 / PR #479** — poll-stall watchdog.  Daemon-level task
+      wakes every 10 s and calls a bounded forced-reconnect when
+      ``poll_stall_seconds > 3 × poll_interval`` — same threshold as
+      ``/api/health`` so the external "monitor pages" and internal
+      "daemon self-recovers" boundaries align.  ``_teardown_driver``
+      runs under ``asyncio.wait_for(timeout=5)``; on timeout the
+      daemon ``os._exit(1)``s so systemd restarts it cleanly (the
+      real 2026-08-23 case, where the wedged ``_io_lock`` would have
+      trapped ``disconnect`` itself).  Operator ``connect`` /
+      ``reconnect`` IPC handlers now share the reconnect lock with
+      the watchdog so a human-initiated reconnect can't overlap a
+      watchdog-initiated one.
+
+    - **#477 / PR #480** — DMPAFT catchup on reconnect.  Every
+      successful Vantage connect (initial or watchdog-forced) pulls
+      archive records from the console's ring buffer since the
+      newest ``sensor_readings`` timestamp and inserts them into
+      ``sensor_readings`` so ``/api/history`` is continuous across
+      the reconnect gap.  Dedupe on timestamp, cap at 3000 records,
+      naive-local-to-naive-UTC conversion matches the live-poll
+      storage convention, derived columns (dew point, heat index,
+      wind chill, feels-like, theta-e) computed with the same
+      helpers and units as the live poller so aggregations across
+      the catchup boundary match.  Flags every backfilled row with
+      ``extra_json = {"backfill_source": "vantage_dmpaft"}`` for
+      debuggability.
+
+    - **#474 / PR #481** — stalled Last Poll badge on the
+      ``StationStatus`` panel.  When ``last_poll`` age crosses
+      ``3 × poll_interval`` (or 180 s fallback), the row tints
+      warning and appends ``" — stalled ~Nm"``; at 15 min it tints
+      danger and appends ``" (logger may be wedged)"``.  A separate
+      10 s re-tick advances the badge without waiting for a fresh
+      ``stationStatus`` — the failure mode is precisely that new
+      statuses stop arriving.  Thresholds match ``/api/health`` so
+      the frontend affordance and the external monitor tell the
+      same story.
+
+    Not in this beta: the deep root fix (#476: bounded serial write
+    in the vantage driver) that would keep ``_io_lock`` from ever
+    being held beyond a hard deadline in the first place.  It wants
+    hardware-in-the-loop soak time before merge and lands on a
+    separate cadence.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Sat, 23 Aug 2026 21:00:00 +0000
+
 kanfei (0.1.0~beta70) unstable; urgency=medium
 
   * Rain: yearly-rain source with console-reset detection.  The Vue's
