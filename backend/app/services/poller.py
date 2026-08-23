@@ -67,11 +67,21 @@ class Poller:
         # A watchdog can only trust the second one as a liveness signal
         # (issue #473 / umbrella #472).
         self._last_poll_completed_at: Optional[datetime] = None
-        # Advances every time a ``sensor_update`` message is handed to
-        # the broadcast callback.  If ``_last_poll_completed_at`` is
-        # advancing but this one isn't, the broadcast plumbing is stuck
-        # even though the poller is doing its job.
+        # Advances after the full broadcast callback returns — which
+        # inside the daemon includes the IPC subscriber broadcast AND
+        # WU / CWOP / public-relay uploaders that hang off it.  An
+        # uploader hang holds this back too, which is intentional: if
+        # the callback-fan-out step is stuck, "we sent the WS update"
+        # is not really true either.
         self._last_broadcast_at: Optional[datetime] = None
+        # Wall-clock instant the poller's run loop entered.  Lets
+        # ``poll_stall_seconds`` fall back to "seconds since the
+        # poller started" until the first cycle completes, so a
+        # startup-time wedge — driver connected, poller created,
+        # first poll hangs before ``_process_reading`` returns —
+        # is not indistinguishable from a healthy first-second window
+        # (Codex R1 on #473).
+        self._poll_started_at: Optional[datetime] = None
         self._last_rain_daily: Optional[float] = None
         self._last_rain_tip_time: Optional[datetime] = None
         self._rain_rate_in_per_hr: float = 0.0
@@ -89,17 +99,24 @@ class Poller:
         now = datetime.now(timezone.utc)
         completed = self._last_poll_completed_at
         broadcast = self._last_broadcast_at
+        started = self._poll_started_at
+        # Age since the last completed cycle when we have one; else the
+        # age since the poller started running (so a hung first poll
+        # trips the same /api/health threshold as a subsequent stall).
+        # None only while the poller has not entered its run loop yet
+        # — a very short window that /api/health treats as ok since a
+        # stall we can't yet measure isn't a stall we can page on.
+        if completed is not None:
+            stall = (now - completed).total_seconds()
+        elif started is not None:
+            stall = (now - started).total_seconds()
+        else:
+            stall = None
         return {
             "last_poll": self._last_poll.isoformat() if self._last_poll else None,
             "last_poll_completed_at": completed.isoformat() if completed else None,
             "last_broadcast_at": broadcast.isoformat() if broadcast else None,
-            # None until the first successful poll completes.  Callers
-            # decide their own "stall" threshold — /api/health treats
-            # None as "not stalled yet" during startup and applies
-            # ``> 3 * poll_interval`` once ``completed`` is set.
-            "poll_stall_seconds": (
-                (now - completed).total_seconds() if completed else None
-            ),
+            "poll_stall_seconds": stall,
             "crc_errors": self._crc_errors,
             "timeouts": self._timeouts,
             "uptime_seconds": int(time.time() - self._start_time),
@@ -124,6 +141,7 @@ class Poller:
         """Main polling loop. Runs until cancelled."""
         self._running = True
         self._start_time = time.time()
+        self._poll_started_at = datetime.now(timezone.utc)
         self.reload_alert_thresholds()
         logger.info("Poller starting with %ds interval", self.poll_interval)
 

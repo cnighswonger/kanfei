@@ -82,11 +82,11 @@ async def get_health() -> JSONResponse:
 
     threshold = _stall_threshold(body["poll_interval"])
     stall = body["poll_stall_seconds"]
-    # None during startup — the poller has been created but no cycle has
-    # completed yet.  Report ok=True so a monitor doesn't page during the
-    # first ~10 s after logger restart.  A wedged startup is caught by
-    # the second check the /api/health caller runs (or the frontend badge
-    # from #474, whose thresholds are separate).
+    # ``poll_stall_seconds`` is populated as soon as the poller's run
+    # loop starts (age-since-start until a cycle completes, then
+    # age-since-last-completion).  So the same threshold catches both a
+    # never-completed startup wedge AND a stalled steady-state poller
+    # — the case Codex R1 on #473 flagged as a monitoring hole.
     if stall is not None and stall > threshold:
         body["reason"] = (
             f"poll stalled: {stall:.0f}s since last completion "

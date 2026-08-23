@@ -87,11 +87,31 @@ class TestHealthy:
         assert body["poll_interval"] == 10
         assert body["reason"] is None
 
-    def test_200_during_startup_when_no_poll_completed_yet(self, make_client):
-        """`poll_stall_seconds: null` is the startup window between
-        driver-connect and first-poll-complete.  A monitor calling
-        /api/health here must not page — the fallback threshold catches
-        the case where startup itself is stuck."""
+    def test_200_during_startup_within_first_cycle(self, make_client):
+        """`poll_stall_seconds` starts as ``time since poller began``
+        (not None), so the first ~10 s after logger restart looks
+        healthy without special-casing.  ``last_poll_completed_at``
+        stays null until the first cycle finishes — that field is the
+        real "have we completed one?" signal."""
+        client = make_client(_StubIPC(data={
+            "connected": True,
+            "poll_interval": 10,
+            "poll_stall_seconds": 4.0,
+            "last_poll_completed_at": None,
+            "last_broadcast_at": None,
+        }))
+        r = client.get("/api/health")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["ok"] is True
+        assert body["last_poll_completed_at"] is None
+        assert body["poll_stall_seconds"] == pytest.approx(4.0)
+
+    def test_200_before_poller_run_loop_starts(self, make_client):
+        """Very short window between IPC-server-up and poller-run-entered
+        where ``poll_stall_seconds`` is null.  Ok=true is safe here —
+        the first `/api/health` call a second later will already see
+        a non-null age and evaluate the threshold normally."""
         client = make_client(_StubIPC(data={
             "connected": True,
             "poll_interval": 10,
@@ -121,6 +141,25 @@ class TestUnhealthy:
         assert "stalled" in body["reason"]
         # Structured detail comes back on 503 so the monitor knows WHY.
         assert body["poll_stall_seconds"] == 32.0
+
+    def test_503_when_first_poll_never_completes(self, make_client):
+        """The startup-wedge case: driver connected, poller's run loop
+        entered, first `driver.poll()` (or downstream first-cycle work)
+        hangs before `_process_reading` returns.  `last_poll_completed_at`
+        stays null forever; `poll_stall_seconds` climbs from
+        poller-start.  Codex R1 flagged this as a monitoring hole in
+        round 1 — the fix moves stall-since-start into
+        `poll_stall_seconds` so the same threshold trips."""
+        client = make_client(_StubIPC(data={
+            "connected": True,
+            "poll_interval": 10,
+            "poll_stall_seconds": 60.0,           # > 3 * 10s threshold
+            "last_poll_completed_at": None,       # never completed
+            "last_broadcast_at": None,
+        }))
+        r = client.get("/api/health")
+        assert r.status_code == 503
+        assert "stalled" in r.json()["reason"]
 
     def test_503_when_driver_disconnected(self, make_client):
         client = make_client(_StubIPC(data={
@@ -153,9 +192,11 @@ class TestUnhealthy:
 
 class TestResponseShape:
     """External monitors depend on these fields; renaming or removing
-    any of them silently disarms callers.  Extend rather than rename."""
+    any of them silently disarms callers.  Subset — additive diagnostic
+    fields are fine and should not fail the guard (Codex R1: exact
+    equality turned "extend rather than rename" into a test failure)."""
 
-    _EXPECTED_KEYS = {
+    _REQUIRED_KEYS = {
         "ok", "connected", "poll_stall_seconds", "poll_interval",
         "last_poll_completed_at", "last_broadcast_at", "reason",
     }
@@ -166,7 +207,7 @@ class TestResponseShape:
             "last_poll_completed_at": "2026-08-23T18:00:00+00:00",
             "last_broadcast_at": "2026-08-23T18:00:00+00:00",
         }))
-        assert set(client.get("/api/health").json()) == self._EXPECTED_KEYS
+        assert self._REQUIRED_KEYS <= set(client.get("/api/health").json())
 
     def test_503_body_has_documented_keys(self, make_client):
         client = make_client(_StubIPC(data={
@@ -174,4 +215,15 @@ class TestResponseShape:
             "last_poll_completed_at": "2026-08-23T12:00:00+00:00",
             "last_broadcast_at": "2026-08-23T12:00:00+00:00",
         }))
-        assert set(client.get("/api/health").json()) == self._EXPECTED_KEYS
+        assert self._REQUIRED_KEYS <= set(client.get("/api/health").json())
+
+    def test_503_body_on_startup_wedge_has_documented_keys(self, make_client):
+        """The startup-wedge case Codex R1 caught — cover this shape
+        too so a future edit that changes null-completion handling
+        can't silently drop a field."""
+        client = make_client(_StubIPC(data={
+            "connected": True, "poll_interval": 10, "poll_stall_seconds": 45,
+            "last_poll_completed_at": None,
+            "last_broadcast_at": None,
+        }))
+        assert self._REQUIRED_KEYS <= set(client.get("/api/health").json())
