@@ -60,6 +60,28 @@ class Poller:
         self._station_type_code = station_type_code
         self._running = False
         self._last_poll: Optional[datetime] = None
+        # ``_last_poll`` is set the instant a poll returns a snapshot
+        # (before DB writes and broadcast).  ``_last_poll_completed_at``
+        # advances only after ``_process_reading`` returns — i.e. after
+        # DB write, broadcast, and any downstream uploaders complete.
+        # A watchdog can only trust the second one as a liveness signal
+        # (issue #473 / umbrella #472).
+        self._last_poll_completed_at: Optional[datetime] = None
+        # Advances after the full broadcast callback returns — which
+        # inside the daemon includes the IPC subscriber broadcast AND
+        # WU / CWOP / public-relay uploaders that hang off it.  An
+        # uploader hang holds this back too, which is intentional: if
+        # the callback-fan-out step is stuck, "we sent the WS update"
+        # is not really true either.
+        self._last_broadcast_at: Optional[datetime] = None
+        # Wall-clock instant the poller's run loop entered.  Lets
+        # ``poll_stall_seconds`` fall back to "seconds since the
+        # poller started" until the first cycle completes, so a
+        # startup-time wedge — driver connected, poller created,
+        # first poll hangs before ``_process_reading`` returns —
+        # is not indistinguishable from a healthy first-second window
+        # (Codex R1 on #473).
+        self._poll_started_at: Optional[datetime] = None
         self._last_rain_daily: Optional[float] = None
         self._last_rain_tip_time: Optional[datetime] = None
         self._rain_rate_in_per_hr: float = 0.0
@@ -74,8 +96,27 @@ class Poller:
 
     @property
     def stats(self) -> dict:
+        now = datetime.now(timezone.utc)
+        completed = self._last_poll_completed_at
+        broadcast = self._last_broadcast_at
+        started = self._poll_started_at
+        # Age since the last completed cycle when we have one; else the
+        # age since the poller started running (so a hung first poll
+        # trips the same /api/health threshold as a subsequent stall).
+        # None only while the poller has not entered its run loop yet
+        # — a very short window that /api/health treats as ok since a
+        # stall we can't yet measure isn't a stall we can page on.
+        if completed is not None:
+            stall = (now - completed).total_seconds()
+        elif started is not None:
+            stall = (now - started).total_seconds()
+        else:
+            stall = None
         return {
             "last_poll": self._last_poll.isoformat() if self._last_poll else None,
+            "last_poll_completed_at": completed.isoformat() if completed else None,
+            "last_broadcast_at": broadcast.isoformat() if broadcast else None,
+            "poll_stall_seconds": stall,
             "crc_errors": self._crc_errors,
             "timeouts": self._timeouts,
             "uptime_seconds": int(time.time() - self._start_time),
@@ -100,6 +141,7 @@ class Poller:
         """Main polling loop. Runs until cancelled."""
         self._running = True
         self._start_time = time.time()
+        self._poll_started_at = datetime.now(timezone.utc)
         self.reload_alert_thresholds()
         logger.info("Poller starting with %ds interval", self.poll_interval)
 
@@ -114,6 +156,13 @@ class Poller:
                         snapshot.outside_temp, snapshot.wind_speed, snapshot.barometer,
                     )
                     await self._process_reading(snapshot)
+                    # Advance the liveness clock ONLY after
+                    # ``_process_reading`` returns — DB write, broadcast,
+                    # and uploaders all completed.  A watchdog checking
+                    # this timestamp can tell the poller is truly making
+                    # progress, not just that a single serial read went
+                    # through and something downstream is wedged.
+                    self._last_poll_completed_at = datetime.now(timezone.utc)
                 else:
                     self._timeouts += 1
                     logger.warning("Poll returned no data (timeout #%d)", self._timeouts)
@@ -351,6 +400,7 @@ class Poller:
                 "data": data_dict,
                 "snapshot": snapshot,
             })
+            self._last_broadcast_at = datetime.now(timezone.utc)
 
             # Reload thresholds each cycle so config changes take effect
             self.reload_alert_thresholds()
