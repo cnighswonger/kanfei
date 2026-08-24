@@ -1,3 +1,44 @@
+kanfei (0.1.0~beta74) unstable; urgency=medium
+
+  * UI redesign catch-up.  beta71/72/73 landed the logger auto-recovery
+    work on the ``deb`` branch but forgot to bring the Design Agent
+    output that had accumulated on ``ui/refactor`` since the last
+    merge along with them.  This beta merges ``origin/ui/refactor``
+    into ``deb`` so vsits-02 sees v46 through v50 as well as the
+    logger fixes:
+
+    - v46 (nerd flat pass) — TileHeading + open sections, resolution
+      buttons as segmented hairline group, stat-row rank + neutral
+      pressure trend, two ConsoleExtremes/SolarEnergy rendering
+      bugs.
+    - v47 §1 (nerd wind rose caption derives from ``roseWeights``)
+      and §2 (retire the duplicate app-shell footer that came back
+      on beta73 when the merge to ``deb`` missed the change).
+    - v47/v48 (persona footer): pinned to viewport bottom, unified
+      content + spacing, moved to ``PersonaFooter.tsx``, and pinned
+      inside a ``flex:1 + minHeight:0`` content region so the strip
+      never jumps between personas.
+    - v48 §1-4 (nerd labels, provenance, clock, watermark).
+    - Barometer: honor the user-selected pressure unit (inHg / hPa)
+      on the reading itself, and drop the alternate-unit sub-line
+      that was over-communicating the unit twice.
+    - v49 §1 (Agriculture Spray Advisory time base): kickers /
+      strip labels rewritten against absolute ``at`` instants so a
+      24-hour window that crosses midnight has an honest strip;
+      ``bestWindowToday`` gains a past-state ("None left today")
+      that keeps the past state in secondary ink so the page's most
+      confident element isn't advice you can no longer act on.
+    - v50 §1 (Everyday budget re-measurement against HEAD, tile
+      min-heights bumped to fit live data), §6-9 polish (24-hour
+      extremes, corner plate raised to clear Console readouts,
+      barometer trend / provenance / axis pass consistent with
+      the user-selected unit).
+
+    Same beta73 backend body (umbrella #472 logger auto-recovery)
+    otherwise; frontend deltas only.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Sun, 24 Aug 2026 01:10:00 +0000
+
 kanfei (0.1.0~beta73) unstable; urgency=medium
 
   * Second follow-up to the beta71/beta72 logger auto-recovery work
