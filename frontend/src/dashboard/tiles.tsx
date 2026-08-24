@@ -10,7 +10,7 @@
  *  - Heights come from the parent layout (TILE-CONTRACT.md), never from content.
  */
 import React from 'react';
-import { Tile, TileHeading, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt, fmtTime, s, fs, decimate } from './primitives';
+import { Tile, TileHeading, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt, fmtTime, fmtHour, s, fs, decimate } from './primitives';
 import type { DashboardData } from './types';
 import { pathFor, ledgerGrid } from '../utils/gauges';
 import WheelBarometer, { ZONE_BANDS, MIN_INHG, MAX_INHG, activeZone } from '../components/charts/WheelBarometer';
@@ -496,10 +496,13 @@ export const AlmanacTile: React.FC<{ d: DashboardData; style?: React.CSSProperti
  */
 export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boolean; style?: React.CSSProperties }> = ({ d, relativeAxis = true, style }) => {
   const bars = d.rain.hourlyIn ?? [];
-  const max = Math.max(0.05, ...bars.map((n) => n ?? 0));
-  const peakIdx = bars.findIndex((n) => (n ?? 0) === max);
-  const peakLabel =
-    peakIdx < 0 ? null : peakIdx === 0 ? '12 AM' : peakIdx < 12 ? `${peakIdx} AM` : peakIdx === 12 ? '12 PM' : `${peakIdx - 12} PM`;
+  const max = Math.max(0.05, ...bars.map((b) => b?.in ?? 0));
+  // Peak label reads from the bar's ISO ``at`` so it prints the
+  // browser's local clock hour — the index-as-clock formula this
+  // replaced was rotated four hours against its own axis in any
+  // non-UTC zone (Design v51).
+  const peakIdx = bars.findIndex((b) => (b?.in ?? 0) === max);
+  const peakLabel = peakIdx < 0 ? null : fmtHour(bars[peakIdx]?.at);
   const W = 700, H = 74;
 
   return (
@@ -523,7 +526,7 @@ export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boo
         style={{ display: 'block', width: '100%', height: H, flexShrink: 0 }}
       >
         {Array.from({ length: 24 }, (_, i) => {
-          const val = bars[i] ?? 0;
+          const val = bars[i]?.in ?? 0;
           const h = val > 0 ? Math.max(2, (val / max) * (H - 8)) : 0;
           const w = W / 24;
           return <rect key={i} x={i * w + 2} y={H - h} width={w - 4} height={h} fill={v.chart.rain} />;
@@ -540,9 +543,13 @@ export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boo
             <span style={{ flex: 1, textAlign: 'right' }}>now</span>
           </>
         ) : (
+          /* Ticks at every 4th bar, labelled from the bar's own
+             ``at`` — Design v51.  The old ``k*4`` formula assumed
+             index N meant local hour N, which was only ever true in
+             UTC; here we let ``fmtHour`` zone the actual instant. */
           Array.from({ length: 6 }, (_, k) => (
             <span key={k} style={{ flex: 1, textAlign: k === 0 ? 'left' : 'center' }}>
-              {k * 4 === 0 ? '12a' : k * 4 < 12 ? `${k * 4}a` : k * 4 === 12 ? '12p' : `${k * 4 - 12}p`}
+              {fmtHour(bars[k * 4]?.at)}
             </span>
           ))
         )}

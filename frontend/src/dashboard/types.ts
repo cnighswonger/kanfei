@@ -108,8 +108,12 @@ export interface DashboardData {
      * where it came from — Design v41.
      */
     yearSource?: "console" | "archive";
-    /** 24 hourly totals in inches, oldest first. */
-    hourlyIn: (number | null)[];
+    /** 24 hourly totals, oldest first.  Each entry pairs the bucket's
+     *  start-of-hour ISO instant with the accumulated inches so the
+     *  renderer can label the axis from the instant instead of
+     *  guessing what index-N means (Design v51).  Consumers that
+     *  only want the plot bars can still map ``.map(b => b.in)``. */
+    hourlyIn: { at: string; in: number | null }[];
   };
 
   solar: {

@@ -957,7 +957,14 @@ function ScheduleForm({
   onCancel: () => void;
 }) {
   const [productId, setProductId] = useState(products[0]?.id ?? 0);
-  const today = new Date().toISOString().split("T")[0];
+  // Local date for the plan default — ``toISOString`` here would be
+  // UTC and roll "today" over four hours before local midnight in
+  // North American zones, so a plan opened after 20:00 EDT would
+  // default to tomorrow (Design v51).  ``toLocaleDateString('en-CA')``
+  // gives ``YYYY-MM-DD`` in the browser's zone.  The fetch bounds
+  // elsewhere in this file still use ``toISOString`` — those ARE
+  // instants and want UTC — deliberately not touched.
+  const today = new Date().toLocaleDateString("en-CA");
   const [date, setDate] = useState(today);
   const [start, setStart] = useState("08:00");
   const [end, setEnd] = useState("12:00");

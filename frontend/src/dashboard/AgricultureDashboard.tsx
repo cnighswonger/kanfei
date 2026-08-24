@@ -18,7 +18,7 @@
 import React from 'react';
 import {
   v, type, s, st, scaleVar, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile,
-  tnum, fmt, fmtInt, fmtTime, fs,
+  tnum, fmt, fmtInt, fmtTime, fmtHour, fs,
 } from './primitives';
 import type { DashboardData } from './types';
 import { COMPASS_NAME } from './tiles';
@@ -336,10 +336,17 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
           <rect key={i} x={i * 26.5} y={8} width={23} height={42} rx={1} fill={tone[c.state]} />
         ))}
         <line x1={0} y1={54} x2={W - 4} y2={54} stroke={v.ruleHair} strokeWidth={1} />
+        {/* Zone the cell instant HERE, not in the adapter — Design
+            v51 traced the UTC axis to ``c.label`` being pre-formatted
+            (from the row's UTC hour) before it ever reached the
+            renderer.  ``fmtHour`` runs
+            ``toLocaleTimeString`` on the ISO ``at`` so the axis
+            follows the browser's locale for the same reason every
+            other display time on the page does. */}
         {cells.map((c, i) =>
           i % 3 === 0 ? (
             <text key={`t${i}`} x={i * 26.5 + 11} y={74} textAnchor="middle" style={type('sectionLabel')} fill={v.chart.axis}>
-              {c.label}
+              {fmtHour(c.at)}
             </text>
           ) : null,
         )}
@@ -484,7 +491,7 @@ export const WaterBalanceTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   const w = d.spray?.water;
   const bal = w?.balanceIn ?? null;
   const bars = d.rain.hourlyIn ?? [];
-  const max = Math.max(0.05, ...bars.map((n) => n ?? 0));
+  const max = Math.max(0.05, ...bars.map((b) => b?.in ?? 0));
 
   return (
     <Tile id="water-balance" style={{ gap: s(8) }}>
@@ -506,7 +513,7 @@ export const WaterBalanceTile: React.FC<{ d: DashboardData }> = ({ d }) => {
 
       <svg viewBox="0 0 620 76" preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: s(60), marginTop: 'auto' }}>
         {Array.from({ length: 24 }, (_, i) => {
-          const val = bars[i] ?? 0;
+          const val = bars[i]?.in ?? 0;
           const h = val > 0 ? Math.max(2, (val / max) * 56) : 0;
           return <rect key={i} x={i * 25.8 + 2} y={58 - h} width={18} height={h} rx={1} fill={v.chart.rain} />;
         })}
