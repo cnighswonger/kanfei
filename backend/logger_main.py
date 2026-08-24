@@ -328,107 +328,127 @@ class LoggerDaemon:
         logger.info("Connecting (driver: %s)...", driver_type)
 
         self.driver = _create_driver(driver_type, config)
-        await self.driver.connect()
-        logger.info("Station: %s", self.driver.station_name)
+        # See the ``except`` block at the bottom of this method for why
+        # the ENTIRE initialization window after ``_create_driver`` is
+        # wrapped — a stale ``self.driver`` after ANY of these awaits
+        # raises would strand the watchdog exactly as documented in
+        # #484 / #482.
+        try:
+            await self.driver.connect()
+            logger.info("Station: %s", self.driver.station_name)
 
-        # LinkDriver-specific post-connect: cache hardware config, archive sync.
-        # Clock sync used to live here too — it now runs below, gated on the
-        # capability rather than on driver type (#296, same class as #215/#220).
-        link = self._link
-        # Default to the driver's own model code where it has one.  This used
-        # to be a bare `= 0`, only overwritten inside the `link is not None`
-        # branch below — i.e. only for legacy stations.  Vantage stations
-        # therefore persisted station_type=0, which is a *valid* legacy enum
-        # member (Weather Wizard III), so /api/current reported a
-        # confidently wrong model rather than an unknown one (#215).
-        station_type_code = _driver_model_code(self.driver)
-        if link is not None:
-            self._archive_period = await link.async_read_archive_period()
-            self._sample_period = await link.async_read_sample_period()
-            logger.info("Archive period: %s min, Sample period: %s sec",
-                         self._archive_period, self._sample_period)
+            # LinkDriver-specific post-connect: cache hardware config, archive sync.
+            # Clock sync used to live here too — it now runs below, gated on the
+            # capability rather than on driver type (#296, same class as #215/#220).
+            link = self._link
+            # Default to the driver's own model code where it has one.  This used
+            # to be a bare `= 0`, only overwritten inside the `link is not None`
+            # branch below — i.e. only for legacy stations.  Vantage stations
+            # therefore persisted station_type=0, which is a *valid* legacy enum
+            # member (Weather Wizard III), so /api/current reported a
+            # confidently wrong model rather than an unknown one (#215).
+            station_type_code = _driver_model_code(self.driver)
+            if link is not None:
+                self._archive_period = await link.async_read_archive_period()
+                self._sample_period = await link.async_read_sample_period()
+                logger.info("Archive period: %s min, Sample period: %s sec",
+                             self._archive_period, self._sample_period)
 
-            # Reconcile the link's actual registers against the canonical row
-            # in station_config (issue #147).  Must run before archive sync so
-            # it operates on the canonical archive_period.
-            try:
-                await self._reconcile_wl_settings(link)
-            except Exception as exc:
-                logger.warning(
-                    "WeatherLink settings reconciliation failed: %s "
-                    "(continuing with link's reported values)",
-                    exc,
+                # Reconcile the link's actual registers against the canonical row
+                # in station_config (issue #147).  Must run before archive sync so
+                # it operates on the canonical archive_period.
+                try:
+                    await self._reconcile_wl_settings(link)
+                except Exception as exc:
+                    logger.warning(
+                        "WeatherLink settings reconciliation failed: %s "
+                        "(continuing with link's reported values)",
+                        exc,
+                    )
+
+                # Archive sync in background (shares _io_lock with poller)
+                asyncio.create_task(self._bg_archive_sync())
+
+                station_type_code = link.station_model.value if link.station_model else 0
+
+            # Vantage-side console-archive catchup (sub-issue #477 of umbrella
+            # #472).  Legacy stations run their own SRAM-walking backfill via
+            # ``_bg_archive_sync`` above; Vantage exposes ``async_dmpaft`` and
+            # gets its own bridge that writes into ``sensor_readings`` so the
+            # /api/history chart is continuous across a poll gap.  Runs in the
+            # background so a re-connect after a stall (or a fresh startup)
+            # doesn't block on the archive round-trip.  Same call site works
+            # for both the initial connect AND the watchdog-forced reconnect
+            # from #475 — no separate wiring needed in ``_forced_reconnect``.
+            if hasattr(self.driver, "async_dmpaft"):
+                asyncio.create_task(
+                    self._bg_dmpaft_catchup(station_type_code),
                 )
 
-            # Archive sync in background (shares _io_lock with poller)
-            asyncio.create_task(self._bg_archive_sync())
+            # Sync station clock to system time — gated on capability, not on
+            # driver type.  Before #296 this was inside the `link is not None`
+            # block above, so Vantage never got an on-connect sync and had to
+            # wait for the frontend to poll `GET /api/station` (~5 min) to
+            # catch clock drift.  The auto-sync path in `api/station.py` still
+            # runs for both; this just closes the on-connect gap so the first
+            # sync fires immediately, matching the LinkDriver behaviour.
+            #
+            # This block MUST NOT dereference `link` — Vantage's `link is None`
+            # and would crash.  #300 R1 caught exactly that.  The regression
+            # test in `test_onconnect_clock_sync.py` greps this branch for
+            # `link.` and fails if it reappears.
+            if hasattr(self.driver, "async_write_station_time"):
+                now = datetime.now()
+                if await self.driver.async_write_station_time(now):
+                    logger.info("Station clock synced to %s", now.strftime("%H:%M:%S"))
+                else:
+                    logger.warning("Failed to sync station clock")
 
-            station_type_code = link.station_model.value if link.station_model else 0
-
-        # Vantage-side console-archive catchup (sub-issue #477 of umbrella
-        # #472).  Legacy stations run their own SRAM-walking backfill via
-        # ``_bg_archive_sync`` above; Vantage exposes ``async_dmpaft`` and
-        # gets its own bridge that writes into ``sensor_readings`` so the
-        # /api/history chart is continuous across a poll gap.  Runs in the
-        # background so a re-connect after a stall (or a fresh startup)
-        # doesn't block on the archive round-trip.  Same call site works
-        # for both the initial connect AND the watchdog-forced reconnect
-        # from #475 — no separate wiring needed in ``_forced_reconnect``.
-        if hasattr(self.driver, "async_dmpaft"):
-            asyncio.create_task(
-                self._bg_dmpaft_catchup(station_type_code),
+            poll_interval = int(config.get("poll_interval", settings.poll_interval_sec))
+            self.poller = Poller(
+                self.driver,
+                poll_interval=poll_interval,
+                station_type_code=station_type_code,
             )
+            self.wu_uploader.reload_config()
+            self.cwop_uploader.reload_config()
 
-        # Sync station clock to system time — gated on capability, not on
-        # driver type.  Before #296 this was inside the `link is not None`
-        # block above, so Vantage never got an on-connect sync and had to
-        # wait for the frontend to poll `GET /api/station` (~5 min) to
-        # catch clock drift.  The auto-sync path in `api/station.py` still
-        # runs for both; this just closes the on-connect gap so the first
-        # sync fires immediately, matching the LinkDriver behaviour.
-        #
-        # This block MUST NOT dereference `link` — Vantage's `link is None`
-        # and would crash.  #300 R1 caught exactly that.  The regression
-        # test in `test_onconnect_clock_sync.py` greps this branch for
-        # `link.` and fails if it reappears.
-        if hasattr(self.driver, "async_write_station_time"):
-            now = datetime.now()
-            if await self.driver.async_write_station_time(now):
-                logger.info("Station clock synced to %s", now.strftime("%H:%M:%S"))
-            else:
-                logger.warning("Failed to sync station clock")
+            async def _broadcast_and_upload(msg: dict) -> None:
+                await self.ipc_server.broadcast_to_subscribers(msg)
+                if msg.get("type") == "sensor_update":
+                    await self.wu_uploader.maybe_upload(msg["data"])
+                    await self.cwop_uploader.maybe_upload(msg["data"])
+                    # Public-droplet relay.  Uses the raw SensorSnapshot
+                    # (attached by ``poller._process_reading``) so the
+                    # ingest payload mirrors the dataclass 1:1 without
+                    # reverse-engineering the REST-shaped ``data`` dict.
+                    await self.relay_sender.maybe_upload(
+                        msg.get("snapshot"), self.driver,
+                    )
 
-        poll_interval = int(config.get("poll_interval", settings.poll_interval_sec))
-        self.poller = Poller(
-            self.driver,
-            poll_interval=poll_interval,
-            station_type_code=station_type_code,
-        )
-        self.wu_uploader.reload_config()
-        self.cwop_uploader.reload_config()
+            self.poller.set_broadcast_callback(_broadcast_and_upload)
 
-        async def _broadcast_and_upload(msg: dict) -> None:
-            await self.ipc_server.broadcast_to_subscribers(msg)
-            if msg.get("type") == "sensor_update":
-                await self.wu_uploader.maybe_upload(msg["data"])
-                await self.cwop_uploader.maybe_upload(msg["data"])
-                # Public-droplet relay.  Uses the raw SensorSnapshot
-                # (attached by ``poller._process_reading``) so the
-                # ingest payload mirrors the dataclass 1:1 without
-                # reverse-engineering the REST-shaped ``data`` dict.
-                await self.relay_sender.maybe_upload(
-                    msg.get("snapshot"), self.driver,
-                )
+            # Restore rain state from a previous run
+            self._restore_rain_state()
 
-        self.poller.set_broadcast_callback(_broadcast_and_upload)
+            self.poller_task = asyncio.create_task(self.poller.run())
+            logger.info("Poller started (%ds interval)", poll_interval)
 
-        # Restore rain state from a previous run
-        self._restore_rain_state()
-
-        self.poller_task = asyncio.create_task(self.poller.run())
-        logger.info("Poller started (%ds interval)", poll_interval)
-
-        self._midnight_task = asyncio.create_task(self._midnight_rain_reset_loop())
+            self._midnight_task = asyncio.create_task(self._midnight_rain_reset_loop())
+        except Exception:
+            # Any raise in the initialization window above leaves this
+            # daemon in a state where the watchdog's automatic-recovery
+            # branches both silently skip (Codex R1 on #484): State A
+            # has no poller stall clock to trip when the poller_task
+            # never got created; State B skips whenever ``self.driver``
+            # is not None, which is true from ``_create_driver`` onward.
+            # Tear down every partial component before re-raising so
+            # the next watchdog tick sees a clean driverless state and
+            # State B fires.  ``_teardown_driver`` is null-safe on
+            # every field so it works regardless of how far this
+            # method got before the raise.
+            await self._teardown_driver()
+            raise
 
     # ---- Poll-stall watchdog (sub-issue #475) ----
 
@@ -589,7 +609,8 @@ class LoggerDaemon:
             except Exception as exc:
                 logger.error(
                     "Watchdog reconnect failed: %s — daemon will keep "
-                    "retrying via subsequent stall detections",
+                    "retrying via the watchdog's driverless-recovery "
+                    "branch (State B in _watchdog_tick, #482)",
                     exc,
                 )
 

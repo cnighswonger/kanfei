@@ -329,3 +329,143 @@ class TestForcedReconnect:
         daemon._connect = _failing_connect
         # Should not raise.
         await daemon._forced_reconnect()
+
+
+class TestConnectClearsDriverOnFailure:
+    """Regression suite for the 2026-08-23 vsits-02 smoke re-test after
+    #483.  ``_connect`` sets ``self.driver = _create_driver(...)`` BEFORE
+    awaiting ``driver.connect()``.  If the wire handshake raises, the
+    stale driver instance would strand the watchdog: State A's
+    ``driver.connected`` guard skips, and State B's ``driver is None``
+    guard skips too.  Result: no more automatic reconnect attempts.
+
+    The fix clears ``self.driver`` on the failure path.  These tests
+    pin the invariant so a future edit that changes the try/except
+    shape doesn't silently reopen the hole."""
+
+    class _RaisingDriver:
+        """Driver stub whose ``connect`` raises the ENOENT the field
+        smoke saw when the USB was gone."""
+
+        connected = False
+
+        async def connect(self):
+            raise OSError(
+                2,
+                "could not open port /dev/ttyUSB0: [Errno 2] "
+                "No such file or directory: '/dev/ttyUSB0'",
+            )
+
+        async def disconnect(self):
+            return None
+
+    async def test_self_driver_is_none_after_connect_raises(
+        self, daemon, monkeypatch,
+    ):
+        """The load-bearing invariant.  After ``_connect`` raises,
+        ``self.driver`` MUST be None so the watchdog's State-B guard
+        fires on subsequent ticks."""
+        monkeypatch.setattr(
+            daemon, "_get_effective_config",
+            lambda: {"station_driver_type": "vantage"},
+        )
+        monkeypatch.setattr(
+            logger_main, "_create_driver",
+            lambda driver_type, config: self._RaisingDriver(),
+        )
+        with pytest.raises(OSError):
+            await daemon._connect("/dev/ttyUSB0", 19200)
+        assert daemon.driver is None, (
+            "Stale driver reference survives a failed connect — "
+            "watchdog State-B will never fire"
+        )
+
+    async def test_watchdog_state_b_fires_after_a_failed_reconnect(
+        self, daemon, monkeypatch,
+    ):
+        """End-to-end version of the invariant.  ``_forced_reconnect``
+        runs, ``_connect`` fails, next ``_watchdog_tick`` sees
+        ``self.driver is None`` and calls ``_forced_reconnect`` again.
+        Before the fix, the failed reconnect left ``self.driver`` set
+        and the second tick silently skipped."""
+        monkeypatch.setattr(
+            daemon, "_get_serial_config", lambda: ("/dev/null", 19200),
+        )
+        monkeypatch.setattr(
+            daemon, "_get_effective_config",
+            lambda: {"station_driver_type": "vantage"},
+        )
+        monkeypatch.setattr(
+            logger_main, "_create_driver",
+            lambda driver_type, config: self._RaisingDriver(),
+        )
+        # First reconnect fails — ``_connect`` catches the raise,
+        # runs the real ``_teardown_driver`` (which null-safes every
+        # field so a no-poller / no-task daemon is fine), and clears
+        # ``self.driver``.  ``_forced_reconnect``'s outer catch logs
+        # the swallowed exception.
+        await daemon._forced_reconnect()
+        assert daemon.driver is None
+        # Now a subsequent watchdog tick must trip State B and try
+        # again — that's what was broken in the field.
+        reconnect_mock = AsyncMock()
+        daemon._forced_reconnect = reconnect_mock
+        await daemon._watchdog_tick()
+        reconnect_mock.assert_called_once()
+
+
+class TestConnectClearsDriverOnPostHandshakeFailure:
+    """Codex R1 on #485 extension: the ``_connect`` cleanup must also
+    catch failures AFTER ``driver.connect()`` succeeded but before the
+    poller task is started.  A raise from
+    ``async_read_archive_period`` / ``async_write_station_time`` /
+    ``Poller`` construction used to leave the daemon in the same
+    stranded state — driver connected, no poller, both watchdog
+    branches silently skip.  These tests pin the widened cleanup."""
+
+    class _ConnectOKThenFailDriver:
+        """Driver whose ``connect`` succeeds but whose subsequent
+        ``async_write_station_time`` raises.  Any post-handshake await
+        in ``_connect`` would do; clock sync is the one every driver
+        with the capability calls."""
+
+        connected = False
+
+        async def connect(self):
+            self.connected = True
+
+        async def disconnect(self):
+            self.connected = False
+
+        async def async_write_station_time(self, now):
+            raise OSError(5, "Input/output error")
+
+        # Station identity metadata that ``_connect`` logs on success.
+        station_name = "FakeStation"
+
+        class _HwConfig:
+            station_type = None
+        hw_config = _HwConfig()
+
+    async def test_teardown_runs_when_post_handshake_await_raises(
+        self, daemon, monkeypatch,
+    ):
+        """A raise after ``driver.connect()`` must clear self.driver
+        just like a raise in ``driver.connect()`` itself.  Otherwise
+        the watchdog dead zone Codex R1 flagged reopens."""
+        monkeypatch.setattr(
+            daemon, "_get_effective_config",
+            lambda: {"station_driver_type": "vantage"},
+        )
+        monkeypatch.setattr(
+            logger_main, "_create_driver",
+            lambda driver_type, config: self._ConnectOKThenFailDriver(),
+        )
+        with pytest.raises(OSError):
+            await daemon._connect("/dev/ttyUSB0", 19200)
+        assert daemon.driver is None, (
+            "Post-handshake raise left a connected driver on self — "
+            "watchdog State-B still can't recover"
+        )
+        assert daemon.poller is None
+        assert daemon.poller_task is None
