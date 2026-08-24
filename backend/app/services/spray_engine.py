@@ -56,6 +56,16 @@ async def fetch_hourly_forecast(
         "temperature_unit": "fahrenheit",
         "wind_speed_unit": "mph",
         "precipitation_unit": "inch",
+        # Return ``time`` values in the LOCATION's local zone (derived
+        # from lat/lon).  Without this, Open-Meteo defaults to GMT and
+        # emits naked ISO strings like ``"2026-08-24T01:00"`` with no
+        # zone marker.  ECMAScript parses those as browser-local, so
+        # the spray strip axis rendered UTC hours as if they were
+        # local hours — 4 h off in EDT (v51 diagnosis).  With
+        # ``timezone=auto`` Open-Meteo emits the station's local wall
+        # clock, and the axis matches the operator's clock without
+        # threading tz metadata through every consumer.
+        "timezone": "auto",
     }
     try:
         async with httpx.AsyncClient(timeout=OPEN_METEO_TIMEOUT) as client:
