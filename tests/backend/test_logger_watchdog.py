@@ -399,11 +399,11 @@ class TestConnectClearsDriverOnFailure:
             logger_main, "_create_driver",
             lambda driver_type, config: self._RaisingDriver(),
         )
-        async def _ok_teardown():
-            return None
-        daemon._teardown_driver = _ok_teardown
-        # First reconnect fails — driver.connect raises OSError,
-        # _forced_reconnect logs and swallows, self.driver goes to None.
+        # First reconnect fails — ``_connect`` catches the raise,
+        # runs the real ``_teardown_driver`` (which null-safes every
+        # field so a no-poller / no-task daemon is fine), and clears
+        # ``self.driver``.  ``_forced_reconnect``'s outer catch logs
+        # the swallowed exception.
         await daemon._forced_reconnect()
         assert daemon.driver is None
         # Now a subsequent watchdog tick must trip State B and try
@@ -412,3 +412,60 @@ class TestConnectClearsDriverOnFailure:
         daemon._forced_reconnect = reconnect_mock
         await daemon._watchdog_tick()
         reconnect_mock.assert_called_once()
+
+
+class TestConnectClearsDriverOnPostHandshakeFailure:
+    """Codex R1 on #485 extension: the ``_connect`` cleanup must also
+    catch failures AFTER ``driver.connect()`` succeeded but before the
+    poller task is started.  A raise from
+    ``async_read_archive_period`` / ``async_write_station_time`` /
+    ``Poller`` construction used to leave the daemon in the same
+    stranded state — driver connected, no poller, both watchdog
+    branches silently skip.  These tests pin the widened cleanup."""
+
+    class _ConnectOKThenFailDriver:
+        """Driver whose ``connect`` succeeds but whose subsequent
+        ``async_write_station_time`` raises.  Any post-handshake await
+        in ``_connect`` would do; clock sync is the one every driver
+        with the capability calls."""
+
+        connected = False
+
+        async def connect(self):
+            self.connected = True
+
+        async def disconnect(self):
+            self.connected = False
+
+        async def async_write_station_time(self, now):
+            raise OSError(5, "Input/output error")
+
+        # Station identity metadata that ``_connect`` logs on success.
+        station_name = "FakeStation"
+
+        class _HwConfig:
+            station_type = None
+        hw_config = _HwConfig()
+
+    async def test_teardown_runs_when_post_handshake_await_raises(
+        self, daemon, monkeypatch,
+    ):
+        """A raise after ``driver.connect()`` must clear self.driver
+        just like a raise in ``driver.connect()`` itself.  Otherwise
+        the watchdog dead zone Codex R1 flagged reopens."""
+        monkeypatch.setattr(
+            daemon, "_get_effective_config",
+            lambda: {"station_driver_type": "vantage"},
+        )
+        monkeypatch.setattr(
+            logger_main, "_create_driver",
+            lambda driver_type, config: self._ConnectOKThenFailDriver(),
+        )
+        with pytest.raises(OSError):
+            await daemon._connect("/dev/ttyUSB0", 19200)
+        assert daemon.driver is None, (
+            "Post-handshake raise left a connected driver on self — "
+            "watchdog State-B still can't recover"
+        )
+        assert daemon.poller is None
+        assert daemon.poller_task is None
