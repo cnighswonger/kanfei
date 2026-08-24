@@ -174,8 +174,20 @@ function trendPer3h(points: HistoryPoint[]): number | null {
 // Integrate 5-min rain rate samples into hourly totals (rate × dt, capped
 // at 1 h per sample so a gap doesn't inflate one bar).  24 buckets,
 // oldest first, keyed to the whole hour in the browser's local timezone.
-function hourlyRainInches(points: HistoryPoint[]): (number | null)[] {
-  if (!points.length) return Array<null>(24).fill(null);
+// Each bin carries its bucket-start ISO instant so axis labels can be
+// derived from the time instead of the array index — Design v51.
+function hourlyRainInches(
+  points: HistoryPoint[],
+): { at: string; in: number | null }[] {
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  const emptyBins = (): { at: string; in: number | null }[] =>
+    Array.from({ length: 24 }, (_, i) => ({
+      at: new Date(now.getTime() - (23 - i) * 3_600_000).toISOString(),
+      in: null,
+    }));
+
+  if (!points.length) return emptyBins();
   const buckets = new Map<number, number>();
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
@@ -189,15 +201,14 @@ function hourlyRainInches(points: HistoryPoint[]): (number | null)[] {
     buckets.set(key, (buckets.get(key) ?? 0) + p.value * dtHours);
   }
   // Emit 24 bins ending at the current hour, oldest first.
-  const now = new Date();
-  now.setMinutes(0, 0, 0);
-  const bins: (number | null)[] = [];
-  for (let i = 23; i >= 0; i--) {
-    const key = now.getTime() - i * 3_600_000;
-    const v = buckets.get(key);
-    bins.push(v != null ? Math.round(v * 1000) / 1000 : null);
-  }
-  return bins;
+  return Array.from({ length: 24 }, (_, i) => {
+    const bucketMs = now.getTime() - (23 - i) * 3_600_000;
+    const v = buckets.get(bucketMs);
+    return {
+      at: new Date(bucketMs).toISOString(),
+      in: v != null ? Math.round(v * 1000) / 1000 : null,
+    };
+  });
 }
 
 interface AdapterSources {
@@ -209,7 +220,7 @@ interface AdapterSources {
   historyDew: HistoryPoint[];
   historyBarometer: HistoryPoint[];
   historyThetaE: HistoryPoint[];
-  hourlyRain: (number | null)[];
+  hourlyRain: { at: string; in: number | null }[];
   /** Raw wind-direction samples over the last 4 h.  Feeds the wind-rose
    *  petals.  Empty until the first fetch resolves. */
   windDir4h: (number | null)[];
@@ -1039,7 +1050,19 @@ export default function Dashboard() {
   const [windDir4h, setWindDir4h] = useState<(number | null)[]>(
     () => cacheLoad<(number | null)[]>("kanfei.dashboard.windDir4h.v1") ?? [],
   );
-  const [hourlyRain, setHourlyRain] = useState<(number | null)[]>(() => Array<null>(24).fill(null));
+  // Initial hourlyRain bins carry ISO ``at`` even when empty so a
+  // pre-first-fetch render has real axis labels rather than a jump
+  // when the fetch lands (Design v51 shape).
+  const [hourlyRain, setHourlyRain] = useState<{ at: string; in: number | null }[]>(
+    () => {
+      const now = new Date();
+      now.setMinutes(0, 0, 0);
+      return Array.from({ length: 24 }, (_, i) => ({
+        at: new Date(now.getTime() - (23 - i) * 3_600_000).toISOString(),
+        in: null,
+      }));
+    },
+  );
   const [siteName, setSiteName] = useState<string | null>(null);
   // User's display-unit preference for pressure — hPa or inHg.
   // Read once at startup from station_config; the barometer readouts

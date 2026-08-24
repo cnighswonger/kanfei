@@ -251,6 +251,29 @@ export const fmtTime = (s: string | null | undefined): string => {
     : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 };
 
+/**
+ * Hour-only formatter for axis labels — Design v51.
+ *
+ * The rule is UTC on the wire, local at the label.  Anywhere an axis
+ * says a clock hour (spray strip, hourly rain bars) the instant must
+ * survive intact until it hits this function so ``toLocaleTimeString``
+ * can zone it in the browser's locale.  Pre-formatted strings and
+ * bare hour ints both lose the zone before they get here — this
+ * function is the one place per page that ever converts an instant
+ * to a display label, matching the ``fmtTime`` pattern above.
+ *
+ * Returns 24-hour by default because axes need to fit inside narrow
+ * ticks; the callers that want 12-hour spoken time
+ * (``bestWindowToday``, ``nextWindow``) use ``fmtTime`` instead.
+ */
+export const fmtHour = (iso?: string | null): string => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? String(iso)
+    : d.toLocaleTimeString([], { hour: 'numeric', hour12: false });
+};
+
 /* ──────────────────────────────────────────────────────────────── components */
 
 /**
