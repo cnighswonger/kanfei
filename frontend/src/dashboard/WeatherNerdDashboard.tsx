@@ -19,9 +19,10 @@
  */
 import React from 'react';
 import {
-  v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, Row, Tile, tnum, fmt, fmtInt, fmtTime, decimate, niceTicks,
+  v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, decimate, niceTicks,
 } from './primitives';
 import type { DashboardData, NerdResolution } from './types';
+import { PersonaFooter } from './PersonaFooter';
 import { pathFor } from '../utils/gauges';
 import WindRoseDial from '../components/charts/WindRoseDial';
 
@@ -32,11 +33,23 @@ export const WeatherNerdDashboard: React.FC<{
   themeLabel: string;
   onResolutionChange?: (r: NerdResolution) => void;
 }> = ({ d, themeLabel, onResolutionChange }) => (
-  <main data-dashboard="weather_nerd" style={{ minWidth: 0, overflow: 'hidden' }}>
+  <main
+    data-dashboard="weather_nerd"
+    style={{
+      minWidth: 0,
+      overflow: 'hidden',
+      // Fill the shell's main area — see EverydayDashboard.
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+    }}
+  >
     <div
       style={{
         ...scaleVar(DESIGN_HEIGHT),
-        padding: `${s(20)} ${s(24)} ${s(24)}`,
+        // Bottom + side paddings in ``st()`` so the footer's
+        // left, right and bottom edges match across personas.
+        padding: `${s(20)} ${st(30)} ${st(20)}`,
         display: 'flex',
         flexDirection: 'column',
         gap: s(16),
@@ -44,20 +57,27 @@ export const WeatherNerdDashboard: React.FC<{
         isolation: 'isolate',
         minWidth: 0,
         boxSizing: 'border-box',
+        // Fill the shell main area — see EverydayDashboard.
+        flex: 1,
+        minHeight: 0,
       }}
     >
-      {/* Corner plate, as Everyday — this screen is dense, so sit the
-          plate up higher and drop opacity a shade so it doesn't clip
-          against the footer or compete with the console-extremes tile
-          (DIFF-2b v27 cosmetic). */}
+      {/* Corner plate, right-anchored to the chart band.  v46 §2
+          removed ``ConsoleExtremesTile``'s fill, so the old
+          bottom-anchored plate now shows through the extremes table
+          and the METAR block.  Move the plate up to sit against the
+          chart tile only: ``top: s(163)`` = below the stat row + gap
+          (147 + 16), ``height: s(340)`` = chart minHeight, so the
+          plate's bottom edge lands at the chart / three-up boundary
+          and never bleeds into the three-up's data.  Design v48 §4. */}
       <div
         aria-hidden
         style={{
           position: 'absolute',
           right: 0,
-          bottom: s(60),
+          top: s(163),
           width: s(380),
-          height: s(260),
+          height: s(340),
           zIndex: -2,
           backgroundImage: 'var(--surface-plate)',
           backgroundSize: 'contain',
@@ -69,6 +89,17 @@ export const WeatherNerdDashboard: React.FC<{
         }}
       />
 
+      {/* Content region — see EverydayDashboard for the rationale. */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: s(16),
+        }}
+      >
       {/* ── stat row, 147 ─────────────────────────────────────────────────── */}
       <div
         style={{
@@ -76,9 +107,12 @@ export const WeatherNerdDashboard: React.FC<{
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: s(16),
           minHeight: s(147),
-          // stretch, not start: the four cards read as one instrument row, so they
-          // share a height. They grow together if any provenance line wraps.
-          alignItems: 'stretch',
+          // start, not stretch (Design v46 §2).  Borderless cells shouldn't
+          // stretch — a stretched borderless cell opens margin-top: auto voids
+          // inside itself.  The 'shared instrument-row height' argument only
+          // held while the cells were boxes; once they aren't, stretch is the
+          // wrong default.
+          alignItems: 'start',
           ...CONTENT_CAP,
         }}
       >
@@ -98,12 +132,12 @@ export const WeatherNerdDashboard: React.FC<{
           gridTemplateColumns: '406fr 406fr 487fr',
           gap: s(16),
           minHeight: s(293),
-          // stretch, not start: these three tiles are BORDERED. A row of
-          // boxes at unequal heights reads as sloppy; sharing a height lets
-          // the tallest content set it. Open (borderless) rows use 'start'
-          // — there stretching would push margin-top:auto footers down and
-          // open visible voids with no box to contain them.
-          alignItems: 'stretch',
+          // start, not stretch (Design v46 §2).  With the tiles now
+          // borderless — separated only by their TileHeading underlines —
+          // stretching them would open margin-top: auto voids with no
+          // box to contain them, exactly the failure mode the old
+          // comment warned against for open rows.
+          alignItems: 'start',
           ...CONTENT_CAP,
         }}
       >
@@ -111,46 +145,22 @@ export const WeatherNerdDashboard: React.FC<{
         <SolarEnergyTile d={d} />
         <ConsoleExtremesTile d={d} />
       </div>
-
-      {/* ── footer strip, 42 ─────────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: s(20),
-          flexWrap: 'wrap',
-          border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-          borderRadius: v.radiusCard,
-          padding: `${s(12)} ${s(18)}`,
-          ...CONTENT_CAP,
-        }}
-      >
-        <span style={{ ...type('sectionLabel'), color: v.text, display: 'inline-flex', alignItems: 'center', gap: s(8) }}>
-          <span
-            style={{
-              width: st(7),
-              height: st(7),
-              borderRadius: '50%',
-              background: d.station.transmittersOk ? v.success : v.danger,
-              display: 'inline-block',
-            }}
-          />
-          {d.station.console ?? '—'}
-          {d.station.model && ` · ${d.station.model}`}
-          {d.station.firmware && ` · FW ${d.station.firmware}`}
-        </span>
-        <SectionLabel>
-          archive {fmtInt(d.station.archiveRecords, ' rows')}
-          {d.station.intervalSeconds != null && ` · ${Math.round(d.station.intervalSeconds / 60) || 1} min`}
-        </SectionLabel>
-        {d.nerd?.dbSizeMB != null && <SectionLabel>DB {fmt(d.nerd.dbSizeMB, 1, ' MB')}</SectionLabel>}
-        {d.nerd?.uploadTargets && <SectionLabel>{d.nerd.uploadTargets} uploading</SectionLabel>}
-        {d.nerd?.ipcStatus && <SectionLabel>{d.nerd.ipcStatus}</SectionLabel>}
-        {themeLabel && <SectionLabel>{themeLabel}</SectionLabel>}
-        <SectionLabel style={{ marginLeft: 'auto' }}>
-          clock {d.station.clock ?? '—'} · last poll {fmtTime(d.station.lastPoll)}
-        </SectionLabel>
       </div>
+
+      {/* Shared provenance strip — see ``PersonaFooter.tsx``.  Weather
+          nerd carries three extra chips (DB size, upload targets, IPC
+          status) that the other personas don't have. */}
+      <PersonaFooter
+        d={d}
+        themeLabel={themeLabel}
+        extraChips={
+          <>
+            {d.nerd?.dbSizeMB != null && <SectionLabel>DB {fmt(d.nerd.dbSizeMB, 1, ' MB')}</SectionLabel>}
+            {d.nerd?.uploadTargets && <SectionLabel>{d.nerd.uploadTargets} uploading</SectionLabel>}
+            {d.nerd?.ipcStatus && <SectionLabel>{d.nerd.ipcStatus}</SectionLabel>}
+          </>
+        }
+      />
     </div>
   </main>
 );
@@ -164,18 +174,26 @@ export const WeatherNerdDashboard: React.FC<{
  * That last line is the persona's whole point — a nerd wants to know *how* the
  * number was arrived at, so every card says where it came from.
  */
-const StatCard: React.FC<{
+/** Four derived readouts in one scanning row — hairline-separated,
+ *  no boxes.  Design v46 §2 applies v45's flat-cell treatment here:
+ *  bordered cards on ``v.surface`` read as four clickable things,
+ *  which they are not.  ``border: 'none'`` is set explicitly because
+ *  ``Tile`` publishes ``border: var(--tile-border, none)`` and the
+ *  dark theme fills that token — an implicit-omit would re-box the
+ *  cells on that theme. */
+const StatCell: React.FC<{
   id: string;
   kicker: string;
+  first?: boolean;
   children: React.ReactNode;
-}> = ({ id, kicker, children }) => (
+}> = ({ id, kicker, first, children }) => (
   <Tile
     id={id}
     style={{
-      border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-      background: v.surface,
-      borderRadius: v.radiusCard,
-      padding: `${s(16)} ${s(18)}`,
+      border: 'none',
+      borderLeft: first ? 'none' : `${v.ruleHairWidth} solid ${v.ruleHair}`,
+      background: 'none',
+      padding: `${s(4)} ${s(20)} ${s(4)} ${first ? '0px' : s(20)}`,
       gap: s(4),
     }}
   >
@@ -204,8 +222,8 @@ const StatCard: React.FC<{
  * was being synthesised by the browser — a smeared faux-bold that read
  * as a fourth typeface.
  */
-const BigFigure: React.FC<{ children: React.ReactNode; color?: string }> = ({ children, color = v.text }) => (
-  <div style={{ ...type('display', fs(34)), ...tnum, color, lineHeight: 1.05 }}>{children}</div>
+const BigFigure: React.FC<{ children: React.ReactNode; color?: string; size?: number }> = ({ children, color = v.text, size = 28 }) => (
+  <div style={{ ...type('display', fs(size)), ...tnum, color, lineHeight: 1.05 }}>{children}</div>
 );
 
 /** Plain-language provenance line — body 11px, secondary ink. */
@@ -215,25 +233,56 @@ const Provenance: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 export const PressureCard: React.FC<{ d: DashboardData }> = ({ d }) => {
   const t = d.barometer.trendInHgPer3h;
-  const tone = t == null ? v.textSecondary : t > 0.005 ? v.success : t < -0.005 ? v.danger : v.textSecondary;
   const arrow = t == null ? '' : t > 0.005 ? '↑' : t < -0.005 ? '↓' : '→';
+  const pu = d.units.pressure;
+  const main = pu === 'hPa' ? d.barometer.hPa : d.barometer.inHg;
+  const mainDigits = pu === 'hPa' ? 1 : 2;
+  const trendConverted = t == null ? null : pu === 'hPa' ? t * 33.8639 : t;
+  const trendDigits = pu === 'hPa' ? 1 : 3;
+  const trendUnit = pu === 'hPa' ? 'hPa' : 'in';
   return (
-    <StatCard id="nerd-pressure" kicker="Pressure">
-      <BigFigure>{fmt(d.barometer.inHg, 2)}</BigFigure>
-      <div style={{ ...type('mono', fs(12)), ...tnum, color: tone }}>
-        {t == null ? '—' : `${arrow} ${t > 0 ? '+' : ''}${t.toFixed(3)} in/3h`}
+    <StatCell id="nerd-pressure" kicker="Pressure" first>
+      {/* Pressure with its 3-h rate is the persona's premise number;
+          it leads the stat row at ``fs(44)`` (Design v46 §8).  User's
+          unit choice controls which of ``inHg`` / ``hPa`` leads. */}
+      <BigFigure size={44}>{fmt(main, mainDigits)}</BigFigure>
+      {/* Rate is neutral in ink — ``success``/``danger`` on this
+          screen mean station health (reception %, transmitters ok,
+          calibration tolerance).  Falling pressure is weather, not
+          a fault; colouring it red was the dashboard editorialising.
+          The ↑ ↓ → glyph carries direction unambiguously
+          (Design v46 §9). */}
+      <div style={{ ...type('mono', fs(12)), ...tnum, color: v.textSecondary }}>
+        {trendConverted == null
+          ? '—'
+          : `${arrow} ${trendConverted > 0 ? '+' : ''}${trendConverted.toFixed(trendDigits)} ${trendUnit}/3h`}
       </div>
+      {/* ``hPa`` (or the alternate) prints unconditionally — it's a
+          unit conversion of the display figure, not a duplicate.
+          Altimeter and SLP filter out when they agree with the
+          station reading at rounding precision so the line stops
+          restating the display figure twice more.  Design v48 §2
+          filter kept for altimeter / SLP; v50 §6 restored the
+          alternate-unit line that over-suppressed under v48 §2. */}
       <Provenance>
-        {fmt(d.barometer.hPa, 1, ' hPa')}
-        {d.nerd?.altimeterInHg != null && ` · altimeter ${fmt(d.nerd.altimeterInHg, 2)}`}
-        {d.nerd?.seaLevelHPa != null && ` · SLP ${fmt(d.nerd.seaLevelHPa, 1)}`}
+        {[
+          pu === 'hPa'
+            ? d.barometer.inHg != null && `${fmt(d.barometer.inHg, 2)} inHg`
+            : d.barometer.hPa != null && `${fmt(d.barometer.hPa, 1)} hPa`,
+          d.nerd?.altimeterInHg != null &&
+            Math.abs(d.nerd.altimeterInHg - (d.barometer.inHg ?? 0)) >= 0.005 &&
+            `altimeter ${fmt(d.nerd.altimeterInHg, 2)} inHg`,
+          d.nerd?.seaLevelHPa != null &&
+            Math.abs(d.nerd.seaLevelHPa - (d.barometer.hPa ?? 0)) >= 0.05 &&
+            `SLP ${fmt(d.nerd.seaLevelHPa, 1)} hPa`,
+        ].filter(Boolean).join(' · ')}
       </Provenance>
-    </StatCard>
+    </StatCell>
   );
 };
 
 export const ThetaECard: React.FC<{ d: DashboardData }> = ({ d }) => (
-  <StatCard id="nerd-theta-e" kicker="Theta-E">
+  <StatCell id="nerd-theta-e" kicker="Theta-E">
     <BigFigure>{fmt(d.outside.thetaEK, 1)}</BigFigure>
     <div style={{ ...type('mono', fs(12)), ...tnum, color: v.textSecondary }}>
       K
@@ -244,12 +293,17 @@ export const ThetaECard: React.FC<{ d: DashboardData }> = ({ d }) => (
       {d.nerd?.mixingRatioGKg != null && ` · mixing ratio ${fmt(d.nerd.mixingRatioGKg, 1)} g/kg`}
       {d.nerd?.lclFt != null && ` · LCL ~${fmtInt(d.nerd.lclFt)} ft`}
     </Provenance>
-  </StatCard>
+  </StatCell>
 );
 
 export const ForecastAgreementCard: React.FC<{ d: DashboardData }> = ({ d }) => (
-  <StatCard id="nerd-agreement" kicker="Zambretti / NWS">
-    <div style={{ ...type('body', fs(17)), color: v.text, lineHeight: 1.25, textWrap: 'pretty' }}>
+  <StatCell id="nerd-agreement" kicker="Zambretti / NWS">
+    {/* Zambretti sentence — italic serif, same voice as the hero
+        Zambretti and Spray's verdictNote.  The rest of the stat
+        row is display-scale figures; this card's headline is a
+        sentence, and ``type('title')`` is the sentence form of
+        the same italic-serif voice (Design v46 §8). */}
+    <div style={{ ...type('title'), color: v.text, lineHeight: 1.2, textWrap: 'pretty' }}>
       {d.forecast.zambretti ?? '—'}
     </div>
     <div style={{ ...type('mono', fs(12)), ...tnum, color: v.accent }}>
@@ -259,7 +313,7 @@ export const ForecastAgreementCard: React.FC<{ d: DashboardData }> = ({ d }) => 
     {d.nerd?.agreementRate30d != null && (
       <Provenance>Zambretti and NWS have agreed {Math.round(d.nerd.agreementRate30d)}% of the last 30 days</Provenance>
     )}
-  </StatCard>
+  </StatCell>
 );
 
 export const ReceptionCard: React.FC<{ d: DashboardData }> = ({ d }) => {
@@ -267,16 +321,23 @@ export const ReceptionCard: React.FC<{ d: DashboardData }> = ({ d }) => {
   const pct = r?.pct ?? null;
   const tone = pct == null ? v.text : pct >= 98 ? v.success : pct >= 92 ? v.warning : v.danger;
   return (
-    <StatCard id="nerd-reception" kicker={`Reception · ${r?.windowLabel ?? 'last hour'}`}>
+    <StatCell id="nerd-reception" kicker={`Reception · ${r?.windowLabel ?? 'last hour'}`}>
       <BigFigure color={tone}>
         {pct == null ? '—' : fmt(pct, 1)}
         {pct != null && <span style={{ ...type('display', fs(16)), color: v.textSecondary }}>%</span>}
       </BigFigure>
+      {/* Counter line carries its own scope word — the kicker
+          ``windowLabel`` describes the percentage above (which is
+          averaged over that window in the adapter), but ``received``
+          / ``missed`` / ``CRC`` / ``resync`` are the console's raw
+          RXCHECK totals since last reset.  Without ``since reset``,
+          23,078 received under a ``last hour`` kicker read as an
+          impossible number.  Design v48 §1. */}
       <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary }}>
-        {fmtInt(r?.received, ' received')} · {fmtInt(r?.missed, ' missed')} · CRC {r?.crcErrors ?? '—'} · resync{' '}
+        {fmtInt(r?.received, ' received since reset')} · {fmtInt(r?.missed, ' missed')} · CRC {r?.crcErrors ?? '—'} · resync{' '}
         {r?.resyncs ?? '—'}
       </div>
-    </StatCard>
+    </StatCell>
   );
 };
 
@@ -301,7 +362,16 @@ export const NerdChartTile: React.FC<{
   // 0.2 in daily span holds only ~20 distinct values.  Binned to 600
   // each value repeats ~30× and draws as a stair-step tread.  200 is
   // enough to render smoothly without over-plotting.
-  const baro = decimate(d.nerd?.historyInHg ?? [], 200).filter((n): n is number => n != null);
+  const pu = d.units.pressure;
+  const baroInHg = decimate(d.nerd?.historyInHg ?? [], 200).filter((n): n is number => n != null);
+  // Honor the user's unit choice on the right axis.  Convert once at
+  // series construction; the rest of the axis math (pad, lo/hi, tick
+  // formatting) then works in whatever unit the reader picked.
+  const baro = pu === 'hPa' ? baroInHg.map((v) => v * 33.8639) : baroInHg;
+  const baroTickDigits = pu === 'hPa' ? 1 : 2;
+  const baroFallbackLo = pu === 'hPa' ? 29.8 * 33.8639 : 29.8;
+  const baroFallbackHi = pu === 'hPa' ? 30.2 * 33.8639 : 30.2;
+  const baroMinPad = pu === 'hPa' ? 0.04 * 33.8639 : 0.04;
 
   // Temperature and dew point share a domain; pressure gets its own right axis —
   // a 0.35 inHg span and a 30 °F span cannot share a scale meaningfully.
@@ -309,9 +379,9 @@ export const NerdChartTile: React.FC<{
   const pad = all.length ? Math.max(2, (Math.max(...all) - Math.min(...all)) * 0.12) : 2;
   const lo = all.length ? Math.min(...all) - pad : 0;
   const hi = all.length ? Math.max(...all) + pad : 1;
-  const bPad = baro.length ? Math.max(0.04, (Math.max(...baro) - Math.min(...baro)) * 0.2) : 0.1;
-  const bLo = baro.length ? Math.min(...baro) - bPad : 29.8;
-  const bHi = baro.length ? Math.max(...baro) + bPad : 30.2;
+  const bPad = baro.length ? Math.max(baroMinPad, (Math.max(...baro) - Math.min(...baro)) * 0.2) : baroMinPad;
+  const bLo = baro.length ? Math.min(...baro) - bPad : baroFallbackLo;
+  const bHi = baro.length ? Math.max(...baro) + bPad : baroFallbackHi;
 
   const t = temps.length ? pathFor(temps, PL, CW - PR, PT, CH - PB, lo, hi) : null;
   const dw = dews.length ? pathFor(dews, PL, CW - PR, PT, CH - PB, lo, hi) : null;
@@ -349,7 +419,7 @@ export const NerdChartTile: React.FC<{
         .map((val, i) => ({
           key: `P${i}`,
           y: (CH - PB) - ((val - bLo) / (bHi - bLo)) * (CH - PB - PT),
-          label: val.toFixed(2),
+          label: val.toFixed(baroTickDigits),
         }))
         .filter((g) => inPlot(g.y))
     : [];
@@ -367,25 +437,31 @@ export const NerdChartTile: React.FC<{
         ...CONTENT_CAP,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: s(16) }}>
-        <SectionLabel>Temperature, dew point &amp; pressure · 24 h</SectionLabel>
-        {/* Resolution + export, from the existing History page controls. */}
-        <div style={{ display: 'flex', gap: s(6) }}>
-          {(['Raw', '5 min', 'Hourly', 'Daily'] as const).map((label) => {
-            const active = label === (d.nerd?.resolution ?? '5 min');
-            return (
-              <ChartButton
-                key={label}
-                active={active}
-                onClick={onResolutionChange ? () => onResolutionChange(label) : undefined}
-              >
-                {label}
-              </ChartButton>
-            );
-          })}
+      {/* Sentence-case serif italic heading + underline rule via
+          ``TileHeading``, with the resolution + CSV controls floated
+          right along the same baseline (Design v46 §1). */}
+      <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(16) }}>
+        <span>Temperature, dew point &amp; pressure · 24 h</span>
+        <div style={{ display: 'flex', gap: s(10), alignItems: 'baseline' }}>
+          <ChartButtonGroup>
+            {(['Raw', '5 min', 'Hourly', 'Daily'] as const).map((label, i) => {
+              const active = label === (d.nerd?.resolution ?? '5 min');
+              return (
+                <ChartButton
+                  key={label}
+                  segmented
+                  first={i === 0}
+                  active={active}
+                  onClick={onResolutionChange ? () => onResolutionChange(label) : undefined}
+                >
+                  {label}
+                </ChartButton>
+              );
+            })}
+          </ChartButtonGroup>
           <ChartButton emphasis>CSV</ChartButton>
         </div>
-      </div>
+      </TileHeading>
 
       {/*
         Two layers, deliberately:
@@ -497,7 +573,7 @@ export const NerdChartTile: React.FC<{
         <LegendKey color={v.accent}>Temperature °F</LegendKey>
         <LegendKey color={v.chart.traceSecondary}>Dew point °F</LegendKey>
         <LegendKey color={v.chart.trace} dashed>
-          Pressure inHg, right axis
+          Pressure {pu}, right axis
         </LegendKey>
         <SectionLabel style={{ marginLeft: 'auto' }}>
           {fmtInt(d.history.sampleCount, ' samples')} · drag to zoom
@@ -525,12 +601,31 @@ const LegendKey: React.FC<{ color: string; dashed?: boolean; children: React.Rea
   </span>
 );
 
+/** ChartButton, two modes (Design v46 §7):
+ *
+ * ``segmented`` (default in the resolution group) — the button
+ * lives inside a shared bordered container.  No per-button
+ * border except a left hairline divider between siblings.  Active
+ * = accent text + a 2 px accent bottom border via inset box-shadow
+ * (so it sits over the container's own bottom border rather than
+ * pushing everything below down by 2 px).  Inactive =
+ * ``textSecondary`` on transparent.  Kills the filled-copper
+ * primary that put the page's strongest contrast on its weakest
+ * control.
+ *
+ * ``emphasis`` (CSV, sitting outside the group) — a standalone
+ * bordered chip.  A different kind of action (export, not a
+ * view-mode toggle), so the treatment is different and it's
+ * placed after a ``s(10)`` gap outside the segmented container.
+ */
 const ChartButton: React.FC<{
   active?: boolean;
+  segmented?: boolean;
+  first?: boolean;
   emphasis?: boolean;
   onClick?: () => void;
   children: React.ReactNode;
-}> = ({ active, emphasis, onClick, children }) => (
+}> = ({ active, segmented, first, emphasis, onClick, children }) => (
   <button
     type="button"
     onClick={onClick}
@@ -539,11 +634,19 @@ const ChartButton: React.FC<{
       letterSpacing: 'normal',
       textTransform: 'none',
       padding: `${s(5)} ${s(12)}`,
-      borderRadius: 'var(--radius-control, 0px)',
-      border: `${v.ruleHairWidth} solid ${active ? v.accent : v.ruleHair}`,
-      background: active ? v.accent : v.sunken,
-      color: active ? v.bg : emphasis ? v.text : v.textSecondary,
+      borderRadius: segmented ? 0 : 'var(--radius-control, 0px)',
+      border: segmented
+        ? 'none'
+        : `${v.ruleHairWidth} solid ${v.ruleHair}`,
+      borderLeft: segmented && !first
+        ? `${v.ruleHairWidth} solid ${v.ruleHair}`
+        : undefined,
+      background: 'transparent',
+      color: active ? v.accent : emphasis ? v.text : v.textSecondary,
       fontWeight: active ? 600 : 400,
+      boxShadow: segmented && active
+        ? `inset 0 -2px 0 ${v.accent}`
+        : 'none',
       cursor: 'pointer',
     }}
   >
@@ -551,21 +654,51 @@ const ChartButton: React.FC<{
   </button>
 );
 
+/** Bordered container around the segmented resolution buttons. */
+const ChartButtonGroup: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div
+    style={{
+      display: 'inline-flex',
+      border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
+      borderRadius: 'var(--radius-control, 0px)',
+    }}
+  >
+    {children}
+  </div>
+);
+
 /* ───────────────────────────────────────────────────────── the three-up */
+
+/** 16 compass sectors, north-first clockwise — matches
+ *  ``bucketWindDirection()`` in ``Dashboard.tsx`` and ``CARDINALS``
+ *  in ``WindRoseDial.tsx``.  Kept adjacent to the caption that
+ *  consumes it so a future divergence would be obvious. */
+const ROSE_DIRS = [
+  'N','NNE','NE','ENE','E','ESE','SE','SSE',
+  'S','SSW','SW','WSW','W','WNW','NW','NNW',
+];
+
+/** Peak sector in a normalised rose-weights array.  Returns null if
+ *  the series is empty or all-zero (no data yet).  ``% 16`` rounds
+ *  the bucket index; the input is 16-long so it's a passthrough,
+ *  but the form is robust to any future re-bucketing.  Design v47 §1. */
+const dominantSector = (weights: (number | null | undefined)[] | null | undefined): string | null => {
+  if (!weights?.length) return null;
+  let best = -1, at = -1;
+  weights.forEach((w, i) => { if (w != null && w > best) { best = w; at = i; } });
+  return best > 0 && at >= 0 ? ROSE_DIRS[Math.round((at / weights.length) * 16) % 16] : null;
+};
 
 export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   return (
     <Tile
       id="nerd-wind-rose"
       style={{
-        border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-        background: v.surface,
-        borderRadius: v.radiusCard,
         padding: `${s(18)} ${s(20)}`,
         gap: s(10),
       }}
     >
-      <SectionLabel>Wind rose · 4 h</SectionLabel>
+      <TileHeading>Wind rose · 4 h</TileHeading>
       {/* Design v35 T3 swap: SVG compass + rosePetals + needle →
           Highcharts WindRoseDial with styled-mode CSS.  Contained in
           a flex-centre wrapper so the square dial sits centred in
@@ -579,7 +712,15 @@ export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         />
       </div>
       <SectionLabel style={{ textAlign: 'center' }}>
-        {d.wind.directionLabel ? `${d.wind.directionLabel} dominant` : 'no prevailing direction'}
+        {/* Dominant sector derives from the same ``roseWeights``
+            series that drew the petals, not from ``directionLabel``
+            (which is the *instantaneous* vane reading and, when the
+            Vue anemometer stalls at 1 mph mean, a held value rather
+            than a current one).  A caption computed from the graphic
+            can't contradict it — Design v47 §1. */}
+        {dominantSector(d.wind.roseWeights)
+          ? `${dominantSector(d.wind.roseWeights)} dominant`
+          : 'no prevailing direction'}
         {d.wind.speedMph != null && ` · ${fmt(d.wind.speedMph, 0)} mph mean`}
         {d.wind.peakMph != null && ` · ${fmt(d.wind.peakMph, 0)} peak`}
       </SectionLabel>
@@ -595,17 +736,20 @@ export const SolarEnergyTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile
       id="nerd-solar"
       style={{
-        border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-        background: v.surface,
-        borderRadius: v.radiusCard,
         padding: `${s(18)} ${s(20)}`,
         gap: s(10),
       }}
     >
-      <SectionLabel>Solar energy · 14 days</SectionLabel>
+      <TileHeading>Solar energy · 14 days</TileHeading>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: s(118) }}>
+        {/* Index from the end so ``today`` is always the rightmost
+            slot regardless of how much history the adapter returns —
+            a short series (say 9 of 14) reads as absent bars on the
+            left, not a mid-chart highlight labelled 'today'.  ``rx``
+            dropped because the SVG is ``preserveAspectRatio="none"``,
+            which turns a uniform corner radius into an ellipse. */}
         {Array.from({ length: 14 }, (_, i) => {
-          const val = days[i] ?? 0;
+          const val = days[days.length - 14 + i] ?? 0;
           const h = val > 0 ? (val / max) * 76 : 0;
           return (
             <rect
@@ -614,9 +758,8 @@ export const SolarEnergyTile: React.FC<{ d: DashboardData }> = ({ d }) => {
               y={82 - h}
               width={24}
               height={h}
-              rx={2}
               fill={v.warning}
-              opacity={i === days.length - 1 ? 1 : 0.55}
+              opacity={i === 13 ? 1 : 0.55}
             />
           );
         })}
@@ -663,19 +806,20 @@ export const ConsoleExtremesTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile
       id="nerd-extremes"
       style={{
-        border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-        background: v.surface,
-        borderRadius: v.radiusCard,
         padding: `${s(18)} ${s(20)}`,
         gap: s(10),
       }}
     >
-      <SectionLabel>Console extremes &amp; calibration</SectionLabel>
+      <TileHeading>Console extremes &amp; calibration</TileHeading>
 
       {/* Two columns of ruled rows — the mock's 212/212 split. */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: s(20) }}>
-        {pairs.map(([label, value], i) => (
-          <Row key={label} label={label} value={value} last={i >= pairs.length - 2} />
+        {/* No ``last`` on the pairs rows — the table continues below
+            with ``Baro offset`` and ``vs reference``, so dropping a
+            hairline here made the third visual row look like the end
+            and the two calibration rows look like a second table. */}
+        {pairs.map(([label, value]) => (
+          <Row key={label} label={label} value={value} />
         ))}
         <Row
           label="Baro offset"
@@ -705,17 +849,20 @@ export const ConsoleExtremesTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         />
       </div>
 
-      {/* The METAR line: a mono block on the sunken ground, selectable as one
-          string so it can be copied into a decoder. */}
-      <div style={{ marginTop: 'auto', paddingTop: s(10), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
+      {/* METAR line: mono, ``userSelect: 'all'`` so it copies as one
+          string.  Sunken fill kept (Design v46 §4) as the visible
+          target for the select, but border + borderRadius dropped —
+          once the tile is open, that inner box was the only remaining
+          card on this section and read as the tile's own frame.
+          ``marginTop: auto`` removed too: a start-aligned borderless
+          tile is content-height, so the auto-push has nothing to do. */}
+      <div style={{ paddingTop: s(10), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
         <SectionLabel style={{ marginBottom: s(6) }}>METAR output</SectionLabel>
         <div
           style={{
             ...type('mono', fs(12)),
             color: v.text,
             background: v.sunken,
-            border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
-            borderRadius: v.radiusCard,
             padding: `${s(10)} ${s(12)}`,
             letterSpacing: '0.3px',
             wordBreak: 'break-word',

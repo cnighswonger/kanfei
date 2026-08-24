@@ -23,13 +23,27 @@ export interface Reading {
   text?: string;
 }
 
+/** User-selected display units from ``station_config``.  Populated
+ *  in ``toDashboardData`` from a single one-shot fetch of the config,
+ *  so every tile reads the same value and none of them has to know
+ *  where the value came from. */
+export type PressureUnit = 'inHg' | 'hPa';
+
 export interface DashboardData {
+  /** Display-unit preferences (see the type above).  Consumers should
+   *  read ``d.units.pressure`` rather than hardcoding a unit and
+   *  should pull the corresponding numeric value from ``barometer``
+   *  (``inHg`` or ``hPa``) — both are always populated so switching
+   *  units is a formatting decision, not a data fetch. */
+  units: {
+    pressure: PressureUnit;
+  };
   station: {
     name: string;          // 'Sanford, NC'
     elevationFt: number | null;
     intervalSeconds: number | null;   // 10
     clock: string;         // '14:41:03'
-    lastPoll: string;      // '2:41:05 PM'
+    lastPoll: string;      // 24-hour 'HH:MM', formatted in the adapter
     console: string;       // 'Vantage Vue'
     model: string;         // '6351'
     firmware: string;      // '1.90'
@@ -85,6 +99,15 @@ export interface DashboardData {
     todayIn: number | null;
     yesterdayIn: number | null;
     yearIn: number | null;
+    /**
+     * Provenance for ``yearIn``.  ``'console'`` = raw Vue counter;
+     * ``'archive'`` = summed from stored daily rain since the season
+     * boundary because a mid-year console reset was detected.  See
+     * backend ``services/rain_year.py``.  Displayed inline next to
+     * the Year figure so an operator reading the value can tell
+     * where it came from — Design v41.
+     */
+    yearSource?: "console" | "archive";
     /** 24 hourly totals in inches, oldest first. */
     hourlyIn: (number | null)[];
   };
@@ -140,8 +163,12 @@ export interface DashboardData {
       limit: string;                 // '≤ 10 mph'
       pass: boolean;
     }[];
-    /** 24 hourly cells, from scoreSprayHours() in utils/gauges.ts */
-    window: { hour: number; label: string; state: 'go' | 'marginal' | 'nogo' }[];
+    /** Hourly forecast cells, from ``scoreSprayHours()`` in
+     *  ``utils/gauges.ts``.  ``at`` is the absolute start-of-hour
+     *  instant (ISO) — cells are sorted by ``at`` and the strip
+     *  starts at the first cell with ``at >= now``, so a 24 h
+     *  window crossing midnight orders correctly. */
+    window: { at: string; hour: number; label: string; state: 'go' | 'marginal' | 'nogo' }[];
     bestWindowToday: string | null;  // '2:40 – 6:40 PM'
     nextWindow: string | null;       // 'Tomorrow 7:10 AM'
     /** Gust frequency histogram, 2 mph bins, last 4 h. */

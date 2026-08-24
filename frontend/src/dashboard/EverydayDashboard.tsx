@@ -9,15 +9,23 @@
  * So: one layout component serves both paper themes. Do NOT fork this file per
  * theme; the theme supplies the fonts, rules, and inks.
  *
- * Geometry (frame 1600×1180, header 60, main padding 24px 30px 20px, gap 20):
- *   title row              51
- *   band A   739 / 547    787     left gap 20, right gap 18
- *   band B   739 / 547    150
- *   footer                 27
+ * Geometry (frame 1600×1240, header 60, main padding 24px 30px 20px, gap 20).
+ * The declared band heights below are LIVE-DOM measurements from the
+ * authenticated view — the mock's numbers (787 / 150) undercounted every tile
+ * once real data landed, and the scaleVar / minHeight budget was ~90 px light
+ * so ``overflow: hidden`` on the content region clipped Console clock and Last
+ * poll off the last tile.  Design v50 §1 remeasured against HEAD; update these
+ * numbers again if a tile's content shape changes.
+ *
+ *   title row               51
+ *   band A   739 / 547    ~845    left column taller: hero 270 + chart 357 + rain/solar 178 (+2*gap 40)
+ *   band B   739 / 547    ~182    Console & link, 8 rows in 2 cols
+ *   footer                  27
  */
 import React from 'react';
-import { v, type, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, fmtTime, s, scaleVar, CONTENT_CAP } from './primitives';
+import { v, type, SectionLabel, TileHeading, Row, Tile, fmt, fmtInt, fmtTime, s, st, scaleVar, CONTENT_CAP } from './primitives';
 import type { DashboardData } from './types';
+import { PersonaFooter } from './PersonaFooter';
 import {
   HeroTemperatureTile, DerivedConditionsTile, HistoryChartTile, BarometerTile,
   WindTile, RainTile, SolarUvTile, AlmanacTile, RainfallByHourTile,
@@ -37,12 +45,34 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
       // main just must not clip or stretch its child.
       minWidth: 0,
       overflow: 'hidden',
+      // Fill the shell's main area so the inner scale wrapper can
+      // grow to that exact height via ``flex: 1``.  Without this,
+      // the persona sizes to its content and the footer sits at
+      // whatever y the content stack ends at — which differs by
+      // persona at any viewport where ``--k`` isn't the same for
+      // all three (the floor-clamp region around 900-1200 vh).
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
     }}
   >
     <div
       style={{
-        ...scaleVar(1120),
-        padding: `${s(24)} ${s(30)} ${s(20)}`,
+        // Design height was declared 1120 against the mock, but every
+        // band-A tile renders taller with live data — hero row ~270 vs
+        // s(205), history chart ~357 vs s(269), rain/solar ~178 vs
+        // s(159); Console & link's eight rows in a 2-col grid come
+        // out at ~182 against s(150).  Total ~1230 in design space
+        // against a 1120 budget, so ``overflow: hidden`` on the
+        // content-region was clipping Console clock and Last poll off
+        // the last tile.  Bumped to 1240 (measured 1230, rounded up
+        // to the next 10) per Design v50 §1.
+        ...scaleVar(1240),
+        // Bottom + side paddings in ``st()`` so the footer's left,
+        // right and bottom edges land at the same physical pixels
+        // across personas (``s()`` is per-persona ``--k``, ``st()``
+        // is shared ``--kt``).  Top padding stays per-persona.
+        padding: `${s(24)} ${st(30)} ${st(20)}`,
         display: 'flex',
         flexDirection: 'column',
         gap: s(20),
@@ -50,6 +80,20 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
         isolation: 'isolate',
         minWidth: 0,
         boxSizing: 'border-box',
+        // Fill the shell's main area exactly (not the viewport
+        // minus a fallback chrome).  Combined with the parent
+        // ``flex: 1`` above and the content-region wrapper below
+        // (which absorbs overflow), the footer always sits at the
+        // shell main's bottom edge regardless of persona content
+        // height or ``--k`` clamp state.
+        //
+        // ``minHeight: 0`` is what makes ``flex: 1`` actually
+        // constrain the wrapper to its allocated space — flex
+        // items default to ``min-height: auto`` (content-sized),
+        // so without this the wrapper grows past its allocation
+        // whenever its content is taller.
+        flex: 1,
+        minHeight: 0,
       }}
     >
     {/* Corner plate — 400×280, bottom-right of MAIN, behind content.
@@ -60,7 +104,12 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
       style={{
         position: 'absolute',
         right: 0,
-        bottom: s(60),
+        // Raised from ``bottom: s(60)`` — the plate at 400×280 sat
+        // under band B's Console & link readouts (``Product 6351``,
+        // ``Console battery 4.66 V``).  ``s(200)`` clears the band
+        // B tiles and keeps the plate at the top of band B's row
+        // (Design v50 §9).
+        bottom: s(200),
         width: s(400),
         height: s(280),
         zIndex: -1,
@@ -74,6 +123,23 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
       }}
     />
 
+    {/* Content region — takes the flex slack from the outer wrapper
+        and clips anything past its own height (viewports too short
+        to fit the composition).  ``PersonaFooter`` is the next
+        sibling and so always sits at the shell-main bottom edge,
+        regardless of whether the content ran short of that height
+        (footer pushed down by content-region's ``flex: 1``) or over
+        (content-region clips, footer stays in view). */}
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: s(20),
+      }}
+    >
     {/* ── title row, 51 — carries a solid 1.6px rule beneath it ───────────── */}
     <div
       style={{
@@ -96,17 +162,17 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
       </SectionLabel>
     </div>
 
-    {/* ── band A, 787 ─────────────────────────────────────────────────────── */}
+    {/* ── band A, ~845 (left column taller than right at start-align) ────── */}
     <div data-band="a" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), alignItems: 'start', ...CONTENT_CAP }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: s(20), minWidth: 0 }}>
-        <div style={{ display: 'flex', gap: s(28), minHeight: s(205) }}>
+        <div style={{ display: 'flex', gap: s(28), minHeight: s(270) }}>
           <HeroTemperatureTile d={d} style={{ width: s(340), flexShrink: 0 }} />
           <DerivedConditionsTile d={d} style={{ flex: 1, minWidth: 0 }} />
         </div>
 
-        <HistoryChartTile d={d} style={{ minHeight: s(269) }} />
+        <HistoryChartTile d={d} style={{ minHeight: s(357) }} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(24), minHeight: s(159), alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(24), minHeight: s(178), alignItems: 'start' }}>
           {/* 1d titles this 'Rain ledger', not 'Rain' */}
           <RainTile d={d} title="Rain ledger" />
           <SolarUvTile d={d} />
@@ -114,37 +180,23 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: s(18), minWidth: 0 }}>
-        <BarometerTile d={d} style={{ minHeight: s(280) }} />
-        <WindTile d={d} style={{ minHeight: s(220) }} />
+        <BarometerTile d={d} style={{ minHeight: s(320) }} />
+        <WindTile d={d} style={{ minHeight: s(250) }} />
         <AlmanacTile d={d} style={{ minHeight: s(159) }} />
       </div>
     </div>
 
-    {/* ── band B, 150 ─────────────────────────────────────────────────────── */}
-    <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), minHeight: s(150), alignItems: 'start', ...CONTENT_CAP }}>
+    {/* ── band B, ~182 (Console & link, 8 rows in a 2-col grid) ─────────── */}
+    <div data-band="b" style={{ display: 'grid', gridTemplateColumns: BAND_COLS, gap: s(BAND_GAP), minHeight: s(182), alignItems: 'start', ...CONTENT_CAP }}>
       <RainfallByHourTile d={d} />
       <ConsoleAndLinkTile d={d} />
     </div>
-
-    {/* ── footer strip, 27 ────────────────────────────────────────────────── */}
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderTop: `${v.ruleWidth} solid ${v.rule}`,
-        paddingTop: s(8),
-        ...CONTENT_CAP,
-      }}
-    >
-      <SectionLabel>
-        Kanfei v{d.station.appVersion ?? '1.0.0'} · {themeLabel}
-        {d.station.intervalSeconds != null && ` · logged every ${d.station.intervalSeconds} s`}
-      </SectionLabel>
-      <span style={{ ...type('sectionLabel'), ...tnum, color: v.textMuted }}>
-        Last update {fmtTime(d.station.lastPoll)}
-      </span>
     </div>
+
+    {/* Provenance strip — shared across the three personas so the
+        same station reports the same fields regardless of view.
+        See ``PersonaFooter.tsx`` for why spacing is in ``st()``. */}
+    <PersonaFooter d={d} themeLabel={themeLabel} />
     </div>
   </main>
 );

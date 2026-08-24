@@ -1,11 +1,23 @@
 /*
- * WheelBarometer — styled-mode identity.
+ * WheelBarometer — styled-mode identity (Design v43).
  *
- * Companion to the geometry in ``WheelBarometer.tsx``.  Colours and
- * fonts pull from theme tokens so a theme switch reskins the wheel
- * with no JS rebuild.  Every selector is scoped through
- * ``.wheel-barometer``.
+ * Companion to the geometry in ``WheelBarometer.tsx``.  Colours pull
+ * from theme tokens so a theme switch reskins the wheel with no JS
+ * rebuild.  Scoped through ``.wheel-barometer``.
+ *
+ * v43 dropped the zone-word ring and the zone annulus.  Words now
+ * live in a separate strip below the tile (see ``BarometerZoneStrip``);
+ * the plate carries a single hairline rim, three numerals, ticks,
+ * needle, and one copper arc over the currently-active zone.
  */
+
+/* Container-fill (Design v43 step 6): the outer wrapper has no
+   intrinsic size, so HC's own root div must stretch to match. */
+
+.wheel-barometer > div {
+  width: 100%;
+  height: 100%;
+}
 
 .wheel-barometer .highcharts-background,
 .wheel-barometer .highcharts-plot-background,
@@ -14,44 +26,39 @@
   stroke: none;
 }
 
-/* ── Rim rings ──────────────────────────────────────────────────────
-   Two stroked concentric circles at 96.7 % / 88.7 % of pane radius
-   (theme ``dial`` group's gradOuter / gradInner).  Rendered as
-   zero-width bands whose stroke this stylesheet owns — Design v35
-   P4: filled bands at sub-percentage widths land on sub-pixel
-   boundaries and render unevenly.  A stroked ring is exact at any
-   size. */
+/* ── Rim ────────────────────────────────────────────────────────────
+   One hairline circle at 0.962 R.  Non-scaling stroke so it stays a
+   crisp 1 px at any viewport (Design v43 scale pilot). */
 
 .wheel-barometer .highcharts-pane {
   fill: transparent;
   stroke: none;
 }
 
-.wheel-barometer .highcharts-pane.wheel-baro-rim-outer {
-  stroke: var(--chart-grid-major, rgba(58, 45, 29, 0.20));
-  stroke-width: 0.8;
+.wheel-barometer .highcharts-pane.wheel-baro-rim {
+  stroke: var(--color-text, #3a2d1d);
+  stroke-opacity: 0.24;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
   fill: none;
 }
 
-.wheel-barometer .highcharts-pane.wheel-baro-rim-inner {
-  stroke: var(--rule-hair, rgba(58, 45, 29, 0.12));
-  stroke-width: 0.6;
+/* ── Active-zone arc ────────────────────────────────────────────────
+   Drawn by the custom render hook as a stroked <path> so it renders
+   as a crisp uniform line — matches the Design 14a mock's <path>
+   stroke, not an annulus fill. */
+
+.wheel-barometer .wheel-baro-custom-arc {
   fill: none;
-}
-
-/* ── Zone-ring separators ───────────────────────────────────────────
-   Four narrow radial slabs at the four zone boundaries.  Empty
-   between them; the labels overlaid on the ring identify each zone
-   by name, not by fill.  Design v35 P0. */
-
-.wheel-barometer .highcharts-plot-band.wheel-baro-separator {
-  fill: var(--chart-grid-major, rgba(58, 45, 29, 0.20));
-  opacity: 1;
+  stroke: var(--color-accent, #a85f24);
+  stroke-opacity: 0.45;
+  vector-effect: non-scaling-stroke;
 }
 
 /* ── Ticks + numerals ──────────────────────────────────────────────
-   Majors + minors sit INSIDE the rim (Design v35 P2), with the
-   numerals underneath.  ``sectionLabel`` role: mono, muted-ink. */
+   Major + minor ticks draw inward from the axis line at 0.667 R.
+   Numerals sit outboard at 0.705 R inner bound — outboard of the
+   needle sweep, which is the ordering rule that ends the collision. */
 
 .wheel-barometer .highcharts-axis-line {
   stroke: transparent;
@@ -59,26 +66,33 @@
 
 .wheel-barometer .highcharts-tick {
   stroke: var(--color-text, #3a2d1d);
-  stroke-width: 1.6;
+  stroke-opacity: 0.72;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
 }
 
 .wheel-barometer .highcharts-minor-tick {
-  stroke: var(--color-text-secondary, rgba(58, 45, 29, 0.84));
-  stroke-width: 1;
-  opacity: 0.5;
+  stroke: var(--color-text, #3a2d1d);
+  stroke-opacity: 0.34;
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
 }
 
 .wheel-barometer .highcharts-axis-labels text {
-  fill: var(--color-text-secondary, rgba(58, 45, 29, 0.84));
+  fill: var(--color-text-secondary, rgba(58, 45, 29, 0.62));
   font-family: var(--type-mono-family, "JetBrains Mono", monospace);
-  font-size: 11px;
+  font-size: 9px;
   letter-spacing: 0.02em;
+  /* Match the mock's SVG <text> attrs so the numerals sit at their
+     anchor point rather than above it (browser default is
+     "alphabetic" baseline). */
+  dominant-baseline: middle;
+  text-anchor: middle;
 }
 
-/* ── Trend dial ─────────────────────────────────────────────────────
-   Short pale hand three hours back.  Ink-soft at 55 % opacity so it
-   reads as ambient, not a value.  Its pivot is hidden — the "now"
-   dial owns the pivot dot. */
+/* ── Trend dial ────────────────────────────────────────────────────
+   Short pale hand three hours back.  Ink @ 0.28 so it reads as a
+   shadow of where the needle was. */
 
 .wheel-barometer .highcharts-series.wheel-baro-trend .highcharts-dial {
   fill: var(--color-text, #3a2d1d);
@@ -91,28 +105,29 @@
 }
 
 /* ── Live needle ───────────────────────────────────────────────────
-   Accent-coloured pointer + a lightly emphasised pivot dot. */
+   The live needle and hub are drawn by the custom render hook as a
+   straight <line> with round caps + a copper circle + a paper pip.
+   HC's own dial polygon and pivot for the ``wheel-baro-now`` series
+   are hidden so only the mock's SVG topology is visible. */
 
-.wheel-barometer .highcharts-series.wheel-baro-now .highcharts-dial {
+.wheel-barometer .highcharts-series.wheel-baro-now .highcharts-dial,
+.wheel-barometer .highcharts-series.wheel-baro-now .highcharts-pivot {
+  display: none;
+}
+
+.wheel-barometer .wheel-baro-custom-needle {
+  fill: none;
+  stroke: var(--color-accent, #a85f24);
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.wheel-barometer .wheel-baro-custom-hub {
   fill: var(--color-accent, #a85f24);
-  fill-opacity: 1;
   stroke: none;
 }
 
-.wheel-barometer .highcharts-series.wheel-baro-now .highcharts-pivot {
-  fill: var(--color-accent, #a85f24);
-  stroke: var(--chart-surface, #dccfa9);
-  stroke-width: 1;
-}
-
-/* ── Zone label overlays ───────────────────────────────────────────
-   Rendered via ``chart.renderer.text()`` on the zone ring — small
-   mono caps, spaced to look like scale engraving. */
-
-.wheel-barometer .wheel-baro-zone-label {
-  fill: var(--color-text-secondary, rgba(58, 45, 29, 0.84));
-  font-family: var(--type-mono-family, "JetBrains Mono", monospace);
-  font-size: 9px;
-  letter-spacing: 1.6px;
-  text-transform: uppercase;
+.wheel-barometer .wheel-baro-custom-pip {
+  fill: var(--chart-surface, #dccfa9);
+  stroke: none;
 }

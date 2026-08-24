@@ -81,6 +81,12 @@ export interface SprayConstraints {
 }
 
 export interface SprayCell {
+  /** Absolute start-of-hour instant, ISO string.  The renderer must
+   *  order cells by ``at`` and never re-derive order from ``hour`` —
+   *  a 24-hour window crossing midnight has two of each clock hour
+   *  and the older one is unrepresentable without a date.  Design
+   *  v49 §1. */
+  at: string;
   hour: number; label: string;
   state: 'go' | 'marginal' | 'nogo';
   fails: string[];
@@ -102,7 +108,7 @@ export interface SprayCell {
  * of step with its own legend swatches.
  */
 export function scoreSprayHours(
-  rows: { hour: number; temp: number; wind: number; rh: number; rainWithinWindow: boolean }[],
+  rows: { at: string; hour: number; temp: number; wind: number; rh: number; rainWithinWindow: boolean }[],
   c: SprayConstraints,
 ): SprayCell[] {
   return rows.map((row) => {
@@ -114,6 +120,7 @@ export function scoreSprayHours(
     const near = !fails.length && (row.wind > c.maxWind - 1.5 || row.temp > c.maxTemp - 3);
     const h = row.hour;
     return {
+      at: row.at,
       hour: h,
       label: `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? 'a' : 'p'}`,
       state: fails.length ? 'nogo' : near ? 'marginal' : 'go',

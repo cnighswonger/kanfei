@@ -42,17 +42,14 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 function AppContent() {
-  const { connected, currentConditions } = useWeatherData();
+  const { connected } = useWeatherData();
   const { flags, loading: flagsLoading } = useFeatureFlags();
-  const lastUpdate = currentConditions?.timestamp
-    ? new Date(currentConditions.timestamp)
-    : null;
 
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="*" element={
-        <AppShell connected={connected} lastUpdate={lastUpdate}>
+        <AppShell connected={connected}>
           <AlertToast />
           <Routes>
             <Route path="/" element={<Dashboard />} />

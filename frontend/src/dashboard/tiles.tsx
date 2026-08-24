@@ -13,7 +13,7 @@ import React from 'react';
 import { Tile, TileHeading, SectionLabel, Row, Rule, v, type, tnum, fmt, fmtInt, fmtTime, s, fs, decimate } from './primitives';
 import type { DashboardData } from './types';
 import { pathFor, ledgerGrid } from '../utils/gauges';
-import WheelBarometer from '../components/charts/WheelBarometer';
+import WheelBarometer, { ZONE_BANDS, MIN_INHG, MAX_INHG, activeZone } from '../components/charts/WheelBarometer';
 import WindRoseDial from '../components/charts/WindRoseDial';
 
 /* ───────────────────────────────────────────────────── 1. hero temperature */
@@ -31,22 +31,39 @@ export const HeroTemperatureTile: React.FC<{ d: DashboardData; style?: React.CSS
       </span>
     </div>
 
-    {d.forecast.zambretti && (
-      <div style={{ ...type('title'), color: v.text, lineHeight: 1.25, textWrap: 'pretty' }}>
-        {d.forecast.zambretti}
+    {/* Humidity sits with the temperature — both are primary sensor
+        readings, and the pair states what the outside air is doing
+        without borrowing space from the derived block (Design v44). */}
+    {d.outside.humidityPct != null && (
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: s(8), paddingTop: s(11), marginTop: s(4), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
+        <span style={{ ...type('mono', fs(27)), ...tnum, color: v.text, lineHeight: 1, letterSpacing: '-0.5px' }}>
+          {fmt(d.outside.humidityPct, 0)}
+        </span>
+        <SectionLabel>% RH</SectionLabel>
       </div>
     )}
-    <SectionLabel>
-      Zambretti{d.forecast.confidencePct != null && ` · ${Math.round(d.forecast.confidencePct)}% confidence`}
-    </SectionLabel>
 
-    {/* high/low chips sit directly under the confidence label. flexShrink:0 and
-        NO overflow clip — an earlier overflow:hidden here sliced the chips in
-        half rather than fitting them. Each chip truncates its own timestamp
-        instead. */}
-    <div style={{ display: 'flex', gap: s(8), marginTop: s(2), minWidth: 0, flexShrink: 0 }}>
-      <Chip label="High" value={fmt(d.outside.highF, 1, '°')} at={d.outside.highAt} tone={v.danger} />
-      <Chip label="Low" value={fmt(d.outside.lowF, 1, '°')} at={d.outside.lowAt} tone={v.sky} />
+    {/* Verdict + Zambretti label + H/L chips anchor to the column
+        foot with margin-top: auto so the space between humidity and
+        the verdict absorbs any leftover column height. */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), marginTop: 'auto' }}>
+      {d.forecast.zambretti && (
+        <div style={{ ...type('title'), color: v.text, lineHeight: 1.25, textWrap: 'pretty' }}>
+          {d.forecast.zambretti}
+        </div>
+      )}
+      <SectionLabel>
+        Zambretti{d.forecast.confidencePct != null && ` · ${Math.round(d.forecast.confidencePct)}% confidence`}
+      </SectionLabel>
+
+      {/* high/low chips sit directly under the confidence label. flexShrink:0 and
+          NO overflow clip — an earlier overflow:hidden here sliced the chips in
+          half rather than fitting them. Each chip truncates its own timestamp
+          instead. */}
+      <div style={{ display: 'flex', gap: s(8), marginTop: s(2), minWidth: 0, flexShrink: 0 }}>
+        <Chip label="High" value={fmt(d.outside.highF, 1, '°')} at={d.outside.highAt} tone={v.danger} />
+        <Chip label="Low" value={fmt(d.outside.lowF, 1, '°')} at={d.outside.lowAt} tone={v.sky} />
+      </div>
     </div>
   </Tile>
 );
@@ -78,8 +95,17 @@ const Chip: React.FC<{ label: string; value: string; at?: string | null; tone: s
 
 export const DerivedConditionsTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
   <Tile id="derived-conditions" style={style}>
-    <TileHeading>Derived conditions</TileHeading>
-    {/* A left-aligned ruled table. Five rows, ~30px each — NOT a centred 2-up grid. */}
+    {/* Five rows, ~30px each — humidity is a sensor reading, not a
+        derivation, so it lives on the outside-air column with the
+        temperature figure.  A provenance line on the header names
+        the two inputs the derivatives below were computed from
+        (Design v44). */}
+    <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(12) }}>
+      <span>Derived conditions</span>
+      <span style={{ ...type('sectionLabel'), ...tnum, color: v.textSecondary, whiteSpace: 'nowrap' }}>
+        FROM {fmt(d.outside.tempF, 1)} °F / {fmt(d.outside.humidityPct, 0)} %
+      </span>
+    </TileHeading>
     <div>
       <Row label="Feels like" value={fmt(d.outside.feelsLikeF, 1, ' °F')} />
       <Row label="Heat index" value={fmt(d.outside.heatIndexF, 1, ' °F')} />
@@ -176,49 +202,130 @@ export const HistoryChartTile: React.FC<{ d: DashboardData; style?: React.CSSPro
 /* ─────────────────────────────────────────────────────────── 4. barometer */
 
 export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
-  const size = 260;
+  // Dial size dropped 260 → 210 in Design v43 to make room for the
+  // zone strip below.  Numerals + zone words no longer share the
+  // plate — words leave for the strip; three numerals remain on
+  // the dial in pockets the needle sweep cannot reach.
+  const size = 210;
   const trend = d.barometer.trendInHgPer3h;
   const arrow = trend == null ? '' : trend > 0.005 ? '↑ rising' : trend < -0.005 ? '↓ falling' : '→ steady';
+  const zone = activeZone(d.barometer.inHg);
+  // Honor the user's unit choice from station_config.  Values on
+  // ``d.barometer`` are always both ``inHg`` and ``hPa``; the choice
+  // decides which one leads the readout.  Trend gets unit-converted
+  // via 33.8639 hPa/inHg so the "in / 3h" annotation matches.
+  const pu = d.units.pressure;
+  const main = pu === 'hPa' ? d.barometer.hPa : d.barometer.inHg;
+  const mainDigits = pu === 'hPa' ? 1 : 2;
+  const trendConverted = trend == null ? null : pu === 'hPa' ? trend * 33.8639 : trend;
+  const trendDigits = pu === 'hPa' ? 1 : 3;
+  const trendUnit = pu === 'hPa' ? 'hPa' : 'in';
+  const trendEpsilon = pu === 'hPa' ? 0.5 : 0.005;
 
   return (
     <Tile id="barometer" style={style}>
-      {/* ⚠ No heading above the gauge. In 1d the dial comes first and the title
-          lives at the top of the readout column beside it.  Design v34 T3
-          swapped the SVG wheel for the Highcharts gauge in
-          ``components/charts/WheelBarometer.tsx``; the readout column
-          below is unchanged. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: s(10), flex: 1, minHeight: 0 }}>
-        <WheelBarometer
-          inHg={d.barometer.inHg}
-          trendInHgPer3h={d.barometer.trendInHgPer3h}
-          size={size}
-        />
+        {/* Container-fill wrapper (Design v43 step 6): tile owns
+            physical size in ``s()`` units (viewport-scaled); the
+            instrument fills 100 % of the slot and rebuilds via
+            ResizeObserver when the wrapper changes size.  Kills the
+            raw-pixel gap that made the dial drift from the tile at
+            other viewport heights. */}
+        <div style={{ width: s(size), aspectRatio: '1', flexShrink: 0 }}>
+          <WheelBarometer
+            inHg={d.barometer.inHg}
+            trendInHgPer3h={d.barometer.trendInHgPer3h}
+            size={size}
+          />
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), minWidth: 0 }}>
           <div style={{ ...type('title'), color: v.text }}>Barometer</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: s(6) }}>
             <span style={{ ...type('mono', fs(34)), ...tnum, color: v.text, lineHeight: 1 }}>
-              {fmt(d.barometer.inHg, 2)}
+              {fmt(main, mainDigits)}
             </span>
-            <SectionLabel>inHg</SectionLabel>
+            <SectionLabel>{pu}</SectionLabel>
           </div>
           <SectionLabel color={v.accent}>
-            {arrow}{trend != null && ` · ${trend > 0 ? '+' : ''}${trend.toFixed(3)} in / 3h`}
+            {arrow}
+            {trendConverted != null &&
+              Math.abs(trendConverted) >= trendEpsilon &&
+              ` · ${trendConverted > 0 ? '+' : ''}${trendConverted.toFixed(trendDigits)} ${trendUnit} / 3h`}
           </SectionLabel>
-          {/* The log's voice: a sentence, not a stack of labelled numbers. */}
-          <div style={{ ...type('body', fs(12.5)), color: v.textSecondary, lineHeight: 1.4, textWrap: 'pretty' }}>
-            {d.barometer.zone && `Zone: ${d.barometer.zone.toLowerCase()}. `}
-            {d.barometer.hPa != null && `${fmt(d.barometer.hPa, 1)} hPa, compensated for elevation.`}
-          </div>
-          <div style={{ display: 'flex', gap: s(16), marginTop: 'auto', paddingTop: s(8), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
-            <span style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary }}>
-              H {fmt(d.barometer.todayHigh, 2)} {fmtTime(d.barometer.todayHighAt)}
-            </span>
-            <span style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary }}>
-              L {fmt(d.barometer.todayLow, 2)} {fmtTime(d.barometer.todayLowAt)}
-            </span>
+          {/* Sub-line + today's H/L, Design v43.  Zone name lives on
+              the dial + strip; the readout drops it to avoid
+              triplicating the same word.  Sub-line shows the OTHER
+              unit as context (``hPa · sea-level`` when inHg leads,
+              ``inHg · station`` when hPa leads).  H / L values track
+              the user's unit choice; conversion uses 33.8639
+              hPa/inHg since the raw fields are inHg. */}
+          <div style={{ marginTop: 'auto', paddingTop: s(9), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`, display: 'flex', flexDirection: 'column', gap: s(7) }}>
+            {/* No "other unit" sub-line — the user picked their unit
+                in Settings, and printing the alternate is exactly the
+                mixing-units complaint that motivated the pressure
+                switch.  Main figure + H/L already carry the reading;
+                anyone who wants both toggles ``pressure_unit``. */}
+            <div style={{ ...type('mono', fs(11)), ...tnum, color: v.text, whiteSpace: 'nowrap', letterSpacing: '0.6px' }}>
+              H {fmt(
+                pu === 'hPa' && d.barometer.todayHigh != null
+                  ? d.barometer.todayHigh * 33.8639
+                  : d.barometer.todayHigh,
+                mainDigits,
+              )}{' '}
+              <span style={{ color: v.textSecondary }}>{fmtTime(d.barometer.todayHighAt)}</span>
+              {'  '}L {fmt(
+                pu === 'hPa' && d.barometer.todayLow != null
+                  ? d.barometer.todayLow * 33.8639
+                  : d.barometer.todayLow,
+                mainDigits,
+              )}{' '}
+              <span style={{ color: v.textSecondary }}>{fmtTime(d.barometer.todayLowAt)}</span>
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Zone strip — full tile width, five cells, columns weighted
+          by each zone's share of the 2.5-inHg range so the strip is
+          a legend AND an unrolled scale.  Active cell picks up the
+          copper wash + a 2 px copper rule on its top edge
+          overlapping the strip's 1 px separator.  Design v43. */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: ZONE_BANDS.map(
+            (b) => `${((b.to - b.from) / (MAX_INHG - MIN_INHG)).toFixed(3)}fr`,
+          ).join(' '),
+          borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
+          marginTop: s(8),
+        }}
+      >
+        {ZONE_BANDS.map((b, i) => {
+          const isActive = zone?.label === b.label;
+          return (
+            <div
+              key={b.label}
+              style={{
+                ...type('sectionLabel'),
+                padding: `${s(6)} 0`,
+                textAlign: 'center',
+                color: isActive ? v.accent : v.textSecondary,
+                opacity: isActive ? 1 : 0.55,
+                background: isActive
+                  ? `color-mix(in oklab, var(--color-accent) 8%, transparent)`
+                  : 'transparent',
+                borderTop: isActive
+                  ? `2px solid var(--color-accent)`
+                  : 'none',
+                marginTop: isActive ? '-2px' : 0,
+                borderLeft: i === 0 ? 'none' : `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
+              }}
+            >
+              {b.label}
+            </div>
+          );
+        })}
       </div>
     </Tile>
   );
@@ -251,22 +358,32 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
             </span>
             <SectionLabel>mph {d.wind.directionLabel ?? ''}</SectionLabel>
           </div>
-          <div style={{ ...type('body', fs(12.5)), color: v.textSecondary, lineHeight: 1.4, textWrap: 'pretty' }}>
-            {d.wind.directionLabel && (COMPASS_NAME[d.wind.directionLabel] ?? d.wind.directionLabel)}
-            {d.wind.gustMph != null && `, gusting ${fmt(d.wind.gustMph, 0)}`}
-            {(d.wind.directionLabel || d.wind.gustMph != null) && '. '}
-            {d.wind.peakMph != null && `Peak ${fmt(d.wind.peakMph, 0)} mph${d.wind.peakAt ? ` at ${fmtTime(d.wind.peakAt)}` : ''}.`}
-          </div>
-          <div style={{ display: 'flex', gap: s(16), marginTop: 'auto', paddingTop: s(8), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
-            {d.wind.directionDeg != null && (
-              <span style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary }}>
-                {Math.round(d.wind.directionDeg)}°
-              </span>
+          {/* Direction detail + peak/gust, mirrors the barometer
+              right column: one mono sub-line in secondary ink for
+              context, one mono line with values in primary and
+              times/units in secondary for hierarchy. */}
+          <div style={{ marginTop: 'auto', paddingTop: s(9), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`, display: 'flex', flexDirection: 'column', gap: s(7) }}>
+            {(d.wind.directionLabel || d.wind.directionDeg != null) && (
+              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary, letterSpacing: '0.4px' }}>
+                {d.wind.directionLabel && (COMPASS_NAME[d.wind.directionLabel] ?? d.wind.directionLabel)}
+                {d.wind.directionLabel && d.wind.directionDeg != null && ' · '}
+                {d.wind.directionDeg != null && `${Math.round(d.wind.directionDeg)}°`}
+              </div>
             )}
-            <span style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary }}>
-              Humidity {fmt(d.outside.humidityPct, 0, '%')}
-              {d.outside.insideHumidityPct != null && ` · inside ${fmt(d.outside.insideHumidityPct, 0, '%')}`}
-            </span>
+            {(d.wind.peakMph != null || d.wind.gustMph != null) && (
+              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.text, whiteSpace: 'nowrap', letterSpacing: '0.6px' }}>
+                {d.wind.peakMph != null && (
+                  <>
+                    Peak {fmt(d.wind.peakMph, 0)}{' '}
+                    {d.wind.peakAt && (
+                      <span style={{ color: v.textSecondary }}>{fmtTime(d.wind.peakAt)}</span>
+                    )}
+                  </>
+                )}
+                {d.wind.peakMph != null && d.wind.gustMph != null && '  '}
+                {d.wind.gustMph != null && <>Gust {fmt(d.wind.gustMph, 0)}</>}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -274,8 +391,10 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
   );
 };
 
-/** Full compass names for the log's prose line. */
-const COMPASS_NAME: Record<string, string> = {
+/** Full compass names for the log's prose line.  Exported so the
+ *  Agriculture drift-risk tile can render the same expanded label
+ *  under the same style contract without duplicating the table. */
+export const COMPASS_NAME: Record<string, string> = {
   N: 'North', NNE: 'North-northeast', NE: 'Northeast', ENE: 'East-northeast',
   E: 'East', ESE: 'East-southeast', SE: 'Southeast', SSE: 'South-southeast',
   S: 'South', SSW: 'South-southwest', SW: 'Southwest', WSW: 'West-southwest',
@@ -299,7 +418,19 @@ export const RainTile: React.FC<{ d: DashboardData; title?: string; style?: Reac
     <div style={{ marginTop: 'auto' }}>
       <Row label="Today" value={fmt(d.rain.todayIn, 2, ' in')} />
       <Row label="Yesterday" value={fmt(d.rain.yesterdayIn, 2, ' in')} />
-      <Row label="Year" value={fmt(d.rain.yearIn, 2, ' in')} last />
+      {/* Year figure carries provenance when it's an archive-derived
+          recomputation — Design v41.  The banner in Settings explains
+          the situation once; the inline label explains the number
+          every time someone reads it, which is where ``0.21 in`` was
+          suspicious for three rounds. */}
+      <Row
+        label="Year"
+        value={
+          fmt(d.rain.yearIn, 2, ' in') +
+          (d.rain.yearSource === 'archive' ? ' (archive)' : '')
+        }
+        last
+      />
     </div>
   </Tile>
 );
@@ -338,7 +469,13 @@ export const AlmanacTile: React.FC<{ d: DashboardData; style?: React.CSSProperti
         value={
           <>
             {d.almanac.dayLength ?? '—'}
-            {d.almanac.dayLengthDelta && <span style={{ color: v.danger }}> {d.almanac.dayLengthDelta}</span>}
+            {d.almanac.dayLengthDelta && (
+              /* Neutral ink — days shortening in late August is the
+                 calendar, not a fault.  Red on this page means
+                 station health.  The ``-`` sign already carries
+                 direction.  Design v50 §7. */
+              <span style={{ color: v.textSecondary }}> {d.almanac.dayLengthDelta}</span>
+            )}
           </>
         }
       />

@@ -21,17 +21,31 @@ import {
   tnum, fmt, fmtInt, fmtTime, fs,
 } from './primitives';
 import type { DashboardData } from './types';
+import { COMPASS_NAME } from './tiles';
+import { PersonaFooter } from './PersonaFooter';
 import WindRoseDial from '../components/charts/WindRoseDial';
 
 export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: string }> = ({
   d,
   themeLabel,
 }) => (
-  <main data-dashboard="agriculture" style={{ minWidth: 0, overflow: 'hidden' }}>
+  <main
+    data-dashboard="agriculture"
+    style={{
+      minWidth: 0,
+      overflow: 'hidden',
+      // Fill the shell's main area — see EverydayDashboard.
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+    }}
+  >
     <div
       style={{
         ...scaleVar(928),
-        padding: `${s(22)} ${s(28)} ${s(20)}`,
+        // Bottom + side paddings in ``st()`` so the footer's
+        // left, right and bottom edges match across personas.
+        padding: `${s(22)} ${st(30)} ${st(20)}`,
         display: 'flex',
         flexDirection: 'column',
         gap: s(16),
@@ -39,27 +53,49 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
         isolation: 'isolate',
         minWidth: 0,
         boxSizing: 'border-box',
+        // Fill the shell main area — see EverydayDashboard.
+        flex: 1,
+        minHeight: 0,
       }}
     >
-      {/* Agriculture's plate is FULL-BLEED within main, unlike Everyday's corner
-          plate — the consent engraving sits behind the whole advisory. `contain`
-          at 50% 30%, opacity 0.13, z-index -2. */}
+      {/* Agriculture's plate — the consent engraving sits behind the
+          advisory.  Design v49 §4: clip to the upper band and drop
+          opacity to Everyday's 0.09.  Previously the plate ran the
+          full height at 0.13 and washed the drift-risk, water-balance
+          and field-schedule readouts (v46/v45 removed the tile fills
+          that used to hide it).  ``bottom: 50%`` cuts the plate off
+          above the lower band; ``contain`` at ``50% 15%`` keeps it
+          anchored near the top of that remaining strip. */}
       <div
         aria-hidden
         style={{
           position: 'absolute',
-          inset: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: '50%',
           zIndex: -2,
           backgroundImage: 'var(--surface-plate-wide, var(--surface-plate))',
           backgroundSize: 'contain',
-          backgroundPosition: '50% 30%',
+          backgroundPosition: '50% 15%',
           backgroundRepeat: 'no-repeat',
-          opacity: 0.13,
+          opacity: 0.09,
           filter: 'sepia(0.55) contrast(1.05) saturate(0.9)',
           mixBlendMode: 'multiply',
         }}
       />
 
+      {/* Content region — see EverydayDashboard for the rationale. */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: s(16),
+        }}
+      >
       {/* ── title row, 46 ─────────────────────────────────────────────────── */}
       <div
         style={{
@@ -95,29 +131,10 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
         <WaterBalanceTile d={d} />
         <FieldScheduleTile d={d} />
       </div>
-
-      {/* ── footer strip, 27 ──────────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderTop: `${v.ruleWidth} solid ${v.rule}`,
-          paddingTop: s(8),
-          ...CONTENT_CAP,
-        }}
-      >
-        <SectionLabel>
-          Kanfei v{d.station.appVersion ?? '1.0.0'} · {themeLabel} · {d.station.console} · FW{' '}
-          {d.station.firmware} · TX{' '}
-          <span style={{ color: d.station.transmittersOk ? v.success : v.danger }}>
-            {d.station.transmittersOk ? 'ok' : 'fault'}
-          </span>
-        </SectionLabel>
-        <span style={{ ...type('sectionLabel'), ...tnum, color: v.textMuted }}>
-          Last update {fmtTime(d.station.lastPoll)}
-        </span>
       </div>
+
+      {/* Shared provenance strip — see ``PersonaFooter.tsx``. */}
+      <PersonaFooter d={d} themeLabel={themeLabel} />
     </div>
   </main>
 );
@@ -188,8 +205,12 @@ export const SprayVerdictTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         gap: s(12),
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(12) }}>
-        <SectionLabel>Product</SectionLabel>
+      {/* Product name floats right on the same baseline as the
+          verdict kicker below.  Old ``PRODUCT`` label removed —
+          Design v49's ``PRODUCT · STATION NOW`` kicker names the
+          basis of the verdict; a second bare ``PRODUCT`` label
+          just prints the word twice (Design v50 §2). */}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: s(12) }}>
         <span style={{ ...type('body', fs(12.5)), color: v.text }}>
           {/* The em-dash clause only appears when there IS a category — otherwise
               the line reads 'Fungicide (Protectant) — null'. */}
@@ -199,22 +220,46 @@ export const SprayVerdictTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         </span>
       </div>
 
-      {/* Verdict: serif italic 54px in the semantic colour, sentence beside it. */}
+      {/* Verdict: serif italic 54px in the semantic colour.
+          MARGINAL is the widest state at eight glyphs; the slot is
+          pinned to that width so shorter states (GO, NO-GO) don't
+          reflow the sentence beside them.  A layout that moves when
+          the answer changes reads worse than one that runs slightly
+          loose (Design v45 q1). */}
       <div style={{ display: 'flex', alignItems: 'center', gap: s(18) }}>
-        <span
-          style={{
-            ...type('display', fs(54)),
-            color: v[VERDICT_TONE(sp?.verdict) as 'success' | 'warning' | 'danger'],
-            lineHeight: 1,
-          }}
-        >
-          {sp?.verdict ? sp.verdict.toUpperCase().replace('NOGO', 'NO-GO') : '—'}
-        </span>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: s(3), minWidth: 0 }}>
-          <span style={{ ...type('body', fs(16)), color: v.text }}>{sp?.verdictNote ?? 'No product selected'}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: s(4), minWidth: st(240) }}>
+          {/* State the basis in the kicker so the reader knows this
+              verdict scores live station values — the forecast strip
+              on the right carries its own kicker for Open-Meteo
+              hourly.  Two labelled instruments that can differ
+              honestly, not one screen contradicting itself
+              (Design v49 §2). */}
+          <SectionLabel>Product · Station now</SectionLabel>
+          <span
+            style={{
+              ...type('display', fs(54)),
+              color: v[VERDICT_TONE(sp?.verdict) as 'success' | 'warning' | 'danger'],
+              lineHeight: 1,
+              display: 'inline-block',
+            }}
+          >
+            {sp?.verdict ? sp.verdict.toUpperCase().replace('NOGO', 'NO-GO') : '—'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: s(4), minWidth: 0 }}>
+          {/* Verdict sentence — italic serif ~17 px, same voice as
+              the hero Zambretti sentence (Design v45 q3). */}
+          <span style={{ ...type('title', fs(17)), color: v.text, lineHeight: 1.2 }}>
+            {sp?.verdictNote ?? 'No product selected'}
+          </span>
+          {/* Caution — an actionable constraint read immediately
+              before deciding to spray.  Mono ~11 px, sentence case,
+              copper marker at line head.  Not tracked caps (those
+              are reserved for fixed metadata like model or window). */}
           {sp?.caution && (
-            <span style={{ ...type('body', fs(12.5)), color: v.text }}>
-              <span style={{ color: v.danger }}>▲</span> {sp.caution}
+            <span style={{ ...type('mono', fs(11)), color: v.text, letterSpacing: '0.2px', lineHeight: 1.4 }}>
+              <span style={{ color: v.accent, marginRight: s(4) }}>▲</span>
+              {sp.caution}
             </span>
           )}
         </div>
@@ -266,7 +311,23 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         gap: s(10),
       }}
     >
-      <SectionLabel>Next 24 hours</SectionLabel>
+      {/* When the forecast API returns rows starting at tomorrow's
+          00:00 (no rows for tonight's remaining hours), the strip
+          begins mid-day rather than at now.  Own it in the label
+          instead of silently starting at midnight — a strip that
+          begins in 3.5 hours with no visual break reads as beginning
+          now (Design v50 §3). */}
+      <SectionLabel>
+        Forecast · {(() => {
+          const first = cells[0]?.at;
+          if (!first) return 'Next 24 hours';
+          const firstDay = new Date(first);
+          const today = new Date();
+          return firstDay.getDate() !== today.getDate() || firstDay.getMonth() !== today.getMonth()
+            ? 'Tomorrow'
+            : 'Next 24 hours';
+        })()}
+      </SectionLabel>
 
       {/* Cells at FULL opacity — any wash puts the scale out of step with its own
           legend swatches below. */}
@@ -296,11 +357,43 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(14), marginTop: 'auto', paddingTop: s(10), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` }}>
         <div>
           <SectionLabel>Best window today</SectionLabel>
-          <div style={{ ...type('mono', fs(17)), ...tnum, color: v.success }}>{fmtRange(d.spray?.bestWindowToday)}</div>
+          {/* Green only for a real, still-usable window.  A past
+              state ("None left today") stays in secondary ink so
+              the page's most confident element isn't advice you
+              can no longer act on (Design v49 §1). */}
+          <div
+            style={{
+              ...type('mono', fs(17)),
+              ...tnum,
+              color: d.spray?.bestWindowToday && d.spray.bestWindowToday !== 'None left today'
+                ? v.success
+                : v.textSecondary,
+            }}
+          >
+            {fmtRange(d.spray?.bestWindowToday)}
+          </div>
         </div>
         <div>
           <SectionLabel>Next window</SectionLabel>
-          <div style={{ ...type('mono', fs(17)), ...tnum, color: v.text }}>{fmtRange(d.spray?.nextWindow)}</div>
+          {/* Day prefix on its own line so the time range never wraps
+              mid-value.  ``Tomorrow 12:00 AM – 1:00 AM`` is the widest
+              string this readout can produce and it wraps whenever
+              the window is tomorrow — i.e. every evening.  Splitting
+              lets Best window today and Next window keep the same
+              value typography (Design v50 §5). */}
+          {(() => {
+            const raw = d.spray?.nextWindow;
+            if (!raw) return <div style={{ ...type('mono', fs(17)), ...tnum, color: v.text }}>—</div>;
+            const m = /^([A-Za-z]+)\s+(\d.*)$/.exec(raw);
+            return m ? (
+              <>
+                <SectionLabel>{m[1]}</SectionLabel>
+                <div style={{ ...type('mono', fs(17)), ...tnum, color: v.text, whiteSpace: 'nowrap' }}>{m[2]}</div>
+              </>
+            ) : (
+              <div style={{ ...type('mono', fs(17)), ...tnum, color: v.text, whiteSpace: 'nowrap' }}>{raw}</div>
+            );
+          })()}
         </div>
       </div>
     </Tile>
@@ -331,9 +424,36 @@ export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
             <span style={{ ...type('mono', fs(24)), ...tnum, color: v.text }}>{fmt(d.wind.speedMph, 0)}</span>
             <SectionLabel>mph {d.wind.directionLabel ?? ''}</SectionLabel>
           </div>
-          <div style={{ ...type('body', fs(12.5)), color: v.textSecondary, lineHeight: 1.4, textWrap: 'pretty' }}>
-            {d.wind.gustMph != null && `Gusting ${fmt(d.wind.gustMph, 0)}. `}
-            {d.wind.peakMph != null && `Peak ${fmt(d.wind.peakMph, 0)} mph${d.wind.peakAt ? ` at ${d.wind.peakAt}` : ''}.`}
+          {/* Direction detail + peak/gust — same shape as the
+              Everyday wind tile.  Mono sub-line in secondary for
+              context, mono value line with primary values and
+              secondary times. */}
+          <div style={{ paddingTop: s(9), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`, display: 'flex', flexDirection: 'column', gap: s(7) }}>
+            {(d.wind.directionLabel || d.wind.directionDeg != null) && (
+              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary, letterSpacing: '0.4px' }}>
+                {d.wind.directionLabel && (COMPASS_NAME[d.wind.directionLabel] ?? d.wind.directionLabel)}
+                {d.wind.directionLabel && d.wind.directionDeg != null && ' · '}
+                {d.wind.directionDeg != null && `${Math.round(d.wind.directionDeg)}°`}
+              </div>
+            )}
+            {/* Narrow readout column — stack Peak and Gust as two
+                lines rather than forcing them onto one row with
+                nowrap.  Value primary, time secondary; matches the
+                Everyday wind tile's ink discipline without its
+                width assumption. */}
+            {d.wind.peakMph != null && (
+              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.text, letterSpacing: '0.6px' }}>
+                Peak {fmt(d.wind.peakMph, 0)}{' '}
+                {d.wind.peakAt && (
+                  <span style={{ color: v.textSecondary }}>{fmtTime(d.wind.peakAt)}</span>
+                )}
+              </div>
+            )}
+            {d.wind.gustMph != null && (
+              <div style={{ ...type('mono', fs(11)), ...tnum, color: v.text, letterSpacing: '0.6px' }}>
+                Gust {fmt(d.wind.gustMph, 0)}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -418,20 +538,19 @@ export const FieldScheduleTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile id="field-schedule" style={{ gap: s(8) }}>
       <TileHeading>Field &amp; schedule</TileHeading>
 
-      {/* No fixed height: the cells contain --kt-scaled text inside a --k-scaled
-          box, so pinning the height makes them overflow and crowd the label below.
-          Let the grid size to its content; the tile's flex gap does the spacing. */}
-      {/* Solid rule + sunken fill on each cell.  A 1px dotted border at
-          24% ink is invisible over the engraving plate — the boxes
-          disappeared entirely in the earlier render. */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(10) }}>
-        {cells.map(([label, value, tone]) => (
+      {/* Flat scan grid, four across — vertical hairlines separate the
+          cells on their inner edges; no outer box, no fill.  Bordered
+          boxes read as clickable, which these are not.  ``align-items:
+          start`` so a borderless row starts at its content rather than
+          stretching and opening voids inside cells (Design v45 q2). */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', alignItems: 'start' }}>
+        {cells.map(([label, value, tone], i) => (
           <div
             key={label}
             style={{
-              border: `1px solid ${v.ruleHair}`,
-              background: v.chart.surface,
-              padding: `${s(10)} ${s(12)}`,
+              padding: `${s(2)} ${s(10)}`,
+              minHeight: s(48),
+              borderLeft: i === 0 ? 'none' : `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
             }}
           >
             <SectionLabel>{label}</SectionLabel>
@@ -446,7 +565,11 @@ export const FieldScheduleTile: React.FC<{ d: DashboardData }> = ({ d }) => {
           <Row
             key={`${r.product}${i}`}
             label={`${r.product} · ${r.when}`}
-            value={<span style={{ color: v[STATUS_TONE[r.status]] }}>{r.status === 'nogo' ? 'no-go' : r.status}</span>}
+            value={
+              <span style={{ color: v[STATUS_TONE[r.status]] }}>
+                {r.status === 'nogo' ? 'No-go' : r.status === 'go' ? 'Go' : 'Pending'}
+              </span>
+            }
             last={i === (sp?.schedule.length ?? 0) - 1}
           />
         ))}

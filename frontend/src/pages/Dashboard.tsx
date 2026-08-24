@@ -108,12 +108,18 @@ function pickNearestReference(
  * ~28 chars and breaks chip / row layouts.  ``primitives.fmtTime()`` in
  * the view is a defensive backstop; this is the primary formatter.
  */
-function clock(iso: string | null | undefined): string | null {
+/** 24-hour ``HH:MM`` from an ISO instant.  Used everywhere a
+ *  timestamp is machine provenance rather than a spoken plan —
+ *  Peak marker, extremes (Everyday HIGH/LOW, barometer H/L,
+ *  todayHighAt/todayLowAt), and lastPoll.  Spray-window readouts
+ *  are the deliberate 12-hour holdouts and format inline in
+ *  ``AgricultureDashboard.tsx`` (Design v49 §3, v50 §8). */
+function clock24(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 /**
@@ -217,6 +223,9 @@ interface AdapterSources {
   /** Which resolution the chart series were fetched at.  Echoed back into
    *  ``d.nerd.resolution`` so the button strip lights the right choice. */
   nerdResolution: NerdResolution;
+  /** User's display-unit choice for pressure.  Fetched once from
+   *  ``station_config`` and echoed into ``d.units.pressure``. */
+  pressureUnit: 'inHg' | 'hPa';
 }
 
 interface SprayAdapterInputs {
@@ -416,6 +425,9 @@ function toDashboardData(s: AdapterSources): DashboardData {
   const gustMph = speedMph != null && gustRaw != null && gustRaw <= speedMph ? null : gustRaw;
 
   return {
+    units: {
+      pressure: s.pressureUnit,
+    },
     station: {
       // Prefer /api/station's station_name (public, no admin round-trip);
       // fall back to /api/config's city+state, then to the empty string
@@ -429,7 +441,20 @@ function toDashboardData(s: AdapterSources): DashboardData {
         (status as { elevation_ft?: number | null } | null)?.elevation_ft ?? null,
       intervalSeconds: status?.poll_interval ?? null,
       clock: status?.station_time ?? "",
-      lastPoll: clock(status?.last_poll) ?? "",
+      // 24-hour ``HH:MM`` — the persona footer prints this next to
+      // the console clock, which is 24-hour too.  Two formats for
+      // the same instant on a machine-provenance strip is confusing;
+      // Design v48 §3.  All extremes (highAt, lowAt, todayHighAt,
+      // todayLowAt, peakAt) use ``clock24()`` for the same reason;
+      // spray-window readouts stay 12-hour by design (v49 §3).
+      lastPoll: (() => {
+        const iso = status?.last_poll;
+        if (!iso) return "";
+        const d = new Date(iso);
+        return Number.isNaN(d.getTime())
+          ? String(iso)
+          : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+      })(),
       // Strip the ``(FW …)`` tail — the Weather Nerd + Everyday
       // footers append firmware as its own column, and a raw
       // ``Vantage Vue (FW 4.33)`` here doubles firmware to
@@ -458,9 +483,13 @@ function toDashboardData(s: AdapterSources): DashboardData {
       insideTempF: cc?.temperature?.inside?.value ?? null,
       insideHumidityPct: cc?.humidity?.inside?.value ?? null,
       highF: cc?.daily_extremes?.outside_temp_hi?.value ?? null,
-      highAt: clock(cc?.daily_extremes?.outside_temp_hi?.at),
+      // Extremes are machine timestamps (H at 3:12 PM), not spoken
+      // times a farmer reads as a plan — take them to 24-hour to
+      // match the header, footer and Peak marker (Design v50 §8).
+      // Window readouts stay 12-hour, per Design v49 §3.
+      highAt: clock24(cc?.daily_extremes?.outside_temp_hi?.at),
       lowF: cc?.daily_extremes?.outside_temp_lo?.value ?? null,
-      lowAt: clock(cc?.daily_extremes?.outside_temp_lo?.at),
+      lowAt: clock24(cc?.daily_extremes?.outside_temp_lo?.at),
     },
     barometer: {
       inHg: cc?.barometer?.value ?? null,
@@ -472,9 +501,9 @@ function toDashboardData(s: AdapterSources): DashboardData {
         cc?.barometer?.trend_rate ?? trendPer3h(s.historyBarometer),
       zone: baroZone(cc?.barometer?.value ?? null),
       todayHigh: cc?.daily_extremes?.barometer_hi?.value ?? null,
-      todayHighAt: clock(cc?.daily_extremes?.barometer_hi?.at),
+      todayHighAt: clock24(cc?.daily_extremes?.barometer_hi?.at),
       todayLow: cc?.daily_extremes?.barometer_lo?.value ?? null,
-      todayLowAt: clock(cc?.daily_extremes?.barometer_lo?.at),
+      todayLowAt: clock24(cc?.daily_extremes?.barometer_lo?.at),
     },
     wind: {
       speedMph,
@@ -482,7 +511,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       directionLabel: cc?.wind?.cardinal ?? null,
       gustMph,
       peakMph: cc?.daily_extremes?.wind_speed_hi?.value ?? null,
-      peakAt: clock(cc?.daily_extremes?.wind_speed_hi?.at),
+      peakAt: clock24(cc?.daily_extremes?.wind_speed_hi?.at),
       roseWeights: bucketWindDirection(s.windDir4h),
     },
     rain: {
@@ -490,6 +519,7 @@ function toDashboardData(s: AdapterSources): DashboardData {
       todayIn: cc?.rain?.daily?.value ?? null,
       yesterdayIn: cc?.rain?.yesterday?.value ?? null,
       yearIn: cc?.rain?.yearly?.value ?? null,
+      yearSource: cc?.rain?.yearly?.source,
       hourlyIn: s.hourlyRain,
     },
     solar: {
@@ -811,48 +841,81 @@ function buildSprayBlock(
       }
     : null;
   const rainFreeHours = product?.rain_free_hours ?? 0;
-  const window = constraints
+  // Sort forecast rows by their absolute ``iso`` so a backend that
+  // returns them out of order (or crosses midnight in a way ``hour``
+  // alone can't represent) still orders correctly.  Truncate to
+  // 24 rows starting at the first row with ``iso >= now`` — the
+  // strip must always begin at "now", not at whatever the backend
+  // decided the window opened at.  Design v49 §1.
+  const scoredAll = constraints
     ? scoreSprayHours(
-        forecast.slice(0, 24).map((r, i) => {
-          // Rain within the required rain-free window ahead: look at the
-          // next ``rainFreeHours`` forecast rows starting at row i and
-          // sum precipitation.  If any is > 0, this cell fails rain-free.
-          const ahead = forecast.slice(i, i + Math.max(1, rainFreeHours));
-          const rainWithinWindow = ahead.some((row) => (row.precip ?? 0) > 0);
-          return {
-            hour: r.hour,
-            temp: r.temp ?? 0,
-            wind: Math.max(r.wind ?? 0, r.gust ?? 0),
-            rh: r.rh ?? 0,
-            rainWithinWindow,
-          };
-        }),
+        forecast
+          .slice()
+          .sort((a, b) => (a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0))
+          .map((r, i, sortedRows) => {
+            const ahead = sortedRows.slice(i, i + Math.max(1, rainFreeHours));
+            const rainWithinWindow = ahead.some((row) => (row.precip ?? 0) > 0);
+            return {
+              at: r.iso,
+              hour: r.hour,
+              temp: r.temp ?? 0,
+              wind: Math.max(r.wind ?? 0, r.gust ?? 0),
+              rh: r.rh ?? 0,
+              rainWithinWindow,
+            };
+          }),
         constraints,
-      ).map((c) => ({ hour: c.hour, label: c.label, state: c.state }))
+      )
     : [];
+  const nowMs = Date.now();
+  const window = scoredAll
+    .filter((c) => new Date(c.at).getTime() >= nowMs - 60 * 60 * 1000)
+    .slice(0, 24)
+    .map((c) => ({ at: c.at, hour: c.hour, label: c.label, state: c.state }));
 
-  // First contiguous ``go`` run that is NOT the current one.  If the
-  // window opens with a go run, skip past its end and start looking
-  // there (that leading run is the ``bestWindowToday`` — showing it
-  // again as "Next window" is redundant).  Format both endpoints as
-  // clock times to match Design's ``bestWindowToday`` shape
-  // ("2:00 AM – 6:00 AM"); the raw ``label`` from ``scoreSprayHours``
-  // is a short-form axis tick ("7a"), not user prose.
-  const nextWindow = (() => {
-    if (!window.length) return null;
+  // Best / next windows read off ``at`` so a run that crosses
+  // midnight can be named honestly ("Tomorrow 6:00 – 8:00 AM").
+  // Both readouts stay in 12-hour spoken time — Design v49 §3 keeps
+  // window figures as a plan a farmer reads, not a machine
+  // timestamp.
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTomorrow = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
+  const startOfDayAfter = new Date(startOfToday.getTime() + 48 * 60 * 60 * 1000);
+  const dayPrefix = (atMs: number): string =>
+    atMs >= startOfDayAfter.getTime()
+      ? `${new Date(atMs).toLocaleDateString(undefined, { weekday: "short" })} `
+      : atMs >= startOfTomorrow.getTime()
+        ? "Tomorrow "
+        : "";
+
+  // Group ``window`` cells into contiguous ``go`` runs so the two
+  // readouts can filter or seek by run.
+  const goRuns: { start: Date; end: Date }[] = [];
+  {
     let i = 0;
-    // Skip the leading go run — it's today's best window.
-    while (i < window.length && window[i].state === "go") i++;
-    // Skip forward to the next go cell.
-    while (i < window.length && window[i].state !== "go") i++;
-    if (i >= window.length) return null;
-    const start = window[i].hour;
-    // Find the end of this go run.
-    let j = i;
-    while (j + 1 < window.length && window[j + 1].state === "go") j++;
-    // The window ends at the START of the next hour after the last go cell.
-    const endHour = (window[j].hour + 1) % 24;
-    return `${fmtHour12(start)} – ${fmtHour12(endHour)}`;
+    while (i < window.length) {
+      while (i < window.length && window[i].state !== "go") i++;
+      if (i >= window.length) break;
+      const start = new Date(window[i].at);
+      let j = i;
+      while (j + 1 < window.length && window[j + 1].state === "go") j++;
+      // Run ends at the start of the hour after the last go cell.
+      const end = new Date(new Date(window[j].at).getTime() + 60 * 60 * 1000);
+      goRuns.push({ start, end });
+      i = j + 1;
+    }
+  }
+  const formatRun = (run: { start: Date; end: Date }): string =>
+    `${dayPrefix(run.start.getTime())}${fmtHour12(run.start.getHours())} – ${fmtHour12(run.end.getHours())}`;
+
+  // Next window is the first run whose START is in the future.  A
+  // run currently open (start ≤ now < end) is described by the
+  // ``caution`` line below and by ``bestWindowToday``; showing it
+  // again as "Next window" would be redundant.
+  const nextWindow = (() => {
+    const run = goRuns.find((r) => r.start.getTime() > nowMs);
+    return run ? formatRun(run) : null;
   })();
 
   const applications = outcomes.slice(0, 4).map((o) => ({
@@ -883,15 +946,10 @@ function buildSprayBlock(
     : null;
 
   // Verdict-column caution note (mock 3c: "▲ Window closes 6:40 PM").
-  // Only when the current hour is a go: name the time the leading go
-  // run ends.  If the run continues past the 24 h horizon, or the
-  // current hour isn't a go, leave null (nothing to caution about).
+  // Show only when a run is currently open — start ≤ now < end.
   const caution = (() => {
-    if (!window.length || window[0].state !== "go") return null;
-    let k = 0;
-    while (k < window.length && window[k].state === "go") k++;
-    if (k >= window.length) return null; // the strip has no close inside 24 h
-    return `Window closes ${fmtHour12(window[k].hour)}`;
+    const open = goRuns.find((r) => r.start.getTime() <= nowMs && r.end.getTime() > nowMs);
+    return open ? `Window closes ${fmtHour12(open.end.getHours())}` : null;
   })();
 
   // Product name may already contain the category ("Fungicide
@@ -905,13 +963,24 @@ function buildSprayBlock(
     !!categoryLabel &&
     product.name.toLowerCase().includes(categoryLabel.toLowerCase());
 
-  // Best window may collapse to a zero-length range when today has no
-  // "go" hours (start === end).  A degenerate range reads as a real
-  // answer — worse than admitting there isn't one (DIFF-3c.md).
+  // Best window today = the first go run whose START is on today's
+  // date (local) AND whose END is still in the future.  If today has
+  // no such run — either today's runs all closed before now, or the
+  // window has no go cells at all today — say so explicitly.  A
+  // window you can no longer use, printed in green at display size,
+  // was the page's most confident-looking bad advice (Design v49 §1).
   const bestWindowToday = (() => {
-    const w = evaluation?.optimal_window;
-    if (!w || !w.start || !w.end || w.start === w.end) return null;
-    return `${w.start} – ${w.end}`;
+    // ``null`` reserved for "no product" (no window array) — that's
+    // the em-dash's own meaning ("we don't know").  With a product
+    // selected, always answer in words: either the range that's
+    // still usable, or ``None left today``.  An em-dash used for a
+    // real "no window" answer reads as a failed lookup
+    // (Design v50 §4).
+    if (!window.length) return null;
+    const today = goRuns.find(
+      (r) => r.start.getTime() < startOfTomorrow.getTime() && r.end.getTime() > nowMs,
+    );
+    return today ? formatRun(today) : "None left today";
   })();
 
   return {
@@ -972,6 +1041,12 @@ export default function Dashboard() {
   );
   const [hourlyRain, setHourlyRain] = useState<(number | null)[]>(() => Array<null>(24).fill(null));
   const [siteName, setSiteName] = useState<string | null>(null);
+  // User's display-unit preference for pressure — hPa or inHg.
+  // Read once at startup from station_config; the barometer readouts
+  // and the pressure column of the derived chart use it.
+  const [pressureUnit, setPressureUnit] = useState<'inHg' | 'hPa'>(
+    () => (cacheLoad<'inHg' | 'hPa'>('kanfei.dashboard.pressureUnit.v1') ?? 'inHg'),
+  );
   const [spray, setSpray] = useState<SprayAdapterInputs | null>(() => cacheLoad<SprayAdapterInputs>("kanfei.dashboard.spray.v1"));
   // Weather Nerd chart resolution — persisted so the choice sticks across
   // refresh.  The window scales with the resolution so each choice returns a
@@ -1072,8 +1147,16 @@ export default function Dashboard() {
         if (cityItem?.value) parts.push(String(cityItem.value));
         if (stateItem?.value) parts.push(String(stateItem.value));
         setSiteName(parts.join(", ") || (nameItem?.value ? String(nameItem.value) : null));
+        // Display-unit preferences.  Barometer keeps both ``inHg``
+        // and ``hPa`` on ``DashboardData.barometer``; the choice
+        // controls which one leads the readout, not what we fetch.
+        const pu = items.find((i) => i.key === "pressure_unit")?.value;
+        if (pu === "hPa" || pu === "inHg") {
+          setPressureUnit(pu);
+          cacheSave("kanfei.dashboard.pressureUnit.v1", pu);
+        }
       })
-      .catch(() => { /* falls back to empty string in adapter */ });
+      .catch(() => { /* falls back to empty string / inHg default */ });
     return () => { cancelled = true; };
   }, []);
   const [baroOffsetInHg, setBaroOffsetInHg] = useState<number | null>(
@@ -1277,8 +1360,9 @@ export default function Dashboard() {
         metar,
         baroRef,
         nerdResolution,
+        pressureUnit,
       }),
-    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, windDir4h, siteName, spray, baroOffsetInHg, signalWindow, solar14d, metar, baroRef, nerdResolution],
+    [currentConditions, stationStatus, forecast, astronomy, historyTemp, historyDew, historyBarometer, historyThetaE, hourlyRain, windDir4h, siteName, spray, baroOffsetInHg, signalWindow, solar14d, metar, baroRef, nerdResolution, pressureUnit],
   );
 
   // Persona dispatch.  Each layout owns its plate, its scale unit, and
