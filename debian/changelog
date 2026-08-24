@@ -1,3 +1,58 @@
+kanfei (0.1.0~beta73) unstable; urgency=medium
+
+  * Second follow-up to the beta71/beta72 logger auto-recovery work
+    (umbrella #472).  The beta72 smoke re-test on vsits-02 caught
+    another hole: after a stall-triggered watchdog reconnect where
+    ``_connect`` fails (I pulled the USB again to reproduce), the
+    daemon was still sitting idle until an operator IPC ``reconnect``
+    command brought it back.  Root cause was ``_connect`` leaving
+    ``self.driver`` pointing at the ``_create_driver`` output even
+    when the wire handshake — or any post-handshake initialization
+    await — raised.  With that stale reference, the watchdog's State
+    A (poll-stall detector) skipped because the driver wasn't
+    ``connected``, and State B (driverless-recovery, added in
+    beta72) skipped because ``self.driver`` wasn't None.  Both
+    branches quietly did nothing for the rest of the process's life.
+
+    The fix wraps the ENTIRE initialization body of ``_connect``
+    from just after ``_create_driver`` through poller_task +
+    _midnight_task creation in a single ``try/except`` that runs
+    the null-safe ``_teardown_driver()`` on any raise and then
+    re-raises.  After any failed ``_connect``, ``self.driver`` is
+    reliably None and the watchdog's driverless-recovery branch
+    fires cleanly on the next 10-second tick.  Codex review round
+    2 flagged the initial fix (which only covered
+    ``driver.connect()`` itself) as still leaving the exact same
+    dead zone reachable from any of the later awaits — archive-
+    period reads, clock sync, uploader config reloads.  The widened
+    boundary in R2 matches the natural end of the initialization
+    arc.
+
+    Regression coverage: two new tests pin the invariant — one at
+    the handshake failure boundary, one for the post-handshake
+    raise (a driver whose ``connect`` succeeds but whose
+    ``async_write_station_time`` raises).  Both fail without the
+    widened cleanup and pass with it.
+
+    The ``Watchdog reconnect failed`` log line on ``main`` was
+    still saying "keep retrying via subsequent stall detections"
+    from the original beta71 wording; retuned to match beta72's
+    "keep retrying via the watchdog's driverless-recovery branch
+    (State B in ``_watchdog_tick``, #482)."  Cosmetic on its own,
+    but the beta72 line and the beta73 line now agree so a
+    future smoke-test transcript is unambiguous about which
+    recovery path is in play.
+
+    Still not addressed: the deep root fix (#476 bounded serial
+    write) that would keep ``_io_lock`` from being held past a
+    hard deadline in the first place.  Also still not addressed:
+    bounded backoff on repeated reconnect failures — the 10-second
+    tick cadence is low enough that a truly disconnected station
+    only costs ~six error log rows per minute, so a state
+    machine for backoff is worth doing but not urgent.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Sun, 24 Aug 2026 00:55:00 +0000
+
 kanfei (0.1.0~beta72) unstable; urgency=medium
 
   * Follow-up to the beta71 logger observability + auto-recovery work
