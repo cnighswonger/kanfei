@@ -586,19 +586,29 @@ export const FieldScheduleTile: React.FC<{ d: DashboardData }> = ({ d }) => {
         <SectionLabel style={{ marginBottom: s(6) }}>
           Last applications{sp?.driftRatePct != null && ` · ${Math.round(sp.driftRatePct)}% drift rate`}
         </SectionLabel>
-        {(sp?.applications ?? []).map((a, i) => (
-          <Row
-            key={`${a.product}${i}`}
-            label={`${a.product} · ${a.date}`}
-            value={
-              <span style={{ color: a.note ? v.danger : v.success }}>
-                {'★'.repeat(Math.max(0, Math.min(5, a.stars)))}
-                {a.note && ` ${a.note}`}
-              </span>
-            }
-            last={i === (sp?.applications.length ?? 0) - 1}
-          />
-        ))}
+        {/* Explicit empty state — an unlabeled section reads as a
+            failed fetch (Design v52 §3).  ``None recorded`` in
+            secondary ink is the honest "no history yet" affordance
+            the rows would otherwise carry. */}
+        {(sp?.applications?.length ?? 0) === 0 ? (
+          <div style={{ ...type('body', fs(12)), color: v.textSecondary, paddingTop: s(2) }}>
+            None recorded
+          </div>
+        ) : (
+          (sp?.applications ?? []).map((a, i) => (
+            <Row
+              key={`${a.product}${i}`}
+              label={`${a.product} · ${a.date}`}
+              value={
+                <span style={{ color: a.note ? v.danger : v.success }}>
+                  {'★'.repeat(Math.max(0, Math.min(5, a.stars)))}
+                  {a.note && ` ${a.note}`}
+                </span>
+              }
+              last={i === (sp?.applications.length ?? 0) - 1}
+            />
+          ))
+        )}
       </div>
     </Tile>
   );
