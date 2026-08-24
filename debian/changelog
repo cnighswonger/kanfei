@@ -1,3 +1,43 @@
+kanfei (0.1.0~beta76) unstable; urgency=medium
+
+  * Backend (#489, Design v52 §1): drop the day's-max wind from the
+    spray current-obs payload.  The verdict tile on the Agriculture
+    persona was blocking a spray with ``Wind 9 ≤ 8 mph ✗`` while
+    the live sustained wind was 0 mph and the day's peak (9 mph
+    from 14:41) was seven hours earlier — the highest-stakes wrong
+    number on the page, the one that tells someone not to spray.
+    Root cause was ``_get_latest_obs`` piping a since-midnight MAX
+    wind query into ``wind_gust_mph`` and ``_check_wind`` then
+    preferring gust over sustained; the row that resulted said
+    "Wind 9" (unqualified) under a "station now" kicker.  Removing
+    the misleading assignment fixes the eval: ``_check_wind`` now
+    labels the row ``Wind (sustained) 0 mph ≤ 8 mph ✓`` and the
+    verdict tracks live conditions.  The ``/spray/conditions``
+    endpoint still returns a real current-hour gust via the
+    Open-Meteo ``wind_gusts_10m[0]`` fallback; the day's peak
+    remains available as context on the Drift-risk tile via a
+    separate ``daily_extremes`` path.  Regression test pins the
+    exact Design v52 fixture (sustained 0 mph now, peak 9 mph
+    earlier → verdict passes).
+
+  * UI (Design v52 §3): the Agriculture ``Field & schedule`` tile's
+    ``Last applications`` sectionLabel now shows ``None recorded``
+    in secondary ink when the applications list is empty, instead
+    of leaving the label bare above nothing.  A stray label with
+    no content reads as a failed fetch; the explicit empty state
+    tells the truth about "no history yet."
+
+  * Not in this beta: Design v52 §2 (empty band at bottom of
+    Agriculture, ~1/4 page) — deferred pending a live measurement
+    per Design's instruction before we pick between "nominate the
+    rose as absorber" and "content, not stretching."  Also
+    deferred: v52 §4 open-from-v49 items (stray ``go`` in right
+    margin, watermark opacity across the lower tiles) — need a
+    re-verification against beta76 to see whether the beta74
+    ui/refactor merge already resolved them.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Sun, 24 Aug 2026 20:50:00 +0000
+
 kanfei (0.1.0~beta75) unstable; urgency=medium
 
   * Backend: fix the spray-forecast axis being consistently off by the
