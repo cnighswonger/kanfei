@@ -7,7 +7,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..models.database import get_db
@@ -211,7 +210,22 @@ def _parse_schedule_datetime(
 
 
 def _get_latest_obs(db: Session) -> dict:
-    """Get latest sensor reading as a flat dict for current conditions."""
+    """Get latest sensor reading as a flat dict for current conditions.
+
+    ``wind_gust_mph`` is deliberately absent from this shape — Design v52
+    §1 caught a contradiction where the constraint eval failed on the
+    day's max wind (a peak from hours earlier) while the live wind was
+    calm, blocking a spray verdict on data the rest of the page
+    disproves.  For a "station now" evaluation the wire's own sustained
+    ``wind_speed_mph`` is the only honest signal; anything labelled
+    ``gust`` should be a recent-window peak, and this table doesn't
+    have one.  The ``/spray/conditions`` endpoint (see
+    ``get_spray_conditions``) still falls back to Open-Meteo's
+    ``wind_gusts_10m[0]`` — a legitimate current-hour forecast gust —
+    when it needs a gust value; the day's peak stays available as
+    context on the Drift-risk tile via
+    ``daily_extremes.wind_speed_hi`` in ``/api/current``.
+    """
     r = (
         db.query(SensorReadingModel)
         .order_by(SensorReadingModel.timestamp.desc())
@@ -220,20 +234,12 @@ def _get_latest_obs(db: Session) -> dict:
     if r is None:
         return {}
 
-    # Today's max wind from station readings (actual gust proxy).
-    now = datetime.now().astimezone()
-    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-    wind_hi = db.query(func.max(SensorReadingModel.wind_speed)).filter(
-        SensorReadingModel.timestamp >= midnight,
-    ).scalar()
-
     from ..models.sensor_meta import convert
 
     return {
         "outside_temp_f": convert("outside_temp", r.outside_temp),
         "outside_humidity_pct": r.outside_humidity,
         "wind_speed_mph": convert("wind_speed", r.wind_speed),
-        "wind_gust_mph": convert("wind_speed", wind_hi),
         "rain_rate_in_hr": convert("rain_rate", r.rain_rate),
         "rain_daily_in": convert("rain_total", r.rain_total),
     }
