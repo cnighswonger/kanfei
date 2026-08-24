@@ -1,3 +1,47 @@
+kanfei (0.1.0~beta75) unstable; urgency=medium
+
+  * Backend: fix the spray-forecast axis being consistently off by the
+    local UTC offset (four hours in EDT).  ``fetch_hourly_forecast``
+    never passed ``timezone`` to Open-Meteo, so the API defaulted to
+    GMT and emitted naked ISO strings like ``"2026-08-24T01:00"`` with
+    no zone marker.  ECMAScript's ``new Date(...)`` then parses those
+    as browser-local (ES2015+ spec), so the frontend spray strip
+    rendered UTC hours as if they were local hours.  Adding
+    ``"timezone": "auto"`` to the request makes Open-Meteo emit the
+    station's local wall clock, and the axis matches the operator's
+    clock.  Diagnosed live on vsits-02 during v51 rollout; a
+    regression test now pins the param so a future URL-builder edit
+    can't silently reopen the hole (#486).
+
+  * Frontend v51 (UTC hour labels): every clock-hour axis label now
+    zones through one place per page.  Design's rule: UTC on the
+    wire, local at the label — a time reduced to an integer or a
+    pre-formatted string before it reaches the component that
+    prints it loses the zone irrecoverably.  Three sites, one root:
+
+    - ``SprayWindowTile`` (Agriculture strip) labels from
+      ``fmtHour(c.at)`` instead of the pre-formatted ``c.label``.
+      v49 §1 had already added ``at`` to ``SprayCell``; this uses
+      it as intended.
+    - ``DashboardData.rain.hourlyIn`` is now ``{at, in}[]`` rather
+      than a bare 24-array.  Both consumers
+      (``RainfallByHourTile`` peak label + ``12a/4a/8a`` ticks,
+      ``WaterBalanceTile`` bars) read the axis from the bar's own
+      ``at`` via ``fmtHour``.
+    - ``Spray.tsx`` plan-modal ``today`` default was
+      ``toISOString().split("T")[0]`` — UTC, so it rolled over
+      four hours before local midnight in North American zones.
+      Switched to ``toLocaleDateString('en-CA')`` for local
+      ``YYYY-MM-DD``.  The ``toISOString`` calls on the fetch
+      bounds elsewhere in this file are correct (those ARE
+      instants) and are deliberately not touched.
+
+  * New ``fmtHour`` primitive in ``dashboard/primitives.tsx``
+    alongside ``fmtTime`` — one function per page that ever
+    converts an instant to a display clock hour.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Sun, 24 Aug 2026 01:20:00 +0000
+
 kanfei (0.1.0~beta74) unstable; urgency=medium
 
   * UI redesign catch-up.  beta71/72/73 landed the logger auto-recovery
