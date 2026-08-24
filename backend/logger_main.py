@@ -328,7 +328,20 @@ class LoggerDaemon:
         logger.info("Connecting (driver: %s)...", driver_type)
 
         self.driver = _create_driver(driver_type, config)
-        await self.driver.connect()
+        try:
+            await self.driver.connect()
+        except Exception:
+            # ``_create_driver`` succeeded but the wire handshake did
+            # not (USB unplugged, permissions, device busy, protocol
+            # timeout, etc.).  Leaving ``self.driver`` set to the
+            # unconnected instance strands the daemon in a state
+            # where the watchdog's State-A guard (`driver.connected`)
+            # skips and its State-B guard (`driver is None`) also
+            # skips.  Clear the reference so State B fires cleanly
+            # on the next tick — the class of hole caught by the
+            # 2026-08-23 vsits-02 smoke re-test after #483.
+            self.driver = None
+            raise
         logger.info("Station: %s", self.driver.station_name)
 
         # LinkDriver-specific post-connect: cache hardware config, archive sync.
