@@ -1,3 +1,31 @@
+kanfei (0.1.0~beta79) unstable; urgency=medium
+
+  * Backend perf (#496): composite indexes on ``sensor_readings``
+    for ``(outside_temp, timestamp)``, ``(wind_speed, timestamp)``,
+    ``(barometer, timestamp)`` — the three columns
+    ``services.daily_extremes._at`` seeks with.  Without a
+    supporting index for ``column == raw``, every ``_at`` call was
+    a full 914 k-row scan; ``get_year_extremes`` fired 5 of these
+    at ~2 s each.  #493 landed a cache to amortise, but on the DO
+    shared-vCPU droplet the cache-miss (first request per poll
+    cycle) still measured 4–6 s wall-clock.  Same DB, same code,
+    same schema on vsits-02 (Ryzen 7700X): 0.35 s cache-hit, 0.8 s
+    cache-miss.  The composite lets SQLite seek by value + range
+    on timestamp in one indexed pass; expected 6-7x drop on the
+    droplet.  Also drops the auto-generated
+    ``ix_sensor_readings_timestamp`` — a 36 MB duplicate of the
+    explicit ``idx_sensor_timestamp`` created by an unnecessary
+    ``index=True`` on the timestamp column.  Idempotent
+    ``CREATE / DROP INDEX IF (NOT) EXISTS`` migration in
+    ``init_database``; index build on 914 k rows takes a few
+    seconds at daemon start.  Storage cost per composite:
+    ~55 MiB/year at the observed demo cadence (~3,760 rows/day),
+    ~127 MiB/year at a true 10 s cadence (8,640 rows/day).
+    Truncation policy for demo installs can reclaim if space
+    matters later.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Mon, 25 Aug 2026 23:30:00 +0000
+
 kanfei (0.1.0~beta78) unstable; urgency=medium
 
   * Frontend hotfix: pin ``highcharts`` back to ``13.0.0`` (was
