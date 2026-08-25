@@ -28,6 +28,14 @@ logger = logging.getLogger(__name__)
 
 STATION_NAME = "Public Relay"
 
+# How recently the last upstream push must have arrived for the driver
+# to report itself connected. A public-relay droplet has no wire — its
+# "connectedness" is whether the upstream is actively talking to us, not
+# whether ``connect()`` ran at some point in the past. 60 s tolerates
+# one missed push cycle at a default 10 s station poll, plus network
+# jitter, without going stale on healthy traffic.
+_STALE_THRESHOLD_SECONDS = 60.0
+
 
 class PublicRelayDriver(StationDriver):
     """No-I/O driver whose poll returns the last snapshot pushed in.
@@ -75,7 +83,18 @@ class PublicRelayDriver(StationDriver):
 
     @property
     def connected(self) -> bool:
-        return self._connected
+        """True iff the driver is initialised AND the last push is fresh.
+
+        A passive relay has no wire to be up or down on; the outward
+        signal has to be data-freshness instead of the wire-based
+        semantics every other driver uses. Header UI, /api/station, and
+        the poller's connection_status broadcast all read this. Setting
+        the threshold high enough to survive one missed cycle keeps a
+        healthy stream from flapping.
+        """
+        if not self._connected or self._last_push_at is None:
+            return False
+        return (time.time() - self._last_push_at) < _STALE_THRESHOLD_SECONDS
 
     @property
     def station_name(self) -> str:
