@@ -1,3 +1,20 @@
+kanfei (0.1.0~beta80) unstable; urgency=medium
+
+  * Backend perf (#497): cache ``compute_yearly_rain`` on
+    ``/api/current``, same shape as #493's extremes cache. Profiled
+    at beta79 rollout as the largest remaining cost on the endpoint
+    (~1.93 s per call on the demo droplet) — ``detect_yearly_reset``
+    does a 30-day ``GROUP BY func.date(timestamp)`` aggregate looking
+    for a mid-year console reset; the ``func.date()`` cast blocks any
+    index-only path, so on a 900 k-row DB every hit touches ~260 k
+    rows. Cache key covers reading timestamp (invalidates on new
+    data), source_mode + season_month (config-branch shape), and a
+    local-midnight day-start (invalidates the 30-day lookback window
+    at each day boundary). Expected steady-state ``/api/current`` on
+    the droplet: 1.7-2.3 s → under 500 ms once the cache is warm.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Mon, 25 Aug 2026 23:50:00 +0000
+
 kanfei (0.1.0~beta79) unstable; urgency=medium
 
   * Backend perf (#496): composite indexes on ``sensor_readings``
