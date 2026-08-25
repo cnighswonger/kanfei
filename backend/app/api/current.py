@@ -30,12 +30,13 @@ from .config import get_effective_config
 
 router = APIRouter()
 
-# Cache of the two expensive period-extremes aggregates, keyed on the
-# timestamp of the latest sensor_readings row. The window over which
-# get_month_extremes / get_year_extremes aggregate cannot change until
-# a new reading lands (poller inserts one per 10 s cycle), so between
-# poll cycles every request that shares the same latest reading is
-# entitled to the same result.
+# Cache of the two expensive period-extremes aggregates, keyed on a
+# composite of (latest_reading_timestamp, month_window_start,
+# year_window_start). Both the underlying sensor data (invalidated by a
+# new reading) AND the window over which the callees aggregate
+# (invalidated by wall-clock crossing local month/year boundaries) must
+# be part of the key — otherwise a stalled logger across midnight on
+# the 1st would freeze the cache on the previous window forever.
 #
 # Why this exists: each period-extremes call fires 5 follow-up
 # "find timestamp for max/min" queries (services/daily_extremes.py:_at),
@@ -51,24 +52,48 @@ _extremes_cache: dict[str, object] = {
 }
 
 
+def _period_window_starts() -> tuple[datetime, datetime]:
+    """Local-midnight starts of the current month and year, as UTC.
+
+    Mirrors the window derivation inside
+    ``services.daily_extremes.get_month_extremes`` and
+    ``get_year_extremes`` so the cache key changes the moment those
+    functions would start returning a different window.
+    """
+    now = datetime.now().astimezone()
+    month_start = now.replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0,
+    ).astimezone(timezone.utc)
+    year_start = now.replace(
+        month=1, day=1, hour=0, minute=0, second=0, microsecond=0,
+    ).astimezone(timezone.utc)
+    return month_start, year_start
+
+
 def _cached_period_extremes(
-    db: Session, key: Optional[datetime],
+    db: Session, reading_ts: Optional[datetime],
 ) -> tuple[Optional[dict], Optional[dict]]:
-    """Return (monthly, yearly) extremes, computing at most once per new reading."""
-    if key is not None:
-        with _extremes_cache_lock:
-            if _extremes_cache["key"] == key:
-                return _extremes_cache["monthly"], _extremes_cache["yearly"]  # type: ignore[return-value]
+    """Return (monthly, yearly) extremes, computing at most once per (reading, window)."""
+    if reading_ts is None:
+        # No latest-reading anchor to key against; recompute without
+        # touching the cache so a transient no-data state cannot poison
+        # a subsequent real request.
+        return get_month_extremes(db), get_year_extremes(db)
+    month_start, year_start = _period_window_starts()
+    key = (reading_ts, month_start, year_start)
+    with _extremes_cache_lock:
+        if _extremes_cache["key"] == key:
+            return _extremes_cache["monthly"], _extremes_cache["yearly"]  # type: ignore[return-value]
     monthly = get_month_extremes(db)
     yearly = get_year_extremes(db)
-    if key is not None:
-        with _extremes_cache_lock:
-            # Two threads racing here computed against the same latest
-            # reading and would produce equivalent results; last-writer
-            # wins is safe.
-            _extremes_cache["key"] = key
-            _extremes_cache["monthly"] = monthly
-            _extremes_cache["yearly"] = yearly
+    with _extremes_cache_lock:
+        # Two threads racing here computed against the same latest
+        # reading AND the same wall-clock windows (the callees derive
+        # their windows from datetime.now(); the key includes those
+        # windows), so their outputs are equivalent; last-writer wins.
+        _extremes_cache["key"] = key
+        _extremes_cache["monthly"] = monthly
+        _extremes_cache["yearly"] = yearly
     return monthly, yearly
 
 CARDINAL_DIRECTIONS = [
