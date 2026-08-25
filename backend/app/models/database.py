@@ -173,3 +173,48 @@ def init_database() -> None:
             conn.commit()
         except Exception:
             pass
+
+    # Migrate: extremes composite indexes + drop the redundant
+    # auto-generated timestamp index.
+    #
+    # ``services.daily_extremes._at`` looks up the timestamp at which a
+    # given column reached a given max/min: ``WHERE timestamp >= X AND
+    # column == raw``. The bare-timestamp index does not help — the
+    # ``column == raw`` filter has no supporting index, so the query
+    # falls back to a full table scan. On a 914 k-row demo this cost
+    # ~2 s per year/month period-extremes call, five times per call,
+    # entirely dominating GET /api/current on weak-CPU hosts.
+    #
+    # A composite ``(column, timestamp)`` lets SQLite seek by value
+    # first and range-scan a small timestamp window inside — orders of
+    # magnitude fewer rows touched. Only outside_temp / wind_speed /
+    # barometer are indexed since those are the columns ``_at`` is
+    # invoked with (see get_period_extremes / get_daily_extremes).
+    #
+    # Also drops ``ix_sensor_readings_timestamp`` — the auto-generated
+    # index from ``index=True`` on the timestamp column. It duplicated
+    # ``idx_sensor_timestamp`` (36 MB of redundant b-tree on the demo).
+    # The explicit named index in ``__table_args__`` is now the sole
+    # timestamp-only index.
+    #
+    # CREATE / DROP INDEX IF (NOT) EXISTS are idempotent by design;
+    # no check-and-alter guard needed. Storage cost per composite:
+    # ~55 MiB/year at the observed demo row density (~3,760 rows/day),
+    # ~127 MiB/year at a true 10 s poll cadence (8,640 rows/day).
+    # See the model-level comment in sensor_reading.py for the
+    # derivation.
+    with engine.connect() as conn:
+        conn.execute(text("DROP INDEX IF EXISTS ix_sensor_readings_timestamp"))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_sensor_outside_temp_ts "
+            "ON sensor_readings (outside_temp, timestamp)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_sensor_wind_speed_ts "
+            "ON sensor_readings (wind_speed, timestamp)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_sensor_barometer_ts "
+            "ON sensor_readings (barometer, timestamp)"
+        ))
+        conn.commit()
