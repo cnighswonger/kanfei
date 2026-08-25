@@ -1,3 +1,22 @@
+kanfei (0.1.0~beta78) unstable; urgency=medium
+
+  * Frontend hotfix: pin ``highcharts`` back to ``13.0.0`` (was
+    ``^13.0.0`` → resolved to ``13.0.1`` in the beta77 build via
+    the merged-in Dependabot bump #487).  13.0.1 changed how
+    the base package exports the internal ``_Highcharts`` symbol
+    that the side-effect module imports
+    (``highcharts/highcharts-more``, ``highcharts/modules/*``)
+    depend on; the runtime bundle threw
+    ``can't access property "SeriesRegistry", n._Highcharts is
+    undefined`` on every page load.  Diagnosed live on
+    kanfei.vsits.co after the beta77 rollout.  Pinning to exact
+    ``13.0.0`` prevents ``npm install`` from re-picking 13.0.1
+    on the next lock refresh.  Real fix is to bump
+    ``highcharts-react-official`` to a version that speaks the
+    13.0.1 module shape; deferred.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Mon, 25 Aug 2026 22:45:00 +0000
+
 kanfei (0.1.0~beta77) unstable; urgency=medium
 
   * Backend perf (#493): cache monthly + yearly extremes on
