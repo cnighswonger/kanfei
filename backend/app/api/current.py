@@ -1,6 +1,8 @@
 """GET /api/current - Latest sensor reading with derived values."""
 
+import threading
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
@@ -27,6 +29,72 @@ from ..services.rain_year import compute_yearly_rain
 from .config import get_effective_config
 
 router = APIRouter()
+
+# Cache of the two expensive period-extremes aggregates, keyed on a
+# composite of (latest_reading_timestamp, month_window_start,
+# year_window_start). Both the underlying sensor data (invalidated by a
+# new reading) AND the window over which the callees aggregate
+# (invalidated by wall-clock crossing local month/year boundaries) must
+# be part of the key — otherwise a stalled logger across midnight on
+# the 1st would freeze the cache on the previous window forever.
+#
+# Why this exists: each period-extremes call fires 5 follow-up
+# "find timestamp for max/min" queries (services/daily_extremes.py:_at),
+# and the column == raw filter has no supporting index. On a 900 k-row
+# database, get_year_extremes cost 2 s and get_month_extremes 0.6 s,
+# which on a page reload firing 15 parallel API requests turned into
+# 8-11 s wall-clock on the slowest of those.
+_extremes_cache_lock = threading.Lock()
+_extremes_cache: dict[str, object] = {
+    "key": None,
+    "monthly": None,
+    "yearly": None,
+}
+
+
+def _period_window_starts() -> tuple[datetime, datetime]:
+    """Local-midnight starts of the current month and year, as UTC.
+
+    Mirrors the window derivation inside
+    ``services.daily_extremes.get_month_extremes`` and
+    ``get_year_extremes`` so the cache key changes the moment those
+    functions would start returning a different window.
+    """
+    now = datetime.now().astimezone()
+    month_start = now.replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0,
+    ).astimezone(timezone.utc)
+    year_start = now.replace(
+        month=1, day=1, hour=0, minute=0, second=0, microsecond=0,
+    ).astimezone(timezone.utc)
+    return month_start, year_start
+
+
+def _cached_period_extremes(
+    db: Session, reading_ts: Optional[datetime],
+) -> tuple[Optional[dict], Optional[dict]]:
+    """Return (monthly, yearly) extremes, computing at most once per (reading, window)."""
+    if reading_ts is None:
+        # No latest-reading anchor to key against; recompute without
+        # touching the cache so a transient no-data state cannot poison
+        # a subsequent real request.
+        return get_month_extremes(db), get_year_extremes(db)
+    month_start, year_start = _period_window_starts()
+    key = (reading_ts, month_start, year_start)
+    with _extremes_cache_lock:
+        if _extremes_cache["key"] == key:
+            return _extremes_cache["monthly"], _extremes_cache["yearly"]  # type: ignore[return-value]
+    monthly = get_month_extremes(db)
+    yearly = get_year_extremes(db)
+    with _extremes_cache_lock:
+        # Two threads racing here computed against the same latest
+        # reading AND the same wall-clock windows (the callees derive
+        # their windows from datetime.now(); the key includes those
+        # windows), so their outputs are equivalent; last-writer wins.
+        _extremes_cache["key"] = key
+        _extremes_cache["monthly"] = monthly
+        _extremes_cache["yearly"] = yearly
+    return monthly, yearly
 
 CARDINAL_DIRECTIONS = [
     "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
@@ -157,6 +225,10 @@ def get_current(db: Session = Depends(get_db)):
         uv_value = reading.uv_index / 10.0
     uv_warning = classify_uv(uv_value)
 
+    monthly_extremes, yearly_extremes = _cached_period_extremes(
+        db, reading.timestamp,
+    )
+
     return {
         "timestamp": reading.timestamp.isoformat() if reading.timestamp else None,
         "station_type": station_name,
@@ -212,6 +284,6 @@ def get_current(db: Session = Depends(get_db)):
         "et_yearly": _et_display(reading.et_yearly),
         "et_weekly": get_weekly_delta(db, SensorReadingModel.et_yearly, "et_yearly"),
         "daily_extremes": _get_daily_extremes(db),
-        "monthly_extremes": get_month_extremes(db),
-        "yearly_extremes": get_year_extremes(db),
+        "monthly_extremes": monthly_extremes,
+        "yearly_extremes": yearly_extremes,
     }
