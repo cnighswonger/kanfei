@@ -1,6 +1,8 @@
 """GET /api/current - Latest sensor reading with derived values."""
 
+import threading
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
@@ -27,6 +29,47 @@ from ..services.rain_year import compute_yearly_rain
 from .config import get_effective_config
 
 router = APIRouter()
+
+# Cache of the two expensive period-extremes aggregates, keyed on the
+# timestamp of the latest sensor_readings row. The window over which
+# get_month_extremes / get_year_extremes aggregate cannot change until
+# a new reading lands (poller inserts one per 10 s cycle), so between
+# poll cycles every request that shares the same latest reading is
+# entitled to the same result.
+#
+# Why this exists: each period-extremes call fires 5 follow-up
+# "find timestamp for max/min" queries (services/daily_extremes.py:_at),
+# and the column == raw filter has no supporting index. On a 900 k-row
+# database, get_year_extremes cost 2 s and get_month_extremes 0.6 s,
+# which on a page reload firing 15 parallel API requests turned into
+# 8-11 s wall-clock on the slowest of those.
+_extremes_cache_lock = threading.Lock()
+_extremes_cache: dict[str, object] = {
+    "key": None,
+    "monthly": None,
+    "yearly": None,
+}
+
+
+def _cached_period_extremes(
+    db: Session, key: Optional[datetime],
+) -> tuple[Optional[dict], Optional[dict]]:
+    """Return (monthly, yearly) extremes, computing at most once per new reading."""
+    if key is not None:
+        with _extremes_cache_lock:
+            if _extremes_cache["key"] == key:
+                return _extremes_cache["monthly"], _extremes_cache["yearly"]  # type: ignore[return-value]
+    monthly = get_month_extremes(db)
+    yearly = get_year_extremes(db)
+    if key is not None:
+        with _extremes_cache_lock:
+            # Two threads racing here computed against the same latest
+            # reading and would produce equivalent results; last-writer
+            # wins is safe.
+            _extremes_cache["key"] = key
+            _extremes_cache["monthly"] = monthly
+            _extremes_cache["yearly"] = yearly
+    return monthly, yearly
 
 CARDINAL_DIRECTIONS = [
     "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
@@ -157,6 +200,10 @@ def get_current(db: Session = Depends(get_db)):
         uv_value = reading.uv_index / 10.0
     uv_warning = classify_uv(uv_value)
 
+    monthly_extremes, yearly_extremes = _cached_period_extremes(
+        db, reading.timestamp,
+    )
+
     return {
         "timestamp": reading.timestamp.isoformat() if reading.timestamp else None,
         "station_type": station_name,
@@ -212,6 +259,6 @@ def get_current(db: Session = Depends(get_db)):
         "et_yearly": _et_display(reading.et_yearly),
         "et_weekly": get_weekly_delta(db, SensorReadingModel.et_yearly, "et_yearly"),
         "daily_extremes": _get_daily_extremes(db),
-        "monthly_extremes": get_month_extremes(db),
-        "yearly_extremes": get_year_extremes(db),
+        "monthly_extremes": monthly_extremes,
+        "yearly_extremes": yearly_extremes,
     }
