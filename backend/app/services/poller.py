@@ -97,6 +97,11 @@ class Poller:
         self._broadcast_callback: (
             Callable[[dict[str, Any]], Coroutine[Any, Any, Any]] | None
         ) = None
+        # Tracks the last connection_status value we broadcast. None
+        # until the first cycle, so the first tick always emits (which
+        # gives every browser that opened during a startup gap a
+        # correct update as soon as poll #1 runs).
+        self._last_broadcast_connected: Optional[bool] = None
         self._alert_checker = AlertChecker()
 
     @property
@@ -126,6 +131,27 @@ class Poller:
             "timeouts": self._timeouts,
             "uptime_seconds": int(time.time() - self._start_time),
         }
+
+    async def _maybe_broadcast_connection_change(self) -> None:
+        """Emit a connection_status WS message when driver.connected flips.
+
+        Fixes #492: without this the frontend only ever sees the one
+        message ws/handler.py sends at WS open. If the handshake landed
+        during a startup or watchdog window, the browser was stuck on
+        the wrong value until a page reload. Emitting on-change here
+        covers both directions (offline→online after recovery, online→
+        offline after a stall), for every connected browser.
+        """
+        if self._broadcast_callback is None:
+            return
+        current = bool(self.driver.connected)
+        if current == self._last_broadcast_connected:
+            return
+        await self._broadcast_callback({
+            "type": "connection_status",
+            "connected": current,
+        })
+        self._last_broadcast_connected = current
 
     def reload_alert_thresholds(self) -> None:
         """Load alert thresholds from the database."""
@@ -178,6 +204,8 @@ class Poller:
                     break
                 logger.error("Polling error: %s", e, exc_info=True)
                 self._timeouts += 1
+
+            await self._maybe_broadcast_connection_change()
 
             try:
                 await asyncio.sleep(self.poll_interval)

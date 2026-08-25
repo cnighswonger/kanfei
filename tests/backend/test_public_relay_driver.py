@@ -7,11 +7,16 @@ so the ingest wiring in Phase 2 has a stable target.
 """
 
 import asyncio
+import time
 
 import pytest
 
 from app.protocol.base import SensorSnapshot
-from app.protocol.public_relay.driver import STATION_NAME, PublicRelayDriver
+from app.protocol.public_relay.driver import (
+    STATION_NAME,
+    _STALE_THRESHOLD_SECONDS,
+    PublicRelayDriver,
+)
 
 
 class TestBuffering:
@@ -35,11 +40,15 @@ class TestBuffering:
 
 
 class TestLifecycle:
-    def test_connect_is_a_no_op_and_sets_connected(self):
+    def test_connect_alone_does_not_report_connected(self):
+        """A passive relay has no wire; connect() alone means "initialised"
+        but the outward `connected` signal is data-freshness. Header UI
+        and /api/station should show OFFLINE until upstream actually
+        starts pushing."""
         drv = PublicRelayDriver()
         assert drv.connected is False
         asyncio.run(drv.connect())
-        assert drv.connected is True
+        assert drv.connected is False  # still no push
 
     def test_disconnect_clears_connected(self):
         async def _cycle(d):
@@ -63,6 +72,49 @@ class TestLifecycle:
         drv.push_config({"station_name": "Vantage Vue (fw 2.12)"})
         assert STATION_NAME in drv.station_name
         assert "Vantage Vue" in drv.station_name
+
+
+class TestConnectedFreshness:
+    """The outward `connected` signal is data-freshness in public_relay
+    mode — closes #492 (header showed OFFLINE-with-fresh-data before,
+    and would have shown RUNNING-with-stale-data after a naive fix)."""
+
+    def test_connected_true_immediately_after_push(self):
+        drv = PublicRelayDriver()
+        asyncio.run(drv.connect())
+        drv.push_snapshot(SensorSnapshot(outside_temp=22.5))
+        assert drv.connected is True
+
+    def test_connected_flips_false_after_stale_threshold(self, monkeypatch):
+        """A push older than the threshold means upstream has gone
+        quiet — header should reflect that even though poll() still
+        returns the last-known snapshot."""
+        drv = PublicRelayDriver()
+        asyncio.run(drv.connect())
+        drv.push_snapshot(SensorSnapshot(outside_temp=22.5))
+        base = drv._last_push_at
+        assert base is not None
+        # Slide the clock forward past the threshold.
+        monkeypatch.setattr(
+            "app.protocol.public_relay.driver.time.time",
+            lambda: base + _STALE_THRESHOLD_SECONDS + 0.1,
+        )
+        assert drv.connected is False
+
+    def test_new_push_re_arms_connected_after_stale(self, monkeypatch):
+        drv = PublicRelayDriver()
+        asyncio.run(drv.connect())
+        drv.push_snapshot(SensorSnapshot(outside_temp=22.5))
+        base = drv._last_push_at
+        monkeypatch.setattr(
+            "app.protocol.public_relay.driver.time.time",
+            lambda: base + _STALE_THRESHOLD_SECONDS + 0.1,
+        )
+        assert drv.connected is False
+        drv.push_snapshot(SensorSnapshot(outside_temp=23.0))
+        # push_snapshot re-stamps _last_push_at using the patched time.time,
+        # so a fresh push under the same clock is instantly fresh again.
+        assert drv.connected is True
 
 
 class TestLoggerFactoryBranch:
