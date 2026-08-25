@@ -1,3 +1,47 @@
+kanfei (0.1.0~beta77) unstable; urgency=medium
+
+  * Backend perf (#493): cache monthly + yearly extremes on
+    ``/api/current``, keyed on a composite of the latest
+    ``sensor_readings`` timestamp and the local-time month + year
+    window starts.  ``get_period_extremes`` was firing 5 unindexed
+    ``column == raw`` scans per call (one per extreme value) via
+    the ``_at`` helper; on a 900 k-row table this cost ~2 s for
+    the year variant and ~0.6 s for the month variant on every
+    single ``/api/current`` hit.  On a page reload firing 15
+    parallel API requests, the endpoint wall-clocked at 8-11 s —
+    diagnosed live on the droplet from a Firefox performance
+    profile.  The composite key invalidates the instant either
+    the underlying data OR the wall-clock aggregation window
+    changes, so a stalled logger crossing local midnight on the
+    1st of a month or year does not freeze the cache on the
+    previous window (Codex round-1 blocker).
+
+  * Backend / frontend live-connection UX (#492, #494): the
+    header on ``kanfei.vsits.co`` showed ``Public Relay · OFFLINE``
+    with a red dot while live data updated everywhere else on
+    the page.  Two bugs, both fixed here.  First, the WS handler
+    emitted ``connection_status`` once per WS open and never
+    again — any handshake that landed during a logger restart or
+    watchdog window left the browser latched on the wrong value
+    forever.  ``Poller._maybe_broadcast_connection_change``
+    runs at the tail of every poll cycle and broadcasts on
+    state flips.  Second, ``PublicRelayDriver.connected`` used
+    to return ``self._connected`` (True after ``connect()``,
+    False after ``disconnect()``) which never advanced — a
+    passive relay has no wire to be up on.  It is now
+    freshness-based: True only when the last upstream push
+    landed within ``_STALE_THRESHOLD_SECONDS = 60.0``.  Together
+    the header is honest in both directions without a page
+    reload.
+
+  * Dependency bumps merged in from origin/main
+    (@types/node 26.1.2 → 26.2.0, highcharts 13.0.0 → 13.0.1,
+    eslint-plugin-react-refresh 0.5.3 → 0.5.4, plus the
+    build-tools group).  All frontend-only, all patch/minor,
+    CI green on each.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Mon, 25 Aug 2026 22:00:00 +0000
+
 kanfei (0.1.0~beta76) unstable; urgency=medium
 
   * Backend (#489, Design v52 §1): drop the day's-max wind from the
