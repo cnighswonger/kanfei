@@ -96,6 +96,72 @@ def _cached_period_extremes(
         _extremes_cache["yearly"] = yearly
     return monthly, yearly
 
+
+# Cache of compute_yearly_rain, keyed on (latest_reading_timestamp,
+# source_mode, season_month, reset_lookback_day_start). Same shape as
+# the extremes cache above: the reading anchor invalidates on new data,
+# and the wall-clock day-start invalidates the 30-day reset-detection
+# lookback window as it slides forward.
+#
+# Why this exists: compute_yearly_rain calls detect_yearly_reset, which
+# does a 30-day GROUP BY func.date(timestamp) aggregate over
+# sensor_readings looking for a mid-year console reset. On a 900 k-row
+# database at 10 s cadence that's ~260 k rows aggregated and the
+# func.date() cast blocks an index-only path. Measured 1.93 s per call
+# on the demo droplet — the largest remaining cost on /api/current
+# after the extremes cache landed (#493) and the composite indexes
+# landed (#496).
+_yearly_rain_cache_lock = threading.Lock()
+_yearly_rain_cache: dict[str, object] = {
+    "key": None,
+    "result": None,
+}
+
+
+def _reset_lookback_day_start() -> datetime:
+    """Local-midnight of today, as UTC.
+
+    ``detect_yearly_reset`` looks back ``lookback_days`` (default 30)
+    from ``datetime.now(timezone.utc)`` and bins by
+    ``func.date(timestamp)``. Refresh the cache once per local-day
+    boundary; within a day the window's endpoints are stable enough
+    for practical purposes (the far edge slides continuously but the
+    detected reset-or-no-reset outcome doesn't oscillate at sub-day
+    resolution — the samples driving the decision are already binned
+    by day inside the callee).
+    """
+    now = datetime.now().astimezone()
+    return now.replace(
+        hour=0, minute=0, second=0, microsecond=0,
+    ).astimezone(timezone.utc)
+
+
+def _cached_yearly_rain(
+    db: Session,
+    reading_ts: Optional[datetime],
+    console_raw: Optional[int],
+    source_mode: str,
+    season_month: Optional[int],
+) -> dict:
+    """Return compute_yearly_rain result, computing at most once per (reading, day)."""
+    if reading_ts is None:
+        # No latest-reading anchor; recompute without touching the cache
+        # for the same reason as the extremes helper above.
+        return compute_yearly_rain(db, console_raw, source_mode, season_month=season_month)
+    day_start = _reset_lookback_day_start()
+    key = (reading_ts, source_mode, season_month, day_start)
+    with _yearly_rain_cache_lock:
+        if _yearly_rain_cache["key"] == key:
+            return _yearly_rain_cache["result"]  # type: ignore[return-value]
+    result = compute_yearly_rain(db, console_raw, source_mode, season_month=season_month)
+    with _yearly_rain_cache_lock:
+        # Same reasoning as the extremes helper: racing threads compute
+        # against the same reading + same day boundary, so their
+        # results are equivalent; last-writer wins.
+        _yearly_rain_cache["key"] = key
+        _yearly_rain_cache["result"] = result
+    return result
+
 CARDINAL_DIRECTIONS = [
     "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
     "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
@@ -207,8 +273,8 @@ def get_current(db: Session = Depends(get_db)):
     # server-side today (it lives in the Vue's EEPROM); treat as None
     # for now, which falls back to January 1 as the season boundary.
     rain_yearly_source_mode = str(cfg.get("rain_yearly_source") or "auto")
-    yearly_result = compute_yearly_rain(
-        db, reading.rain_yearly, rain_yearly_source_mode, season_month=None,
+    yearly_result = _cached_yearly_rain(
+        db, reading.timestamp, reading.rain_yearly, rain_yearly_source_mode, season_month=None,
     )
     solar_energy_daily_value = joules_to_display_unit(solar_j_per_m2, solar_energy_unit)
     solar_energy_daily = (
