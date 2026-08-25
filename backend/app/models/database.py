@@ -198,8 +198,11 @@ def init_database() -> None:
     # timestamp-only index.
     #
     # CREATE / DROP INDEX IF (NOT) EXISTS are idempotent by design;
-    # no check-and-alter guard needed. Storage cost: ~55 MB per year
-    # of data per composite at a 10 s poll cadence.
+    # no check-and-alter guard needed. Storage cost per composite:
+    # ~55 MiB/year at the observed demo row density (~3,760 rows/day),
+    # ~127 MiB/year at a true 10 s poll cadence (8,640 rows/day).
+    # See the model-level comment in sensor_reading.py for the
+    # derivation.
     with engine.connect() as conn:
         conn.execute(text("DROP INDEX IF EXISTS ix_sensor_readings_timestamp"))
         conn.execute(text(

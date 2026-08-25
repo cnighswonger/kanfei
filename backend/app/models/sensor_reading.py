@@ -65,11 +65,21 @@ class SensorReadingModel(Base):
         # Composite indexes that let ``services.daily_extremes._at`` seek
         # by value + timestamp in one pass instead of scanning the whole
         # table for each of the 5 max/min extremes it looks up per period
-        # window. Costs ~55 MB per year of data at a 10 s poll cadence
-        # per index; measured on a 914 k-row demo, the drop from unindexed
-        # scan (2 s per period_extremes call) to indexed seek is 6-7x on
-        # weak CPUs. If a deployment needs to reclaim the storage, the
-        # operator can prune ancient rows without touching the indexes.
+        # window. Measured on a 914 k-row demo (~3,760 rows/day observed
+        # density), the drop from unindexed scan (2 s per period_extremes
+        # call) to indexed seek is 6-7x on weak CPUs. If a deployment
+        # needs to reclaim the storage, the operator can prune ancient
+        # rows without touching the indexes.
+        #
+        # Storage cost per index: derived from the existing timestamp
+        # index at ~42 B/row on the demo.
+        #
+        #   - Observed demo cadence (~3,760 rows/day) → ~55 MiB/year.
+        #   - True 10 s cadence (8,640 rows/day)      → ~127 MiB/year.
+        #
+        # Prior daemon downtime + variable poll intervals put the demo
+        # well below a strict 10 s cadence; a fresh install polling at
+        # the default 10 s should budget the higher number.
         Index("idx_sensor_outside_temp_ts", "outside_temp", "timestamp"),
         Index("idx_sensor_wind_speed_ts", "wind_speed", "timestamp"),
         Index("idx_sensor_barometer_ts", "barometer", "timestamp"),
