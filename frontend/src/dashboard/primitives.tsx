@@ -223,6 +223,92 @@ export const type = (role: Role, overrides: React.CSSProperties = {}): React.CSS
 /** Scaled font-size override, for the handful of one-off sizes in the mock. */
 export const fs = (n: number): React.CSSProperties => ({ fontSize: st(n) });
 
+/**
+ * ── PHONE-WIDTH TYPE (Design v54 §4) ────────────────────────────────
+ *
+ * At ≤768 px the dashboard bypasses the scale units ``--k`` / ``--kt``
+ * entirely and renders at natural px. Neither unit's assumption holds
+ * on a phone: ``--k`` is anchored to a vh budget the phone doesn't have,
+ * and ``--kt`` collapses to the ``--k`` floor because
+ * ``(100vw - sidebar) / 1318`` is below its clamp. The result was the
+ * per-tile crushing the beta80 memo captured.
+ *
+ * ``mType(role)`` returns a natural-px style block for each of the
+ * type roles named in Design v54 §4's table. Sizes are integers in
+ * CSS pixels; families/weights/styles preserve the same paper-vs-dark
+ * shape the desktop ``type()`` helper uses (serif italic for headline
+ * and verdict only, mono tabular for every number, mono caps for
+ * labels). Consumers spread the return value into ``style``.
+ *
+ * 10 px is the floor — v54 §4: "9 px mono caps at arm's length on a
+ * 360 px screen is not readable, and the desktop ``sectionLabel``
+ * being 10 is not a licence to go under it."
+ */
+export type MType =
+  | 'heroFigure'         // 76 px serif italic — the one big number per persona
+  | 'premiseFigure'      // 58 px serif italic — Nerd's pressure lead
+  | 'verdictFigure'      // 52 px serif italic — Agriculture's GO / NO-GO
+  | 'secondaryFigure'    // 28-38 px serif italic — supporting figures
+  | 'monoFigure'         // 26 px mono tabular
+  | 'pageTitle'          // 26 px serif italic — page-hero title
+  | 'tileHeading'        // 18 px serif italic
+  | 'noteTitle'          // 17 px serif italic — one-line notes
+  | 'body'               // 14 px body
+  | 'monoRow'            // 12-13 px mono tabular — table rows
+  | 'sectionLabel'       // 10 px mono caps ls 0.2em
+  | 'axisLabel';         // 10 px mono caps ls 0.13em — chart axis / footer
+
+/**
+ * Each mobile role maps to an existing desktop ``Role`` so the theme's
+ * published ``--type-{role}-*`` CSS vars still drive family / weight /
+ * style / tracking / transform. Only ``fontSize`` is overridden with a
+ * natural px value per v54 §4.
+ *
+ * This preserves the paper-vs-dark typography contract that
+ * ``type()`` establishes: dark theme publishes upright Inter for
+ * display / heading, paper themes publish italic serif, and mobile
+ * inherits whichever the current theme picked — same as desktop.
+ *
+ * ``tabular`` is a size-independent property (tabular figures are
+ * always desired on monoFigure / monoRow), so it's a per-role
+ * override rather than a theme-published one.
+ *
+ * ``axisLabel`` uses the same ``sectionLabel`` variables as normal
+ * labels but tightens the letterSpacing — 0.13em reads better under
+ * a narrow tick than 0.2em; this is a size-tuned override, not a
+ * theme override.
+ */
+const M_ROLE: Record<MType, { size: number; base: Role; tabular?: boolean; letterSpacing?: string }> = {
+  heroFigure:      { size: 76, base: 'display' },
+  premiseFigure:   { size: 58, base: 'display' },
+  verdictFigure:   { size: 52, base: 'display' },
+  secondaryFigure: { size: 32, base: 'display' },
+  monoFigure:      { size: 26, base: 'mono', tabular: true },
+  pageTitle:       { size: 26, base: 'heading' },
+  tileHeading:     { size: 18, base: 'title' },
+  noteTitle:       { size: 17, base: 'title' },
+  body:            { size: 14, base: 'body' },
+  monoRow:         { size: 13, base: 'mono', tabular: true },
+  sectionLabel:    { size: 10, base: 'sectionLabel' },
+  axisLabel:       { size: 10, base: 'sectionLabel', letterSpacing: '0.13em' },
+};
+
+export const mType = (role: MType): React.CSSProperties => {
+  const m = M_ROLE[role];
+  // Start from the theme-published type(base) style block so family /
+  // weight / style / tracking / transform all honour the current
+  // theme's ``--type-{base}-*`` CSS vars. Then override just fontSize
+  // to the natural px value, optionally letterSpacing (axisLabel),
+  // and add tabular figures where the role calls for them.
+  const base = type(m.base);
+  return {
+    ...base,
+    fontSize: `${m.size}px`,
+    ...(m.letterSpacing ? { letterSpacing: m.letterSpacing } : {}),
+    ...(m.tabular ? { fontVariantNumeric: 'tabular-nums' } : {}),
+  };
+};
+
 /** Tabular figures — mandatory on any value that updates live, or rows jitter. */
 export const tnum: React.CSSProperties = { fontVariantNumeric: 'tabular-nums' };
 
