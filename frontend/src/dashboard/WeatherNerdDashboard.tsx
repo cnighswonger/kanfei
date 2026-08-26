@@ -19,11 +19,12 @@
  */
 import React from 'react';
 import {
-  v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, decimate, niceTicks,
+  v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, decimate, niceTicks, mType,
 } from './primitives';
 import type { DashboardData, NerdResolution } from './types';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { PersonaFooter } from './PersonaFooter';
+import { FullReadoutDivider } from './FullReadoutDivider';
 import { pathFor } from '../utils/gauges';
 import WindRoseDial from '../components/charts/WindRoseDial';
 
@@ -36,6 +37,21 @@ export const WeatherNerdDashboard: React.FC<{
 }> = ({ d, themeLabel, onResolutionChange }) => {
   // v54 phase 3a: gate the right-side plate at phone width (§6).
   const isMobile = useIsMobile();
+
+  // v54 phase 3d: the phone composition leads with "what is the station
+  // doing?" — pressure premise + Zambretti/NWS + theta-e | reception
+  // paired row above the FULL READOUT divider; chart, wind table,
+  // solar bars and extremes stack below.
+  if (isMobile) {
+    return (
+      <WeatherNerdMobileShell
+        d={d}
+        themeLabel={themeLabel}
+        onResolutionChange={onResolutionChange}
+      />
+    );
+  }
+
   return (
   <main
     data-dashboard="weather_nerd"
@@ -883,5 +899,178 @@ export const ConsoleExtremesTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     </Tile>
   );
 };
+
+/* ─────────────────────────────────────────────── phone composition (v54 §2) */
+
+/**
+ * Weather nerd at ≤768 px. Rebuilt for the "what is the station
+ * doing?" question (v54 §2): pressure premise + 3 h rate + hPa
+ * alternate, then the Zambretti sentence with NWS agreement, then a
+ * paired theta-e | reception row.  Reception is above the divider
+ * because it's the one item that tells you whether to trust
+ * everything below it (v54 §2).
+ *
+ * Below the divider, the chart, wind table, solar bars and console
+ * extremes stack in the order they read left-to-right on desktop —
+ * v54 §5 explicitly keeps the 24 h temp/dew line AND the 14-day
+ * solar bars because both fit 328 px and are the point of their
+ * tiles.  The wind rose stays too (the dial-replacement rule
+ * applies to the above-divider only; the reader has scrolled past
+ * the summary by then).
+ */
+const WeatherNerdMobileShell: React.FC<{
+  d: DashboardData;
+  themeLabel: string;
+  onResolutionChange?: (r: NerdResolution) => void;
+}> = ({ d, themeLabel, onResolutionChange }) => {
+  const pu = d.units.pressure;
+  const main = pu === 'hPa' ? d.barometer.hPa : d.barometer.inHg;
+  const mainDigits = pu === 'hPa' ? 1 : 2;
+  const t = d.barometer.trendInHgPer3h;
+  const arrow = t == null ? '' : t > 0.005 ? '↑' : t < -0.005 ? '↓' : '→';
+  const trendConverted = t == null ? null : pu === 'hPa' ? t * 33.8639 : t;
+  const trendDigits = pu === 'hPa' ? 1 : 3;
+  const trendUnit = pu === 'hPa' ? 'hPa' : 'in';
+  const altValue =
+    pu === 'hPa'
+      ? d.barometer.inHg != null && `${fmt(d.barometer.inHg, 2)} inHg`
+      : d.barometer.hPa != null && `${fmt(d.barometer.hPa, 1)} hPa`;
+
+  const reception = d.nerd?.reception ?? null;
+  const rPct = reception?.pct ?? null;
+  const rTone =
+    rPct == null ? v.text : rPct >= 98 ? v.success : rPct >= 92 ? v.warning : v.danger;
+
+  const kicker = [
+    _nerdKickerDate(new Date()),
+    d.station.console,
+    d.station.elevationFt != null ? `${Math.round(d.station.elevationFt)} ft` : null,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <main
+      data-dashboard="weather_nerd"
+      data-mobile
+      style={{
+        ['--k' as string]: '1px',
+        ['--kt' as string]: '1px',
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        padding: '16px',
+        boxSizing: 'border-box',
+        gap: '20px',
+      }}
+    >
+      {/* Title + kicker (v54 §7). Header no longer carries the date at
+          phone width (this phase), so the kicker is the only place the
+          date lives now — matches Everyday / Agriculture. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <h2 style={{ ...mType('pageTitle'), color: v.text, margin: 0 }}>Station Readout</h2>
+        <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>{kicker}</div>
+      </div>
+
+      {/* Pressure premise (v54 §2 leads the nerd persona). */}
+      <section style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Pressure</div>
+        <div style={{ ...mType('premiseFigure'), color: v.text, lineHeight: 0.95 }}>
+          {fmt(main, mainDigits)}
+        </div>
+        <div style={{ ...mType('monoRow'), color: v.textSecondary }}>
+          {trendConverted == null
+            ? '—'
+            : `${arrow} ${trendConverted > 0 ? '+' : ''}${trendConverted.toFixed(trendDigits)} ${trendUnit}/3h`}
+          {altValue && `   ${altValue}`}
+        </div>
+      </section>
+
+      {/* Zambretti + NWS agreement — italic serif sentence in the same
+          voice as Everyday's hero Zambretti and Agriculture's verdict
+          note. */}
+      <section style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Zambretti / NWS</div>
+        <div style={{ ...mType('noteTitle'), color: v.text, lineHeight: 1.2 }}>
+          {d.forecast.zambretti ?? '—'}
+        </div>
+        <div style={{ ...mType('sectionLabel'), color: v.accent }}>
+          {d.forecast.confidencePct != null && `${Math.round(d.forecast.confidencePct)}% confidence`}
+          {d.nerd?.nwsAgrees != null && ` · NWS ${d.nerd.nwsAgrees ? 'agrees' : 'differs'}`}
+        </div>
+      </section>
+
+      {/* Theta-e | Reception paired row.  Reception is above the divider
+          because if it's bad, everything else is suspect (v54 §2). */}
+      <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Theta-e</div>
+          <div style={{ ...mType('secondaryFigure'), color: v.text, lineHeight: 1 }}>
+            {fmt(d.outside.thetaEK, 1)}{' '}
+            <span style={{ ...mType('sectionLabel'), color: v.textSecondary }}>K</span>
+          </div>
+          {d.nerd?.thetaEDelta != null && (
+            <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>
+              {d.nerd.thetaEDelta > 0 ? '+' : ''}
+              {fmt(d.nerd.thetaEDelta, 1)} since 06Z
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>
+            Reception · {reception?.windowLabel ?? '1 h'}
+          </div>
+          <div style={{ ...mType('secondaryFigure'), color: rTone, lineHeight: 1 }}>
+            {rPct == null ? '—' : fmt(rPct, 1)}
+            {rPct != null && (
+              <span style={{ ...mType('sectionLabel'), color: v.textSecondary }}> %</span>
+            )}
+          </div>
+          {(reception?.crcErrors != null || reception?.resyncs != null) && (
+            <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>
+              {reception?.crcErrors != null && `CRC ${reception.crcErrors}`}
+              {reception?.crcErrors != null && reception?.resyncs != null && ' · '}
+              {reception?.resyncs != null && `Resync ${reception.resyncs}`}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <FullReadoutDivider />
+
+      {/* Below-divider: the existing chart + tiles at natural-px scale
+          (same --k/--kt hoist as the other personas).  Order matches
+          the mock top-to-bottom: chart, wind table, solar bars,
+          console extremes + METAR (owned by ConsoleExtremesTile). */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
+        <NerdChartTile d={d} onResolutionChange={onResolutionChange} />
+        <WindRoseTile d={d} />
+        <SolarEnergyTile d={d} />
+        <ConsoleExtremesTile d={d} />
+      </div>
+
+      <PersonaFooter
+        d={d}
+        themeLabel={themeLabel}
+        extraChips={
+          <>
+            {d.nerd?.dbSizeMB != null && <SectionLabel>DB {fmt(d.nerd.dbSizeMB, 1, ' MB')}</SectionLabel>}
+            {d.nerd?.uploadTargets && <SectionLabel>{d.nerd.uploadTargets} uploading</SectionLabel>}
+            {d.nerd?.ipcStatus && <SectionLabel>{d.nerd.ipcStatus}</SectionLabel>}
+          </>
+        }
+      />
+    </main>
+  );
+};
+
+function _nerdKickerDate(d: Date): string {
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export default WeatherNerdDashboard;
