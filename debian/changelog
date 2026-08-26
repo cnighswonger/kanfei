@@ -1,3 +1,24 @@
+kanfei (0.1.0~beta83) unstable; urgency=medium
+
+  * Frontend / mobile (#500, Design v54 phase 3a foundation): three
+    shared pieces the per-persona composition PRs (3b/3c/3d) will
+    consume. New ``FullReadoutDivider`` component (48 px full-width
+    band on ``surfaceSunken``, hairline top/bottom, ``FULL READOUT``
+    label + dotted rule + ``↓`` glyph; not interactive). New
+    ``mType(role)`` type helper — natural-px table for phone width
+    that maps each of twelve mobile roles onto an existing desktop
+    Role so the theme-published ``--type-{role}-*`` CSS vars still
+    drive family / weight / style / tracking / transform (only
+    ``fontSize`` overrides to the v54 natural px). And the visible
+    delta this beta ships alone: the corner plate watermark is off
+    at ≤768 px in all three dashboards (v54 §6: "at 328 px of
+    content width there is no empty ground for a watermark to
+    fall on"). Phase 3b/3c/3d wire the divider and ``mType`` into
+    per-persona above-the-divider tile sets; this beta lands the
+    foundation with no other visible mobile change.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 26 Aug 2026 12:15:00 +0000
+
 kanfei (0.1.0~beta82) unstable; urgency=medium
 
   * Frontend / mobile (#499, Design v54 phase 2): header shed at
