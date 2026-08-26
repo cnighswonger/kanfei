@@ -21,6 +21,18 @@ export type Persona = 'everyday' | 'agriculture' | 'weather_nerd';
 
 export const PERSONAS: readonly Persona[] = ['everyday', 'agriculture', 'weather_nerd'] as const;
 
+/** Display labels — the single source of truth for how a persona is
+ * shown in UI. Header, drawer, and Settings all read this so they
+ * cannot drift (a prior duplicate in `Header.tsx` said `Weather nerd`
+ * while `Sidebar.tsx` and Settings said `Weather Nerd` — Codex R1 on
+ * PR #498 flagged the divergence).
+ */
+export const PERSONA_LABEL: Record<Persona, string> = {
+  everyday: 'Everyday',
+  agriculture: 'Agriculture',
+  weather_nerd: 'Weather Nerd',
+};
+
 export const DEFAULT_PERSONA: Persona = 'everyday';
 
 const PREF_KEY = 'ui_persona';
