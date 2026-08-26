@@ -22,6 +22,7 @@ import {
   v, type, s, st, fs, scaleVar, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile, tnum, fmt, fmtInt, decimate, niceTicks,
 } from './primitives';
 import type { DashboardData, NerdResolution } from './types';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { PersonaFooter } from './PersonaFooter';
 import { pathFor } from '../utils/gauges';
 import WindRoseDial from '../components/charts/WindRoseDial';
@@ -32,7 +33,10 @@ export const WeatherNerdDashboard: React.FC<{
   d: DashboardData;
   themeLabel: string;
   onResolutionChange?: (r: NerdResolution) => void;
-}> = ({ d, themeLabel, onResolutionChange }) => (
+}> = ({ d, themeLabel, onResolutionChange }) => {
+  // v54 phase 3a: gate the right-side plate at phone width (§6).
+  const isMobile = useIsMobile();
+  return (
   <main
     data-dashboard="weather_nerd"
     style={{
@@ -70,6 +74,8 @@ export const WeatherNerdDashboard: React.FC<{
           (147 + 16), ``height: s(340)`` = chart minHeight, so the
           plate's bottom edge lands at the chart / three-up boundary
           and never bleeds into the three-up's data.  Design v48 §4. */}
+      {/* v54 §6: plate off at phone width. */}
+      {!isMobile && (
       <div
         aria-hidden
         style={{
@@ -88,6 +94,7 @@ export const WeatherNerdDashboard: React.FC<{
           mixBlendMode: 'var(--surface-plate-blend, normal)' as React.CSSProperties['mixBlendMode'],
         }}
       />
+      )}
 
       {/* Content region — see EverydayDashboard for the rationale. */}
       <div
@@ -163,7 +170,8 @@ export const WeatherNerdDashboard: React.FC<{
       />
     </div>
   </main>
-);
+  );
+};
 
 /* ────────────────────────────────────────────────────────── the stat cards */
 

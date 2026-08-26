@@ -21,6 +21,7 @@ import {
   tnum, fmt, fmtInt, fmtTime, fmtHour, fs,
 } from './primitives';
 import type { DashboardData } from './types';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { COMPASS_NAME } from './tiles';
 import { PersonaFooter } from './PersonaFooter';
 import WindRoseDial from '../components/charts/WindRoseDial';
@@ -28,7 +29,10 @@ import WindRoseDial from '../components/charts/WindRoseDial';
 export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: string }> = ({
   d,
   themeLabel,
-}) => (
+}) => {
+  // v54 phase 3a: gate the top-half plate at phone width (§6).
+  const isMobile = useIsMobile();
+  return (
   <main
     data-dashboard="agriculture"
     style={{
@@ -66,24 +70,27 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
           that used to hide it).  ``bottom: 50%`` cuts the plate off
           above the lower band; ``contain`` at ``50% 15%`` keeps it
           anchored near the top of that remaining strip. */}
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: '50%',
-          zIndex: -2,
-          backgroundImage: 'var(--surface-plate-wide, var(--surface-plate))',
-          backgroundSize: 'contain',
-          backgroundPosition: '50% 15%',
-          backgroundRepeat: 'no-repeat',
-          opacity: 0.09,
-          filter: 'sepia(0.55) contrast(1.05) saturate(0.9)',
-          mixBlendMode: 'multiply',
-        }}
-      />
+      {/* v54 §6: plate off at phone width. */}
+      {!isMobile && (
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: '50%',
+            zIndex: -2,
+            backgroundImage: 'var(--surface-plate-wide, var(--surface-plate))',
+            backgroundSize: 'contain',
+            backgroundPosition: '50% 15%',
+            backgroundRepeat: 'no-repeat',
+            opacity: 0.09,
+            filter: 'sepia(0.55) contrast(1.05) saturate(0.9)',
+            mixBlendMode: 'multiply',
+          }}
+        />
+      )}
 
       {/* Content region — see EverydayDashboard for the rationale. */}
       <div
@@ -137,7 +144,8 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
       <PersonaFooter d={d} themeLabel={themeLabel} />
     </div>
   </main>
-);
+  );
+};
 
 /**
  * A window is a range of two times. The API hands back
