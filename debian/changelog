@@ -1,3 +1,29 @@
+kanfei (0.1.0~beta84) unstable; urgency=medium
+
+  * Frontend / mobile (#504, Design v54 phase 3b): Everyday persona
+    phone tier. At ≤768 px the persona now renders a reduced tile
+    set above a ``FULL READOUT`` divider (v54 §2's above-the-fold
+    composition: title + kicker with date, hero air temp with
+    RH/feels/dew mono line, Zambretti + hi/lo chips, wind|rain
+    paired row with the wind rose replaced by ``0 MPH SE · PEAK 12``
+    per v54 §5). Below the divider the existing desktop tiles
+    stack single-column, natural-px scale (``--k: 1px, --kt: 1px``
+    published on the mobile wrapper). Desktop (≥769 px) is
+    byte-identical to beta83. Phases 3c (Agriculture) and 3d
+    (Weather Nerd + header date drop) still to come.
+
+  * Backend / relay (#503): after a private-side DMPAFT catchup
+    (#480) lands rows in the private ``sensor_readings``, the
+    relay sender now bulk-pushes them to the droplet's new
+    ``/api/ingest/backfill`` endpoint. Closes the gap on the
+    droplet's DB that had been a permanent feature of any private-
+    side outage window (13-hour gap observed 2026-08-26 after the
+    vsits-02 Vue USB wedge, #501). Same bearer-auth surface as
+    ``/api/ingest/{reading,config}``. 3000-row batch cap, dedupe
+    on timestamp, atomic per request.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 26 Aug 2026 14:00:00 +0000
+
 kanfei (0.1.0~beta83) unstable; urgency=medium
 
   * Frontend / mobile (#500, Design v54 phase 3a foundation): three
