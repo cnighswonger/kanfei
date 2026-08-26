@@ -4,6 +4,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useWeatherData } from '../../context/WeatherDataContext';
 import { useAuth } from '../../context/AuthContext';
 import { usePersona, PERSONAS, type Persona } from '../../context/PersonaContext';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { themes } from '../../themes';
 
 const PERSONA_LABEL: Record<Persona, string> = {
@@ -34,6 +35,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
   const { currentConditions } = useWeatherData();
   const { user, logout } = useAuth();
   const { persona, setPersona } = usePersona();
+  const isMobile = useIsMobile();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -263,59 +265,66 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
 
         {/* Persona switch — 3 segments.  Paper themes render the pills
             as an outlined group with cream-on-brown active state; other
-            themes keep the pre-refactor accent-tinted background. */}
-        <div
-          role="group"
-          aria-label="Persona"
-          className="header-persona-switch"
-          style={{
-            display: 'flex',
-            border: paper
-              ? '1px solid var(--color-border)'
-              : '1px solid var(--color-border)',
-            borderRadius: paper ? '2px' : '6px',
-            overflow: 'hidden',
-            fontFamily: paper ? 'var(--font-heading)' : 'var(--font-body)',
-          }}
-        >
-          {PERSONAS.map((p, i) => {
-            const active = p === persona;
-            return (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPersona(p)}
-                aria-pressed={active}
-                title={PERSONA_LABEL[p]}
-                style={paper ? {
-                  background: active ? 'var(--color-text)' : 'transparent',
-                  color: active ? 'var(--color-bg)' : paperInk,
-                  border: 'none',
-                  borderLeft: i > 0 ? '1px solid var(--color-border)' : 'none',
-                  padding: '7px 16px',
-                  fontFamily: 'var(--font-heading)',
-                  fontSize: 'calc(13px * var(--font-scale))',
-                  fontStyle: 'italic',
-                  fontWeight: active ? 600 : 400,
-                  cursor: 'pointer',
-                  transition: 'background 0.15s ease, color 0.15s ease',
-                } : {
-                  background: active ? 'var(--color-accent-muted)' : 'transparent',
-                  color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-                  border: 'none',
-                  borderLeft: i > 0 ? '1px solid var(--color-border)' : 'none',
-                  padding: '6px 10px',
-                  fontSize: 'calc(12px * var(--font-scale))',
-                  fontWeight: active ? 600 : 400,
-                  cursor: 'pointer',
-                  transition: 'background 0.15s ease, color 0.15s ease',
-                }}
-              >
-                {PERSONA_LABEL[p]}
-              </button>
-            );
-          })}
-        </div>
+            themes keep the pre-refactor accent-tinted background.
+
+            Hidden at phone widths (≤768 px): v54 §7 folds the strip
+            into the drawer alongside page nav, so Weather Nerd is
+            reachable on the S10 (previously the strip overflowed and
+            the third tab was unclickable). Desktop is unchanged. */}
+        {!isMobile && (
+          <div
+            role="group"
+            aria-label="Persona"
+            className="header-persona-switch"
+            style={{
+              display: 'flex',
+              border: paper
+                ? '1px solid var(--color-border)'
+                : '1px solid var(--color-border)',
+              borderRadius: paper ? '2px' : '6px',
+              overflow: 'hidden',
+              fontFamily: paper ? 'var(--font-heading)' : 'var(--font-body)',
+            }}
+          >
+            {PERSONAS.map((p, i) => {
+              const active = p === persona;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPersona(p)}
+                  aria-pressed={active}
+                  title={PERSONA_LABEL[p]}
+                  style={paper ? {
+                    background: active ? 'var(--color-text)' : 'transparent',
+                    color: active ? 'var(--color-bg)' : paperInk,
+                    border: 'none',
+                    borderLeft: i > 0 ? '1px solid var(--color-border)' : 'none',
+                    padding: '7px 16px',
+                    fontFamily: 'var(--font-heading)',
+                    fontSize: 'calc(13px * var(--font-scale))',
+                    fontStyle: 'italic',
+                    fontWeight: active ? 600 : 400,
+                    cursor: 'pointer',
+                    transition: 'background 0.15s ease, color 0.15s ease',
+                  } : {
+                    background: active ? 'var(--color-accent-muted)' : 'transparent',
+                    color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                    border: 'none',
+                    borderLeft: i > 0 ? '1px solid var(--color-border)' : 'none',
+                    padding: '6px 10px',
+                    fontSize: 'calc(12px * var(--font-scale))',
+                    fontWeight: active ? 600 : 400,
+                    cursor: 'pointer',
+                    transition: 'background 0.15s ease, color 0.15s ease',
+                  }}
+                >
+                  {PERSONA_LABEL[p]}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {paper && (
           <>

@@ -1,8 +1,18 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useFeatureFlags } from '../../context/FeatureFlagsContext';
-import { usePersona, type Persona } from '../../context/PersonaContext';
+import { usePersona, PERSONAS, type Persona } from '../../context/PersonaContext';
 import { useTheme } from '../../context/ThemeContext';
+
+// Persona display labels — mirror what the header persona strip uses
+// (Header.tsx:PERSONA_LABEL). Kept here so the drawer selector reads
+// standalone without pulling a shared constant across the layout dir
+// for a three-entry table.
+const PERSONA_LABEL: Record<Persona, string> = {
+  everyday: 'Everyday',
+  agriculture: 'Agriculture',
+  weather_nerd: 'Weather Nerd',
+};
 
 interface SidebarProps {
   open: boolean;
@@ -69,7 +79,7 @@ function applyPersonaOrder(items: NavItem[], order: string[]): NavItem[] {
 
 export default function Sidebar({ open, onClose, collapsed = false, onToggleCollapse }: SidebarProps) {
   const { flags } = useFeatureFlags();
-  const { persona } = usePersona();
+  const { persona, setPersona } = usePersona();
   const { theme } = useTheme();
   const [showAll, setShowAll] = useState(false);
 
@@ -137,6 +147,91 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
           transition: 'transform 0.2s ease, width 0.2s ease',
         }}
       >
+        {/* Persona selector — phase 1 of v54 mobile composition.
+            Above the route nav because switching persona changes what
+            each route contains; reads top-down. Header still carries
+            the same strip on ≥769 px, but on phone widths that strip
+            is off (memo finding #1: it overflowed and Weather Nerd
+            was unreachable). Hidden entirely when the drawer is
+            collapsed to 56 px on desktop — matches the same policy
+            the routes use for their labels below. */}
+        {!collapsed && (
+          <div
+            role="group"
+            aria-label="Persona"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: paper ? '0' : '2px',
+              padding: paper ? '0 14px 12px' : '0 8px 8px',
+              borderBottom: paper
+                ? `${theme.rules.hairline}px ${theme.rules.style} ${theme.rules.strong}`
+                : '1px solid var(--color-border)',
+              marginBottom: paper ? '12px' : '8px',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'calc(10px * var(--font-scale))',
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                color: 'var(--color-text-secondary)',
+                padding: paper ? '4px 12px 8px' : '4px 12px 6px',
+              }}
+            >
+              Persona
+            </div>
+            {PERSONAS.map((p) => {
+              const active = p === persona;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => { setPersona(p); onClose(); }}
+                  aria-pressed={active}
+                  style={paper ? {
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                    padding: '11px 12px',
+                    textAlign: 'left',
+                    textDecoration: 'none',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'calc(11px * var(--font-scale))',
+                    fontWeight: active ? 700 : 500,
+                    letterSpacing: '1.8px',
+                    textTransform: 'uppercase',
+                    color: active ? 'var(--color-bg)' : 'var(--color-text)',
+                    background: active ? 'var(--color-text)' : 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'color 0.15s ease, background 0.15s ease',
+                  } : {
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                    padding: '10px 12px',
+                    textAlign: 'left',
+                    textDecoration: 'none',
+                    fontFamily: 'var(--font-body)',
+                    fontSize: 'calc(13px * var(--font-scale))',
+                    fontWeight: active ? 600 : 400,
+                    color: active ? 'var(--color-accent)' : 'var(--color-text)',
+                    background: active ? 'var(--color-accent-muted)' : 'transparent',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'color 0.15s ease, background 0.15s ease',
+                  }}
+                >
+                  {PERSONA_LABEL[p]}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <nav style={{ display: 'flex', flexDirection: 'column', gap: paper ? '0' : '2px', padding: paper ? '0 14px' : '0 8px', flex: 1 }}>
           {visibleNavItems.map((item, itemIdx) => {
             const iconHue = theme.nav?.iconHues?.[item.to];
