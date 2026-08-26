@@ -258,34 +258,54 @@ export type MType =
   | 'sectionLabel'       // 10 px mono caps ls 0.2em
   | 'axisLabel';         // 10 px mono caps ls 0.13em — chart axis / footer
 
-const M_ROLE: Record<MType, {
-  size: number; family: string; weight: number; style: string; tracking: string; transform: string;
-  tabular?: boolean;
-}> = {
-  heroFigure:      { size: 76, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
-  premiseFigure:   { size: 58, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
-  verdictFigure:   { size: 52, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
-  secondaryFigure: { size: 32, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
-  monoFigure:      { size: 26, family: "'JetBrains Mono', monospace",      weight: 500, style: 'normal', tracking: 'normal', transform: 'none', tabular: true },
-  pageTitle:       { size: 26, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
-  tileHeading:     { size: 18, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
-  noteTitle:       { size: 17, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
-  body:            { size: 14, family: "'Inter', sans-serif",              weight: 400, style: 'normal', tracking: 'normal', transform: 'none' },
-  monoRow:         { size: 13, family: "'JetBrains Mono', monospace",      weight: 400, style: 'normal', tracking: 'normal', transform: 'none', tabular: true },
-  sectionLabel:    { size: 10, family: "'JetBrains Mono', monospace",      weight: 400, style: 'normal', tracking: '0.2em',  transform: 'uppercase' },
-  axisLabel:       { size: 10, family: "'JetBrains Mono', monospace",      weight: 400, style: 'normal', tracking: '0.13em', transform: 'uppercase' },
+/**
+ * Each mobile role maps to an existing desktop ``Role`` so the theme's
+ * published ``--type-{role}-*`` CSS vars still drive family / weight /
+ * style / tracking / transform. Only ``fontSize`` is overridden with a
+ * natural px value per v54 §4.
+ *
+ * This preserves the paper-vs-dark typography contract that
+ * ``type()`` establishes: dark theme publishes upright Inter for
+ * display / heading, paper themes publish italic serif, and mobile
+ * inherits whichever the current theme picked — same as desktop.
+ *
+ * ``tabular`` is a size-independent property (tabular figures are
+ * always desired on monoFigure / monoRow), so it's a per-role
+ * override rather than a theme-published one.
+ *
+ * ``axisLabel`` uses the same ``sectionLabel`` variables as normal
+ * labels but tightens the letterSpacing — 0.13em reads better under
+ * a narrow tick than 0.2em; this is a size-tuned override, not a
+ * theme override.
+ */
+const M_ROLE: Record<MType, { size: number; base: Role; tabular?: boolean; letterSpacing?: string }> = {
+  heroFigure:      { size: 76, base: 'display' },
+  premiseFigure:   { size: 58, base: 'display' },
+  verdictFigure:   { size: 52, base: 'display' },
+  secondaryFigure: { size: 32, base: 'display' },
+  monoFigure:      { size: 26, base: 'mono', tabular: true },
+  pageTitle:       { size: 26, base: 'heading' },
+  tileHeading:     { size: 18, base: 'title' },
+  noteTitle:       { size: 17, base: 'title' },
+  body:            { size: 14, base: 'body' },
+  monoRow:         { size: 13, base: 'mono', tabular: true },
+  sectionLabel:    { size: 10, base: 'sectionLabel' },
+  axisLabel:       { size: 10, base: 'sectionLabel', letterSpacing: '0.13em' },
 };
 
 export const mType = (role: MType): React.CSSProperties => {
-  const f = M_ROLE[role];
+  const m = M_ROLE[role];
+  // Start from the theme-published type(base) style block so family /
+  // weight / style / tracking / transform all honour the current
+  // theme's ``--type-{base}-*`` CSS vars. Then override just fontSize
+  // to the natural px value, optionally letterSpacing (axisLabel),
+  // and add tabular figures where the role calls for them.
+  const base = type(m.base);
   return {
-    fontSize: `${f.size}px`,
-    fontFamily: f.family,
-    fontWeight: f.weight,
-    fontStyle: f.style,
-    letterSpacing: f.tracking,
-    textTransform: f.transform as React.CSSProperties['textTransform'],
-    ...(f.tabular ? { fontVariantNumeric: 'tabular-nums' } : {}),
+    ...base,
+    fontSize: `${m.size}px`,
+    ...(m.letterSpacing ? { letterSpacing: m.letterSpacing } : {}),
+    ...(m.tabular ? { fontVariantNumeric: 'tabular-nums' } : {}),
   };
 };
 
