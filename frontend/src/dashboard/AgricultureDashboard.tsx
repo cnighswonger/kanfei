@@ -18,12 +18,13 @@
 import React from 'react';
 import {
   v, type, s, st, scaleVar, CONTENT_CAP, SectionLabel, TileHeading, Row, Tile,
-  tnum, fmt, fmtInt, fmtTime, fmtHour, fs,
+  tnum, fmt, fmtInt, fmtTime, fmtHour, fs, mType,
 } from './primitives';
 import type { DashboardData } from './types';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { COMPASS_NAME } from './tiles';
 import { PersonaFooter } from './PersonaFooter';
+import { FullReadoutDivider } from './FullReadoutDivider';
 import WindRoseDial from '../components/charts/WindRoseDial';
 
 export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: string }> = ({
@@ -32,6 +33,16 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
 }) => {
   // v54 phase 3a: gate the top-half plate at phone width (§6).
   const isMobile = useIsMobile();
+
+  // v54 phase 3c: the phone composition is not a re-scaled desktop.
+  // "Can I spray?" is the question you ask holding the phone in the
+  // field, so the verdict + a 24 h forecast strip + a drift/water
+  // paired row are ALL that's above the divider. The detail tables
+  // (water balance, drift 4 h, field & schedule) live below.
+  if (isMobile) {
+    return <AgricultureMobileShell d={d} themeLabel={themeLabel} />;
+  }
+
   return (
   <main
     data-dashboard="agriculture"
@@ -621,5 +632,281 @@ export const FieldScheduleTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     </Tile>
   );
 };
+
+/* ─────────────────────────────────────────────── phone composition (v54 §2) */
+
+/**
+ * Agriculture at ≤768 px. Rebuilt for the outdoor-with-phone question
+ * ("can I spray?") rather than reflowed from the desktop grid — the
+ * verdict + a 24 h strip + drift/water paired row sit above the
+ * FULL READOUT divider, and the detail tables (water balance, drift
+ * 4 h, field & schedule) stack below in natural px.
+ *
+ * The verdict tile is the tight constraint at 316 px of the 705 px
+ * above-divider budget, defending 7 px of margin on a 360×760 S10
+ * (v54 §1). It caps at ``maxHeight: 320``, the note clamps to two
+ * lines, and the constraint list shows at most four rows — the same
+ * rule the spec calls out.
+ */
+const AgricultureMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = ({
+  d,
+  themeLabel,
+}) => {
+  const sp = d.spray;
+
+  // Kicker: AUG 26, 2026 · 266 FT · OPEN-METEO. Date leads per v54 §7.
+  const kicker = [
+    _agriKickerDate(new Date()),
+    d.station.elevationFt != null ? `${Math.round(d.station.elevationFt)} ft` : null,
+    'Open-Meteo',
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <main
+      data-dashboard="agriculture"
+      data-mobile
+      style={{
+        // Same natural-px hoist as Everyday — every child ``s(n)`` /
+        // ``st(n)`` resolves to ``n px`` so the below-divider tile
+        // stream renders at its designed 1× proportions.
+        ['--k' as string]: '1px',
+        ['--kt' as string]: '1px',
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        padding: '16px',
+        boxSizing: 'border-box',
+        gap: '20px',
+      }}
+    >
+      {/* Title + kicker (v54 §7). */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <h2 style={{ ...mType('pageTitle'), color: v.text, margin: 0 }}>Spray Advisory</h2>
+        <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>{kicker}</div>
+      </div>
+
+      {/* Verdict tile — the answer to "can I spray?"  Bordered, capped
+          at 320 so a two-line note plus four checks fits in the 7 px
+          margin the spec's height budget defends. */}
+      <section
+        style={{
+          border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
+          padding: '14px 14px 12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          maxHeight: 320,
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>
+          {sp?.product
+            ? `Product · ${sp.product.name}${sp.product.category ? ` — ${sp.product.category}` : ''}`
+            : 'Product · —'}
+        </div>
+        <div
+          style={{
+            ...mType('verdictFigure'),
+            color: v[VERDICT_TONE(sp?.verdict) as 'success' | 'warning' | 'danger'],
+            lineHeight: 1,
+          }}
+        >
+          {sp?.verdict ? sp.verdict.toUpperCase().replace('NOGO', 'NO-GO') : '—'}
+        </div>
+        <div
+          style={{
+            ...mType('noteTitle'),
+            color: v.text,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}
+        >
+          {sp?.verdictNote ?? 'No product selected'}
+        </div>
+        <div>
+          {CHECK_ORDER.map(([name, label], i) => {
+            const c = sp?.checks.find((x) => x.name === name);
+            return (
+              <div
+                key={name}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                  padding: '6px 0',
+                  borderBottom:
+                    i < CHECK_ORDER.length - 1
+                      ? `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`
+                      : 'none',
+                }}
+              >
+                <span style={{ ...mType('body'), color: v.text }}>{label}</span>
+                <span style={{ ...mType('monoRow'), color: v.text }}>
+                  {c ? (
+                    <>
+                      {c.value} <span style={{ color: v.textMuted }}>{c.limit}</span>{' '}
+                      <span style={{ color: c.pass ? v.success : v.danger, fontWeight: 700 }}>
+                        {c.pass ? '✓' : '✕'}
+                      </span>
+                    </>
+                  ) : (
+                    <span style={{ color: v.textMuted }}>no limit</span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* 24 h forecast strip + best/next window (v54 §2 keeps this
+          above the divider — it's the answer to "when"). */}
+      <section style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Forecast · Next 24 hours</div>
+        <_MobileForecastStrip cells={sp?.window ?? []} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', paddingTop: '4px' }}>
+          <div>
+            <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Best today</div>
+            <div
+              style={{
+                ...mType('monoRow'),
+                color:
+                  sp?.bestWindowToday && sp.bestWindowToday !== 'None left today'
+                    ? v.success
+                    : v.textSecondary,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {fmtRange(sp?.bestWindowToday)}
+            </div>
+          </div>
+          <div>
+            <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Next window</div>
+            <div style={{ ...mType('monoRow'), color: v.text, whiteSpace: 'nowrap' }}>
+              {sp?.nextWindow ?? '—'}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Drift wind | Water balance paired row (v54 §5: dial → number). */}
+      <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Drift · Wind</div>
+          <div style={{ ...mType('secondaryFigure'), color: v.text, lineHeight: 1 }}>
+            {fmtInt(d.wind.speedMph)}{' '}
+            <span style={{ ...mType('sectionLabel'), color: v.textSecondary }}>
+              MPH {d.wind.directionLabel ?? ''}
+            </span>
+          </div>
+          {d.wind.peakMph != null && (
+            <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>
+              Peak {fmtInt(d.wind.peakMph)}
+              {d.wind.peakAt && ` · ${fmtTime(d.wind.peakAt)}`}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Water · 7 d</div>
+          <div
+            style={{
+              ...mType('secondaryFigure'),
+              color:
+                sp?.water?.balanceIn != null && sp.water.balanceIn < 0 ? v.danger : v.success,
+              lineHeight: 1,
+            }}
+          >
+            {sp?.water?.balanceIn == null
+              ? '—'
+              : `${sp.water.balanceIn < 0 ? '−' : '+'}${Math.abs(sp.water.balanceIn).toFixed(2)}`}
+          </div>
+          <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>in, rain − ET</div>
+        </div>
+      </section>
+
+      <FullReadoutDivider />
+
+      {/* Below-divider: existing desktop tiles stack single-column at
+          their designed 1× scale (the same --k/--kt hoist as Everyday).
+          Order matches mock-agriculture-360: water balance detail
+          table, drift risk 4 h histogram/table, then field & schedule.
+          The mock is measured not described, so the sequence is part
+          of the spec. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
+        <WaterBalanceTile d={d} />
+        <DriftRiskTile d={d} />
+        <FieldScheduleTile d={d} />
+      </div>
+
+      <PersonaFooter d={d} themeLabel={themeLabel} />
+    </main>
+  );
+};
+
+/**
+ * The 24 h colour band, sized for a 328 px content column.  Cells at
+ * 12.2 px wide read as a scale, not a strip of buttons (v54 §2).
+ * Axis labels are HTML in a flex row beneath the SVG so the SVG
+ * never has to carry text — v54 §5's rule against absolutely
+ * positioned annotations.
+ */
+const _MobileForecastStrip: React.FC<{ cells: NonNullable<DashboardData['spray']>['window'] }> = ({ cells }) => {
+  const W = 328, H = 48;
+  const cellW = cells.length > 0 ? W / cells.length : 0;
+  const tone = { go: v.success, marginal: v.warning, nogo: v.danger };
+  const labelEvery = 3;
+  return (
+    <div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        style={{ display: 'block', width: '100%', height: H }}
+      >
+        {cells.map((c, i) => (
+          <rect
+            key={i}
+            x={i * cellW + 0.5}
+            y={0}
+            width={Math.max(0, cellW - 1)}
+            height={H}
+            rx={1}
+            fill={tone[c.state]}
+          />
+        ))}
+      </svg>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${cells.length}, 1fr)`,
+          marginTop: '2px',
+          ...mType('axisLabel'),
+          color: v.chart.axis,
+        }}
+      >
+        {cells.map((c, i) => (
+          <div key={i} style={{ textAlign: 'center' }}>
+            {i % labelEvery === 0 ? fmtHour(c.at) : ''}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+function _agriKickerDate(d: Date): string {
+  // "Aug 26, 2026" → sectionLabel CSS uppercases to "AUG 26, 2026"
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export default AgricultureDashboard;
