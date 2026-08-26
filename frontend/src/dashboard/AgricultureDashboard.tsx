@@ -835,10 +835,13 @@ const AgricultureMobileShell: React.FC<{ d: DashboardData; themeLabel: string }>
 
       {/* Below-divider: existing desktop tiles stack single-column at
           their designed 1× scale (the same --k/--kt hoist as Everyday).
-          The detail tables are the point of scrolling past the divider. */}
+          Order matches mock-agriculture-360: water balance detail
+          table, drift risk 4 h histogram/table, then field & schedule.
+          The mock is measured not described, so the sequence is part
+          of the spec. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
-        <DriftRiskTile d={d} />
         <WaterBalanceTile d={d} />
+        <DriftRiskTile d={d} />
         <FieldScheduleTile d={d} />
       </div>
 
