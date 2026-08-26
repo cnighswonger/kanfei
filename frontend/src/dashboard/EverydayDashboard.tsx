@@ -23,10 +23,11 @@
  *   footer                  27
  */
 import React from 'react';
-import { v, type, SectionLabel, TileHeading, Row, Tile, fmt, fmtInt, fmtTime, s, st, scaleVar, CONTENT_CAP } from './primitives';
+import { v, type, SectionLabel, TileHeading, Row, Tile, fmt, fmtInt, fmtTime, s, st, scaleVar, mType, CONTENT_CAP } from './primitives';
 import type { DashboardData } from './types';
 import { PersonaFooter } from './PersonaFooter';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { FullReadoutDivider } from './FullReadoutDivider';
 import {
   HeroTemperatureTile, DerivedConditionsTile, HistoryChartTile, BarometerTile,
   WindTile, RainTile, SolarUvTile, AlmanacTile, RainfallByHourTile,
@@ -42,6 +43,16 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
   // v54 phase 3a: gate the corner plate at phone width (§6). Above
   // 768 px behaves exactly as before.
   const isMobile = useIsMobile();
+
+  // v54 phase 3b: phone tier is an entirely different composition
+  // — reduced tile set above a FULL READOUT divider, the existing
+  // desktop tiles single-column below, all sized in natural px
+  // (--k / --kt bypassed). Everything above 768 px keeps the
+  // desktop layout untouched.
+  if (isMobile) {
+    return <EverydayMobileShell d={d} themeLabel={themeLabel} />;
+  }
+
   return (
   <main
     data-dashboard="everyday"
@@ -212,6 +223,181 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
   </main>
   );
 };
+
+// ─────────────────────────────────────────────────────────────── Mobile shell
+
+/**
+ * v54 phase 3b mobile tree.
+ *
+ * ≤ 768 px: an entirely different composition. Above a FULL READOUT
+ * divider live four reduced blocks sized in natural px per v54 §2:
+ * title + date/elevation kicker, hero air temp (heroFigure) with
+ * RH/feels/dew on one mono line, Zambretti + hi/lo chips, and a
+ * wind|rain paired row. Below the divider, the existing desktop
+ * tiles stack single-column and scroll — each rendered inside a
+ * ``--k: 1px, --kt: 1px`` wrapper so ``s(n)`` / ``st(n)`` inside
+ * those tiles resolve to natural px instead of the vh-clamp floor.
+ *
+ * The mobile-branch dial/rose replacements (v54 §5) live only in
+ * the above-divider block; below the divider, the reader has
+ * scrolled past the summary and can afford the graphic, so the
+ * existing WheelBarometer / WindRoseDial render intact at their
+ * designed 210 / 250 px sizes.
+ */
+const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = ({
+  d,
+  themeLabel,
+}) => {
+  const t = d.outside;
+  const w = d.wind;
+  const r = d.rain;
+  const f = d.forecast;
+
+  // Kicker: AUG 26, 2026 · <station> · 266 ft. Date leads per v54 §7.
+  const kicker = [
+    _fmtKickerDate(new Date()),
+    d.station.name,
+    d.station.elevationFt != null ? `${Math.round(d.station.elevationFt)} ft` : null,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <main
+      data-dashboard="everyday"
+      data-mobile
+      style={{
+        // Bypass the scale units entirely at phone width. Every child
+        // ``s(n)`` / ``st(n)`` now resolves to ``n px``.
+        ['--k' as string]: '1px',
+        ['--kt' as string]: '1px',
+        // The mobile wrapper OWNS the vertical scroll; it's the shell
+        // above (AppShell.tsx) that's flex: 1, and we take that height
+        // then let the natural content flow past it.
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        padding: '16px',
+        boxSizing: 'border-box',
+        gap: '20px',
+      }}
+    >
+      {/* Title + kicker (v54 §7). Header stays showing the date until
+          phase 3d drops it — no visible gap during 3b/3c. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <h2 style={{ ...mType('pageTitle'), color: v.text, margin: 0 }}>Current Conditions</h2>
+        <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>
+          {kicker}
+        </div>
+      </div>
+
+      {/* Hero air temperature (v54 §2: what is it like right now?) */}
+      <section style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Outside air</div>
+        <div style={{ ...mType('heroFigure'), color: v.text, lineHeight: 0.95 }}>
+          {fmt(t.tempF, 1)} <span style={{ ...mType('secondaryFigure'), color: v.textSecondary }}>°F</span>
+        </div>
+        <div style={{ ...mType('monoRow'), color: v.text }}>
+          RH {fmtInt(t.humidityPct, '%')}
+          {t.feelsLikeF != null && ` · Feels ${fmt(t.feelsLikeF, 0)}°`}
+          {t.dewPointF != null && ` · Dew ${fmt(t.dewPointF, 0)}°`}
+        </div>
+      </section>
+
+      {/* Zambretti + hi/lo chips */}
+      <section style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ ...mType('noteTitle'), color: v.text }}>
+          {f.zambretti ?? '—'}
+        </div>
+        {f.confidencePct != null && (
+          <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>
+            Zambretti · {f.confidencePct}% confidence
+          </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <MChip label="High" value={t.highF} at={t.highAt} />
+          <MChip label="Low"  value={t.lowF}  at={t.lowAt} />
+        </div>
+      </section>
+
+      {/* Wind | Rain paired row (v54 §5: dial → number) */}
+      <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Wind</div>
+          <div style={{ ...mType('secondaryFigure'), color: v.text, lineHeight: 1 }}>
+            {fmtInt(w.speedMph)} <span style={{ ...mType('sectionLabel'), color: v.textSecondary }}>MPH {w.directionLabel ?? ''}</span>
+          </div>
+          {w.peakMph != null && (
+            <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>
+              Peak {fmtInt(w.peakMph)} · {fmtTime(w.peakAt)}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Rain today</div>
+          <div style={{ ...mType('secondaryFigure'), color: v.text, lineHeight: 1 }}>
+            {fmt(r.todayIn, 2)} <span style={{ ...mType('sectionLabel'), color: v.textSecondary }}>IN</span>
+          </div>
+          <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>
+            Rate {fmt(r.rateInPerHr, 2)} in/hr
+          </div>
+        </div>
+      </section>
+
+      <FullReadoutDivider />
+
+      {/* Below-divider: the existing desktop tile stream, single column,
+          natural-px scale via the same --k/--kt override on this wrapper.
+          Tiles retain their designed proportions at 1×; charts + dials
+          fit the 328 px content width without additional adaptation. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
+          <HeroTemperatureTile d={d} />
+          <DerivedConditionsTile d={d} />
+        </div>
+        <HistoryChartTile d={d} />
+        <RainTile d={d} title="Rain ledger" />
+        <SolarUvTile d={d} />
+        <BarometerTile d={d} />
+        <WindTile d={d} />
+        <AlmanacTile d={d} />
+        <RainfallByHourTile d={d} />
+        <ConsoleAndLinkTile d={d} />
+      </div>
+
+      <PersonaFooter d={d} themeLabel={themeLabel} />
+    </main>
+  );
+};
+
+const MChip: React.FC<{ label: string; value: number | null; at: string | null }> = ({ label, value, at }) => (
+  <div
+    style={{
+      border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
+      borderRadius: '2px',
+      padding: '6px 10px',
+      display: 'flex',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      gap: '8px',
+    }}
+  >
+    <span style={{ ...mType('sectionLabel'), color: v.textSecondary }}>{label}</span>
+    <span style={{ ...mType('monoRow'), color: v.text }}>
+      {fmt(value, 0)}°{at && ` ${fmtTime(at)}`}
+    </span>
+  </div>
+);
+
+function _fmtKickerDate(d: Date): string {
+  // "Aug 26, 2026" → sectionLabel CSS uppercases to "AUG 26, 2026"
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 /**
  * Console & link — 1d's station tile.
