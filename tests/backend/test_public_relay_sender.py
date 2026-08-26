@@ -416,3 +416,123 @@ class TestNoSnapshot:
         # Exactly one call, and it must be the identity push.
         assert mock.post.call_count == 1
         assert mock.post.call_args_list[0].args[0].endswith("/api/ingest/config")
+
+
+# ─────────────────────────────────────── push_backfill (#502)
+
+
+from app.models.sensor_reading import SensorReadingModel
+from app.services.public_relay_sender import BACKFILL_CHUNK, _row_to_wire
+
+
+def _sensor_row(ts: datetime, **fields) -> SensorReadingModel:
+    kwargs = {"timestamp": ts, "station_type": 17}
+    kwargs.update(fields)
+    return SensorReadingModel(**kwargs)
+
+
+class TestBackfillPushGates:
+    """push_backfill honours the same config/driver short-circuits as
+    the live push. Otherwise a droplet relaying its own catchup rows
+    back to itself would spin an infinite loop, and a private station
+    with the relay toggled off would leak data to an unconfigured
+    endpoint."""
+
+    def test_disabled_relay_skips_push(self, clean_station_config):
+        sender = PublicRelaySender()
+        mock = _install_mock_client(sender)
+        _run(sender.push_backfill([_sensor_row(datetime(2026, 8, 26, 10, 0))]))
+        assert mock.post.call_count == 0
+
+    def test_missing_target_url_skips(self, clean_station_config):
+        _set("public_relay_enabled", "true")
+        _set("public_relay_secret", "secret-token-abcdefghijklmnop")
+        _set("station_driver_type", "vantage")
+        sender = PublicRelaySender()
+        mock = _install_mock_client(sender)
+        _run(sender.push_backfill([_sensor_row(datetime(2026, 8, 26, 10, 0))]))
+        assert mock.post.call_count == 0
+
+    def test_public_relay_driver_skips_push(self, clean_station_config):
+        """A droplet fanning its own catchup rows back to itself is a
+        broadcast loop — same gate the live push uses."""
+        _enable_relay()
+        _set("station_driver_type", "public_relay")
+        sender = PublicRelaySender()
+        mock = _install_mock_client(sender)
+        _run(sender.push_backfill([_sensor_row(datetime(2026, 8, 26, 10, 0))]))
+        assert mock.post.call_count == 0
+
+    def test_empty_rows_is_noop(self, clean_station_config):
+        _enable_relay()
+        sender = PublicRelaySender()
+        mock = _install_mock_client(sender)
+        _run(sender.push_backfill([]))
+        assert mock.post.call_count == 0
+
+
+class TestBackfillPushShape:
+    def test_single_chunk_posts_once(self, clean_station_config):
+        _enable_relay()
+        sender = PublicRelaySender()
+        mock = _install_mock_client(sender)
+        rows = [
+            _sensor_row(datetime(2026, 8, 26, 10, 0), outside_temp=850),
+            _sensor_row(datetime(2026, 8, 26, 10, 5), outside_temp=852),
+        ]
+        _run(sender.push_backfill(rows))
+        assert mock.post.call_count == 1
+        call = mock.post.call_args_list[0]
+        assert call.args[0] == "https://droplet.example.com/api/ingest/backfill"
+        assert call.kwargs["headers"]["Authorization"].startswith("Bearer ")
+        body = call.kwargs["json"]
+        assert isinstance(body["rows"], list)
+        assert len(body["rows"]) == 2
+        assert body["rows"][0]["outside_temp"] == 850
+        assert body["rows"][0]["timestamp"].endswith("Z")
+
+    def test_chunks_when_over_cap(self, clean_station_config):
+        _enable_relay()
+        sender = PublicRelaySender()
+        mock = _install_mock_client(sender)
+        rows = [_sensor_row(datetime(2026, 8, 26, 0, 0)) for _ in range(BACKFILL_CHUNK + 5)]
+        _run(sender.push_backfill(rows))
+        # (chunk cap + 5) → 2 requests: [chunk], [5]
+        assert mock.post.call_count == 2
+        assert len(mock.post.call_args_list[0].kwargs["json"]["rows"]) == BACKFILL_CHUNK
+        assert len(mock.post.call_args_list[1].kwargs["json"]["rows"]) == 5
+
+    def test_chunk_failure_stops_fanout(self, clean_station_config):
+        """A persistently down droplet gets ONE loud row per catchup,
+        not one per chunk — matches the sender's overall backoff shape."""
+        _enable_relay()
+        sender = PublicRelaySender()
+        mock = _install_mock_client(sender)
+        mock.post = AsyncMock(return_value=httpx.Response(503, json={"detail": "down"}))
+        rows = [_sensor_row(datetime(2026, 8, 26, 0, 0)) for _ in range(BACKFILL_CHUNK + 5)]
+        _run(sender.push_backfill(rows))
+        assert mock.post.call_count == 1, "must stop after the first failure"
+        assert _get("public_relay_last_error") != ""
+
+
+class TestRowToWire:
+    def test_timestamp_serialises_with_z_suffix(self):
+        row = _sensor_row(datetime(2026, 8, 26, 10, 0, 0))
+        wire = _row_to_wire(row)
+        assert wire["timestamp"].endswith("Z")
+        assert "id" not in wire
+
+    def test_all_data_columns_present(self):
+        row = _sensor_row(
+            datetime(2026, 8, 26, 10, 0, 0),
+            outside_temp=850,
+            wind_speed=12,
+            barometer=30012,
+            extra_json='{"foo": "bar"}',
+        )
+        wire = _row_to_wire(row)
+        assert wire["outside_temp"] == 850
+        assert wire["wind_speed"] == 12
+        assert wire["barometer"] == 30012
+        assert wire["extra_json"] == '{"foo": "bar"}'
+        assert wire["station_type"] == 17

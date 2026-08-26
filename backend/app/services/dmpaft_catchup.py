@@ -153,9 +153,13 @@ async def async_backfill_from_vantage(
     driver: _VantageBackfillDriver,
     station_type_code: int,
     max_records: int = MAX_BACKFILL_RECORDS,
-) -> int:
+) -> tuple[int, list[SensorReadingModel]]:
     """Pull archive records after the last-known live sample and
-    insert them into ``sensor_readings``.  Returns count inserted.
+    insert them into ``sensor_readings``.  Returns
+    ``(count_inserted, inserted_rows)`` — the count for logging /
+    back-compat callers, and the list of freshly-inserted rows so
+    downstream fan-out (public_relay_sender's backfill push,
+    issue #502) can ship them to a droplet without re-querying.
 
     Safe to call redundantly — dedupes on ``timestamp`` before
     insert, so overlap with existing live samples or a prior
@@ -170,11 +174,11 @@ async def async_backfill_from_vantage(
         records = await driver.async_dmpaft(after=after_local)
     except Exception as exc:
         logger.warning("DMPAFT catchup failed: %s", exc)
-        return 0
+        return 0, []
 
     if not records:
         logger.info("DMPAFT catchup: no records returned")
-        return 0
+        return 0, []
 
     if len(records) > max_records:
         logger.warning(
@@ -185,6 +189,7 @@ async def async_backfill_from_vantage(
 
     inserted = 0
     skipped = 0
+    inserted_rows: list[SensorReadingModel] = []
     db = SessionLocal()
     try:
         for rec in records:
@@ -195,7 +200,9 @@ async def async_backfill_from_vantage(
             if existing is not None:
                 skipped += 1
                 continue
-            db.add(_project_to_sensor_reading(rec, ts_utc, station_type_code))
+            row = _project_to_sensor_reading(rec, ts_utc, station_type_code)
+            db.add(row)
+            inserted_rows.append(row)
             inserted += 1
             if inserted % 200 == 0:
                 db.commit()
@@ -203,7 +210,13 @@ async def async_backfill_from_vantage(
     except Exception as exc:
         db.rollback()
         logger.error("DMPAFT catchup insert failed: %s", exc, exc_info=True)
-        return inserted
+        # Rollback dropped the inserts we thought we'd made; return
+        # only what committed successfully before the failure. The
+        # inserted_rows list is authoritative for what we handed the
+        # session; after a partial rollback the safest thing is to
+        # return an empty fan-out list so the sender doesn't push
+        # rows the droplet's DB doesn't actually have.
+        return inserted, []
     finally:
         db.close()
 
@@ -211,7 +224,7 @@ async def async_backfill_from_vantage(
         "DMPAFT catchup: %d inserted, %d skipped (already present)",
         inserted, skipped,
     )
-    return inserted
+    return inserted, inserted_rows
 
 
 def _tenths(value: Optional[float]) -> Optional[int]:
