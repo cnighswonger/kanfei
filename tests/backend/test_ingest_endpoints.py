@@ -318,3 +318,155 @@ class TestSecretMasking:
             "public_mode_ingest_secret stays in _SECRET_KEYS."
         )
         assert "*" in items["public_mode_ingest_secret"]
+
+
+# ─────────────────────────────────────────── /api/ingest/backfill (#502)
+
+
+from app.models.sensor_reading import SensorReadingModel
+
+
+@pytest.fixture
+def clean_sensor_readings():
+    Base.metadata.drop_all(bind=engine, tables=[SensorReadingModel.__table__])
+    Base.metadata.create_all(bind=engine, tables=[SensorReadingModel.__table__])
+    yield
+    db = SessionLocal()
+    try:
+        db.query(SensorReadingModel).delete()
+        db.commit()
+    finally:
+        db.close()
+
+
+@pytest.fixture
+def backfill_droplet(clean_station_config, clean_sensor_readings):
+    _set_config("station_driver_type", "public_relay")
+    _set_config("public_mode_ingest_secret", INGEST_SECRET)
+    public_mode.invalidate_cache()
+    with TestClient(app) as c:
+        yield c
+
+
+def _row(ts_iso: str, **fields) -> dict:
+    return {"timestamp": ts_iso, **fields}
+
+
+class TestIngestBackfill:
+    """POST /api/ingest/backfill — bulk historical rows straight into
+    ``sensor_readings`` on the droplet, deduped by timestamp. Closes
+    #502. See app/api/ingest.py::ingest_backfill for the shape."""
+
+    def test_401_without_bearer(self, backfill_droplet):
+        resp = backfill_droplet.post(
+            "/api/ingest/backfill",
+            json={"rows": [_row("2026-08-26T10:00:00Z", outside_temp=850, station_type=17)]},
+        )
+        assert resp.status_code == 401
+
+    def test_401_with_wrong_bearer(self, backfill_droplet):
+        resp = backfill_droplet.post(
+            "/api/ingest/backfill",
+            json={"rows": [_row("2026-08-26T10:00:00Z", outside_temp=850, station_type=17)]},
+            headers={"Authorization": f"Bearer wrong-{INGEST_SECRET}"},
+        )
+        assert resp.status_code == 401
+
+    def test_empty_rows_is_200(self, backfill_droplet):
+        resp = backfill_droplet.post(
+            "/api/ingest/backfill",
+            json={"rows": []},
+            headers={"Authorization": f"Bearer {INGEST_SECRET}"},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"inserted": 0, "skipped": 0}
+
+    def test_inserts_rows_and_reports_counts(self, backfill_droplet):
+        resp = backfill_droplet.post(
+            "/api/ingest/backfill",
+            json={"rows": [
+                _row("2026-08-26T10:00:00Z", outside_temp=850, wind_speed=12, station_type=17),
+                _row("2026-08-26T10:05:00Z", outside_temp=852, wind_speed=14, station_type=17),
+                _row("2026-08-26T10:10:00Z", outside_temp=851, wind_speed=13, station_type=17),
+            ]},
+            headers={"Authorization": f"Bearer {INGEST_SECRET}"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"inserted": 3, "skipped": 0}
+
+        db = SessionLocal()
+        try:
+            count = db.query(SensorReadingModel).count()
+            assert count == 3
+            row = db.query(SensorReadingModel).order_by(
+                SensorReadingModel.timestamp,
+            ).first()
+            assert row.outside_temp == 850
+            assert row.wind_speed == 12
+        finally:
+            db.close()
+
+    def test_dedupes_on_timestamp(self, backfill_droplet):
+        headers = {"Authorization": f"Bearer {INGEST_SECRET}"}
+        first = backfill_droplet.post(
+            "/api/ingest/backfill",
+            json={"rows": [
+                _row("2026-08-26T10:00:00Z", outside_temp=850, station_type=17),
+                _row("2026-08-26T10:05:00Z", outside_temp=852, station_type=17),
+            ]},
+            headers=headers,
+        )
+        assert first.json() == {"inserted": 2, "skipped": 0}
+
+        second = backfill_droplet.post(
+            "/api/ingest/backfill",
+            json={"rows": [
+                _row("2026-08-26T10:00:00Z", outside_temp=850, station_type=17),  # dup
+                _row("2026-08-26T10:10:00Z", outside_temp=851, station_type=17),  # new
+            ]},
+            headers=headers,
+        )
+        assert second.json() == {"inserted": 1, "skipped": 1}
+
+        db = SessionLocal()
+        try:
+            assert db.query(SensorReadingModel).count() == 3
+        finally:
+            db.close()
+
+    def test_413_over_batch_cap(self, backfill_droplet):
+        from app.api.ingest import INGEST_BACKFILL_MAX_ROWS
+        overflowing = [
+            _row(f"2026-08-26T10:{i//60:02d}:{i%60:02d}Z", outside_temp=850, station_type=17)
+            for i in range(INGEST_BACKFILL_MAX_ROWS + 1)
+        ]
+        resp = backfill_droplet.post(
+            "/api/ingest/backfill",
+            json={"rows": overflowing},
+            headers={"Authorization": f"Bearer {INGEST_SECRET}"},
+        )
+        assert resp.status_code == 413
+
+    def test_ignores_unknown_columns(self, backfill_droplet):
+        """A private side running ahead of the droplet may ship a
+        column the droplet's DB doesn't have yet — that must not 400."""
+        resp = backfill_droplet.post(
+            "/api/ingest/backfill",
+            json={"rows": [
+                _row("2026-08-26T10:00:00Z",
+                     outside_temp=850,
+                     station_type=17,
+                     future_column_the_droplet_doesnt_know_about=42),
+            ]},
+            headers={"Authorization": f"Bearer {INGEST_SECRET}"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"inserted": 1, "skipped": 0}
+
+    def test_400_on_missing_timestamp(self, backfill_droplet):
+        resp = backfill_droplet.post(
+            "/api/ingest/backfill",
+            json={"rows": [{"outside_temp": 850}]},
+            headers={"Authorization": f"Bearer {INGEST_SECRET}"},
+        )
+        assert resp.status_code == 422  # pydantic ValidationError

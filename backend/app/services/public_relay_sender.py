@@ -55,6 +55,12 @@ BASE_UPLOAD_INTERVAL = 0    # 0 = push on every broadcast (no rate-limit)
 
 _LAST_ERROR_KEY = "public_relay_last_error"
 
+# Backfill push chunk size. Matches the droplet-side
+# ``INGEST_BACKFILL_MAX_ROWS`` cap in app/api/ingest.py — a single
+# 3000-row DMPAFT catchup fits in one request, and larger catchups
+# fan out cleanly.
+BACKFILL_CHUNK = 3000
+
 
 class PublicRelaySender:
     """POSTs the current SensorSnapshot to a public droplet."""
@@ -167,6 +173,69 @@ class PublicRelaySender:
             self._on_success()
         else:
             self._on_failure(f"reading push: {detail}")
+
+    # ---- Backfill push ----
+
+    async def push_backfill(self, rows: list[dict]) -> None:
+        """POST batches of freshly-inserted rows to the droplet's
+        ``/api/ingest/backfill`` endpoint.
+
+        Called from ``LoggerDaemon._bg_dmpaft_catchup`` after the
+        DMPAFT catchup has landed new rows in the private-side
+        ``sensor_readings`` table. Closes issue #502: without this,
+        the outage window becomes a permanent gap on the droplet's
+        DB even though the private side has now filled it from the
+        Vue's console ring buffer.
+
+        ``rows`` is a list of already-projected wire dicts, built by
+        ``dmpaft_catchup._row_to_wire_dict`` inside the session
+        transaction — passing ORM instances here breaks with
+        ``DetachedInstanceError`` because SessionLocal expires
+        attributes on commit and closes the session before this
+        runs (Codex R1 on PR #503). The catchup owns the DB shape;
+        the sender only serializes JSON.
+
+        Same config / driver gates as ``maybe_upload``. A relay
+        running the ``public_relay`` driver itself is not relaying
+        anywhere (it's the droplet); no-op there.
+
+        Chunks into batches of ``BACKFILL_CHUNK`` so a single
+        request never exceeds the droplet endpoint's cap (matches
+        ``INGEST_BACKFILL_MAX_ROWS`` on the droplet side). A chunk
+        failure updates ``public_relay_last_error`` via
+        ``_on_failure`` and stops the fan-out. A persistently down
+        droplet gets one loud row per catchup, not one per chunk;
+        the tradeoff is that a transient mid-fan-out failure leaves
+        the droplet with a partial fill until the next catchup
+        pushes the remainder (accepted per v1 scope in #502).
+        """
+        self._reload_config()
+        if not self._enabled or not self._target_url or not self._secret:
+            return
+        if self._driver_type == PUBLIC_RELAY_DRIVER_TYPE:
+            return
+        if not rows:
+            return
+
+        url = f"{self._target_url}/api/ingest/backfill"
+        total_pushed = 0
+        for start in range(0, len(rows), BACKFILL_CHUNK):
+            chunk = rows[start:start + BACKFILL_CHUNK]
+            ok, detail = await self._post(url, {"rows": chunk})
+            if not ok:
+                self._on_failure(f"backfill push: {detail}")
+                logger.warning(
+                    "PublicRelaySender: backfill push stopped at %d/%d rows",
+                    total_pushed, len(rows),
+                )
+                return
+            total_pushed += len(chunk)
+
+        self._on_success()
+        logger.info(
+            "PublicRelaySender: backfill pushed %d rows in %d chunk(s)",
+            total_pushed, (len(rows) + BACKFILL_CHUNK - 1) // BACKFILL_CHUNK,
+        )
 
     # ---- Identity push ----
 
