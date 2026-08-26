@@ -1,3 +1,41 @@
+kanfei (0.1.0~beta85) unstable; urgency=medium
+
+  * Backend / logger (#507, fixes #505): DMPAFT catchup fires at
+    most once per process lifetime. On a Vantage with a full
+    513-page archive, the paged DMPAFT transfer takes ~77 s over
+    19200 baud — longer than the 30 s poll-stall watchdog
+    threshold in ``davis.logger``. Before this gate, every
+    watchdog-forced reconnect fired another ``_bg_dmpaft_catchup``,
+    held the serial ``_io_lock`` past the threshold, got its port
+    closed mid-page-read by the next reconnect, and died with
+    ``'NoneType' object cannot be interpreted as an integer``.
+    Infinite loop: poller never ran, live pushes to the public
+    relay stopped, droplet UI stuck OFFLINE. Observed live on
+    vsits-02 today. Fix is a single flag on ``LoggerDaemon``
+    (``_catchup_completed``) set BEFORE the service-function
+    await so a raised exception below still burns the attempt.
+    The historical vsits-02 gap will NOT self-fill after this
+    lands — a follow-on PR will interleave the DMPAFT page-loop
+    with the poll-stall watchdog. Load-bearing.
+
+  * Frontend / mobile (#506, Design v54 phase 3c): Agriculture
+    persona phone tier. At ≤768 px the persona now renders a
+    reduced tile set above the ``FULL READOUT`` divider composed
+    for the "can I spray?" question the reader is holding the
+    phone in the field to answer (v54 §2): title + kicker with
+    date, bordered verdict tile (verdictFigure + 2-line clamped
+    note + 4 constraint rows, ``maxHeight: 320`` per spec), 24 h
+    forecast strip with best/next window paired row, and a
+    Drift · Wind | Water · 7 d paired row with the wind rose
+    replaced by ``3 MPH SE / PEAK 9 · 13:36`` per v54 §5. Below
+    the divider, WaterBalanceTile / DriftRiskTile / FieldScheduleTile
+    stack single-column at their designed 1× scale via the same
+    ``--k`` / ``--kt`` hoist as Everyday. Desktop (≥769 px) is
+    byte-identical to beta84. Phase 3d (Weather Nerd + header
+    date drop) still to come.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Wed, 26 Aug 2026 19:47:40 +0000
+
 kanfei (0.1.0~beta84) unstable; urgency=medium
 
   * Frontend / mobile (#504, Design v54 phase 3b): Everyday persona
