@@ -223,6 +223,72 @@ export const type = (role: Role, overrides: React.CSSProperties = {}): React.CSS
 /** Scaled font-size override, for the handful of one-off sizes in the mock. */
 export const fs = (n: number): React.CSSProperties => ({ fontSize: st(n) });
 
+/**
+ * ── PHONE-WIDTH TYPE (Design v54 §4) ────────────────────────────────
+ *
+ * At ≤768 px the dashboard bypasses the scale units ``--k`` / ``--kt``
+ * entirely and renders at natural px. Neither unit's assumption holds
+ * on a phone: ``--k`` is anchored to a vh budget the phone doesn't have,
+ * and ``--kt`` collapses to the ``--k`` floor because
+ * ``(100vw - sidebar) / 1318`` is below its clamp. The result was the
+ * per-tile crushing the beta80 memo captured.
+ *
+ * ``mType(role)`` returns a natural-px style block for each of the
+ * type roles named in Design v54 §4's table. Sizes are integers in
+ * CSS pixels; families/weights/styles preserve the same paper-vs-dark
+ * shape the desktop ``type()`` helper uses (serif italic for headline
+ * and verdict only, mono tabular for every number, mono caps for
+ * labels). Consumers spread the return value into ``style``.
+ *
+ * 10 px is the floor — v54 §4: "9 px mono caps at arm's length on a
+ * 360 px screen is not readable, and the desktop ``sectionLabel``
+ * being 10 is not a licence to go under it."
+ */
+export type MType =
+  | 'heroFigure'         // 76 px serif italic — the one big number per persona
+  | 'premiseFigure'      // 58 px serif italic — Nerd's pressure lead
+  | 'verdictFigure'      // 52 px serif italic — Agriculture's GO / NO-GO
+  | 'secondaryFigure'    // 28-38 px serif italic — supporting figures
+  | 'monoFigure'         // 26 px mono tabular
+  | 'pageTitle'          // 26 px serif italic — page-hero title
+  | 'tileHeading'        // 18 px serif italic
+  | 'noteTitle'          // 17 px serif italic — one-line notes
+  | 'body'               // 14 px body
+  | 'monoRow'            // 12-13 px mono tabular — table rows
+  | 'sectionLabel'       // 10 px mono caps ls 0.2em
+  | 'axisLabel';         // 10 px mono caps ls 0.13em — chart axis / footer
+
+const M_ROLE: Record<MType, {
+  size: number; family: string; weight: number; style: string; tracking: string; transform: string;
+  tabular?: boolean;
+}> = {
+  heroFigure:      { size: 76, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
+  premiseFigure:   { size: 58, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
+  verdictFigure:   { size: 52, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
+  secondaryFigure: { size: 32, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
+  monoFigure:      { size: 26, family: "'JetBrains Mono', monospace",      weight: 500, style: 'normal', tracking: 'normal', transform: 'none', tabular: true },
+  pageTitle:       { size: 26, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
+  tileHeading:     { size: 18, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
+  noteTitle:       { size: 17, family: "'Source Serif 4', Georgia, serif", weight: 600, style: 'italic', tracking: 'normal', transform: 'none' },
+  body:            { size: 14, family: "'Inter', sans-serif",              weight: 400, style: 'normal', tracking: 'normal', transform: 'none' },
+  monoRow:         { size: 13, family: "'JetBrains Mono', monospace",      weight: 400, style: 'normal', tracking: 'normal', transform: 'none', tabular: true },
+  sectionLabel:    { size: 10, family: "'JetBrains Mono', monospace",      weight: 400, style: 'normal', tracking: '0.2em',  transform: 'uppercase' },
+  axisLabel:       { size: 10, family: "'JetBrains Mono', monospace",      weight: 400, style: 'normal', tracking: '0.13em', transform: 'uppercase' },
+};
+
+export const mType = (role: MType): React.CSSProperties => {
+  const f = M_ROLE[role];
+  return {
+    fontSize: `${f.size}px`,
+    fontFamily: f.family,
+    fontWeight: f.weight,
+    fontStyle: f.style,
+    letterSpacing: f.tracking,
+    textTransform: f.transform as React.CSSProperties['textTransform'],
+    ...(f.tabular ? { fontVariantNumeric: 'tabular-nums' } : {}),
+  };
+};
+
 /** Tabular figures — mandatory on any value that updates live, or rows jitter. */
 export const tnum: React.CSSProperties = { fontVariantNumeric: 'tabular-nums' };
 

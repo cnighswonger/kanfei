@@ -26,6 +26,7 @@ import React from 'react';
 import { v, type, SectionLabel, TileHeading, Row, Tile, fmt, fmtInt, fmtTime, s, st, scaleVar, CONTENT_CAP } from './primitives';
 import type { DashboardData } from './types';
 import { PersonaFooter } from './PersonaFooter';
+import { useIsMobile } from '../hooks/useIsMobile';
 import {
   HeroTemperatureTile, DerivedConditionsTile, HistoryChartTile, BarometerTile,
   WindTile, RainTile, SolarUvTile, AlmanacTile, RainfallByHourTile,
@@ -37,7 +38,11 @@ const BAND_GAP = 32;
 export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string }> = ({
   d,
   themeLabel,
-}) => (
+}) => {
+  // v54 phase 3a: gate the corner plate at phone width (§6). Above
+  // 768 px behaves exactly as before.
+  const isMobile = useIsMobile();
+  return (
   <main
     data-dashboard="everyday"
     style={{
@@ -98,30 +103,36 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
     >
     {/* Corner plate — 400×280, bottom-right of MAIN, behind content.
         Not full-bleed, not on body, not position:fixed. Exact values from the
-        mock; see ADAPTER.md if the page currently shows a page-sized engraving. */}
-    <div
-      aria-hidden
-      style={{
-        position: 'absolute',
-        right: 0,
-        // Raised from ``bottom: s(60)`` — the plate at 400×280 sat
-        // under band B's Console & link readouts (``Product 6351``,
-        // ``Console battery 4.66 V``).  ``s(200)`` clears the band
-        // B tiles and keeps the plate at the top of band B's row
-        // (Design v50 §9).
-        bottom: s(200),
-        width: s(400),
-        height: s(280),
-        zIndex: -1,
-        backgroundImage: 'var(--surface-plate)',
-        backgroundSize: 'contain',
-        backgroundPosition: 'right bottom',
-        backgroundRepeat: 'no-repeat',
-        opacity: 0.09,
-        filter: 'sepia(0.62) contrast(1.05) saturate(0.85)',
-        mixBlendMode: 'multiply',
-      }}
-    />
+        mock; see ADAPTER.md if the page currently shows a page-sized engraving.
+
+        v54 §6: off at phone width. At 328 px of content width there is
+        no empty ground for a watermark to fall on, so any opacity puts
+        it under a number. */}
+    {!isMobile && (
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          right: 0,
+          // Raised from ``bottom: s(60)`` — the plate at 400×280 sat
+          // under band B's Console & link readouts (``Product 6351``,
+          // ``Console battery 4.66 V``).  ``s(200)`` clears the band
+          // B tiles and keeps the plate at the top of band B's row
+          // (Design v50 §9).
+          bottom: s(200),
+          width: s(400),
+          height: s(280),
+          zIndex: -1,
+          backgroundImage: 'var(--surface-plate)',
+          backgroundSize: 'contain',
+          backgroundPosition: 'right bottom',
+          backgroundRepeat: 'no-repeat',
+          opacity: 0.09,
+          filter: 'sepia(0.62) contrast(1.05) saturate(0.85)',
+          mixBlendMode: 'multiply',
+        }}
+      />
+    )}
 
     {/* Content region — takes the flex slack from the outer wrapper
         and clips anything past its own height (viewports too short
@@ -199,7 +210,8 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
     <PersonaFooter d={d} themeLabel={themeLabel} />
     </div>
   </main>
-);
+  );
+};
 
 /**
  * Console & link — 1d's station tile.
