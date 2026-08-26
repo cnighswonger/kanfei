@@ -340,3 +340,55 @@ class TestTimestampConversion:
         aware_now_local = datetime.now().astimezone().replace(tzinfo=None)
         delta = aware_now_local - floor
         assert timedelta(minutes=55) <= delta <= timedelta(minutes=65)
+
+
+import json
+
+
+class TestCatchupToRelayHandoff:
+    """The critical hand-off between async_backfill_from_vantage and
+    PublicRelaySender.push_backfill (Codex R1 on PR #503 caught the
+    original DetachedInstanceError here — ORM instances went stale
+    when the session closed before the sender read them).
+
+    The module-level autouse ``clean_sensor_readings`` fixture takes
+    care of DB state.
+    """
+
+    pytestmark = pytest.mark.asyncio
+
+    async def test_returned_rows_are_json_serialisable_dicts(self):
+        """The whole point of the R1 fix: sender receives plain dicts,
+        not ORM instances. json.dumps must succeed with no session."""
+        drv = _FakeVantageDriver(records=[_mk_record(30), _mk_record(20)])
+        n, rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        assert n == 2
+        assert len(rows) == 2
+        assert all(isinstance(r, dict) for r in rows)
+        # Round-trip through JSON — DetachedInstanceError would raise
+        # before we get here if we still had ORM instances.
+        json.dumps(rows, default=str)
+
+    async def test_row_dicts_carry_the_wire_shape_the_endpoint_expects(self):
+        """The dict shape the sender POSTs to /api/ingest/backfill.
+        Must include timestamp as ISO-Z and every non-id column."""
+        drv = _FakeVantageDriver(records=[_mk_record(30)])
+        _n, rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        assert len(rows) == 1
+        row = rows[0]
+        assert isinstance(row["timestamp"], str)
+        assert row["timestamp"].endswith("Z")
+        assert "id" not in row, "id must not ride the wire"
+        assert "outside_temp" in row
+        assert "station_type" in row
+
+    async def test_no_rows_returned_when_all_dupes(self):
+        """Re-catchup of an already-inserted record returns 0 and an
+        empty list — the sender's fan-out then correctly no-ops."""
+        drv = _FakeVantageDriver(records=[_mk_record(30)])
+        first_n, first_rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        assert first_n == 1
+        assert len(first_rows) == 1
+        second_n, second_rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        assert second_n == 0
+        assert second_rows == []

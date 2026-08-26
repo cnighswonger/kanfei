@@ -421,14 +421,21 @@ class TestNoSnapshot:
 # ─────────────────────────────────────── push_backfill (#502)
 
 
-from app.models.sensor_reading import SensorReadingModel
-from app.services.public_relay_sender import BACKFILL_CHUNK, _row_to_wire
+from app.services.public_relay_sender import BACKFILL_CHUNK
 
 
-def _sensor_row(ts: datetime, **fields) -> SensorReadingModel:
-    kwargs = {"timestamp": ts, "station_type": 17}
-    kwargs.update(fields)
-    return SensorReadingModel(**kwargs)
+def _wire_row(ts: datetime, **fields) -> dict:
+    """A wire dict matching what dmpaft_catchup._row_to_wire_dict
+    would build for a freshly-inserted row. The sender's contract is
+    a list of these — ORM instances would break with
+    DetachedInstanceError since the catchup closes its session
+    before handing the list off (Codex R1 on PR #503)."""
+    row: dict = {
+        "timestamp": ts.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+        "station_type": 17,
+    }
+    row.update(fields)
+    return row
 
 
 class TestBackfillPushGates:
@@ -441,7 +448,7 @@ class TestBackfillPushGates:
     def test_disabled_relay_skips_push(self, clean_station_config):
         sender = PublicRelaySender()
         mock = _install_mock_client(sender)
-        _run(sender.push_backfill([_sensor_row(datetime(2026, 8, 26, 10, 0))]))
+        _run(sender.push_backfill([_wire_row(datetime(2026, 8, 26, 10, 0))]))
         assert mock.post.call_count == 0
 
     def test_missing_target_url_skips(self, clean_station_config):
@@ -450,7 +457,7 @@ class TestBackfillPushGates:
         _set("station_driver_type", "vantage")
         sender = PublicRelaySender()
         mock = _install_mock_client(sender)
-        _run(sender.push_backfill([_sensor_row(datetime(2026, 8, 26, 10, 0))]))
+        _run(sender.push_backfill([_wire_row(datetime(2026, 8, 26, 10, 0))]))
         assert mock.post.call_count == 0
 
     def test_public_relay_driver_skips_push(self, clean_station_config):
@@ -460,7 +467,7 @@ class TestBackfillPushGates:
         _set("station_driver_type", "public_relay")
         sender = PublicRelaySender()
         mock = _install_mock_client(sender)
-        _run(sender.push_backfill([_sensor_row(datetime(2026, 8, 26, 10, 0))]))
+        _run(sender.push_backfill([_wire_row(datetime(2026, 8, 26, 10, 0))]))
         assert mock.post.call_count == 0
 
     def test_empty_rows_is_noop(self, clean_station_config):
@@ -477,8 +484,8 @@ class TestBackfillPushShape:
         sender = PublicRelaySender()
         mock = _install_mock_client(sender)
         rows = [
-            _sensor_row(datetime(2026, 8, 26, 10, 0), outside_temp=850),
-            _sensor_row(datetime(2026, 8, 26, 10, 5), outside_temp=852),
+            _wire_row(datetime(2026, 8, 26, 10, 0), outside_temp=850),
+            _wire_row(datetime(2026, 8, 26, 10, 5), outside_temp=852),
         ]
         _run(sender.push_backfill(rows))
         assert mock.post.call_count == 1
@@ -495,7 +502,7 @@ class TestBackfillPushShape:
         _enable_relay()
         sender = PublicRelaySender()
         mock = _install_mock_client(sender)
-        rows = [_sensor_row(datetime(2026, 8, 26, 0, 0)) for _ in range(BACKFILL_CHUNK + 5)]
+        rows = [_wire_row(datetime(2026, 8, 26, 0, 0)) for _ in range(BACKFILL_CHUNK + 5)]
         _run(sender.push_backfill(rows))
         # (chunk cap + 5) → 2 requests: [chunk], [5]
         assert mock.post.call_count == 2
@@ -509,30 +516,7 @@ class TestBackfillPushShape:
         sender = PublicRelaySender()
         mock = _install_mock_client(sender)
         mock.post = AsyncMock(return_value=httpx.Response(503, json={"detail": "down"}))
-        rows = [_sensor_row(datetime(2026, 8, 26, 0, 0)) for _ in range(BACKFILL_CHUNK + 5)]
+        rows = [_wire_row(datetime(2026, 8, 26, 0, 0)) for _ in range(BACKFILL_CHUNK + 5)]
         _run(sender.push_backfill(rows))
         assert mock.post.call_count == 1, "must stop after the first failure"
         assert _get("public_relay_last_error") != ""
-
-
-class TestRowToWire:
-    def test_timestamp_serialises_with_z_suffix(self):
-        row = _sensor_row(datetime(2026, 8, 26, 10, 0, 0))
-        wire = _row_to_wire(row)
-        assert wire["timestamp"].endswith("Z")
-        assert "id" not in wire
-
-    def test_all_data_columns_present(self):
-        row = _sensor_row(
-            datetime(2026, 8, 26, 10, 0, 0),
-            outside_temp=850,
-            wind_speed=12,
-            barometer=30012,
-            extra_json='{"foo": "bar"}',
-        )
-        wire = _row_to_wire(row)
-        assert wire["outside_temp"] == 850
-        assert wire["wind_speed"] == 12
-        assert wire["barometer"] == 30012
-        assert wire["extra_json"] == '{"foo": "bar"}'
-        assert wire["station_type"] == 17

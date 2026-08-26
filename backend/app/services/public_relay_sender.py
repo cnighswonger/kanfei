@@ -62,38 +62,6 @@ _LAST_ERROR_KEY = "public_relay_last_error"
 BACKFILL_CHUNK = 3000
 
 
-def _row_to_wire(row: Any) -> dict:
-    """Project a SensorReadingModel ORM row into the wire dict the
-    backfill endpoint accepts. ``id`` is dropped — the droplet's own
-    autoincrement decides. ``timestamp`` is serialised as ISO 8601
-    with a Z suffix so pydantic parses it back to a tz-aware
-    datetime on the receiving end (the droplet endpoint then
-    normalises to naive-UTC for the column write, matching what the
-    poller writes on the private side)."""
-    ts = getattr(row, "timestamp", None)
-    if isinstance(ts, datetime):
-        ts_iso = (
-            ts.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
-            if ts.tzinfo is None else ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-        )
-    else:
-        ts_iso = str(ts) if ts is not None else None
-
-    payload: dict = {"timestamp": ts_iso}
-    for col in row.__table__.columns:
-        if col.key in ("id", "timestamp"):
-            continue
-        val = getattr(row, col.key, None)
-        # Serialise datetimes uniformly (extra_json is text so it
-        # rides through as-is). Every other column is Integer / Text
-        # / null and JSON-safe.
-        if isinstance(val, datetime):
-            payload[col.key] = val.isoformat()
-        else:
-            payload[col.key] = val
-    return payload
-
-
 class PublicRelaySender:
     """POSTs the current SensorSnapshot to a public droplet."""
 
@@ -208,7 +176,7 @@ class PublicRelaySender:
 
     # ---- Backfill push ----
 
-    async def push_backfill(self, rows: list[Any]) -> None:
+    async def push_backfill(self, rows: list[dict]) -> None:
         """POST batches of freshly-inserted rows to the droplet's
         ``/api/ingest/backfill`` endpoint.
 
@@ -219,17 +187,27 @@ class PublicRelaySender:
         DB even though the private side has now filled it from the
         Vue's console ring buffer.
 
+        ``rows`` is a list of already-projected wire dicts, built by
+        ``dmpaft_catchup._row_to_wire_dict`` inside the session
+        transaction — passing ORM instances here breaks with
+        ``DetachedInstanceError`` because SessionLocal expires
+        attributes on commit and closes the session before this
+        runs (Codex R1 on PR #503). The catchup owns the DB shape;
+        the sender only serializes JSON.
+
         Same config / driver gates as ``maybe_upload``. A relay
         running the ``public_relay`` driver itself is not relaying
         anywhere (it's the droplet); no-op there.
 
-        Chunks the row list into batches of ``BACKFILL_CHUNK`` so a
-        single request never exceeds the droplet endpoint's cap
-        (matches ``INGEST_BACKFILL_MAX_ROWS`` on the droplet side).
-        A chunk failure updates ``public_relay_last_error`` via
-        ``_on_failure`` and stops the fan-out (a persistently down
-        droplet gets one loud row per catchup, not a spam of one per
-        chunk).
+        Chunks into batches of ``BACKFILL_CHUNK`` so a single
+        request never exceeds the droplet endpoint's cap (matches
+        ``INGEST_BACKFILL_MAX_ROWS`` on the droplet side). A chunk
+        failure updates ``public_relay_last_error`` via
+        ``_on_failure`` and stops the fan-out. A persistently down
+        droplet gets one loud row per catchup, not one per chunk;
+        the tradeoff is that a transient mid-fan-out failure leaves
+        the droplet with a partial fill until the next catchup
+        pushes the remainder (accepted per v1 scope in #502).
         """
         self._reload_config()
         if not self._enabled or not self._target_url or not self._secret:
@@ -243,8 +221,7 @@ class PublicRelaySender:
         total_pushed = 0
         for start in range(0, len(rows), BACKFILL_CHUNK):
             chunk = rows[start:start + BACKFILL_CHUNK]
-            payload = {"rows": [_row_to_wire(r) for r in chunk]}
-            ok, detail = await self._post(url, payload)
+            ok, detail = await self._post(url, {"rows": chunk})
             if not ok:
                 self._on_failure(f"backfill push: {detail}")
                 logger.warning(

@@ -261,6 +261,11 @@ async def ingest_backfill(
 
     inserted = 0
     skipped = 0
+    # One commit per request — the 3000-row cap is well within
+    # SQLite's transaction budget, and atomic-per-request keeps the
+    # sender's fan-out honest (the response's ``inserted`` count is
+    # exactly what committed, no partial-write ambiguity if a later
+    # row raises).
     try:
         for row_model, ts in zip(payload.rows, incoming_ts):
             if ts in existing:
@@ -278,8 +283,6 @@ async def ingest_backfill(
             db.add(SensorReadingModel(**kwargs))
             existing.add(ts)  # protect against same-timestamp dupes in one batch
             inserted += 1
-            if inserted % 200 == 0:
-                db.commit()
         db.commit()
     except Exception as exc:
         db.rollback()
