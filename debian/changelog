@@ -1,3 +1,34 @@
+kanfei (0.1.0~beta86) unstable; urgency=medium
+
+  * Frontend / mobile (#510, Design v54 phase 3d): Weather Nerd
+    persona phone tier + shared-header date drop.  At ≤768 px the
+    persona now renders a composition for the "what is the station
+    doing?" question (v54 §2): title + kicker with date, pressure
+    premise (``premiseFigure`` at 58 px per v54 §4) with the 3 h
+    rate and alternate-unit reading, Zambretti/NWS sentence with
+    confidence + agreement, and a paired theta-e | reception row
+    where reception carries the same tone bands as the desktop
+    ``ReceptionCard``.  Below the divider, the existing chart, wind
+    rose, solar bars and console-extremes tiles stack at their
+    designed 1× scale via the same ``--k`` / ``--kt`` hoist as the
+    other personas.  ``PersonaFooter``'s three nerd-only chips
+    (DB size, upload targets, IPC status) survive to the mobile
+    footer unchanged.
+
+  * Frontend / header (part of #510): at ≤768 px the paper-theme
+    ``dateStr · timeStr`` header line collapses to just ``timeStr``.
+    Every persona now carries the date in its own kicker
+    (Everyday since 3b, Agriculture since 3c, Weather Nerd since
+    3d), so the header duplicated it while eating width the
+    mobile status line needs.  Desktop paper-theme header at
+    ≥769 px is byte-identical to beta85.
+
+    v54 mobile composition (phases 3a-3d) is now complete for
+    all three personas.  Phase 4 (768-1213 middle tier) still
+    to come.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Wed, 26 Aug 2026 22:11:43 +0000
+
 kanfei (0.1.0~beta85) unstable; urgency=medium
 
   * Backend / logger (#507, fixes #505): DMPAFT catchup fires at
