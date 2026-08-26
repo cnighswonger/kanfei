@@ -46,7 +46,12 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
   // Wordmark tag: the active theme's full ``label`` field, uppercased
   // via CSS (``text-transform``) so the raw label stays presentable
   // wherever else it's used (theme picker, dashboard title, footer).
-  const themeTag = theme.label;
+  // v54 §7: shorten the log dropdown label at phone width by dropping
+  // a leading "The " — the full tag is ~156 px of a 328 px row and
+  // the full theme name is already in the footer. Applies universally
+  // (theme-agnostic), so a rename or a future paper theme with a
+  // leading article doesn't need to re-check this rule.
+  const themeTag = isMobile ? theme.label.replace(/^The\s+/i, '') : theme.label;
 
   // Theme picker (mocks 13a/13b): wordmark tag is the trigger.  Menu
   // shows two shipping defaults plus a jump to Settings › Appearance.
@@ -162,7 +167,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
             letterSpacing: paper ? '0' : '-0.01em',
           }}
         >
-          Kanfei
+          {isMobile ? 'K' : 'Kanfei'}
         </h1>
 
         <div ref={pickerRef} style={{ position: 'relative' }}>
@@ -231,7 +236,7 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        {!paper && (
+        {!paper && !isMobile && (
           <div
             style={{
               display: 'flex',
@@ -333,66 +338,75 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
             >
               {`${dateStr} · ${timeStr}`}
             </span>
-            <span
-              aria-label={connected ? 'connected' : 'disconnected'}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 'calc(11px * var(--font-scale))',
-                letterSpacing: '0.14em',
-                color: paperInk,
-                whiteSpace: 'nowrap',
-              }}
-            >
+            {!isMobile && (
               <span
+                aria-label={connected ? 'connected' : 'disconnected'}
                 style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: connected ? 'var(--color-success)' : 'var(--color-danger)',
-                  boxShadow: connected
-                    ? '0 0 6px var(--color-success)'
-                    : '0 0 6px var(--color-danger)',
-                  flexShrink: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 'calc(11px * var(--font-scale))',
+                  letterSpacing: '0.14em',
+                  color: paperInk,
+                  whiteSpace: 'nowrap',
                 }}
-              />
-              {`${stationTypeShort} · ${connected ? 'RUNNING' : 'OFFLINE'}`}
-            </span>
+              >
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: connected ? 'var(--color-success)' : 'var(--color-danger)',
+                    boxShadow: connected
+                      ? '0 0 6px var(--color-success)'
+                      : '0 0 6px var(--color-danger)',
+                    flexShrink: 0,
+                  }}
+                />
+                {`${stationTypeShort} · ${connected ? 'RUNNING' : 'OFFLINE'}`}
+              </span>
+            )}
           </>
         )}
 
         {/* Sign in / Logout.  Present on every theme now (mocks 13a/13b)
             so an anonymous visitor has a route into Settings from any
             page.  Paper themes use the quiet mono-caps button; dark and
-            classic keep the accent-outlined pill. */}
-        <button
-          onClick={onAuth}
-          style={paper ? {
-            background: 'transparent',
-            border: '1px solid var(--color-border)',
-            borderRadius: '2px',
-            padding: '7px 14px',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'calc(10px * var(--font-scale))',
-            letterSpacing: '0.20em',
-            textTransform: 'uppercase',
-            color: paperInk,
-            cursor: 'pointer',
-          } : {
-            background: 'none',
-            border: '1px solid var(--color-border)',
-            borderRadius: '6px',
-            padding: '6px 10px',
-            fontSize: 'calc(12px * var(--font-scale))',
-            fontFamily: 'var(--font-body)',
-            color: 'var(--color-text-secondary)',
-            cursor: 'pointer',
-          }}
-        >
-          {authLabel}
-        </button>
+            classic keep the accent-outlined pill.
+
+            Hidden at phone widths (v54 §7): a public-droplet visitor
+            still reaches Settings via the drawer's Settings route;
+            burning a header slot on a login shortcut isn't the right
+            trade at 360 px. */}
+        {!isMobile && (
+          <button
+            onClick={onAuth}
+            style={paper ? {
+              background: 'transparent',
+              border: '1px solid var(--color-border)',
+              borderRadius: '2px',
+              padding: '7px 14px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'calc(10px * var(--font-scale))',
+              letterSpacing: '0.20em',
+              textTransform: 'uppercase',
+              color: paperInk,
+              cursor: 'pointer',
+            } : {
+              background: 'none',
+              border: '1px solid var(--color-border)',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: 'calc(12px * var(--font-scale))',
+              fontFamily: 'var(--font-body)',
+              color: 'var(--color-text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            {authLabel}
+          </button>
+        )}
       </div>
     </header>
   );

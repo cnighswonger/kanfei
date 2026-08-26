@@ -197,10 +197,11 @@ a:hover {
     padding: 12px !important;
   }
 
-  /* Header: hide station name on mobile */
-  .header-title {
-    display: none !important;
-  }
+  /* v54 phase 2: the header wordmark stays visible at phone width
+     as the single-letter "K" mark (Header.tsx swaps content via
+     {isMobile ? 'K' : 'Kanfei'}). The prior blanket display:none
+     hid the wordmark entirely and predated the wordmark-refactor
+     — no station name lives in that element today. */
 
   /* Page heading responsiveness (used by Dashboard, History, etc.) */
   .dashboard-heading {
