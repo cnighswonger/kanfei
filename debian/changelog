@@ -1,3 +1,26 @@
+kanfei (0.1.0~beta82) unstable; urgency=medium
+
+  * Frontend / mobile (#499, Design v54 phase 2): header shed at
+    ≤768 px. Four items land: (1) wordmark ``Kanfei`` → single-
+    letter ``K`` mark at phone width, (2) log dropdown label strips
+    a leading ``The `` so ``The Mammoth's Log`` becomes
+    ``MAMMOTH'S LOG``, (3) connection status dot + label off on
+    phone (both paper and non-paper branches), (4) SIGN IN / Logout
+    button off on phone (phone users still reach Settings via the
+    drawer's Settings route from phase 1). Also removed a dead
+    ``@media (max-width: 768px) .header-title { display: none }``
+    left over from a pre-wordmark-refactor era that would have
+    hidden the new ``K`` mark entirely (Codex R1 blocker).
+
+    Deferred to phase 3: date-to-kicker (v54 §7's fifth shed item).
+    Weather Nerd has no page-title hero today; adding the kicker
+    crosses into phase 3's composition surface, so this phase
+    keeps the date fragment in the header. Header at 360 px lands
+    at ``☰ · K · MAMMOTH'S LOG ▾ · AUG 26, 2026 · 01:25`` — fits
+    with breathing room.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 26 Aug 2026 01:30:00 +0000
+
 kanfei (0.1.0~beta81) unstable; urgency=medium
 
   * Frontend / mobile (#498, Design v54 phase 1): fold the persona
