@@ -247,6 +247,15 @@ class LoggerDaemon:
         # alongside WU/CWOP; self-gated inside ``maybe_upload`` on
         # driver type and config-enabled.
         self.relay_sender = PublicRelaySender()
+        # DMPAFT catchup runs at most once per process lifetime (#505).
+        # On a Vantage with a full 513-page archive the paged transfer
+        # takes ~77s over 19200 baud, longer than the 30s poll-stall
+        # threshold; every reconnect fires another catchup, holds the
+        # serial ``_io_lock``, gets its port closed by the watchdog
+        # reconnect mid-parse, and dies.  Gating on this flag stops
+        # the runaway loop after the first attempt — a successful
+        # catchup won't retry, a failed one won't either.
+        self._catchup_completed: bool = False
 
     # ---- helpers for LinkDriver-specific operations ----
 
@@ -653,14 +662,35 @@ class LoggerDaemon:
         daemon's lifecycle file — same shape as ``_bg_archive_sync``
         above.
 
+        Runs **at most once per process lifetime** (#505).  On a
+        Vantage with a full 513-page archive the paged transfer takes
+        ~77s over 19200 baud, longer than the 30s poll-stall
+        threshold.  Before this gate, every watchdog-forced reconnect
+        fired another catchup, held the serial ``_io_lock``, got its
+        port closed by the next reconnect mid-parse, and died — an
+        infinite loop that never let the poller run.  Firing exactly
+        once (fail or succeed) breaks the loop; a station-side gap
+        larger than one process lifetime is handled by an operator
+        restart (or a separate patch that runs catchup in a way that
+        doesn't hold the lock past the poll-stall threshold).
+
         Failure is logged and swallowed: a busted backfill must never
         take down a healthy connect or a watchdog-forced reconnect.
-        The gap it fails to fill is exactly the failure ``/api/health``
-        will already be surfacing.
         """
         drv = self.driver
         if drv is None or not hasattr(drv, "async_dmpaft"):
             return
+        if self._catchup_completed:
+            logger.debug(
+                "DMPAFT catchup: skipping (already attempted this process)",
+            )
+            return
+        # Mark BEFORE the await so an exception below doesn't reset it —
+        # one attempt per process, regardless of outcome.  The service
+        # function catches driver exceptions internally and returns
+        # ``(0, [])``, so the outer try/except only fires on wiring
+        # bugs (e.g. missing attribute); either way, we're done.
+        self._catchup_completed = True
         try:
             n, rows = await async_backfill_from_vantage(drv, station_type_code)
             if n:
