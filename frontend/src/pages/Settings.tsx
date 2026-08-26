@@ -5,7 +5,7 @@ import type { NowcastPresetOption } from "../api/client.ts";
 import type { ConfigItem, WeatherLinkConfig, WeatherLinkCalibration, AlertThreshold, LocalUsageResponse, UsageStatus, DbStats, LogEntry } from "../api/types.ts";
 import { useTheme } from "../context/ThemeContext.tsx";
 import { useWeatherData } from "../context/WeatherDataContext.tsx";
-import { usePersona, PERSONAS, type Persona } from "../context/PersonaContext.tsx";
+import { usePersona, PERSONAS, PERSONA_LABEL, type Persona } from "../context/PersonaContext.tsx";
 import { useWeatherBackground } from "../context/WeatherBackgroundContext.tsx";
 import { themes } from "../themes/index.ts";
 import { SectionRail } from "../components/settings/SectionRail.tsx";
@@ -3605,7 +3605,7 @@ export default function Settings() {
           >
             {PERSONAS.map((p) => (
               <option key={p} value={p}>
-                {p === "everyday" ? "Everyday" : p === "agriculture" ? "Agriculture" : "Weather Nerd"}
+                {PERSONA_LABEL[p]}
               </option>
             ))}
           </select>

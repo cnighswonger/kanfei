@@ -1,18 +1,8 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useFeatureFlags } from '../../context/FeatureFlagsContext';
-import { usePersona, PERSONAS, type Persona } from '../../context/PersonaContext';
+import { usePersona, PERSONAS, PERSONA_LABEL, type Persona } from '../../context/PersonaContext';
 import { useTheme } from '../../context/ThemeContext';
-
-// Persona display labels — mirror what the header persona strip uses
-// (Header.tsx:PERSONA_LABEL). Kept here so the drawer selector reads
-// standalone without pulling a shared constant across the layout dir
-// for a three-entry table.
-const PERSONA_LABEL: Record<Persona, string> = {
-  everyday: 'Everyday',
-  agriculture: 'Agriculture',
-  weather_nerd: 'Weather Nerd',
-};
 
 interface SidebarProps {
   open: boolean;

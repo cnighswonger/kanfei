@@ -3,15 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useWeatherData } from '../../context/WeatherDataContext';
 import { useAuth } from '../../context/AuthContext';
-import { usePersona, PERSONAS, type Persona } from '../../context/PersonaContext';
+import { usePersona, PERSONAS, PERSONA_LABEL } from '../../context/PersonaContext';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { themes } from '../../themes';
-
-const PERSONA_LABEL: Record<Persona, string> = {
-  everyday: 'Everyday',
-  agriculture: 'Agriculture',
-  weather_nerd: 'Weather nerd',
-};
 
 // Theme picker: two shipping defaults surfaced from the wordmark tag
 // (mocks 13a / 13b).  Descriptors are ``ground · accent · face`` and
