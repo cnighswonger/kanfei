@@ -1,3 +1,29 @@
+kanfei (0.1.0~beta81) unstable; urgency=medium
+
+  * Frontend / mobile (#498, Design v54 phase 1): fold the persona
+    selector into the drawer alongside page nav, and hide the
+    header persona strip at ≤768 px.  Closes the sharpest S10
+    (360 px) pain from the beta80 mobile-render memo: the strip
+    overflowed horizontally with no scroll affordance, so Weather
+    Nerd was unclickable — the third tab was simply off-screen.
+    Drawer now lists persona first, three items with the current
+    one marked, then the five pages; changing persona changes what
+    the pages contain, so it reads top-down.  Also normalizes the
+    `Weather Nerd` spelling (header was `Weather nerd` — lowercase
+    n — the outlier; drawer + Settings + comments all used the
+    capitalised form) and lifts `PERSONA_LABEL` to
+    `PersonaContext` as the single source of truth so future
+    persona surfaces can't drift again.  Desktop (≥769 px) is
+    unchanged — the header strip still renders there.
+
+    Phase-1 only.  Header shed (status dot, `SIGN IN`,
+    wordmark→mark, date kicker, `THE MAMMOTH'S LOG` →
+    `MAMMOTH'S LOG`), the reduced tile set + `FULL READOUT`
+    divider composition per persona, and the 768–1213 two-column
+    middle tier all land in phases 2+.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Tue, 26 Aug 2026 00:55:00 +0000
+
 kanfei (0.1.0~beta80) unstable; urgency=medium
 
   * Backend perf (#497): cache ``compute_yearly_rain`` on
