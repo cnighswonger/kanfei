@@ -336,7 +336,11 @@ export default function Header({ connected, onMenuToggle, sidebarOpen, hidden = 
                 whiteSpace: 'nowrap',
               }}
             >
-              {`${dateStr} · ${timeStr}`}
+              {/* v54 §7 phase 3d: drop the header date at phone width — all
+                  three personas now carry it in their kicker, so keeping it
+                  here duplicates it and eats width the mobile header needs
+                  for the persona name and clock. */}
+              {isMobile ? timeStr : `${dateStr} · ${timeStr}`}
             </span>
             {!isMobile && (
               <span
