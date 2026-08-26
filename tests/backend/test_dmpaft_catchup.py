@@ -92,7 +92,7 @@ class TestFreshInstall:
         window, not "since epoch" — a 30-min-interval station would
         otherwise stream a decade of records."""
         drv = _FakeVantageDriver(records=[_mk_record(30)])
-        n = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        n, _rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
         assert n == 1
         assert drv.asked_after is not None
         expected_floor = datetime.now() - FRESH_INSTALL_HORIZON
@@ -110,7 +110,7 @@ class TestInsertion:
         drv = _FakeVantageDriver(records=[
             _mk_record(30), _mk_record(20), _mk_record(10),
         ])
-        n = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        n, _rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
         assert n == 3
         db = SessionLocal()
         try:
@@ -192,9 +192,9 @@ class TestIdempotence:
         catchup while the /api/health monitor is still flapping."""
         records = [_mk_record(30), _mk_record(20)]
         drv = _FakeVantageDriver(records=records)
-        first = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        first, _r1 = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
         assert first == 2
-        second = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        second, _r2 = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
         assert second == 0
         db = SessionLocal()
         try:
@@ -241,7 +241,7 @@ class TestGuards:
         drv = _FakeVantageDriver(
             records=[_mk_record(m) for m in range(MAX_BACKFILL_RECORDS + 50)],
         )
-        n = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        n, _rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
         assert n == MAX_BACKFILL_RECORDS
 
     async def test_cap_preserves_oldest_records_drops_newest_tail(self):
@@ -260,7 +260,7 @@ class TestGuards:
             MAX_BACKFILL_RECORDS + 3,
         )]
         drv = _FakeVantageDriver(records=recs)
-        n = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        n, _rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
         assert n == MAX_BACKFILL_RECORDS
 
         db = SessionLocal()
@@ -286,7 +286,7 @@ class TestGuards:
         raise here would take down the reconnect path.  Caller
         expects a return value it can log."""
         drv = _FakeVantageDriver(raise_exc=ConnectionError("wire ate it"))
-        n = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        n, _rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
         assert n == 0
         db = SessionLocal()
         try:
@@ -296,7 +296,7 @@ class TestGuards:
 
     async def test_empty_result_is_zero_not_error(self):
         drv = _FakeVantageDriver(records=[])
-        n = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        n, _rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
         assert n == 0
         assert drv.call_count == 1
 
@@ -340,3 +340,55 @@ class TestTimestampConversion:
         aware_now_local = datetime.now().astimezone().replace(tzinfo=None)
         delta = aware_now_local - floor
         assert timedelta(minutes=55) <= delta <= timedelta(minutes=65)
+
+
+import json
+
+
+class TestCatchupToRelayHandoff:
+    """The critical hand-off between async_backfill_from_vantage and
+    PublicRelaySender.push_backfill (Codex R1 on PR #503 caught the
+    original DetachedInstanceError here — ORM instances went stale
+    when the session closed before the sender read them).
+
+    The module-level autouse ``clean_sensor_readings`` fixture takes
+    care of DB state.
+    """
+
+    pytestmark = pytest.mark.asyncio
+
+    async def test_returned_rows_are_json_serialisable_dicts(self):
+        """The whole point of the R1 fix: sender receives plain dicts,
+        not ORM instances. json.dumps must succeed with no session."""
+        drv = _FakeVantageDriver(records=[_mk_record(30), _mk_record(20)])
+        n, rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        assert n == 2
+        assert len(rows) == 2
+        assert all(isinstance(r, dict) for r in rows)
+        # Round-trip through JSON — DetachedInstanceError would raise
+        # before we get here if we still had ORM instances.
+        json.dumps(rows, default=str)
+
+    async def test_row_dicts_carry_the_wire_shape_the_endpoint_expects(self):
+        """The dict shape the sender POSTs to /api/ingest/backfill.
+        Must include timestamp as ISO-Z and every non-id column."""
+        drv = _FakeVantageDriver(records=[_mk_record(30)])
+        _n, rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        assert len(rows) == 1
+        row = rows[0]
+        assert isinstance(row["timestamp"], str)
+        assert row["timestamp"].endswith("Z")
+        assert "id" not in row, "id must not ride the wire"
+        assert "outside_temp" in row
+        assert "station_type" in row
+
+    async def test_no_rows_returned_when_all_dupes(self):
+        """Re-catchup of an already-inserted record returns 0 and an
+        empty list — the sender's fan-out then correctly no-ops."""
+        drv = _FakeVantageDriver(records=[_mk_record(30)])
+        first_n, first_rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        assert first_n == 1
+        assert len(first_rows) == 1
+        second_n, second_rows = await async_backfill_from_vantage(drv, STATION_TYPE_VUE)
+        assert second_n == 0
+        assert second_rows == []

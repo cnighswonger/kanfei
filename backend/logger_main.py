@@ -662,9 +662,21 @@ class LoggerDaemon:
         if drv is None or not hasattr(drv, "async_dmpaft"):
             return
         try:
-            n = await async_backfill_from_vantage(drv, station_type_code)
+            n, rows = await async_backfill_from_vantage(drv, station_type_code)
             if n:
                 logger.info("DMPAFT catchup: %d records inserted", n)
+            # Fan the freshly-inserted rows out to the public-relay
+            # droplet, if one is configured. Same enable/config
+            # short-circuits as the live push in ``maybe_upload``, so
+            # this is a no-op when the operator has no relay wired up.
+            # Issue #502: without this the outage window becomes a
+            # permanent gap on the droplet even though it's now
+            # present in the private-side DB.
+            if rows:
+                try:
+                    await self.relay_sender.push_backfill(rows)
+                except Exception as exc:
+                    logger.warning("relay_sender.push_backfill errored: %s", exc)
         except Exception as exc:
             logger.warning("DMPAFT catchup errored: %s", exc)
 

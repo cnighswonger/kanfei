@@ -153,9 +153,28 @@ async def async_backfill_from_vantage(
     driver: _VantageBackfillDriver,
     station_type_code: int,
     max_records: int = MAX_BACKFILL_RECORDS,
-) -> int:
+) -> tuple[int, list[dict]]:
     """Pull archive records after the last-known live sample and
-    insert them into ``sensor_readings``.  Returns count inserted.
+    insert them into ``sensor_readings``.  Returns
+    ``(count_inserted, inserted_row_dicts)`` — the count for logging
+    / back-compat callers, and the list of freshly-inserted rows
+    projected to plain dicts so downstream fan-out
+    (public_relay_sender's backfill push, issue #502) can ship them
+    without touching a closed session.
+
+    Why dicts, not ORM instances (Codex R1 on PR #503): SessionLocal
+    uses SQLAlchemy's default ``expire_on_commit=True``, so ORM
+    instances have their attributes expired on ``db.commit()`` and
+    become fully detached when the session closes here. A caller
+    that then reads ``row.timestamp`` gets ``DetachedInstanceError``.
+    Projecting to dicts inside the ``try`` block, before commit +
+    close, keeps the ownership boundary clean: DB layer persists,
+    relay layer receives serializable data.
+
+    Insert is one commit for the whole batch: the ``max_records``
+    cap (3000) is well within SQLite's transaction size, and an
+    atomic accept/reject keeps the sender's fan-out honest — the
+    dict list is exactly what committed.
 
     Safe to call redundantly — dedupes on ``timestamp`` before
     insert, so overlap with existing live samples or a prior
@@ -170,11 +189,11 @@ async def async_backfill_from_vantage(
         records = await driver.async_dmpaft(after=after_local)
     except Exception as exc:
         logger.warning("DMPAFT catchup failed: %s", exc)
-        return 0
+        return 0, []
 
     if not records:
         logger.info("DMPAFT catchup: no records returned")
-        return 0
+        return 0, []
 
     if len(records) > max_records:
         logger.warning(
@@ -185,6 +204,7 @@ async def async_backfill_from_vantage(
 
     inserted = 0
     skipped = 0
+    row_dicts: list[dict] = []
     db = SessionLocal()
     try:
         for rec in records:
@@ -195,15 +215,20 @@ async def async_backfill_from_vantage(
             if existing is not None:
                 skipped += 1
                 continue
-            db.add(_project_to_sensor_reading(rec, ts_utc, station_type_code))
+            row = _project_to_sensor_reading(rec, ts_utc, station_type_code)
+            db.add(row)
+            # Project to a plain dict while the row is still bound
+            # to the live session. See docstring for the why.
+            row_dicts.append(_row_to_wire_dict(row, ts_utc))
             inserted += 1
-            if inserted % 200 == 0:
-                db.commit()
         db.commit()
     except Exception as exc:
         db.rollback()
         logger.error("DMPAFT catchup insert failed: %s", exc, exc_info=True)
-        return inserted
+        # Nothing was committed; drop the projected list too so the
+        # sender can't push rows the droplet would then have that
+        # aren't in the private-side DB.
+        return 0, []
     finally:
         db.close()
 
@@ -211,7 +236,30 @@ async def async_backfill_from_vantage(
         "DMPAFT catchup: %d inserted, %d skipped (already present)",
         inserted, skipped,
     )
-    return inserted
+    return inserted, row_dicts
+
+
+def _row_to_wire_dict(row: SensorReadingModel, ts_utc: datetime) -> dict:
+    """Project a session-bound SensorReadingModel to a plain dict for
+    the /api/ingest/backfill wire. Must be called BEFORE session
+    commit/close so column attributes are still fresh (Codex R1 on
+    PR #503 flagged the DetachedInstanceError this dodges).
+
+    Timestamp is emitted as an ISO 8601 string with a Z suffix —
+    the droplet endpoint parses it back to a tz-aware datetime and
+    normalises to naive-UTC for the column write, matching the
+    poller's convention. ``id`` is dropped so the droplet's own
+    autoincrement decides.
+    """
+    payload: dict = {
+        "timestamp": ts_utc.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    for col in row.__table__.columns:
+        if col.key in ("id", "timestamp"):
+            continue
+        val = getattr(row, col.key, None)
+        payload[col.key] = val
+    return payload
 
 
 def _tenths(value: Optional[float]) -> Optional[int]:

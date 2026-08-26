@@ -19,7 +19,7 @@ day's peak context stays available on the Drift-risk tile via
 ``daily_extremes.wind_speed_hi`` in ``/api/current``.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.orm import Session
@@ -56,7 +56,13 @@ def _seed_readings(sustained_mph_now: float, peak_mph_earlier: float) -> None:
     db = SessionLocal()
     try:
         now = datetime.now(timezone.utc)
-        earlier = now.replace(hour=14, minute=41, second=0, microsecond=0)
+        # "Earlier" must be strictly before "now" regardless of the
+        # wall clock CI happens to run at. The prior fixture used a
+        # fixed 14:41 UTC, which put the peak row in the FUTURE if
+        # the test ran before 14:41Z, and _get_latest_obs (max
+        # timestamp) then returned the peak instead of the calm
+        # current row. CI caught this at 13:17Z on 2026-08-26.
+        earlier = now - timedelta(hours=1)
         db.add(SensorReadingModel(
             timestamp=earlier.replace(tzinfo=None),
             station_type=17,

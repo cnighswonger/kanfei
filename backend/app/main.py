@@ -321,6 +321,7 @@ def create_app() -> FastAPI:
     app.state.public_mode_write_allowlist = frozenset({
         "/api/ingest/reading",
         "/api/ingest/config",
+        "/api/ingest/backfill",
     })
 
     @app.middleware("http")
