@@ -27,6 +27,7 @@ import { v, type, SectionLabel, TileHeading, Row, Tile, fmt, fmtInt, fmtTime, s,
 import type { DashboardData } from './types';
 import { PersonaFooter } from './PersonaFooter';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useIsTablet } from '../hooks/useIsTablet';
 import { FullReadoutDivider } from './FullReadoutDivider';
 import {
   HeroTemperatureTile, DerivedConditionsTile, HistoryChartTile, BarometerTile,
@@ -43,6 +44,7 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
   // v54 phase 3a: gate the corner plate at phone width (§6). Above
   // 768 px behaves exactly as before.
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
 
   // v54 phase 3b: phone tier is an entirely different composition
   // — reduced tile set above a FULL READOUT divider, the existing
@@ -51,6 +53,15 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
   // desktop layout untouched.
   if (isMobile) {
     return <EverydayMobileShell d={d} themeLabel={themeLabel} />;
+  }
+
+  // v54 phase 4b: middle tier (content 769-1213 = viewport 989-1433)
+  // pairs the desktop's three-up right column of band A into a
+  // two-column composition at natural type sizes, with the chart
+  // full-width beneath.  Same tile bodies as desktop, rearranged
+  // per §8.
+  if (isTablet) {
+    return <EverydayTabletShell d={d} themeLabel={themeLabel} />;
   }
 
   return (
@@ -389,6 +400,117 @@ const MChip: React.FC<{ label: string; value: number | null; at: string | null }
     </span>
   </div>
 );
+
+/* ─────────────────────────────────────────────── tablet composition (v54 §8) */
+
+/**
+ * Everyday at content-769–1213 (viewport 989–1433 with the fixed
+ * 220 px sidebar).  §8 rule for this persona: "band A becomes hero
+ * | derived+barometer with the chart full-width beneath; band B's
+ * three tiles become two plus one."
+ *
+ *   header row (title | kicker)        — full width
+ *   hero        | derived + barometer  — band A rearranged
+ *   chart                              — full width
+ *   rain        | solar                — band A's ledger row
+ *   wind        | almanac              — the three-up "two-plus-one"
+ *                                        pair, with rainfall/console
+ *                                        below covering the "one"
+ *   rainfall by hour                   — full width
+ *   console & link                     — full width
+ *
+ * Uses the same ``--k`` / ``--kt`` = ``1px`` hoist as the phone
+ * shell so the reused tiles render at their designed proportions
+ * rather than the vh-clamped floor.  Corner plate off at this tier
+ * — its ``top: s(60), right: 0`` positioning is tied to the
+ * ``scaleVar(1120)`` outer wrapper which the shell bypasses.
+ */
+const EverydayTabletShell: React.FC<{ d: DashboardData; themeLabel: string }> = ({
+  d,
+  themeLabel,
+}) => {
+  // Kicker matches the desktop title row: date · station · elevation.
+  // Header still carries date+time on tablet (phase 3d only drops it
+  // at phone), so this repeats the date the way desktop does.
+  const kicker = [
+    _fmtKickerDate(new Date()),
+    d.station.name,
+    d.station.elevationFt != null ? `${Math.round(d.station.elevationFt)} ft` : null,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <main
+      data-dashboard="everyday"
+      data-tablet
+      style={{
+        ['--k' as string]: '1px',
+        ['--kt' as string]: '1px',
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        padding: '20px 24px 24px',
+        boxSizing: 'border-box',
+        gap: '20px',
+      }}
+    >
+      {/* Header row — full width, hairline under. */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: '24px',
+          paddingBottom: '8px',
+          borderBottom: `${v.ruleWidth} solid ${v.rule}`,
+        }}
+      >
+        <h2 style={{ ...type('heading'), color: v.text, margin: 0 }}>Current Conditions</h2>
+        <SectionLabel>{kicker}</SectionLabel>
+      </div>
+
+      {/* Band A rearranged: hero | (derived + barometer stacked).
+          alignItems: start so the right column's stacked height
+          doesn't force the hero to grow. */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+        <HeroTemperatureTile d={d} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
+          <DerivedConditionsTile d={d} />
+          <BarometerTile d={d} />
+        </div>
+      </div>
+
+      {/* Chart — full width per §8. */}
+      <HistoryChartTile d={d} />
+
+      {/* Ledger row — the existing 2-col rain / solar pair from
+          desktop's band A left column. */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+        <RainTile d={d} title="Rain ledger" />
+        <SolarUvTile d={d} />
+      </div>
+
+      {/* Wind | Almanac — the "two" of the three-up "two-plus-one"
+          from desktop's right column of band A.  Barometer was the
+          "one" but it's already been pulled up alongside derived. */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+        <WindTile d={d} />
+        <AlmanacTile d={d} />
+      </div>
+
+      {/* Band B — both tiles full width at this content width.  The
+          rainfall-by-hour tile is a horizontal strip and reads
+          better wide; console-and-link's two-column internal grid
+          works fine at any content width ≥ ~500 px. */}
+      <RainfallByHourTile d={d} />
+      <ConsoleAndLinkTile d={d} />
+
+      <PersonaFooter d={d} themeLabel={themeLabel} />
+    </main>
+  );
+};
 
 function _fmtKickerDate(d: Date): string {
   // "Aug 26, 2026" → sectionLabel CSS uppercases to "AUG 26, 2026"
