@@ -1,16 +1,14 @@
-"""PublicRelayDriver exposes the pushed identity via ``hw_config`` and
-the last snapshot's timestamp via ``async_read_station_time``, so the
-daemon's ``_h_status`` / ``_h_read_station_time`` handlers surface
-Firmware, Product SKU and Console clock on the droplet's Console tile
-without a public-relay branch in those handlers.
+"""PublicRelayDriver exposes the pushed identity via ``hw_config`` so
+the daemon's ``_h_status`` handler surfaces Firmware and Product SKU
+on the droplet's Console tile without a public-relay branch.
+
+Console clock is deliberately NOT surfaced — the droplet has no way
+to construct the upstream's console-clock timezone from its own
+``time.time()``.  See the driver.
 """
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime
-
-from app.protocol.base import SensorSnapshot
 from app.protocol.public_relay.driver import PublicRelayDriver
 
 
@@ -35,23 +33,12 @@ def test_hw_config_none_before_first_push() -> None:
     assert hw.product_sku is None
 
 
-def test_async_read_station_time_returns_push_arrival_components() -> None:
+def test_async_read_station_time_not_present() -> None:
+    """The daemon's ``_h_read_station_time`` gates on
+    ``hasattr(drv, 'async_read_station_time')`` — the driver must NOT
+    have the attribute, so ``/api/station`` returns ``station_time:
+    null`` and the Console tile renders "—".  Any implementation that
+    reads from the droplet's ``time.time()`` publishes the droplet's
+    timezone as if it were the operator's."""
     drv = PublicRelayDriver()
-    drv.push_snapshot(SensorSnapshot())
-    ts = datetime(2026, 8, 27, 17, 42, 3)
-    drv._last_push_at = ts.timestamp()
-    result = asyncio.run(drv.async_read_station_time())
-    assert result == {
-        "year": 2026,
-        "month": 8,
-        "day": 27,
-        "hour": 17,
-        "minute": 42,
-        "second": 3,
-    }
-
-
-def test_async_read_station_time_none_before_first_push() -> None:
-    drv = PublicRelayDriver()
-    result = asyncio.run(drv.async_read_station_time())
-    assert result is None
+    assert not hasattr(drv, "async_read_station_time")
