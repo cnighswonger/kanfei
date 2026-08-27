@@ -28,6 +28,7 @@
 import React from 'react';
 import { v, type, st, SectionLabel, fmtInt, CONTENT_CAP } from './primitives';
 import type { DashboardData } from './types';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface PersonaFooterProps {
   d: DashboardData;
@@ -56,6 +57,7 @@ const wrappedDrift = (consoleMin: number, browserMin: number): number => {
 };
 
 export const PersonaFooter: React.FC<PersonaFooterProps> = ({ d, themeLabel, extraChips }) => {
+  const isMobile = useIsMobile();
   const consoleHM = parseConsoleClock(d.station.clock);
   const consoleStr = consoleHM
     ? `${String(consoleHM.hh).padStart(2, '0')}:${String(consoleHM.mm).padStart(2, '0')}`
@@ -114,16 +116,25 @@ export const PersonaFooter: React.FC<PersonaFooterProps> = ({ d, themeLabel, ext
         instant, on the strip whose whole job is machine provenance.
         Naming the console-vs-browser drift turns what looked like a
         rendering lag into real station information.  Design v48 §3. */}
+    {/* Phone drops the console-clock segment: it collides with the
+        below-divider Console tile that carries the same field, and its
+        null state renders a bare em-dash beside a populated last-poll,
+        which reads as broken.  Desktop keeps the drift readout —
+        that's where its width earns its own row. */}
     <SectionLabel style={{ marginLeft: 'auto' }}>
-      console clock {consoleStr}
-      {showDrift && (
-        <span style={warnDrift ? { color: v.warning } : undefined}>
+      {!isMobile && (
+        <>
+          console clock {consoleStr}
+          {showDrift && (
+            <span style={warnDrift ? { color: v.warning } : undefined}>
+              {' · '}
+              {Math.abs(driftMin!)} min {driftMin! > 0 ? 'ahead' : 'behind'}
+            </span>
+          )}
           {' · '}
-          {Math.abs(driftMin!)} min {driftMin! > 0 ? 'ahead' : 'behind'}
-        </span>
+        </>
       )}
-      {' · last poll '}
-      {d.station.lastPoll || '—'}
+      last poll {d.station.lastPoll || '—'}
     </SectionLabel>
   </div>
   );
