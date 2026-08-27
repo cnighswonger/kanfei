@@ -989,6 +989,9 @@ const WeatherNerdMobileShell: React.FC<{
         flex: 1,
         minHeight: 0,
         overflowY: 'auto',
+        // Any scroll-into-view or hash-anchor jump inside this shell
+        // leaves the top row clear of the fixed AppShell header.
+        scrollPaddingTop: '60px',
         padding: '16px',
         boxSizing: 'border-box',
         gap: '20px',
