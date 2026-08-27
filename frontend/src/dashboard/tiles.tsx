@@ -93,16 +93,14 @@ const Chip: React.FC<{ label: string; value: string; at?: string | null; tone: s
 
 /* ────────────────────────────────────────────────── 2. derived conditions */
 
-export const DerivedConditionsTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
+export const DerivedConditionsTile: React.FC<{ d: DashboardData; style?: React.CSSProperties; compact?: boolean }> = ({ d, style, compact }) => (
   <Tile id="derived-conditions" style={style}>
-    {/* Five rows, ~30px each — humidity is a sensor reading, not a
-        derivation, so it lives on the outside-air column with the
-        temperature figure.  A provenance line on the header names
-        the two inputs the derivatives below were computed from
-        (Design v44). */}
-    <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(12), minWidth: 0 }}>
+    {/* Heading and provenance stack in compact so the heading gets
+        its own line and the FROM line sits below at left-align — the
+        two-column row wrapped into two four-line ladders at 328 px. */}
+    <TileHeading style={{ display: 'flex', flexDirection: compact ? 'column' : 'row', alignItems: compact ? 'flex-start' : 'baseline', justifyContent: 'space-between', gap: compact ? s(4) : s(12), minWidth: 0 }}>
       <span>Derived conditions</span>
-      <span style={{ ...type('sectionLabel'), ...tnum, color: v.textSecondary, minWidth: 0, textAlign: 'right' }}>
+      <span style={{ ...type('sectionLabel'), ...tnum, color: v.textSecondary, minWidth: 0, textAlign: compact ? 'left' : 'right' }}>
         FROM {fmt(d.outside.tempF, 1)} °F / {fmt(d.outside.humidityPct, 0)} %
       </span>
     </TileHeading>
@@ -121,7 +119,7 @@ export const DerivedConditionsTile: React.FC<{ d: DashboardData; style?: React.C
 const CHART_W = 700;
 const CHART_H = 196;
 
-export const HistoryChartTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
+export const HistoryChartTile: React.FC<{ d: DashboardData; style?: React.CSSProperties; compact?: boolean }> = ({ d, style, compact }) => {
   // Bin to ~600 points before drawing.  Over-plotting a ~2000px trace
   // with 8,000+ raw samples of 0.1 °F resolution renders as a
   // staircase; averaging into pixel-width bins keeps the shape and
@@ -150,9 +148,9 @@ export const HistoryChartTile: React.FC<{ d: DashboardData; style?: React.CSSPro
 
   return (
     <Tile id="history-chart" style={style}>
-      {/* Heading is serif italic sentence case; the range line is mono, to its
-          right. No legend pills, no y-axis column. */}
-      <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(16) }}>
+      {/* Heading serif italic; range line mono.  Stack in compact so
+          the four-line ladder wrap at 328 px goes flat instead. */}
+      <TileHeading style={{ display: 'flex', flexDirection: compact ? 'column' : 'row', alignItems: compact ? 'flex-start' : 'baseline', justifyContent: 'space-between', gap: compact ? s(4) : s(16) }}>
         <span>Temperature &amp; dew point, 24 hours</span>
         <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>
           {fmt(Math.min(...temps))}–{fmt(Math.max(...temps))} °F
@@ -469,11 +467,14 @@ export const RainTile: React.FC<{ d: DashboardData; title?: string; style?: Reac
 
 /* ──────────────────────────────────────────────────────────── 7. solar & uv */
 
-export const SolarUvTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => (
+export const SolarUvTile: React.FC<{ d: DashboardData; style?: React.CSSProperties; compact?: boolean }> = ({ d, style, compact }) => (
   <Tile id="solar-uv" style={style}>
     <TileHeading>Sun &amp; water</TileHeading>
     <div style={{ display: 'flex', alignItems: 'baseline', gap: s(8) }}>
-      <span style={{ ...type('mono', fs(30)), ...tnum, color: v.warning, lineHeight: 1 }}>
+      {/* Solar irradiance is a stat, not a headline figure — §4 caps
+          non-hero numbers at mono row size.  Desktop keeps 30 px for
+          visual anchor of the tile; compact tucks to 15. */}
+      <span style={{ ...type('mono', fs(compact ? 15 : 30)), ...tnum, color: v.warning, lineHeight: 1 }}>
         {fmtInt(d.solar.wm2)}
       </span>
       <SectionLabel>W/m²</SectionLabel>
@@ -526,7 +527,7 @@ export const AlmanacTile: React.FC<{ d: DashboardData; style?: React.CSSProperti
  * 1d labels this axis '24h ago · <peak> in peak, <time> · now' — three marks, not
  * six hour ticks. Set `relativeAxis` false for the 12a/4a/8a… form.
  */
-export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boolean; style?: React.CSSProperties }> = ({ d, relativeAxis = true, style }) => {
+export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boolean; style?: React.CSSProperties; compact?: boolean }> = ({ d, relativeAxis = true, style, compact }) => {
   const bars = d.rain.hourlyIn ?? [];
   const max = Math.max(0.05, ...bars.map((b) => b?.in ?? 0));
   // Peak label reads from the bar's ISO ``at`` so it prints the
@@ -539,7 +540,7 @@ export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boo
 
   return (
     <Tile id="rainfall-hourly" style={style}>
-      <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+      <TileHeading style={{ display: 'flex', flexDirection: compact ? 'column' : 'row', alignItems: compact ? 'flex-start' : 'baseline', justifyContent: 'space-between', gap: compact ? s(4) : undefined }}>
         <span>Rainfall by hour</span>
         <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>
           {fmt(d.rain.todayIn, 2)} in today · peak {fmt(max, 2)} in/hr
