@@ -1005,7 +1005,9 @@ const WeatherNerdMobileShell: React.FC<{
         // Any scroll-into-view or hash-anchor jump inside this shell
         // leaves the top row clear of the fixed AppShell header.
         scrollPaddingTop: '60px',
-        padding: '16px',
+        // 12 px horizontal (down from 16) buys 8 px of content width
+        // where the tiles need it — 328 → 336 at 360-viewport phones.
+        padding: '16px 12px',
         boxSizing: 'border-box',
         gap: '20px',
       }}
