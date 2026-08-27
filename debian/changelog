@@ -1,3 +1,34 @@
+kanfei (0.1.0~beta92) unstable; urgency=medium
+
+  * Frontend / mobile (#520): eliminate the double vertical
+    scrollbar the operator flagged in v55.  ``AppShell``'s root
+    grid was published at ``height: 100vh``, which on mobile
+    browsers is the URL-bar-hidden height — larger than the
+    visible viewport whenever the URL bar is showing.  The shell
+    overflowed the visible area, the browser painted its own
+    scrollbar for ``body`` and the mobile shell painted its own
+    for the ``overflowY: auto`` main.  Switched every 100vh in
+    the shell chain (AppShell grid, body min-height, #root
+    min-height) to ``100dvh`` — the dynamic viewport height that
+    tracks the actual visible area across URL-bar transitions.
+    The mobile shell now owns the only scroll.  Universal support
+    on Kanfei's target browsers (Safari 15.4+, Chrome 108+,
+    Firefox 101+, Samsung Internet 21+).
+
+  * Frontend / theme (#520): themed scrollbars.  The default
+    browser scrollbar was a light-mode grey rail that read as
+    debris on paper themes and as chrome on modern themes.  The
+    single canonical ``::-webkit-scrollbar`` block plus a Firefox
+    ``scrollbar-color`` shorthand now read the same theme tokens
+    ``ThemeContext`` publishes — track ``--color-bg-secondary``,
+    thumb ``--color-text-muted``, thumb on hover ``--color-accent``
+    — so the scrollbar palette follows the theme.  Codex R1
+    caught that the previous scrollbar block earlier in
+    ``index.css`` was being overridden by an older global block
+    later in the cascade; consolidated into one canonical rule.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 16:21:24 +0000
+
 kanfei (0.1.0~beta91) unstable; urgency=medium
 
   * Frontend / mobile (#519, Design v55 phase 5a): régime correction
