@@ -395,7 +395,8 @@ export const NerdChartTile: React.FC<{
   d: DashboardData;
   onResolutionChange?: (r: NerdResolution) => void;
   style?: React.CSSProperties;
-}> = ({ d, onResolutionChange, style }) => {
+  compact?: boolean;
+}> = ({ d, onResolutionChange, style, compact }) => {
   // Bin to ~600 points first — see decimate() in primitives.tsx.  Raw
   // 8k-sample series at 0.1 °F resolution over ~2000 px would render
   // as a staircase, not a trace.
@@ -484,9 +485,13 @@ export const NerdChartTile: React.FC<{
       {/* Sentence-case serif italic heading + underline rule via
           ``TileHeading``, with the resolution + CSV controls floated
           right along the same baseline (Design v46 §1). */}
-      <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(16) }}>
+      {/* Heading stacks over the controls at phone width — the flat
+          "heading | 4 buttons + CSV" row wraps to a 4-line ladder at
+          328 px and the buttons collide with the CSV emphasis; stacked
+          the heading owns its line and the controls own theirs. */}
+      <TileHeading style={{ display: 'flex', flexDirection: compact ? 'column' : 'row', alignItems: compact ? 'flex-start' : 'baseline', justifyContent: 'space-between', gap: compact ? s(8) : s(16) }}>
         <span>Temperature, dew point &amp; pressure · 24 h</span>
-        <div style={{ display: 'flex', gap: s(10), alignItems: 'baseline' }}>
+        <div style={{ display: 'flex', gap: s(10), alignItems: 'baseline', flexWrap: 'wrap' }}>
           <ChartButtonGroup>
             {(['Raw', '5 min', 'Hourly', 'Daily'] as const).map((label, i) => {
               const active = label === (d.nerd?.resolution ?? '5 min');
@@ -733,7 +738,7 @@ const dominantSector = (weights: (number | null | undefined)[] | null | undefine
   return best > 0 && at >= 0 ? ROSE_DIRS[Math.round((at / weights.length) * 16) % 16] : null;
 };
 
-export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
+export const WindRoseTile: React.FC<{ d: DashboardData; compact?: boolean }> = ({ d, compact }) => {
   return (
     <Tile
       id="nerd-wind-rose"
@@ -743,18 +748,22 @@ export const WindRoseTile: React.FC<{ d: DashboardData }> = ({ d }) => {
       }}
     >
       <TileHeading>Wind rose · 4 h</TileHeading>
-      {/* Design v35 T3 swap: SVG compass + rosePetals + needle →
-          Highcharts WindRoseDial with styled-mode CSS.  Contained in
-          a flex-centre wrapper so the square dial sits centred in
-          the tile's remaining width. */}
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <WindRoseDial
-          roseWeights={d.wind.roseWeights}
-          directionDeg={d.wind.directionDeg}
-          speedMph={d.wind.speedMph}
-          size={250}
-        />
-      </div>
+      {/* Radial dial off at phone — v55 §5: nothing radial survives
+          below 768.  The caption below already carries dominant sector,
+          mean and peak, so the text does the tile's whole job when the
+          graphic can't; promote it in compact from a small caption to
+          the tile body so it doesn't read as an orphan below empty
+          space. */}
+      {!compact && (
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <WindRoseDial
+            roseWeights={d.wind.roseWeights}
+            directionDeg={d.wind.directionDeg}
+            speedMph={d.wind.speedMph}
+            size={250}
+          />
+        </div>
+      )}
       <SectionLabel style={{ textAlign: 'center' }}>
         {/* Dominant sector derives from the same ``roseWeights``
             series that drew the petals, not from ``directionLabel``
@@ -989,6 +998,10 @@ const WeatherNerdMobileShell: React.FC<{
         flex: 1,
         minHeight: 0,
         overflowY: 'auto',
+        // v55 §1 belt-and-braces: any residual fixed pixel width
+        // inside a reused tile clips to the viewport rather than
+        // shifting the whole document horizontally.
+        overflowX: 'hidden',
         // Any scroll-into-view or hash-anchor jump inside this shell
         // leaves the top row clear of the fixed AppShell header.
         scrollPaddingTop: '60px',
@@ -1076,8 +1089,8 @@ const WeatherNerdMobileShell: React.FC<{
           the mock top-to-bottom: chart, wind table, solar bars,
           console extremes + METAR (owned by ConsoleExtremesTile). */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
-        <NerdChartTile d={d} onResolutionChange={onResolutionChange} />
-        <WindRoseTile d={d} />
+        <NerdChartTile d={d} onResolutionChange={onResolutionChange} compact />
+        <WindRoseTile d={d} compact />
         <SolarEnergyTile d={d} />
         <ConsoleExtremesTile d={d} compact />
       </div>
