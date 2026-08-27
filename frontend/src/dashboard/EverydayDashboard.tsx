@@ -482,8 +482,12 @@ const EverydayTabletShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
         </div>
       </div>
 
-      {/* Chart — full width per §8. */}
-      <HistoryChartTile d={d} />
+      {/* Chart — full width per §8.  Explicit minHeight because
+          HistoryChartTile's plot area is a flex:1 child; without a
+          parent height, it collapses to ~61 px of just the heading
+          (Codex R1 on #516).  357 matches the desktop path's
+          ``minHeight: s(357)`` (which resolves to 357 px at kt=1). */}
+      <HistoryChartTile d={d} style={{ minHeight: 357 }} />
 
       {/* Ledger row — the existing 2-col rain / solar pair from
           desktop's band A left column. */}
