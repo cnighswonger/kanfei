@@ -1,3 +1,14 @@
+kanfei (0.1.0~beta94) unstable; urgency=medium
+
+  * Frontend / mobile (#522): Row values and DerivedConditions
+    provenance now WRAP at the tile edge instead of ellipsis-
+    truncating.  Beta93's truncation was hiding the second half of
+    multi-part values like ``6:43 AM · 7:45 PM`` and ``FROM 88.0 °F
+    / 66 %``.  Values wrap between segments; short values still
+    fit single-line; desktop unchanged.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 17:24:56 +0000
+
 kanfei (0.1.0~beta93) unstable; urgency=medium
 
   * Frontend / mobile (#521): tile-edge text overflow truncates with
