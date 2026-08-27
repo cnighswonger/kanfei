@@ -1,3 +1,30 @@
+kanfei (0.1.0~beta88) unstable; urgency=medium
+
+  * Frontend / mobile (#512, Design v54 phase 4a): Agriculture
+    persona 768-1213 middle tier.  Between the phone composition
+    (≤768, phases 3a-3d) and the desktop scaled grids (≥1214),
+    the ``--kt`` width term is below its floor while the desktop
+    three-up bands are still nominally in force — v53's
+    "over-typeset" zone.  Phase 4 composes the existing tile
+    bodies into two columns at natural type sizes: header full
+    width, verdict | forecast, water | drift, field & schedule
+    full width.  Reuses ``SprayVerdictTile``, ``SprayWindowTile``,
+    ``WaterBalanceTile``, ``DriftRiskTile``, ``FieldScheduleTile``
+    unchanged; ``--k`` / ``--kt`` = ``1px`` hoist same as the
+    phone shells.  Plate off at this tier — the mock shows flat
+    ground.
+
+    Viewport thresholds account for the fixed 220 px sidebar
+    AppShell renders at every viewport > 768: content = viewport
+    − 220, so the spec's 768-1213 CONTENT numbers map to
+    viewport 989-1433.  Between 769 and 988 viewport (content
+    549-768) dashboards continue to fall through to the desktop
+    composition — status quo from beta87, tracked as #513.
+
+    Everyday phase 4b and Weather Nerd phase 4c still to come.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 01:38:15 +0000
+
 kanfei (0.1.0~beta87) unstable; urgency=medium
 
   * Frontend / sidebar (#511): fix the persona picker leaking into
