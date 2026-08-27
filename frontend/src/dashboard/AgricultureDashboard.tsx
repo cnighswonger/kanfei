@@ -22,6 +22,7 @@ import {
 } from './primitives';
 import type { DashboardData } from './types';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useIsTablet } from '../hooks/useIsTablet';
 import { COMPASS_NAME } from './tiles';
 import { PersonaFooter } from './PersonaFooter';
 import { FullReadoutDivider } from './FullReadoutDivider';
@@ -33,6 +34,7 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
 }) => {
   // v54 phase 3a: gate the top-half plate at phone width (§6).
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
 
   // v54 phase 3c: the phone composition is not a re-scaled desktop.
   // "Can I spray?" is the question you ask holding the phone in the
@@ -41,6 +43,15 @@ export const AgricultureDashboard: React.FC<{ d: DashboardData; themeLabel: stri
   // (water balance, drift 4 h, field & schedule) live below.
   if (isMobile) {
     return <AgricultureMobileShell d={d} themeLabel={themeLabel} />;
+  }
+
+  // v54 phase 4a: the 768-1213 middle tier composes the existing
+  // tiles into two columns at natural type sizes (§8).  Same "can I
+  // spray?" reading order as mobile — verdict, forecast, water,
+  // drift, field/schedule — but no divider, no reduced-set/detail
+  // split.  Reuses the same desktop tile bodies, just rearranged.
+  if (isTablet) {
+    return <AgricultureTabletShell d={d} themeLabel={themeLabel} />;
   }
 
   return (
@@ -897,6 +908,94 @@ const _MobileForecastStrip: React.FC<{ cells: NonNullable<DashboardData['spray']
         ))}
       </div>
     </div>
+  );
+};
+
+/* ─────────────────────────────────────────────── tablet composition (v54 §8) */
+
+/**
+ * Agriculture at 769–1213 px.  Rebuilt for the middle tier where the
+ * ``--kt`` width term is below its floor and the desktop's three-up
+ * band wouldn't fit even if it re-tuned.  Same tile bodies as
+ * desktop, arranged two columns per v54 §8 and
+ * ``mock-agriculture-768.png``:
+ *
+ *   header (title | kicker)   — full width
+ *   verdict     | forecast    — band A pair
+ *   water       | drift       — band B pair
+ *   field & schedule          — full width
+ *
+ * Type at natural scale via the same ``--k`` / ``--kt`` = ``1px``
+ * hoist Everyday/Agriculture/Nerd already publish for their phone
+ * shells; the tiles' own ``s(n)`` / ``st(n)`` render at their
+ * designed proportions rather than the vh-clamped floor the desktop
+ * grid falls to when width < 1214.  Plate off at this tier — the
+ * mock shows a flat ground and the plate's positioning is tied to
+ * ``scaleVar(928)``, which the shell bypasses.
+ */
+const AgricultureTabletShell: React.FC<{ d: DashboardData; themeLabel: string }> = ({
+  d,
+  themeLabel,
+}) => {
+  const kicker = [
+    d.station.elevationFt != null ? `${Math.round(d.station.elevationFt)} ft` : null,
+    'Open-Meteo hourly',
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <main
+      data-dashboard="agriculture"
+      data-tablet
+      style={{
+        ['--k' as string]: '1px',
+        ['--kt' as string]: '1px',
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        padding: '20px 24px 24px',
+        boxSizing: 'border-box',
+        gap: '20px',
+      }}
+    >
+      {/* Header row — full width, title left, kicker right, hairline
+          under, matching the desktop title row's ink discipline but
+          at natural px. */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: '24px',
+          paddingBottom: '8px',
+          borderBottom: `${v.ruleWidth} solid ${v.rule}`,
+        }}
+      >
+        <h2 style={{ ...type('heading'), color: v.text, margin: 0 }}>Spray Advisory</h2>
+        <SectionLabel>{kicker}</SectionLabel>
+      </div>
+
+      {/* Band A — verdict | forecast. */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'stretch' }}>
+        <SprayVerdictTile d={d} />
+        <SprayWindowTile d={d} />
+      </div>
+
+      {/* Band B — water | drift. */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+        <WaterBalanceTile d={d} />
+        <DriftRiskTile d={d} />
+      </div>
+
+      {/* Field & schedule — full-width row per the mock. */}
+      <div>
+        <FieldScheduleTile d={d} />
+      </div>
+
+      <PersonaFooter d={d} themeLabel={themeLabel} />
+    </main>
   );
 };
 
