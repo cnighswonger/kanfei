@@ -1,3 +1,41 @@
+kanfei (0.1.0~beta91) unstable; urgency=medium
+
+  * Frontend / mobile (#519, Design v55 phase 5a): régime correction
+    on the Everyday phone tier.  v54 read the FULL READOUT divider
+    as separating "reduced set above" from "desktop composition
+    below," which reinstated the wheel, the wind rose, the 2-col
+    Console & link table and a duplicate hero.  v55 makes explicit
+    that §4-§6 and §9 apply to the WHOLE phone document — the
+    divider is a scroll marker, not two régimes.  Phase 5a lands
+    Design's items 1-4 as one PR (item 1 masks whether item 4 is
+    fixed):
+
+    - **Item 2:** ``HeroTemperatureTile`` removed from the
+      below-divider stream.  Two dew points, 0.8° apart on the same
+      page are gone (v55 shot 8).  The reduced set is a SELECTION,
+      not a preview.
+    - **Item 3:** ``BarometerTile`` and ``WindTile`` accept a
+      ``compact`` prop.  When set: the 210 px wheel and 250 px rose
+      are suppressed and the readout column takes full tile width;
+      barometer's 5-cell zone-word strip is replaced by a single
+      line naming the active zone (``FAIR`` / ``SET FAIR`` no
+      longer collide, v55 shot 5).
+    - **Item 4:** ``ConsoleAndLinkTile`` accepts a ``compact`` prop
+      matching the pattern that fixed ``ConsoleExtremesTile`` in
+      #517.  Grid collapses from 2-col to 1-col; the ``last`` gate
+      updates so the hairline discipline survives.  ``Last poll``
+      value is now visible (v55 shot 7).
+    - **Item 1:** ``overflowX: 'hidden'`` on the mobile shell as a
+      floor for any residual fixed pixel width, so a missed one
+      clips a tile rather than shifting the whole document.
+
+    Desktop (≥ 1214) and tablet (989-1433) byte-identical to
+    beta90.  Phase 5b (items 5-7: type/layout pass), 5c (items
+    8-10: independents), and 5d/5e (apply to Agriculture and
+    Nerd) still to come.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 15:48:47 +0000
+
 kanfei (0.1.0~beta90) unstable; urgency=medium
 
   * Frontend / mobile (#517, Design v54 phase 4c): Weather Nerd
