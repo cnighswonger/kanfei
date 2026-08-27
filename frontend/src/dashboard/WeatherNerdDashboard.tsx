@@ -23,6 +23,7 @@ import {
 } from './primitives';
 import type { DashboardData, NerdResolution } from './types';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useIsTablet } from '../hooks/useIsTablet';
 import { PersonaFooter } from './PersonaFooter';
 import { FullReadoutDivider } from './FullReadoutDivider';
 import { pathFor } from '../utils/gauges';
@@ -37,6 +38,7 @@ export const WeatherNerdDashboard: React.FC<{
 }> = ({ d, themeLabel, onResolutionChange }) => {
   // v54 phase 3a: gate the right-side plate at phone width (§6).
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
 
   // v54 phase 3d: the phone composition leads with "what is the station
   // doing?" — pressure premise + Zambretti/NWS + theta-e | reception
@@ -45,6 +47,22 @@ export const WeatherNerdDashboard: React.FC<{
   if (isMobile) {
     return (
       <WeatherNerdMobileShell
+        d={d}
+        themeLabel={themeLabel}
+        onResolutionChange={onResolutionChange}
+      />
+    );
+  }
+
+  // v54 phase 4c: middle tier (content 769-1213 = viewport 989-1433)
+  // pairs the desktop's four-up stat row into a 2×2 grid, drops the
+  // chart to full width, and folds the three-up into a wind|solar
+  // pair + full-width console-extremes (§8's "two plus one" rule).
+  // ConsoleExtremesTile switches to single-column via ``compact`` per
+  // §9 so year-highs and reference-station values don't clip.
+  if (isTablet) {
+    return (
+      <WeatherNerdTabletShell
         d={d}
         themeLabel={themeLabel}
         onResolutionChange={onResolutionChange}
@@ -376,7 +394,8 @@ const GRID_INSET = 8;
 export const NerdChartTile: React.FC<{
   d: DashboardData;
   onResolutionChange?: (r: NerdResolution) => void;
-}> = ({ d, onResolutionChange }) => {
+  style?: React.CSSProperties;
+}> = ({ d, onResolutionChange, style }) => {
   // Bin to ~600 points first — see decimate() in primitives.tsx.  Raw
   // 8k-sample series at 0.1 °F resolution over ~2000 px would render
   // as a staircase, not a trace.
@@ -459,6 +478,7 @@ export const NerdChartTile: React.FC<{
         gap: s(10),
         minHeight: s(341),
         ...CONTENT_CAP,
+        ...style,
       }}
     >
       {/* Sentence-case serif italic heading + underline rule via
@@ -815,7 +835,7 @@ export const SolarEnergyTile: React.FC<{ d: DashboardData }> = ({ d }) => {
   );
 };
 
-export const ConsoleExtremesTile: React.FC<{ d: DashboardData }> = ({ d }) => {
+export const ConsoleExtremesTile: React.FC<{ d: DashboardData; compact?: boolean }> = ({ d, compact }) => {
   const e = d.nerd?.extremes;
   const pairs: [string, React.ReactNode][] = [
     ['Temp, day', e ? `${fmt(e.tempDayHigh, 1)} / ${fmt(e.tempDayLow, 1)}` : '—'],
@@ -836,8 +856,12 @@ export const ConsoleExtremesTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     >
       <TileHeading>Console extremes &amp; calibration</TileHeading>
 
-      {/* Two columns of ruled rows — the mock's 212/212 split. */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: s(20) }}>
+      {/* Two columns of ruled rows — the mock's 212/212 split.  v54
+          §9 collapses this to single-column at phone and tablet tiers
+          because the right-column values (year highs/lows, ``vs KHRJ``)
+          clip inside the tighter cells; ``compact`` gets the pair
+          grid to ``1fr`` and lets it flow as 8 hairline-separated rows. */}
+      <div style={{ display: 'grid', gridTemplateColumns: compact ? '1fr' : '1fr 1fr', columnGap: s(20) }}>
         {/* No ``last`` on the pairs rows — the table continues below
             with ``Baro offset`` and ``vs reference``, so dropping a
             hairline here made the third visual row look like the end
@@ -1047,7 +1071,7 @@ const WeatherNerdMobileShell: React.FC<{
         <NerdChartTile d={d} onResolutionChange={onResolutionChange} />
         <WindRoseTile d={d} />
         <SolarEnergyTile d={d} />
-        <ConsoleExtremesTile d={d} />
+        <ConsoleExtremesTile d={d} compact />
       </div>
 
       <PersonaFooter
@@ -1072,5 +1096,113 @@ function _nerdKickerDate(d: Date): string {
     year: 'numeric',
   });
 }
+
+/* ─────────────────────────────────────────────── tablet composition (v54 §8) */
+
+/**
+ * Weather Nerd at content-769–1213 (viewport 989–1433 with the fixed
+ * 220 px sidebar).  §8 rule for this persona: "four-up hero becomes
+ * 2×2, the chart full width, the three-up becomes two plus one."
+ *
+ *   header row (title | kicker)     — full width
+ *   pressure  | theta-e             — stat 2×2, row 1
+ *   agreement | reception           — stat 2×2, row 2
+ *   chart                           — full width
+ *   wind rose | solar               — three-up "two"
+ *   console extremes                — three-up "one" (full width),
+ *                                     compact prop → single column
+ *                                     per §9 so year highs and
+ *                                     ``vs KHRJ`` don't clip
+ *
+ * Uses the same ``--k`` / ``--kt`` = ``1px`` hoist as the phone
+ * shell.  Right-side corner plate off — its positioning is tied to
+ * ``scaleVar(928)``, which the tablet shell bypasses.
+ */
+const WeatherNerdTabletShell: React.FC<{
+  d: DashboardData;
+  themeLabel: string;
+  onResolutionChange?: (r: NerdResolution) => void;
+}> = ({ d, themeLabel, onResolutionChange }) => {
+  const kicker = [
+    d.station.name,
+    d.station.console,
+    d.station.elevationFt != null ? `${Math.round(d.station.elevationFt)} ft` : null,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <main
+      data-dashboard="weather_nerd"
+      data-tablet
+      style={{
+        ['--k' as string]: '1px',
+        ['--kt' as string]: '1px',
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        padding: '20px 24px 24px',
+        boxSizing: 'border-box',
+        gap: '20px',
+      }}
+    >
+      {/* Header row — full width, hairline under. */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: '24px',
+          paddingBottom: '8px',
+          borderBottom: `${v.ruleWidth} solid ${v.rule}`,
+        }}
+      >
+        <h2 style={{ ...type('heading'), color: v.text, margin: 0 }}>Station Readout</h2>
+        <SectionLabel>{kicker}</SectionLabel>
+      </div>
+
+      {/* 2×2 stat grid.  Each cell keeps the ``StatCell`` treatment:
+          borderless, hairline-separated on non-first columns.  At
+          natural px the ``first`` prop still drops the left border on
+          cells in the first column of each row. */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 0, rowGap: 16, alignItems: 'start' }}>
+        <PressureCard d={d} />
+        <ThetaECard d={d} />
+        <ForecastAgreementCard d={d} />
+        <ReceptionCard d={d} />
+      </div>
+
+      {/* Chart — full width per §8.  Explicit minHeight so the plot
+          area doesn't collapse (same lesson as #516 R1 on Everyday). */}
+      <NerdChartTile d={d} onResolutionChange={onResolutionChange} style={{ minHeight: 341 }} />
+
+      {/* Three-up "two" — wind rose | solar bars.  Both stay per
+          v54 §5: "Two charts stay ... the 24 h temp/dew line ... and
+          the 14-day solar bars."  Wind rose likewise stays below the
+          divider on phone; here it's above the "one" full-width row. */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+        <WindRoseTile d={d} />
+        <SolarEnergyTile d={d} />
+      </div>
+
+      {/* Three-up "one" — console extremes full width, compact so the
+          8 rows lay out one-per-line (§9). */}
+      <ConsoleExtremesTile d={d} compact />
+
+      <PersonaFooter
+        d={d}
+        themeLabel={themeLabel}
+        extraChips={
+          <>
+            {d.nerd?.dbSizeMB != null && <SectionLabel>DB {fmt(d.nerd.dbSizeMB, 1, ' MB')}</SectionLabel>}
+            {d.nerd?.uploadTargets && <SectionLabel>{d.nerd.uploadTargets} uploading</SectionLabel>}
+            {d.nerd?.ipcStatus && <SectionLabel>{d.nerd.ipcStatus}</SectionLabel>}
+          </>
+        }
+      />
+    </main>
+  );
+};
 
 export default WeatherNerdDashboard;
