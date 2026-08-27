@@ -1,3 +1,31 @@
+kanfei (0.1.0~beta97) unstable; urgency=medium
+
+  * Frontend / mobile (#528, v55 phase 5c items 8-9): phone
+    ``PersonaFooter`` drops the ``console clock`` + drift segment
+    and keeps only ``last poll`` — the em-dash null state beside a
+    populated ``last poll`` read as broken, and the below-divider
+    Console tile already carries the same field.  Desktop and
+    tablet keep the full clock + drift line.  Each persona's
+    mobile scroll container gains ``scroll-padding-top: 60px`` so
+    scroll-into-view / hash-anchor jumps leave the top row clear
+    of the fixed AppShell header (60 px on paper themes; 56 + 4
+    gap on non-paper).  Item 10 (rain-ledger blue outline shapes)
+    deferred pending a fresh phone shot.
+  * Backend / droplet (#527): the ``async_read_station_time``
+    method added in beta95 lied about the operator's timezone —
+    ``datetime.fromtimestamp(_last_push_at)`` returns droplet-
+    local time (UTC on the droplet, EDT on the operator's
+    machine), so the droplet's Console tile showed ``console
+    clock 18:51 · 240 min ahead`` while vsits-02 correctly showed
+    ``14:51 · 1 min behind``.  Silence beats a lie: the method is
+    removed, the console clock and drift readouts render as
+    em-dash on the droplet until a follow-up ships the push-time
+    components alongside the snapshot (issue #526).  The
+    ``hw_config`` surface (Firmware and Product on the tile) is
+    unaffected.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 20:00:00 +0000
+
 kanfei (0.1.0~beta96) unstable; urgency=medium
 
   * Frontend / mobile (#525, v55 phase 5b): Everyday phone tier
