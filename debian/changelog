@@ -1,3 +1,18 @@
+kanfei (0.1.0~beta87) unstable; urgency=medium
+
+  * Frontend / sidebar (#511): fix the persona picker leaking into
+    desktop views alongside the header persona strip.  Phase 1
+    (#498) gated the sidebar picker on ``!collapsed`` only, which
+    fires on desktop with the sidebar expanded (default 220 px) —
+    the header strip continues to render there per v54 §7, so both
+    controls appeared at once.  The picker now gates on
+    ``isMobile && !collapsed`` so it only shows in the mobile
+    drawer, where v54 §7's phase-1 finding #1 (Weather Nerd
+    unreachable through the overflowed header strip) put it in the
+    first place.  Non-load-bearing display fix.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 00:21:49 +0000
+
 kanfei (0.1.0~beta86) unstable; urgency=medium
 
   * Frontend / mobile (#510, Design v54 phase 3d): Weather Nerd
