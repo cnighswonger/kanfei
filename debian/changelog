@@ -1,3 +1,31 @@
+kanfei (0.1.0~beta90) unstable; urgency=medium
+
+  * Frontend / mobile (#517, Design v54 phase 4c): Weather Nerd
+    persona 768-1213 content-width middle tier (viewport 989-1433).
+    Applies §8's Nerd rule: four-up hero becomes 2×2, chart full
+    width, three-up becomes two-plus-one.  Composition, top to
+    bottom: header title | kicker, stat 2×2 (pressure|theta-e /
+    agreement|reception), chart full width, wind rose | solar bars,
+    console extremes full width.
+
+  * Frontend / mobile (#517, Design v54 §9): ``ConsoleExtremesTile``
+    gets a ``compact?: boolean`` prop.  When true, the internal
+    2-column pairs grid collapses to a single column so the 8 rows
+    (6 pairs + Baro offset + vs reference) lay out hairline-
+    separated, v53 §5's right-column clipping fix.  The Weather
+    Nerd MOBILE shell now also passes ``compact`` — before this
+    beta it rendered the desktop 2-col layout inside a phone-width
+    tile, which is the exact clipping §9 was written to fix.
+    Codex R1 caught the ``last`` prop on the Baro offset row
+    leaving a gap between rows 7 and 8; gated on ``!compact``.
+
+    v54 phases 4a/4b/4c are now complete for all three personas
+    at content 769-1213 (viewport 989-1433).  The 769-988 viewport
+    zone (content 549-768) still falls through to the desktop
+    composition per #513.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 13:34:02 +0000
+
 kanfei (0.1.0~beta89) unstable; urgency=medium
 
   * Frontend / mobile (#516, Design v54 phase 4b): Everyday
