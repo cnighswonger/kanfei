@@ -102,7 +102,7 @@ export const DerivedConditionsTile: React.FC<{ d: DashboardData; style?: React.C
         (Design v44). */}
     <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(12), minWidth: 0 }}>
       <span>Derived conditions</span>
-      <span style={{ ...type('sectionLabel'), ...tnum, color: v.textSecondary, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <span style={{ ...type('sectionLabel'), ...tnum, color: v.textSecondary, minWidth: 0, textAlign: 'right' }}>
         FROM {fmt(d.outside.tempF, 1)} °F / {fmt(d.outside.humidityPct, 0)} %
       </span>
     </TileHeading>

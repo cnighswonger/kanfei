@@ -518,14 +518,9 @@ export const Row: React.FC<{
     }}
   >
     <span style={{ ...type('body'), color: v.textSecondary, whiteSpace: 'nowrap', flexShrink: 0 }}>{label}</span>
-    {/* v55 items 5+1: on the phone the tile column is narrower than
-        the row's ``label + gap + value`` intrinsic, so the value
-        (``6:43 AM · 7:45 PM``, ``FROM 88.0 °F / 66 %``) used to poke
-        past the tile edge and got clipped by the shell's
-        ``overflowX: hidden`` a few pixels of daylight later.  Let the
-        value take the remaining space and truncate cleanly with an
-        ellipsis instead. */}
-    <span style={{ ...type('mono'), ...tnum, color: valueColor, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span>
+    {/* Value wraps rather than truncates: multi-part values (``6:43
+        AM · 7:45 PM``) would lose their second half to an ellipsis. */}
+    <span style={{ ...type('mono'), ...tnum, color: valueColor, minWidth: 0, textAlign: 'right' }}>{value}</span>
   </div>
 );
 
