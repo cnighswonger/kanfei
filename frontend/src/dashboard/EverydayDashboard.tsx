@@ -238,22 +238,35 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
 // ─────────────────────────────────────────────────────────────── Mobile shell
 
 /**
- * v54 phase 3b mobile tree.
+ * Everyday mobile tree — v54 phase 3b as revised by v55.
  *
- * ≤ 768 px: an entirely different composition. Above a FULL READOUT
- * divider live four reduced blocks sized in natural px per v54 §2:
- * title + date/elevation kicker, hero air temp (heroFigure) with
- * RH/feels/dew on one mono line, Zambretti + hi/lo chips, and a
- * wind|rain paired row. Below the divider, the existing desktop
- * tiles stack single-column and scroll — each rendered inside a
- * ``--k: 1px, --kt: 1px`` wrapper so ``s(n)`` / ``st(n)`` inside
- * those tiles resolve to natural px instead of the vh-clamp floor.
+ * ≤ 768 px: an entirely different composition than desktop.  Above
+ * a FULL READOUT divider live four reduced blocks sized in natural
+ * px per v54 §2: title + date/elevation kicker, hero air temp
+ * (heroFigure) with RH/feels/dew on one mono line, Zambretti + hi/lo
+ * chips, and a wind|rain paired row.
  *
- * The mobile-branch dial/rose replacements (v54 §5) live only in
- * the above-divider block; below the divider, the reader has
- * scrolled past the summary and can afford the graphic, so the
- * existing WheelBarometer / WindRoseDial render intact at their
- * designed 210 / 250 px sizes.
+ * Below the divider, the DETAIL tiles stack single-column, each
+ * rendered inside a ``--k: 1px, --kt: 1px`` wrapper so
+ * ``s(n)`` / ``st(n)`` resolve to natural px instead of the vh-clamp
+ * floor.
+ *
+ * **The divider is a scroll marker, not two régimes.**  v55 §régime
+ * makes this explicit: §4-§6 and §9 (natural px, no dials, no plate,
+ * no pair grids) apply to the WHOLE phone document.  v54 phase 3b
+ * originally read the divider as separating "reduced above" from
+ * "desktop composition below," which reinstated the wheel, the rose,
+ * the 2-col Console & link table and a duplicate hero.  Phase 5a
+ * (#519) corrects the reading:
+ *
+ * - ``HeroTemperatureTile`` is NOT in the below-divider stream — it
+ *   duplicates the above-divider reduced set (v55 item 2).
+ * - ``BarometerTile``, ``WindTile`` and ``ConsoleAndLinkTile`` are
+ *   rendered in ``compact`` mode below the divider: no dial, no
+ *   rose, no 2-column pair grid (v55 items 3-4).
+ * - ``overflowX: 'hidden'`` on this wrapper is a floor for any
+ *   residual fixed pixel width so it clips a tile instead of shifting
+ *   the whole document (v55 item 1).
  */
 const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = ({
   d,
@@ -289,6 +302,13 @@ const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
         flex: 1,
         minHeight: 0,
         overflowY: 'auto',
+        // v55 §1 belt-and-braces: any residual fixed pixel width
+        // inside a reused tile clips to the viewport rather than
+        // shifting the whole document horizontally.  The individual
+        // width sources have compact-mode gates (dial, rose, pair
+        // grids), but this stops a missed one from becoming a
+        // page-wide scrollbar.
+        overflowX: 'hidden',
         padding: '16px',
         boxSizing: 'border-box',
         gap: '20px',
@@ -358,23 +378,28 @@ const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
 
       <FullReadoutDivider />
 
-      {/* Below-divider: the existing desktop tile stream, single column,
-          natural-px scale via the same --k/--kt override on this wrapper.
-          Tiles retain their designed proportions at 1×; charts + dials
-          fit the 328 px content width without additional adaptation. */}
+      {/* Below-divider: single column of DETAIL tiles at natural-px
+          scale.  v55 régime: the whole document below 768 follows
+          §4-§6/§9 — natural px, no dials, no plate, no pair grids —
+          not just the above-divider selection.
+          v55 §2: ``HeroTemperatureTile`` is excluded because the
+          above-divider set already renders the same hero + Zambretti
+          + hi/lo chips inline.  The reduced set is a SELECTION, not
+          a preview.
+          v55 §5: ``BarometerTile`` / ``WindTile`` render in
+          ``compact`` mode (dial and rose suppressed).
+          v55 §9: ``ConsoleAndLinkTile`` collapses to single-column
+          via ``compact`` too. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
-          <HeroTemperatureTile d={d} />
-          <DerivedConditionsTile d={d} />
-        </div>
+        <DerivedConditionsTile d={d} />
         <HistoryChartTile d={d} />
         <RainTile d={d} title="Rain ledger" />
         <SolarUvTile d={d} />
-        <BarometerTile d={d} />
-        <WindTile d={d} />
+        <BarometerTile d={d} compact />
+        <WindTile d={d} compact />
         <AlmanacTile d={d} />
         <RainfallByHourTile d={d} />
-        <ConsoleAndLinkTile d={d} />
+        <ConsoleAndLinkTile d={d} compact />
       </div>
 
       <PersonaFooter d={d} themeLabel={themeLabel} />
@@ -532,7 +557,7 @@ function _fmtKickerDate(d: Date): string {
  * NOT the single flowing strip that shipped. Its own title is 'Console & link'.
  * The clock and last poll are rows here; the footer carries 'Last update' only.
  */
-export const ConsoleAndLinkTile: React.FC<{ d: DashboardData }> = ({ d }) => {
+export const ConsoleAndLinkTile: React.FC<{ d: DashboardData; compact?: boolean }> = ({ d, compact }) => {
   // Named ``stn`` so it doesn't shadow the ``s(n)`` scale helper used
   // for the ``columnGap: s(24)`` below.
   const stn = d.station;
@@ -547,12 +572,20 @@ export const ConsoleAndLinkTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     ['Last poll', fmtTime(stn.lastPoll)],
   ];
 
+  // v55 §9 / item 4: at phone width the pair grid collapses to a
+  // single column of eight hairline-separated rows.  In the 2-col
+  // grid the "last row" is the final 2 items; in the 1-col flow it's
+  // just the final item.
+  const cols = compact ? '1fr' : '1fr 1fr';
+  const isLast = (i: number) =>
+    compact ? i === rows.length - 1 : i >= rows.length - 2;
+
   return (
     <Tile id="station-status">
       <TileHeading>Console &amp; link</TileHeading>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: s(24), rowGap: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: cols, columnGap: s(24), rowGap: 0 }}>
         {rows.map(([label, value], i) => (
-          <Row key={label} label={label} value={value} last={i >= rows.length - 2} />
+          <Row key={label} label={label} value={value} last={isLast(i)} />
         ))}
       </div>
     </Tile>
