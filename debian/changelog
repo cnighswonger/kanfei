@@ -1,3 +1,20 @@
+kanfei (0.1.0~beta93) unstable; urgency=medium
+
+  * Frontend / mobile (#521): tile-edge text overflow truncates with
+    an ellipsis instead of hard-clipping.  ``Row`` value spans and
+    ``DerivedConditionsTile``'s heading provenance span used
+    ``whiteSpace: nowrap`` with no truncation strategy, poking past
+    the tile edge and being cut off by the shell's
+    ``overflowX: hidden`` a few pixels later.  Both now carry
+    ``min-width: 0``, ``overflow: hidden`` and
+    ``text-overflow: ellipsis``; the label side gets
+    ``flex-shrink: 0`` so the label stays intact and the value
+    column bears the truncation.  Fixes Almanac's Sunrise/sunset
+    and Day length rows plus Derived conditions' ``FROM x °F / y %``
+    provenance line at 360 px.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 17:02:16 +0000
+
 kanfei (0.1.0~beta92) unstable; urgency=medium
 
   * Frontend / mobile (#520): eliminate the double vertical
