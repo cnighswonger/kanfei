@@ -100,9 +100,9 @@ export const DerivedConditionsTile: React.FC<{ d: DashboardData; style?: React.C
         temperature figure.  A provenance line on the header names
         the two inputs the derivatives below were computed from
         (Design v44). */}
-    <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(12) }}>
+    <TileHeading style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: s(12), minWidth: 0 }}>
       <span>Derived conditions</span>
-      <span style={{ ...type('sectionLabel'), ...tnum, color: v.textSecondary, whiteSpace: 'nowrap' }}>
+      <span style={{ ...type('sectionLabel'), ...tnum, color: v.textSecondary, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
         FROM {fmt(d.outside.tempF, 1)} °F / {fmt(d.outside.humidityPct, 0)} %
       </span>
     </TileHeading>
