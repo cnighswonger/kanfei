@@ -302,6 +302,10 @@ const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
         flex: 1,
         minHeight: 0,
         overflowY: 'auto',
+        // Any scroll-into-view or hash-anchor jump inside this shell
+        // leaves the top row clear of the fixed AppShell header (60 px
+        // on paper themes; 56 + 4 gap on non-paper).
+        scrollPaddingTop: '60px',
         // v55 §1 belt-and-braces: any residual fixed pixel width
         // inside a reused tile clips to the viewport rather than
         // shifting the whole document horizontally.  The individual
