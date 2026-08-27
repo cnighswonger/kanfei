@@ -439,7 +439,7 @@ export const SprayWindowTile: React.FC<{ d: DashboardData }> = ({ d }) => {
 
 /* ─────────────────────────────────────────────────────────── 3. drift risk */
 
-export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
+export const DriftRiskTile: React.FC<{ d: DashboardData; compact?: boolean }> = ({ d, compact }) => {
   const bins = d.spray?.gustBins ?? [];
   const max = Math.max(1, ...bins);
 
@@ -447,25 +447,34 @@ export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile id="drift-risk" style={{ gap: s(8) }}>
       <TileHeading>Drift risk</TileHeading>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: s(10), minHeight: s(180) }}>
-        <div style={{ flexShrink: 0 }}>
-          <WindRoseDial
-            roseWeights={d.wind.roseWeights}
-            directionDeg={d.wind.directionDeg}
-            speedMph={d.wind.speedMph}
-            size={250}
-          />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: s(6) }}>
-            <span style={{ ...type('mono', fs(24)), ...tnum, color: v.text }}>{fmt(d.wind.speedMph, 0)}</span>
-            <SectionLabel>mph {d.wind.directionLabel ?? ''}</SectionLabel>
+      <div style={{ display: 'flex', alignItems: 'center', gap: s(10), minHeight: compact ? undefined : s(180) }}>
+        {/* Rose off at phone: the paired drift/wind row above the
+            divider already carries the compass reading, and at 328 px
+            content the 250 px dial + text column overruns.  Detail
+            below the numeric readout — peak, gust, histogram — is
+            what earns this tile a place below the divider. */}
+        {!compact && (
+          <div style={{ flexShrink: 0 }}>
+            <WindRoseDial
+              roseWeights={d.wind.roseWeights}
+              directionDeg={d.wind.directionDeg}
+              speedMph={d.wind.speedMph}
+              size={250}
+            />
           </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), minWidth: 0 }}>
+          {!compact && (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: s(6) }}>
+              <span style={{ ...type('mono', fs(24)), ...tnum, color: v.text }}>{fmt(d.wind.speedMph, 0)}</span>
+              <SectionLabel>mph {d.wind.directionLabel ?? ''}</SectionLabel>
+            </div>
+          )}
           {/* Direction detail + peak/gust — same shape as the
               Everyday wind tile.  Mono sub-line in secondary for
               context, mono value line with primary values and
               secondary times. */}
-          <div style={{ paddingTop: s(9), borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`, display: 'flex', flexDirection: 'column', gap: s(7) }}>
+          <div style={{ paddingTop: compact ? 0 : s(9), borderTop: compact ? 'none' : `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`, display: 'flex', flexDirection: 'column', gap: s(7) }}>
             {(d.wind.directionLabel || d.wind.directionDeg != null) && (
               <div style={{ ...type('mono', fs(11)), ...tnum, color: v.textSecondary, letterSpacing: '0.4px' }}>
                 {d.wind.directionLabel && (COMPASS_NAME[d.wind.directionLabel] ?? d.wind.directionLabel)}
@@ -517,7 +526,7 @@ export const DriftRiskTile: React.FC<{ d: DashboardData }> = ({ d }) => {
 
 /* ────────────────────────────────────────────────────── 4. water balance */
 
-export const WaterBalanceTile: React.FC<{ d: DashboardData }> = ({ d }) => {
+export const WaterBalanceTile: React.FC<{ d: DashboardData; compact?: boolean }> = ({ d, compact }) => {
   const w = d.spray?.water;
   const bal = w?.balanceIn ?? null;
   const bars = d.rain.hourlyIn ?? [];
@@ -527,12 +536,18 @@ export const WaterBalanceTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     <Tile id="water-balance" style={{ gap: s(8) }}>
       <TileHeading>Water balance</TileHeading>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: s(8), minHeight: s(44) }}>
-        <span style={{ ...type('display', fs(44)), color: bal != null && bal < 0 ? v.danger : v.success, lineHeight: 1 }}>
-          {bal == null ? '—' : `${bal < 0 ? '−' : '+'}${Math.abs(bal).toFixed(2)}`}
-        </span>
-        <SectionLabel>in, rain − ET, 7 days</SectionLabel>
-      </div>
+      {/* Hero figure off at phone: the drift/water paired row above
+          the divider already prints ``+/-0.14 in, rain − ET`` — the
+          detail row table and the rain histogram are what this tile
+          uniquely offers below. */}
+      {!compact && (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: s(8), minHeight: s(44) }}>
+          <span style={{ ...type('display', fs(44)), color: bal != null && bal < 0 ? v.danger : v.success, lineHeight: 1 }}>
+            {bal == null ? '—' : `${bal < 0 ? '−' : '+'}${Math.abs(bal).toFixed(2)}`}
+          </span>
+          <SectionLabel>in, rain − ET, 7 days</SectionLabel>
+        </div>
+      )}
 
       <div>
         <Row label="Rain today / week" value={`${fmt(w?.rainTodayIn, 2)} / ${fmt(w?.rainWeekIn, 2)} in`} valueColor={v.sky} />
@@ -688,6 +703,10 @@ const AgricultureMobileShell: React.FC<{ d: DashboardData; themeLabel: string }>
         flex: 1,
         minHeight: 0,
         overflowY: 'auto',
+        // v55 §1 belt-and-braces: any residual fixed pixel width
+        // inside a reused tile clips to the viewport rather than
+        // shifting the whole document horizontally.
+        overflowX: 'hidden',
         // Any scroll-into-view or hash-anchor jump inside this shell
         // leaves the top row clear of the fixed AppShell header.
         scrollPaddingTop: '60px',
@@ -854,8 +873,8 @@ const AgricultureMobileShell: React.FC<{ d: DashboardData; themeLabel: string }>
           The mock is measured not described, so the sequence is part
           of the spec. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
-        <WaterBalanceTile d={d} />
-        <DriftRiskTile d={d} />
+        <WaterBalanceTile d={d} compact />
+        <DriftRiskTile d={d} compact />
         <FieldScheduleTile d={d} />
       </div>
 

@@ -331,7 +331,7 @@ const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
       <section style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Outside air</div>
         <div style={{ ...mType('heroFigure'), color: v.text, lineHeight: 0.95 }}>
-          {fmt(t.tempF, 1)} <span style={{ ...mType('secondaryFigure'), color: v.textSecondary }}>°F</span>
+          {fmt(t.tempF, 1)} <span style={{ ...mType('secondaryFigure'), color: v.accent }}>°F</span>
         </div>
         <div style={{ ...mType('monoRow'), color: v.text }}>
           RH {fmtInt(t.humidityPct, '%')}
@@ -351,8 +351,8 @@ const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
           </div>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <MChip label="High" value={t.highF} />
-          <MChip label="Low"  value={t.lowF} />
+          <MChip label="High" value={t.highF} tone={v.danger} />
+          <MChip label="Low"  value={t.lowF}  tone={v.sky} />
         </div>
       </section>
 
@@ -411,7 +411,10 @@ const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
   );
 };
 
-const MChip: React.FC<{ label: string; value: number | null }> = ({ label, value }) => (
+// Tone mirrors desktop ``Chip`` in ``tiles.tsx``: high in ``v.danger``
+// warmth, low in ``v.sky`` cool, so the pair carries the same reading
+// on phone that the paper header does on desktop.
+const MChip: React.FC<{ label: string; value: number | null; tone?: string }> = ({ label, value, tone }) => (
   <div
     style={{
       border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
@@ -424,7 +427,7 @@ const MChip: React.FC<{ label: string; value: number | null }> = ({ label, value
     }}
   >
     <span style={{ ...mType('sectionLabel'), color: v.textSecondary }}>{label}</span>
-    <span style={{ ...mType('monoRow'), color: v.text }}>
+    <span style={{ ...mType('monoRow'), color: tone ?? v.text }}>
       {fmt(value, 0)}°
     </span>
   </div>
