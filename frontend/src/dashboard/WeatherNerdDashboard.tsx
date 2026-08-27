@@ -877,7 +877,12 @@ export const ConsoleExtremesTile: React.FC<{ d: DashboardData; compact?: boolean
               : `${d.nerd.baroOffsetInHg > 0 ? '+' : ''}${d.nerd.baroOffsetInHg.toFixed(3)} in`
           }
           valueColor={v.accent}
-          last
+          // ``last`` here was correct for the 2-col grid where this
+          // row and ``vs reference`` shared the visual bottom row.  In
+          // compact (1-col) flow this is the seventh of eight rows, so
+          // suppressing its rule leaves a gap before the final row.
+          // Codex R1 on #517.
+          last={!compact}
         />
         <Row
           label={d.nerd?.referenceStation ? `vs ${d.nerd.referenceStation}` : 'vs reference'}
