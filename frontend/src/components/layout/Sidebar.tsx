@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useFeatureFlags } from '../../context/FeatureFlagsContext';
 import { usePersona, PERSONAS, PERSONA_LABEL, type Persona } from '../../context/PersonaContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 interface SidebarProps {
   open: boolean;
@@ -71,6 +72,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
   const { flags } = useFeatureFlags();
   const { persona, setPersona } = usePersona();
   const { theme } = useTheme();
+  const isMobile = useIsMobile();
   const [showAll, setShowAll] = useState(false);
 
   // Paper themes render a fundamentally different sidebar per the
@@ -140,12 +142,12 @@ export default function Sidebar({ open, onClose, collapsed = false, onToggleColl
         {/* Persona selector — phase 1 of v54 mobile composition.
             Above the route nav because switching persona changes what
             each route contains; reads top-down. Header still carries
-            the same strip on ≥769 px, but on phone widths that strip
-            is off (memo finding #1: it overflowed and Weather Nerd
-            was unreachable). Hidden entirely when the drawer is
-            collapsed to 56 px on desktop — matches the same policy
-            the routes use for their labels below. */}
-        {!collapsed && (
+            the same strip on ≥769 px, so this picker is MOBILE-ONLY —
+            showing it in the desktop sidebar duplicates the header
+            strip (found in beta86 QA). Also hidden when the mobile
+            drawer is collapsed to 56 px, matching the label policy
+            the routes below use. */}
+        {isMobile && !collapsed && (
           <div
             role="group"
             aria-label="Persona"
