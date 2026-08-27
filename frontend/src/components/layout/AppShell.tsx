@@ -113,16 +113,11 @@ export default function AppShell({
             "header header"
             "sidebar main"
           `,
-          // 100dvh (dynamic viewport height) instead of 100vh — on
-          // mobile browsers the URL bar's show/hide state changes
-          // the visible viewport height; 100vh always reports the
-          // LARGER value (URL bar hidden), so the shell overflows the
-          // visible area whenever the URL bar is showing.  The
-          // browser then paints its own scrollbar for body while the
-          // mobile shell paints its own — the double scrollbar the
-          // operator flagged in v55.  ``dvh`` tracks the actual
-          // visible viewport and lets the mobile shell own the only
-          // scroll.
+          // dvh not vh: mobile 100vh is the URL-bar-hidden height,
+          // so vh-sized shells overflow the visible viewport while
+          // the URL bar is up and the browser paints its own body
+          // scrollbar next to the mobile shell's own.  100dvh tracks
+          // the actual visible viewport.
           height: '100dvh',
           background: shellTransparent ? 'transparent' : 'var(--color-bg)',
           position: 'relative',

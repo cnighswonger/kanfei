@@ -69,41 +69,6 @@ body {
   min-height: 100dvh;
 }
 
-/* Themed scrollbars.  The default browser scrollbar is a light-mode
-   grey rail that reads as debris on paper themes and as chrome on
-   the darker modern themes.  Paint it in the theme's own palette
-   — a translucent hairline track + a text-muted thumb that shifts
-   to the copper accent on hover — so a persistent mobile shell
-   scroll doesn't look bolted-on.
-   Firefox uses ``scrollbar-color`` / ``scrollbar-width``; Chromium
-   and WebKit use ``::-webkit-scrollbar`` pseudo-elements.  Both
-   read the same tokens so themes stay in sync automatically. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-text-muted, rgba(0, 0, 0, 0.3))
-                   var(--color-sunken, transparent);
-}
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-*::-webkit-scrollbar-track {
-  background: var(--color-sunken, transparent);
-}
-*::-webkit-scrollbar-thumb {
-  background: var(--color-text-muted, rgba(0, 0, 0, 0.3));
-  border-radius: 0;
-  border: 1px solid transparent;
-  background-clip: padding-box;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--color-accent, currentColor);
-  background-clip: padding-box;
-}
-*::-webkit-scrollbar-corner {
-  background: var(--color-sunken, transparent);
-}
-
 /* Settings page: suppress ancestor scrolling so only the tab content scrolls. */
 body.settings-scroll-lock {
   overflow: hidden;
@@ -140,23 +105,32 @@ a:hover {
   color: var(--color-accent-hover);
 }
 
-/* Scrollbar styling */
+/* Themed scrollbars — Firefox via ``scrollbar-*`` shorthand,
+   Chromium/WebKit via ``::-webkit-scrollbar`` pseudo-elements.
+   Both read theme tokens ThemeContext already publishes, so the
+   scrollbar palette follows the theme automatically.  Paper themes
+   land on cream track + tertiary-ink thumb + copper hover; modern
+   themes on their secondary-bg + muted-text + accent equivalents. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-text-muted) var(--color-bg-secondary);
+}
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 ::-webkit-scrollbar-track {
   background: var(--color-bg-secondary);
 }
-
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border-light);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-muted);
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
+}
+::-webkit-scrollbar-corner {
+  background: var(--color-bg-secondary);
 }
 
 /* Selection */
