@@ -347,8 +347,8 @@ const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
           </div>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <MChip label="High" value={t.highF} at={t.highAt} />
-          <MChip label="Low"  value={t.lowF}  at={t.lowAt} />
+          <MChip label="High" value={t.highF} />
+          <MChip label="Low"  value={t.lowF} />
         </div>
       </section>
 
@@ -391,14 +391,14 @@ const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
           v55 §9: ``ConsoleAndLinkTile`` collapses to single-column
           via ``compact`` too. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
-        <DerivedConditionsTile d={d} />
-        <HistoryChartTile d={d} />
+        <DerivedConditionsTile d={d} compact />
+        <HistoryChartTile d={d} compact />
         <RainTile d={d} title="Rain ledger" />
-        <SolarUvTile d={d} />
+        <SolarUvTile d={d} compact />
         <BarometerTile d={d} compact />
         <WindTile d={d} compact />
         <AlmanacTile d={d} />
-        <RainfallByHourTile d={d} />
+        <RainfallByHourTile d={d} compact />
         <ConsoleAndLinkTile d={d} compact />
       </div>
 
@@ -407,7 +407,7 @@ const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
   );
 };
 
-const MChip: React.FC<{ label: string; value: number | null; at: string | null }> = ({ label, value, at }) => (
+const MChip: React.FC<{ label: string; value: number | null }> = ({ label, value }) => (
   <div
     style={{
       border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
@@ -421,7 +421,7 @@ const MChip: React.FC<{ label: string; value: number | null; at: string | null }
   >
     <span style={{ ...mType('sectionLabel'), color: v.textSecondary }}>{label}</span>
     <span style={{ ...mType('monoRow'), color: v.text }}>
-      {fmt(value, 0)}°{at && ` ${fmtTime(at)}`}
+      {fmt(value, 0)}°
     </span>
   </div>
 );
