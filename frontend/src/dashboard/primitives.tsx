@@ -513,11 +513,19 @@ export const Row: React.FC<{
       justifyContent: 'space-between',
       gap: s(12),
       padding: `${s(7)} 0`,
+      minWidth: 0,
       borderBottom: last ? 'none' : `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
     }}
   >
-    <span style={{ ...type('body'), color: v.textSecondary, whiteSpace: 'nowrap' }}>{label}</span>
-    <span style={{ ...type('mono'), ...tnum, color: valueColor, whiteSpace: 'nowrap' }}>{value}</span>
+    <span style={{ ...type('body'), color: v.textSecondary, whiteSpace: 'nowrap', flexShrink: 0 }}>{label}</span>
+    {/* v55 items 5+1: on the phone the tile column is narrower than
+        the row's ``label + gap + value`` intrinsic, so the value
+        (``6:43 AM · 7:45 PM``, ``FROM 88.0 °F / 66 %``) used to poke
+        past the tile edge and got clipped by the shell's
+        ``overflowX: hidden`` a few pixels of daylight later.  Let the
+        value take the remaining space and truncate cleanly with an
+        ellipsis instead. */}
+    <span style={{ ...type('mono'), ...tnum, color: valueColor, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span>
   </div>
 );
 
