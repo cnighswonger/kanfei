@@ -490,7 +490,10 @@ export const NerdChartTile: React.FC<{
           328 px and the buttons collide with the CSV emphasis; stacked
           the heading owns its line and the controls own theirs. */}
       <TileHeading style={{ display: 'flex', flexDirection: compact ? 'column' : 'row', alignItems: compact ? 'flex-start' : 'baseline', justifyContent: 'space-between', gap: compact ? s(8) : s(16) }}>
-        <span>Temperature, dew point &amp; pressure · 24 h</span>
+        {/* At phone the four-word serif heading wrapped to three
+            lines with ``24 h`` alone on the last — shorten to the
+            three visible series and the window, in the same order. */}
+        <span>{compact ? 'Temp, dew & pressure · 24 h' : 'Temperature, dew point & pressure · 24 h'}</span>
         <div style={{ display: 'flex', gap: s(10), alignItems: 'baseline', flexWrap: 'wrap' }}>
           <ChartButtonGroup>
             {(['Raw', '5 min', 'Hourly', 'Daily'] as const).map((label, i) => {
@@ -703,11 +706,15 @@ const ChartButton: React.FC<{
   </button>
 );
 
-/** Bordered container around the segmented resolution buttons. */
+/** Bordered container around the segmented resolution buttons.
+ *  ``flex-wrap`` at phone so ``Raw / 5 min / Hourly / Daily`` can
+ *  wrap into two rows inside the same bordered group rather than
+ *  overrunning the tile edge. */
 const ChartButtonGroup: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div
     style={{
       display: 'inline-flex',
+      flexWrap: 'wrap',
       border: `${v.ruleHairWidth} solid ${v.ruleHair}`,
       borderRadius: 'var(--radius-control, 0px)',
     }}
@@ -1005,7 +1012,9 @@ const WeatherNerdMobileShell: React.FC<{
         // Any scroll-into-view or hash-anchor jump inside this shell
         // leaves the top row clear of the fixed AppShell header.
         scrollPaddingTop: '60px',
-        padding: '16px',
+        // 12 px horizontal (down from 16) buys 8 px of content width
+        // where the tiles need it — 328 → 336 at 360-viewport phones.
+        padding: '16px 12px',
         boxSizing: 'border-box',
         gap: '20px',
       }}

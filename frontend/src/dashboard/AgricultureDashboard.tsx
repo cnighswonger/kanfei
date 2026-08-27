@@ -564,10 +564,15 @@ export const WaterBalanceTile: React.FC<{ d: DashboardData; compact?: boolean }>
         })}
         <line x1={0} y1={58} x2={620} y2={58} stroke={v.ruleHair} strokeWidth={1} />
       </svg>
-      <div style={{ display: 'flex', justifyContent: 'space-between', ...type('sectionLabel'), color: v.chart.axis }}>
-        <span>24h ago</span>
-        <span>{max > 0.001 ? `${fmt(max, 2)} in peak` : 'no rain recorded'}</span>
-        <span>now</span>
+      {/* Each label anchored in its own flex column so a widish
+          middle ("0.05 in peak") can't overrun the ``now`` on the
+          right at phone width. */}
+      <div style={{ display: 'flex', ...type('sectionLabel'), color: v.chart.axis }}>
+        <span style={{ flex: 1, textAlign: 'left' }}>24h ago</span>
+        <span style={{ flex: 2, textAlign: 'center' }}>
+          {max > 0.001 ? `${fmt(max, 2)} in peak` : 'no rain recorded'}
+        </span>
+        <span style={{ flex: 1, textAlign: 'right' }}>now</span>
       </div>
     </Tile>
   );
@@ -577,7 +582,7 @@ export const WaterBalanceTile: React.FC<{ d: DashboardData; compact?: boolean }>
 
 const STATUS_TONE = { go: 'success', pending: 'textSecondary', nogo: 'danger' } as const;
 
-export const FieldScheduleTile: React.FC<{ d: DashboardData }> = ({ d }) => {
+export const FieldScheduleTile: React.FC<{ d: DashboardData; compact?: boolean }> = ({ d, compact }) => {
   const sp = d.spray;
   const cells: [string, React.ReactNode, string?][] = [
     ['Air', fmt(d.outside.tempF, 1, '°'), undefined],
@@ -595,14 +600,20 @@ export const FieldScheduleTile: React.FC<{ d: DashboardData }> = ({ d }) => {
           boxes read as clickable, which these are not.  ``align-items:
           start`` so a borderless row starts at its content rather than
           stretching and opening voids inside cells (Design v45 q2). */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', alignItems: 'start' }}>
+      {/* 4×1 at desktop; 2×2 at phone — the four labels
+          (Air, Humidity, Dew point, Solar) don't fit horizontally
+          at 328 px content, "Humidity" clips to "Humidit" and
+          "Dew point" wraps against a cramped value. */}
+      <div style={{ display: 'grid', gridTemplateColumns: compact ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', alignItems: 'start' }}>
         {cells.map(([label, value, tone], i) => (
           <div
             key={label}
             style={{
               padding: `${s(2)} ${s(10)}`,
               minHeight: s(48),
-              borderLeft: i === 0 ? 'none' : `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
+              borderLeft: (compact ? i % 2 === 0 : i === 0) ? 'none' : `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
+              borderTop: compact && i >= 2 ? `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}` : undefined,
+              paddingTop: compact && i >= 2 ? s(8) : s(2),
             }}
           >
             <SectionLabel>{label}</SectionLabel>
@@ -710,7 +721,9 @@ const AgricultureMobileShell: React.FC<{ d: DashboardData; themeLabel: string }>
         // Any scroll-into-view or hash-anchor jump inside this shell
         // leaves the top row clear of the fixed AppShell header.
         scrollPaddingTop: '60px',
-        padding: '16px',
+        // 12 px horizontal (down from 16) buys 8 px of content width
+        // where the tiles need it — 328 → 336 at 360-viewport phones.
+        padding: '16px 12px',
         boxSizing: 'border-box',
         gap: '20px',
       }}
@@ -803,7 +816,10 @@ const AgricultureMobileShell: React.FC<{ d: DashboardData; themeLabel: string }>
         <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Forecast · Next 24 hours</div>
         <_MobileForecastStrip cells={sp?.window ?? []} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', paddingTop: '4px' }}>
-          <div>
+          {/* Best today + Next window wrap freely at phone width — an
+              ellipsis or a nowrap-clipped ``Tomorrow 1:0`` costs the
+              reader the exact information the value carries. */}
+          <div style={{ minWidth: 0 }}>
             <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Best today</div>
             <div
               style={{
@@ -812,17 +828,14 @@ const AgricultureMobileShell: React.FC<{ d: DashboardData; themeLabel: string }>
                   sp?.bestWindowToday && sp.bestWindowToday !== 'None left today'
                     ? v.success
                     : v.textSecondary,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
               }}
             >
               {fmtRange(sp?.bestWindowToday)}
             </div>
           </div>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>Next window</div>
-            <div style={{ ...mType('monoRow'), color: v.text, whiteSpace: 'nowrap' }}>
+            <div style={{ ...mType('monoRow'), color: v.text }}>
               {sp?.nextWindow ?? '—'}
             </div>
           </div>
@@ -875,7 +888,7 @@ const AgricultureMobileShell: React.FC<{ d: DashboardData; themeLabel: string }>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
         <WaterBalanceTile d={d} compact />
         <DriftRiskTile d={d} compact />
-        <FieldScheduleTile d={d} />
+        <FieldScheduleTile d={d} compact />
       </div>
 
       <PersonaFooter d={d} themeLabel={themeLabel} />
