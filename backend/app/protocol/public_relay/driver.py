@@ -19,7 +19,9 @@ endpoints that call them.
 
 import logging
 import time
-from typing import Optional
+from datetime import datetime
+from types import SimpleNamespace
+from typing import Any, Optional
 
 from ..base import HardwareInfo, SensorSnapshot, StationDriver
 
@@ -107,3 +109,41 @@ class PublicRelayDriver(StationDriver):
         """
         if isinstance(info, dict):
             self._upstream_info = info
+
+    # ---- Read surface that the daemon's ``_h_status`` / ``_h_read_station_time``
+    # exercise via ``getattr`` on the active driver.  The daemon "asks the
+    # driver, not its type," so surfacing the pushed identity via the same
+    # attribute names every real driver uses lets ``/api/station`` render
+    # firmware, product SKU, and station clock without a public-relay
+    # branch in the endpoint.
+
+    @property
+    def hw_config(self) -> Any:
+        """Namespace exposing pushed identity fields the ``_h_status``
+        handler reads via ``getattr`` (``firmware_version``,
+        ``firmware_date``, ``product_sku``).  Empty upstream_info
+        surfaces as None attributes, same shape as a driver whose
+        detection hasn't completed."""
+        u = self._upstream_info
+        return SimpleNamespace(
+            firmware_version=u.get("firmware_version"),
+            firmware_date=u.get("firmware_date"),
+            product_sku=u.get("product_sku"),
+        )
+
+    async def async_read_station_time(self) -> Optional[dict]:
+        """Return time components from when the last snapshot arrived.
+        A public relay has no wire to the upstream console clock; the
+        push-arrival timestamp is the closest proxy and is what the
+        Console tile ends up rendering."""
+        if self._last_push_at is None:
+            return None
+        ts = datetime.fromtimestamp(self._last_push_at)
+        return {
+            "year": ts.year,
+            "month": ts.month,
+            "day": ts.day,
+            "hour": ts.hour,
+            "minute": ts.minute,
+            "second": ts.second,
+        }
