@@ -201,11 +201,17 @@ export const HistoryChartTile: React.FC<{ d: DashboardData; style?: React.CSSPro
 
 /* ─────────────────────────────────────────────────────────── 4. barometer */
 
-export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
+export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProperties; compact?: boolean }> = ({ d, style, compact }) => {
   // Dial size dropped 260 → 210 in Design v43 to make room for the
   // zone strip below.  Numerals + zone words no longer share the
   // plate — words leave for the strip; three numerals remain on
   // the dial in pockets the needle sweep cannot reach.
+  //
+  // ``compact`` (v55 §5, applied below the divider on phone): drop
+  // the wheel, drop the zone strip word band.  A 210 px dial and a
+  // 5-cell strip both overflow the 328 px content column; §5's
+  // replacement is a large mono figure + a mono `H / L / zone`
+  // line, matching the above-divider treatment.
   const size = 210;
   const trend = d.barometer.trendInHgPer3h;
   const arrow = trend == null ? '' : trend > 0.005 ? '↑ rising' : trend < -0.005 ? '↓ falling' : '→ steady';
@@ -230,16 +236,19 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
             instrument fills 100 % of the slot and rebuilds via
             ResizeObserver when the wrapper changes size.  Kills the
             raw-pixel gap that made the dial drift from the tile at
-            other viewport heights. */}
-        <div style={{ width: s(size), aspectRatio: '1', flexShrink: 0 }}>
-          <WheelBarometer
-            inHg={d.barometer.inHg}
-            trendInHgPer3h={d.barometer.trendInHgPer3h}
-            size={size}
-          />
-        </div>
+            other viewport heights.  Suppressed in ``compact``
+            (v55 §5): no radial instrument at phone width. */}
+        {!compact && (
+          <div style={{ width: s(size), aspectRatio: '1', flexShrink: 0 }}>
+            <WheelBarometer
+              inHg={d.barometer.inHg}
+              trendInHgPer3h={d.barometer.trendInHgPer3h}
+              size={size}
+            />
+          </div>
+        )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), minWidth: 0, flex: 1 }}>
           <div style={{ ...type('title'), color: v.text }}>Barometer</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: s(6) }}>
             <span style={{ ...type('mono', fs(34)), ...tnum, color: v.text, lineHeight: 1 }}>
@@ -290,50 +299,67 @@ export const BarometerTile: React.FC<{ d: DashboardData; style?: React.CSSProper
           by each zone's share of the 2.5-inHg range so the strip is
           a legend AND an unrolled scale.  Active cell picks up the
           copper wash + a 2 px copper rule on its top edge
-          overlapping the strip's 1 px separator.  Design v43. */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: ZONE_BANDS.map(
-            (b) => `${((b.to - b.from) / (MAX_INHG - MIN_INHG)).toFixed(3)}fr`,
-          ).join(' '),
-          borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
-          marginTop: s(8),
-        }}
-      >
-        {ZONE_BANDS.map((b, i) => {
-          const isActive = zone?.label === b.label;
-          return (
-            <div
-              key={b.label}
-              style={{
-                ...type('sectionLabel'),
-                padding: `${s(6)} 0`,
-                textAlign: 'center',
-                color: isActive ? v.accent : v.textSecondary,
-                opacity: isActive ? 1 : 0.55,
-                background: isActive
-                  ? `color-mix(in oklab, var(--color-accent) 8%, transparent)`
-                  : 'transparent',
-                borderTop: isActive
-                  ? `2px solid var(--color-accent)`
-                  : 'none',
-                marginTop: isActive ? '-2px' : 0,
-                borderLeft: i === 0 ? 'none' : `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
-              }}
-            >
-              {b.label}
-            </div>
-          );
-        })}
-      </div>
+          overlapping the strip's 1 px separator.  Design v43.
+          Suppressed in ``compact``: the strip's 5 words overflow a
+          328 px column (v55 shot 5: ``FAIR`` and ``SET FAIR``
+          collide).  Compact prints the active zone name on the H/L
+          line beneath the number instead. */}
+      {!compact && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: ZONE_BANDS.map(
+              (b) => `${((b.to - b.from) / (MAX_INHG - MIN_INHG)).toFixed(3)}fr`,
+            ).join(' '),
+            borderTop: `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
+            marginTop: s(8),
+          }}
+        >
+          {ZONE_BANDS.map((b, i) => {
+            const isActive = zone?.label === b.label;
+            return (
+              <div
+                key={b.label}
+                style={{
+                  ...type('sectionLabel'),
+                  padding: `${s(6)} 0`,
+                  textAlign: 'center',
+                  color: isActive ? v.accent : v.textSecondary,
+                  opacity: isActive ? 1 : 0.55,
+                  background: isActive
+                    ? `color-mix(in oklab, var(--color-accent) 8%, transparent)`
+                    : 'transparent',
+                  borderTop: isActive
+                    ? `2px solid var(--color-accent)`
+                    : 'none',
+                  marginTop: isActive ? '-2px' : 0,
+                  borderLeft: i === 0 ? 'none' : `${v.ruleHairWidth} ${v.ruleStyle} ${v.ruleHair}`,
+                }}
+              >
+                {b.label}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {compact && zone && (
+        <div
+          style={{
+            ...type('sectionLabel'),
+            color: v.accent,
+            paddingTop: s(6),
+          }}
+        >
+          {zone.label}
+        </div>
+      )}
     </Tile>
   );
 };
 
 /* ────────────────────────────────────────────────────────────────── 5. wind */
 
-export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties }> = ({ d, style }) => {
+export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties; compact?: boolean }> = ({ d, style, compact }) => {
   const SIZE = 250;
 
   return (
@@ -341,16 +367,22 @@ export const WindTile: React.FC<{ d: DashboardData; style?: React.CSSProperties 
       {/* Compass first, title inside the readout column — same pattern as the
           barometer.  Design v35 T3 swapped the SVG compass + rosePetals +
           needle for the Highcharts WindRoseDial; the readout column
-          below is unchanged. */}
+          below is unchanged.
+          ``compact`` (v55 §5): drop the rose dial.  Its 250 px width
+          plus the rose N/E/S/W labels' external padding push past
+          the 328 px content column, and the S label lands under the
+          next tile's heading (v55 shot 4). */}
       <div style={{ display: 'flex', alignItems: 'center', gap: s(10), flex: 1, minHeight: 0 }}>
-        <WindRoseDial
-          roseWeights={d.wind.roseWeights}
-          directionDeg={d.wind.directionDeg}
-          speedMph={d.wind.speedMph}
-          size={SIZE}
-        />
+        {!compact && (
+          <WindRoseDial
+            roseWeights={d.wind.roseWeights}
+            directionDeg={d.wind.directionDeg}
+            speedMph={d.wind.speedMph}
+            size={SIZE}
+          />
+        )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: s(5), minWidth: 0, flex: 1 }}>
           <div style={{ ...type('title'), color: v.text }}>Wind</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: s(6) }}>
             <span style={{ ...type('mono', fs(34)), ...tnum, color: v.text, lineHeight: 1 }}>
