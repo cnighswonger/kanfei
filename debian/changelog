@@ -1,3 +1,18 @@
+kanfei (0.1.0~beta96) unstable; urgency=medium
+
+  * Frontend / mobile (#525, v55 phase 5b): Everyday phone tier
+    type/layout pass — items 5-7.  ``DerivedConditionsTile``,
+    ``HistoryChartTile``, ``RainfallByHourTile`` and ``SolarUvTile``
+    gain a ``compact`` prop: the two-column TileHeading stacks
+    heading over stat line at phone width so the four-line ladder
+    wrap collapses to two flat lines, and ``SolarUvTile``'s
+    ``225 W/m²`` figure drops from 30 px to 15 px so a non-hero
+    number reads as a stat.  ``MChip`` drops the times, so the
+    ``HIGH 82° · LOW 69°`` pair fits inside its 158 px chip grid
+    without overlap.  Desktop and tablet unchanged.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 18:42:51 +0000
+
 kanfei (0.1.0~beta95) unstable; urgency=medium
 
   * Backend / droplet (#523): the droplet's Console tile now
