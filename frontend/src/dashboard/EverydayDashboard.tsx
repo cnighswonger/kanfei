@@ -313,7 +313,9 @@ const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
         // grids), but this stops a missed one from becoming a
         // page-wide scrollbar.
         overflowX: 'hidden',
-        padding: '16px',
+        // 12 px horizontal (down from 16) buys 8 px of content width
+        // where the tiles need it — 328 → 336 at 360-viewport phones.
+        padding: '16px 12px',
         boxSizing: 'border-box',
         gap: '20px',
       }}
