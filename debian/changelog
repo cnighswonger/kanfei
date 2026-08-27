@@ -1,3 +1,34 @@
+kanfei (0.1.0~beta98) unstable; urgency=medium
+
+  * Frontend / mobile (#529, v55 phase 5d + Everyday nits): Everyday
+    hero ``°F`` and MChip high/low tones restored to the paper
+    palette — ``°F`` back to ``v.accent``, MChip pair split into
+    ``v.danger`` for the high and ``v.sky`` for the low (regressions
+    from beta96's 5b type/layout pass).  Agriculture below-divider
+    tiles ``WaterBalanceTile`` and ``DriftRiskTile`` grow a
+    ``compact`` prop that the phone shell passes: Water drops its
+    44 px ``display`` hero (duplicated by the drift/water paired
+    row above the divider); Drift drops the 250 px ``WindRoseDial``
+    and the top numeric wind readout (same duplicate).  Both tiles
+    still carry their unique below-divider payload — Water's rows
+    table + rain histogram, Drift's peak/gust detail + gust-bin
+    histogram.  Belt-and-braces ``overflowX: 'hidden'`` on the
+    Agriculture mobile shell matches Everyday's 5a.
+
+  * Frontend / mobile (#530, v55 phase 5e): Weather Nerd below-
+    divider stream gets the same treatment.  ``WindRoseTile``
+    compact drops the 250 px dial and promotes its caption
+    (dominant sector, mean, peak) directly under the heading — the
+    caption already carried what the dial encoded.  ``NerdChartTile``
+    compact stacks its heading and the resolution / CSV controls
+    vertically so the ~30-char heading + four segmented buttons +
+    CSV don't wrap to a colliding 4-line ladder at 328 px content.
+    ``overflowX: 'hidden'`` on the Nerd mobile shell.  Third and
+    last persona pass; the phone régime + type/layout is now
+    consistent across Everyday, Agriculture and Weather Nerd.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 21:00:00 +0000
+
 kanfei (0.1.0~beta97) unstable; urgency=medium
 
   * Frontend / mobile (#528, v55 phase 5c items 8-9): phone
