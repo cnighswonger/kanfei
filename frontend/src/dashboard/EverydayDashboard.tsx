@@ -289,6 +289,13 @@ const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
         flex: 1,
         minHeight: 0,
         overflowY: 'auto',
+        // v55 §1 belt-and-braces: any residual fixed pixel width
+        // inside a reused tile clips to the viewport rather than
+        // shifting the whole document horizontally.  The individual
+        // width sources have compact-mode gates (dial, rose, pair
+        // grids), but this stops a missed one from becoming a
+        // page-wide scrollbar.
+        overflowX: 'hidden',
         padding: '16px',
         boxSizing: 'border-box',
         gap: '20px',
@@ -358,23 +365,28 @@ const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = 
 
       <FullReadoutDivider />
 
-      {/* Below-divider: the existing desktop tile stream, single column,
-          natural-px scale via the same --k/--kt override on this wrapper.
-          Tiles retain their designed proportions at 1×; charts + dials
-          fit the 328 px content width without additional adaptation. */}
+      {/* Below-divider: single column of DETAIL tiles at natural-px
+          scale.  v55 régime: the whole document below 768 follows
+          §4-§6/§9 — natural px, no dials, no plate, no pair grids —
+          not just the above-divider selection.
+          v55 §2: ``HeroTemperatureTile`` is excluded because the
+          above-divider set already renders the same hero + Zambretti
+          + hi/lo chips inline.  The reduced set is a SELECTION, not
+          a preview.
+          v55 §5: ``BarometerTile`` / ``WindTile`` render in
+          ``compact`` mode (dial and rose suppressed).
+          v55 §9: ``ConsoleAndLinkTile`` collapses to single-column
+          via ``compact`` too. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
-          <HeroTemperatureTile d={d} />
-          <DerivedConditionsTile d={d} />
-        </div>
+        <DerivedConditionsTile d={d} />
         <HistoryChartTile d={d} />
         <RainTile d={d} title="Rain ledger" />
         <SolarUvTile d={d} />
-        <BarometerTile d={d} />
-        <WindTile d={d} />
+        <BarometerTile d={d} compact />
+        <WindTile d={d} compact />
         <AlmanacTile d={d} />
         <RainfallByHourTile d={d} />
-        <ConsoleAndLinkTile d={d} />
+        <ConsoleAndLinkTile d={d} compact />
       </div>
 
       <PersonaFooter d={d} themeLabel={themeLabel} />
@@ -532,7 +544,7 @@ function _fmtKickerDate(d: Date): string {
  * NOT the single flowing strip that shipped. Its own title is 'Console & link'.
  * The clock and last poll are rows here; the footer carries 'Last update' only.
  */
-export const ConsoleAndLinkTile: React.FC<{ d: DashboardData }> = ({ d }) => {
+export const ConsoleAndLinkTile: React.FC<{ d: DashboardData; compact?: boolean }> = ({ d, compact }) => {
   // Named ``stn`` so it doesn't shadow the ``s(n)`` scale helper used
   // for the ``columnGap: s(24)`` below.
   const stn = d.station;
@@ -547,12 +559,20 @@ export const ConsoleAndLinkTile: React.FC<{ d: DashboardData }> = ({ d }) => {
     ['Last poll', fmtTime(stn.lastPoll)],
   ];
 
+  // v55 §9 / item 4: at phone width the pair grid collapses to a
+  // single column of eight hairline-separated rows.  In the 2-col
+  // grid the "last row" is the final 2 items; in the 1-col flow it's
+  // just the final item.
+  const cols = compact ? '1fr' : '1fr 1fr';
+  const isLast = (i: number) =>
+    compact ? i === rows.length - 1 : i >= rows.length - 2;
+
   return (
     <Tile id="station-status">
       <TileHeading>Console &amp; link</TileHeading>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: s(24), rowGap: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: cols, columnGap: s(24), rowGap: 0 }}>
         {rows.map(([label, value], i) => (
-          <Row key={label} label={label} value={value} last={i >= rows.length - 2} />
+          <Row key={label} label={label} value={value} last={isLast(i)} />
         ))}
       </div>
     </Tile>
