@@ -23,7 +23,11 @@ html {
 }
 
 body {
-  min-height: 100vh;
+  /* dvh not vh — see AppShell.tsx for why.  On mobile browsers vh
+     lags the URL bar and the body ends up taller than the visible
+     viewport, adding a second (browser-owned) scrollbar next to the
+     mobile shell's own. */
+  min-height: 100dvh;
   background-color: var(--color-bg);
   /* Paper themes set --surface-texture to a multi-radial-gradient
      that renders as the paper's warmth spots.  Non-paper themes set
@@ -62,7 +66,7 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Settings page: suppress ancestor scrolling so only the tab content scrolls. */
@@ -101,23 +105,32 @@ a:hover {
   color: var(--color-accent-hover);
 }
 
-/* Scrollbar styling */
+/* Themed scrollbars — Firefox via ``scrollbar-*`` shorthand,
+   Chromium/WebKit via ``::-webkit-scrollbar`` pseudo-elements.
+   Both read theme tokens ThemeContext already publishes, so the
+   scrollbar palette follows the theme automatically.  Paper themes
+   land on cream track + tertiary-ink thumb + copper hover; modern
+   themes on their secondary-bg + muted-text + accent equivalents. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-text-muted) var(--color-bg-secondary);
+}
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 ::-webkit-scrollbar-track {
   background: var(--color-bg-secondary);
 }
-
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border-light);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-muted);
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
+}
+::-webkit-scrollbar-corner {
+  background: var(--color-bg-secondary);
 }
 
 /* Selection */

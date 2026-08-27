@@ -113,7 +113,12 @@ export default function AppShell({
             "header header"
             "sidebar main"
           `,
-          height: '100vh',
+          // dvh not vh: mobile 100vh is the URL-bar-hidden height,
+          // so vh-sized shells overflow the visible viewport while
+          // the URL bar is up and the browser paints its own body
+          // scrollbar next to the mobile shell's own.  100dvh tracks
+          // the actual visible viewport.
+          height: '100dvh',
           background: shellTransparent ? 'transparent' : 'var(--color-bg)',
           position: 'relative',
           zIndex: 3,
