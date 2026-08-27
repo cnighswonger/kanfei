@@ -1,3 +1,19 @@
+kanfei (0.1.0~beta95) unstable; urgency=medium
+
+  * Backend / droplet (#523): the droplet's Console tile now
+    renders Firmware, Product and Console clock — previously blank.
+    ``PublicRelayDriver`` exposes the pushed identity via a new
+    ``hw_config`` property (SimpleNamespace with firmware_version /
+    firmware_date / product_sku from ``_upstream_info``) and a new
+    ``async_read_station_time`` returning time components from
+    ``_last_push_at``.  The daemon's ``_h_status`` and
+    ``_h_read_station_time`` handlers already ask the driver via
+    ``getattr`` / ``hasattr`` per the pattern #219 established, so
+    ``/api/station`` populates the missing fields without a
+    public-relay branch anywhere in the endpoint.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 18:09:17 +0000
+
 kanfei (0.1.0~beta94) unstable; urgency=medium
 
   * Frontend / mobile (#522): Row values and DerivedConditions
