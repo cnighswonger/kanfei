@@ -1,3 +1,27 @@
+kanfei (0.1.0~beta89) unstable; urgency=medium
+
+  * Frontend / mobile (#516, Design v54 phase 4b): Everyday
+    persona 768-1213 middle tier (content) = 989-1433 viewport.
+    Applies §8's Everyday-specific rule: band A becomes hero |
+    (derived+barometer stacked) with the chart full-width beneath;
+    the remaining three-up (barometer + wind + almanac) becomes
+    two-plus-one with barometer already pulled up alongside
+    derived.  Composition, top to bottom: header title | kicker,
+    hero | derived+barometer, chart, rain | solar, wind | almanac,
+    rainfall by hour full width, console & link full width.
+    Reuses all 10 desktop tile bodies unchanged inside a
+    two-column grid at natural type sizes (``--k`` / ``--kt`` =
+    ``1px`` hoist, same as the phone shell).  Explicit
+    ``minHeight: 357`` restored on the tablet chart tile so its
+    plot area doesn't collapse to 61 px (Codex R1 on #516).
+    Corner plate off at this tier — its ``top: s(60), right: 0``
+    positioning is tied to the ``scaleVar(1120)`` outer wrapper
+    the tablet shell bypasses.
+
+    Weather Nerd phase 4c still to come.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 12:56:51 +0000
+
 kanfei (0.1.0~beta88) unstable; urgency=medium
 
   * Frontend / mobile (#512, Design v54 phase 4a): Agriculture
