@@ -238,22 +238,35 @@ export const EverydayDashboard: React.FC<{ d: DashboardData; themeLabel: string 
 // ─────────────────────────────────────────────────────────────── Mobile shell
 
 /**
- * v54 phase 3b mobile tree.
+ * Everyday mobile tree — v54 phase 3b as revised by v55.
  *
- * ≤ 768 px: an entirely different composition. Above a FULL READOUT
- * divider live four reduced blocks sized in natural px per v54 §2:
- * title + date/elevation kicker, hero air temp (heroFigure) with
- * RH/feels/dew on one mono line, Zambretti + hi/lo chips, and a
- * wind|rain paired row. Below the divider, the existing desktop
- * tiles stack single-column and scroll — each rendered inside a
- * ``--k: 1px, --kt: 1px`` wrapper so ``s(n)`` / ``st(n)`` inside
- * those tiles resolve to natural px instead of the vh-clamp floor.
+ * ≤ 768 px: an entirely different composition than desktop.  Above
+ * a FULL READOUT divider live four reduced blocks sized in natural
+ * px per v54 §2: title + date/elevation kicker, hero air temp
+ * (heroFigure) with RH/feels/dew on one mono line, Zambretti + hi/lo
+ * chips, and a wind|rain paired row.
  *
- * The mobile-branch dial/rose replacements (v54 §5) live only in
- * the above-divider block; below the divider, the reader has
- * scrolled past the summary and can afford the graphic, so the
- * existing WheelBarometer / WindRoseDial render intact at their
- * designed 210 / 250 px sizes.
+ * Below the divider, the DETAIL tiles stack single-column, each
+ * rendered inside a ``--k: 1px, --kt: 1px`` wrapper so
+ * ``s(n)`` / ``st(n)`` resolve to natural px instead of the vh-clamp
+ * floor.
+ *
+ * **The divider is a scroll marker, not two régimes.**  v55 §régime
+ * makes this explicit: §4-§6 and §9 (natural px, no dials, no plate,
+ * no pair grids) apply to the WHOLE phone document.  v54 phase 3b
+ * originally read the divider as separating "reduced above" from
+ * "desktop composition below," which reinstated the wheel, the rose,
+ * the 2-col Console & link table and a duplicate hero.  Phase 5a
+ * (#519) corrects the reading:
+ *
+ * - ``HeroTemperatureTile`` is NOT in the below-divider stream — it
+ *   duplicates the above-divider reduced set (v55 item 2).
+ * - ``BarometerTile``, ``WindTile`` and ``ConsoleAndLinkTile`` are
+ *   rendered in ``compact`` mode below the divider: no dial, no
+ *   rose, no 2-column pair grid (v55 items 3-4).
+ * - ``overflowX: 'hidden'`` on this wrapper is a floor for any
+ *   residual fixed pixel width so it clips a tile instead of shifting
+ *   the whole document (v55 item 1).
  */
 const EverydayMobileShell: React.FC<{ d: DashboardData; themeLabel: string }> = ({
   d,
