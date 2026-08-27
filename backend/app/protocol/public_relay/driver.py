@@ -19,7 +19,6 @@ endpoints that call them.
 
 import logging
 import time
-from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, Optional
 
@@ -150,19 +149,13 @@ class PublicRelayDriver(StationDriver):
             product_sku=u.get("product_sku"),
         )
 
-    async def async_read_station_time(self) -> Optional[dict]:
-        """Return time components from when the last snapshot arrived.
-        A public relay has no wire to the upstream console clock; the
-        push-arrival timestamp is the closest proxy and is what the
-        Console tile ends up rendering."""
-        if self._last_push_at is None:
-            return None
-        ts = datetime.fromtimestamp(self._last_push_at)
-        return {
-            "year": ts.year,
-            "month": ts.month,
-            "day": ts.day,
-            "hour": ts.hour,
-            "minute": ts.minute,
-            "second": ts.second,
-        }
+    # ``async_read_station_time`` intentionally NOT implemented.  The
+    # daemon gates on ``hasattr(drv, "async_read_station_time")``, and
+    # a public-relay droplet has no way to construct the upstream's
+    # console clock: ``_last_push_at`` is a ``time.time()`` on the
+    # droplet's own machine (typically UTC), and returning components
+    # from it prints the droplet's timezone as if it were the
+    # operator's (240 min drift on a US-East → UTC droplet).  Better
+    # to render "—" than to publish a four-hour lie.  A proper fix
+    # requires the upstream to push its console-clock components in
+    # each snapshot; tracked separately.
