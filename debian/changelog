@@ -1,3 +1,35 @@
+kanfei (0.1.0~beta99) unstable; urgency=medium
+
+  * Frontend / mobile (#531): phone shell horizontal padding drops
+    from 16 to 12 px.  At a 360 px viewport that takes tile content
+    width from 328 to 336 — 8 more px where the tiles need it.
+    Vertical padding unchanged.  Applies to all three personas.
+
+  * Frontend / mobile (#532): right-edge overflow cleanups on the
+    Agriculture and Weather Nerd phone shells.  On Agriculture the
+    above-divider ``Best today`` / ``Next window`` values drop
+    ``whiteSpace: 'nowrap'`` so ``Tomorrow 1:00 PM`` no longer
+    clips mid-time; the ``WaterBalance`` rain-histogram axis
+    labels anchor in flex ``1 / 2 / 1`` columns with left / center
+    / right text-align so the middle ``0.05 in peak`` can't overrun
+    ``now`` at the tile edge; and the ``FieldSchedule`` four-cell
+    scan row (Air / Humidity / Dew point / Solar) becomes a 2×2
+    grid at phone with a top hairline between the rows —
+    ``Humidity`` no longer clips to ``Humidit`` and the Dew point
+    value stops crashing the right edge.  On Weather Nerd the
+    chart heading shortens at phone from ``Temperature, dew point
+    & pressure · 24 h`` (three-line ladder, ``24 h`` orphaned on
+    line 3) to ``Temp, dew & pressure · 24 h`` (one line, same
+    three series in the same order), and the segmented resolution
+    button group gains ``flex-wrap: wrap`` so ``Raw / 5 min /
+    Hourly / Daily`` can split into two rows inside the bordered
+    container rather than the last button overrunning the tile
+    edge with ``Dai[ly]`` clipped.  Desktop and tablet paths
+    unchanged; the desktop wrap is benign at desktop widths where
+    the group never overruns.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Thu, 27 Aug 2026 21:45:00 +0000
+
 kanfei (0.1.0~beta98) unstable; urgency=medium
 
   * Frontend / mobile (#529, v55 phase 5d + Everyday nits): Everyday
