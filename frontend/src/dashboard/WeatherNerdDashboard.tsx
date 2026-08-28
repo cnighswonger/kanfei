@@ -489,11 +489,15 @@ export const NerdChartTile: React.FC<{
           "heading | 4 buttons + CSV" row wraps to a 4-line ladder at
           328 px and the buttons collide with the CSV emphasis; stacked
           the heading owns its line and the controls own theirs. */}
-      <TileHeading style={{ display: 'flex', flexDirection: compact ? 'column' : 'row', alignItems: compact ? 'flex-start' : 'baseline', justifyContent: 'space-between', gap: compact ? s(8) : s(16) }}>
-        {/* At phone the four-word serif heading wrapped to three
-            lines with ``24 h`` alone on the last — shorten to the
-            three visible series and the window, in the same order. */}
-        <span>{compact ? 'Temp, dew & pressure · 24 h' : 'Temperature, dew point & pressure · 24 h'}</span>
+      <TileHeading style={{ display: 'flex', flexDirection: compact ? 'column' : 'row', alignItems: compact ? 'flex-start' : 'baseline', justifyContent: 'space-between', gap: compact ? s(8) : s(16), fontSize: compact ? '15px' : undefined }}>
+        {/* At phone the serif italic heading wrapped even after
+            shortening to ``Temp, dew & pressure · 24 h`` because
+            TileHeading's ``type('title')`` on the mobile shell resolves
+            to 17 px raw and the two-word tail ``· 24 h`` orphaned to a
+            new line.  Explicit 15 px override + ``whiteSpace: nowrap``
+            forces a single line — the heading is short enough that
+            clipping shouldn't happen at 336 content width. */}
+        <span style={compact ? { whiteSpace: 'nowrap' } : undefined}>{compact ? 'Temp, dew & pressure · 24 h' : 'Temperature, dew point & pressure · 24 h'}</span>
         <div style={{ display: 'flex', gap: s(10), alignItems: 'baseline', flexWrap: 'wrap' }}>
           <ChartButtonGroup>
             {(['Raw', '5 min', 'Hourly', 'Daily'] as const).map((label, i) => {

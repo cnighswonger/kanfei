@@ -743,37 +743,50 @@ const AgricultureMobileShell: React.FC<{ d: DashboardData; themeLabel: string }>
           padding: '14px 14px 12px',
           display: 'flex',
           flexDirection: 'column',
+          alignItems: sp?.verdict ? 'stretch' : 'center',
+          justifyContent: sp?.verdict ? 'flex-start' : 'center',
           gap: '10px',
           maxHeight: 320,
           overflow: 'hidden',
         }}
       >
-        <div style={{ ...mType('sectionLabel'), color: v.textSecondary }}>
+        {/* Product line — centered when it's the only visible content.
+            On the droplet the spray engine isn't running, so verdict,
+            note and checks come back empty; without gates the box
+            still reserves ~200 px for an invisible em-dash + placeholder
+            note + zero-row check block, and the Product label ended up
+            marooned in the top-left of a mostly-empty box. */}
+        <div style={{ ...mType('sectionLabel'), color: v.textSecondary, textAlign: sp?.verdict ? 'left' : 'center' }}>
           {sp?.product
             ? `Product · ${sp.product.name}${sp.product.category ? ` — ${sp.product.category}` : ''}`
             : 'Product · —'}
         </div>
-        <div
-          style={{
-            ...mType('verdictFigure'),
-            color: v[VERDICT_TONE(sp?.verdict) as 'success' | 'warning' | 'danger'],
-            lineHeight: 1,
-          }}
-        >
-          {sp?.verdict ? sp.verdict.toUpperCase().replace('NOGO', 'NO-GO') : '—'}
-        </div>
-        <div
-          style={{
-            ...mType('noteTitle'),
-            color: v.text,
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-        >
-          {sp?.verdictNote ?? 'No product selected'}
-        </div>
+        {sp?.verdict && (
+          <div
+            style={{
+              ...mType('verdictFigure'),
+              color: v[VERDICT_TONE(sp?.verdict) as 'success' | 'warning' | 'danger'],
+              lineHeight: 1,
+            }}
+          >
+            {sp.verdict.toUpperCase().replace('NOGO', 'NO-GO')}
+          </div>
+        )}
+        {sp?.verdictNote && (
+          <div
+            style={{
+              ...mType('noteTitle'),
+              color: v.text,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
+            {sp.verdictNote}
+          </div>
+        )}
+        {sp?.checks && sp.checks.length > 0 && (
         <div>
           {CHECK_ORDER.map(([name, label], i) => {
             const c = sp?.checks.find((x) => x.name === name);
@@ -808,6 +821,7 @@ const AgricultureMobileShell: React.FC<{ d: DashboardData; themeLabel: string }>
             );
           })}
         </div>
+        )}
       </section>
 
       {/* 24 h forecast strip + best/next window (v54 §2 keeps this
