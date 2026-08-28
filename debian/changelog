@@ -1,3 +1,23 @@
+kanfei (0.1.0~beta100) unstable; urgency=medium
+
+  * Frontend / mobile (#533): two phone-visual touch-ups from
+    beta99 shots.  Agriculture verdict tile gates ``verdictFigure``,
+    ``verdictNote`` and the four ``checks`` rows on their data
+    being present — on the droplet the spray engine isn't running
+    so all three come back empty, and the tile was reserving
+    ~200 px for an invisible ``—`` at 52 px display, a fallback
+    "No product selected" note and four zero-content rows.  With
+    those gated the section shrinks to just the ``Product ·
+    Fungicide`` line, and switches to centered alignment so the
+    residual box reads as a caption rather than a truncated
+    table.  When engine data IS present (private station), the
+    full verdict table renders unchanged.  Weather Nerd chart
+    heading gets ``fontSize: 15px`` + ``whiteSpace: 'nowrap'`` on
+    the span at compact, so ``Temp, dew & pressure · 24 h`` stops
+    orphaning its trailing ``· 24 h`` onto a second line.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Wed, 28 Aug 2026 00:22:00 +0000
+
 kanfei (0.1.0~beta99) unstable; urgency=medium
 
   * Frontend / mobile (#531): phone shell horizontal padding drops
