@@ -1,3 +1,21 @@
+kanfei (0.1.0~beta102) unstable; urgency=medium
+
+  * Frontend / mobile (#535): Weather Nerd chart's right-axis
+    pressure labels drop the whole-inch part at phone width for
+    inHg users — ``.20`` / ``.15`` / ``.10`` / ``.05`` / ``.00`` /
+    ``.95`` — so the ladder fits its right band without overrunning
+    the plot area, and the ``PR = 96`` widening from beta101
+    (#534) reverts to the module-level 52 so the plot gets its
+    ~44 px of width back.  A single emphasized gridline draws at
+    each whole-inch tick in the pressure trace's colour at 35 %
+    opacity, so the operator reads the ladder as centered on that
+    line rather than needing the label to name which whole inch
+    it's centered on.  hPa users keep the full label because the
+    whole-part transitions are meaningful context, not a fixed
+    30 / 29 boundary.  Desktop and tablet renders are unchanged.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Fri, 29 Aug 2026 19:35:00 +0000
+
 kanfei (0.1.0~beta101) unstable; urgency=medium
 
   * Frontend / mobile (#534): the Weather Nerd chart's right-axis
