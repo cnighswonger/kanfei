@@ -1,3 +1,21 @@
+kanfei (0.1.0~beta103) unstable; urgency=medium
+
+  * Frontend / mobile (#536): the Weather Nerd chart's tint moves
+    from the wrapper background to an SVG ``<rect>`` covering only
+    the plot rectangle.  Previously the whole tile-wrapper was
+    tinted with ``v.chart.surface``, so both axis-label bands were
+    painted the same tint as the plot area.  At desktop the wide
+    ~55 px bands hid the bleed; at phone the ~24 px bands crowded
+    the plot boundary and the right-axis pressure labels looked
+    like they were sitting on top of the plot while the left-axis
+    temperature labels sat on paper.  With the tint scoped to
+    ``[PL, CW-PR] × [PT, CH-PB]``, both bands now sit on the tile's
+    paper background — symmetric to the operator's eye.  Traces
+    still render over the tinted rect (rect draws first).  Desktop
+    render's plot area tint is unchanged.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Fri, 29 Aug 2026 20:15:00 +0000
+
 kanfei (0.1.0~beta102) unstable; urgency=medium
 
   * Frontend / mobile (#535): Weather Nerd chart's right-axis
