@@ -397,14 +397,7 @@ export const NerdChartTile: React.FC<{
   style?: React.CSSProperties;
   compact?: boolean;
 }> = ({ d, onResolutionChange, style, compact }) => {
-  // Right axis label band widens at phone.  The module-level ``PR = 52``
-  // yields a 7.9 % band of the wrapper — plenty at desktop (~55 px), too
-  // tight at phone (~24 px) for a 5-char pressure label like ``30.20``,
-  // which then overflows past its band into the plot area.  ``96`` at
-  // compact gives ~44 px of label room while pulling the plot right
-  // edge in by the same 44 px — the trace stays within the labels'
-  // shifted-inward boundary rather than crossing them.
-  const PR = compact ? 96 : 52;
+  const PR = 52;
   // Bin to ~600 points first — see decimate() in primitives.tsx.  Raw
   // 8k-sample series at 0.1 °F resolution over ~2000 px would render
   // as a staircase, not a trace.
@@ -466,13 +459,24 @@ export const NerdChartTile: React.FC<{
         }))
         .filter((g) => inPlot(g.y))
     : [];
+  // Phone strips the whole-inch part (``.20``, ``.15``, ``.10``) so
+  // the label fits its narrow right band without overrunning the
+  // plot; the whole-inch mark (``30.00``) reads from the emphasized
+  // gridline drawn at that tick.  hPa keeps its full label — its
+  // whole-part transitions are meaningful context, not a fixed
+  // 30/29 boundary.
+  const stripWhole = compact && pu !== 'hPa';
   const right = baro.length
     ? niceTicks(bLo, bHi, 5)
-        .map((val, i) => ({
-          key: `P${i}`,
-          y: (CH - PB) - ((val - bLo) / (bHi - bLo)) * (CH - PB - PT),
-          label: val.toFixed(baroTickDigits),
-        }))
+        .map((val, i) => {
+          const full = val.toFixed(baroTickDigits);
+          return {
+            key: `P${i}`,
+            y: (CH - PB) - ((val - bLo) / (bHi - bLo)) * (CH - PB - PT),
+            label: stripWhole ? full.replace(/^\d+\./, '.') : full,
+            whole: val === Math.round(val),
+          };
+        })
         .filter((g) => inPlot(g.y))
     : [];
 
@@ -552,6 +556,13 @@ export const NerdChartTile: React.FC<{
               lumpy.  With it, widths are in screen px and traces read evenly. */}
           {left.map((g, i) => (
             <line key={`g${i}`} x1={PL + GRID_INSET} y1={g.y} x2={CW - PR - GRID_INSET} y2={g.y} stroke={v.chart.gridMinor} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          ))}
+          {/* Emphasized gridline at whole-inch pressure ticks when the
+              label ladder has dropped the whole part — the operator
+              reads ``.20 / .15 / .10 / .05 / .00 / .95`` as the ladder
+              and this line names which whole inch they're centred on. */}
+          {stripWhole && bp && right.filter((g) => g.whole).map((g) => (
+            <line key={`w${g.key}`} x1={PL + GRID_INSET} y1={g.y} x2={CW - PR - GRID_INSET} y2={g.y} stroke={v.chart.trace} strokeWidth={1.2} opacity={0.35} vectorEffect="non-scaling-stroke" />
           ))}
           {bp && (
             <path d={bp.line} fill="none" stroke={v.chart.trace} strokeWidth={1.4} strokeDasharray="5 3" opacity={0.9} vectorEffect="non-scaling-stroke" />
