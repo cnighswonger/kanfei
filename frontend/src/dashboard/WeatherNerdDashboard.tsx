@@ -544,12 +544,21 @@ export const NerdChartTile: React.FC<{
         band fell off the bottom. Bounding the height fixes the size; splitting the
         text out fixes the distortion permanently.
       */}
-      <div style={{ position: 'relative', height: s(250), minHeight: s(250), background: v.chart.surface }}>
+      <div style={{ position: 'relative', height: s(250), minHeight: s(250) }}>
         <svg
           viewBox={`0 0 ${CW} ${CH}`}
           preserveAspectRatio="none"
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
         >
+          {/* Plot-area tint rendered as a rect INSIDE the SVG rather than
+              a wrapper background — the axis-label bands were sitting on
+              the same wrapper background as the traces, so at phone
+              width the right-axis labels appeared to overlap the plot
+              tint even though they were positioned outside it.  Painting
+              the tint only within the ``[PL, CW-PR] × [PT, CH-PB]``
+              plot rectangle puts both label bands on the tile's paper
+              background where the reader expects them. */}
+          <rect x={PL} y={PT} width={CW - PL - PR} height={CH - PT - PB} fill={v.chart.surface} />
           {/* ``vectorEffect="non-scaling-stroke"`` on every stroked element —
               preserveAspectRatio="none" scales x ~3× more than y, so without it
               strokes draw 3× thicker horizontally than vertically and joins look
