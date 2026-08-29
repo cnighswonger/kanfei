@@ -385,7 +385,7 @@ export const ReceptionCard: React.FC<{ d: DashboardData }> = ({ d }) => {
 
 /* ─────────────────────────────────────────────── the multi-series chart */
 
-const CW = 660, CH = 250, PL = 52, PR = 52, PT = 14, PB = 26;
+const CW = 660, CH = 250, PL = 52, PT = 14, PB = 26;
 /** Gridlines stop short of the gutter: at 3× horizontal scale a line
  *  ending flush against a label reads as an extra character ("90"
  *  became "9I" in review). */
@@ -397,6 +397,14 @@ export const NerdChartTile: React.FC<{
   style?: React.CSSProperties;
   compact?: boolean;
 }> = ({ d, onResolutionChange, style, compact }) => {
+  // Right axis label band widens at phone.  The module-level ``PR = 52``
+  // yields a 7.9 % band of the wrapper — plenty at desktop (~55 px), too
+  // tight at phone (~24 px) for a 5-char pressure label like ``30.20``,
+  // which then overflows past its band into the plot area.  ``96`` at
+  // compact gives ~44 px of label room while pulling the plot right
+  // edge in by the same 44 px — the trace stays within the labels'
+  // shifted-inward boundary rather than crossing them.
+  const PR = compact ? 96 : 52;
   // Bin to ~600 points first — see decimate() in primitives.tsx.  Raw
   // 8k-sample series at 0.1 °F resolution over ~2000 px would render
   // as a staircase, not a trace.
