@@ -1,3 +1,23 @@
+kanfei (0.1.0~beta101) unstable; urgency=medium
+
+  * Frontend / mobile (#534): the Weather Nerd chart's right-axis
+    pressure labels stop overrunning the plot area at phone width.
+    ``PR`` (the SVG right-axis padding, module-level 52 viewBox
+    units) was sized against the ~700 px desktop wrapper and
+    collapsed to a ~24 px label band at the ~300 px phone
+    wrapper — too tight for ``30.20`` at ``sectionLabel`` size, so
+    the text started 8 px inside the plot boundary and overflowed
+    right, and the pressure trace itself was drawn to the same
+    ``CW - PR`` boundary so it threaded under the labels.  ``PR``
+    is now shadowed inside ``NerdChartTile`` with a compact-aware
+    local (96 viewBox units at phone, 52 elsewhere), pulling the
+    label band and the plot right edge in together by ~44 px so
+    the labels get room and the trace stays inside them.  Desktop
+    and tablet renders are byte-identical; module-level ``PR`` is
+    removed since it's no longer read.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Fri, 29 Aug 2026 19:20:00 +0000
+
 kanfei (0.1.0~beta100) unstable; urgency=medium
 
   * Frontend / mobile (#533): two phone-visual touch-ups from
