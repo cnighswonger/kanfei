@@ -1,3 +1,15 @@
+kanfei (0.1.0~beta105) unstable; urgency=medium
+
+  * Frontend / mobile (#538): the Weather Nerd chart's left-axis
+    padding-right dials back from 12 to 10 px at compact.  The
+    beta104 bump to 12 overshot the visual balance — with the right
+    band's ``.dd`` labels leading with a period whose ~2 px of
+    intrinsic left whitespace already reads as extra clearance,
+    10 px on the left matches the 8 px + period on the right about
+    right.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Sat, 30 Aug 2026 20:20:00 +0000
+
 kanfei (0.1.0~beta104) unstable; urgency=medium
 
   * Frontend / mobile (#537): the Weather Nerd chart's left-axis
