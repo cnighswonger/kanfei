@@ -603,7 +603,13 @@ export const NerdChartTile: React.FC<{
               top: `${(g.y / CH) * 100}%`,
               transform: 'translateY(-50%)',
               textAlign: 'right',
-              paddingRight: s(8),
+              // Extra gap at phone: the right band's ".dd" labels lead
+              // with a period whose visual left edge sits ~2 px inside
+              // its glyph box, so 8 px of padding-left reads as ~10 px
+              // of clearance from the plot boundary.  The left band's
+              // "84" leads with a full-body glyph, so 8 px reads as 8.
+              // Bumping to 12 at compact evens the visual gap.
+              paddingRight: compact ? s(12) : s(8),
               boxSizing: 'border-box',
               whiteSpace: 'nowrap',
             }}
