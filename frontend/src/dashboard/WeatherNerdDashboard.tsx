@@ -604,12 +604,13 @@ export const NerdChartTile: React.FC<{
               transform: 'translateY(-50%)',
               textAlign: 'right',
               // Extra gap at phone: the right band's ".dd" labels lead
-              // with a period whose visual left edge sits ~2 px inside
-              // its glyph box, so 8 px of padding-left reads as ~10 px
-              // of clearance from the plot boundary.  The left band's
-              // "84" leads with a full-body glyph, so 8 px reads as 8.
-              // Bumping to 12 at compact evens the visual gap.
-              paddingRight: compact ? s(12) : s(8),
+              // with a period whose visual left edge sits ~1 px inside
+              // its glyph box.  ``s(10)`` at compact reads as ~10 px
+              // of visual clearance, matching the right band's 8 px
+              // padding + 1 px period lead-in + trailing-digit space
+              // on the left.  ``s(12)`` overshot and put the left
+              // labels visibly further from the plot than the right.
+              paddingRight: compact ? s(10) : s(8),
               boxSizing: 'border-box',
               whiteSpace: 'nowrap',
             }}
