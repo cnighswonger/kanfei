@@ -1,3 +1,16 @@
+kanfei (0.1.0~beta104) unstable; urgency=medium
+
+  * Frontend / mobile (#537): the Weather Nerd chart's left-axis
+    temperature labels get 12 px of padding-right at phone width
+    (up from 8) so the visual gap between the numbers and the
+    plot boundary matches the right-axis pressure labels.  Both
+    sides were 8 px in code, but the right band leads with a
+    period whose glyph carries ~2 px of internal left whitespace,
+    while the left band leads with a full-body digit — the padding
+    was symmetric, the ink wasn't.  Non-compact renders unchanged.
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Sat, 30 Aug 2026 13:30:00 +0000
+
 kanfei (0.1.0~beta103) unstable; urgency=medium
 
   * Frontend / mobile (#536): the Weather Nerd chart's tint moves
