@@ -1,3 +1,17 @@
+kanfei (0.1.0~beta106) unstable; urgency=medium
+
+  * Frontend / rain histogram (#548): the RainfallByHourTile (Everyday)
+    and WaterBalanceTile (Agriculture) shared one ``max`` between the
+    SVG's divide-by-zero denominator and every peak label shown to the
+    user.  The 0.05 floor was correct for the SVG and wrong for the
+    label — on any dry day the header hard-coded to "peak 0.05 in/hr"
+    and the "no rain recorded" fallback (guarded on ``max > 0.001``)
+    was unreachable.  Split into rawMax (labels + empty-state guard)
+    and scaleMax (SVG denominator only) so a real 2+ in peak reads as
+    2, and a dry hour block reads as "no rain recorded".
+
+ -- Kanfei Code Agent <dev@veritassuperaitsolutions.com>  Sat, 13 Sep 2026 20:25:00 +0000
+
 kanfei (0.1.0~beta105) unstable; urgency=medium
 
   * Frontend / mobile (#538): the Weather Nerd chart's left-axis
