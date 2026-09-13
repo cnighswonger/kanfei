@@ -529,12 +529,18 @@ export const AlmanacTile: React.FC<{ d: DashboardData; style?: React.CSSProperti
  */
 export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boolean; style?: React.CSSProperties; compact?: boolean }> = ({ d, relativeAxis = true, style, compact }) => {
   const bars = d.rain.hourlyIn ?? [];
-  const max = Math.max(0.05, ...bars.map((b) => b?.in ?? 0));
+  // rawMax is the actual peak-hour total, used for every label.
+  // scaleMax carries a floor so the SVG never divides by zero — but
+  // only the SVG sees it; earlier code shared one ``max`` between
+  // both jobs, which pinned the peak label to a hard-coded 0.05 in
+  // on any dry day.
+  const rawMax = Math.max(0, ...bars.map((b) => b?.in ?? 0));
+  const scaleMax = Math.max(0.05, rawMax);
   // Peak label reads from the bar's ISO ``at`` so it prints the
   // browser's local clock hour — the index-as-clock formula this
   // replaced was rotated four hours against its own axis in any
   // non-UTC zone (Design v51).
-  const peakIdx = bars.findIndex((b) => (b?.in ?? 0) === max);
+  const peakIdx = rawMax > 0 ? bars.findIndex((b) => (b?.in ?? 0) === rawMax) : -1;
   const peakLabel = peakIdx < 0 ? null : fmtHour(bars[peakIdx]?.at);
   const W = 700, H = 74;
 
@@ -543,7 +549,7 @@ export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boo
       <TileHeading style={{ display: 'flex', flexDirection: compact ? 'column' : 'row', alignItems: compact ? 'flex-start' : 'baseline', justifyContent: 'space-between', gap: compact ? s(4) : undefined }}>
         <span>Rainfall by hour</span>
         <span style={{ ...type('mono'), ...tnum, color: v.textSecondary }}>
-          {fmt(d.rain.todayIn, 2)} in today · peak {fmt(max, 2)} in/hr
+          {fmt(d.rain.todayIn, 2)} in today · peak {fmt(rawMax, 2)} in/hr
         </span>
       </TileHeading>
       {/* Always render the 24 slots. An empty axis reads as "no rain today";
@@ -560,7 +566,7 @@ export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boo
       >
         {Array.from({ length: 24 }, (_, i) => {
           const val = bars[i]?.in ?? 0;
-          const h = val > 0 ? Math.max(2, (val / max) * (H - 8)) : 0;
+          const h = val > 0 ? Math.max(2, (val / scaleMax) * (H - 8)) : 0;
           const w = W / 24;
           return <rect key={i} x={i * w + 2} y={H - h} width={w - 4} height={h} fill={v.chart.rain} />;
         })}
@@ -571,7 +577,7 @@ export const RainfallByHourTile: React.FC<{ d: DashboardData; relativeAxis?: boo
           <>
             <span style={{ flex: 1, textAlign: 'left' }}>24h ago</span>
             <span style={{ flex: 2, textAlign: 'center' }}>
-              {max > 0.001 ? `${fmt(max, 2)} in peak${peakLabel ? `, ${peakLabel}` : ''}` : 'no rain recorded'}
+              {rawMax > 0.001 ? `${fmt(rawMax, 2)} in peak${peakLabel ? `, ${peakLabel}` : ''}` : 'no rain recorded'}
             </span>
             <span style={{ flex: 1, textAlign: 'right' }}>now</span>
           </>

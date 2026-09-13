@@ -530,7 +530,11 @@ export const WaterBalanceTile: React.FC<{ d: DashboardData; compact?: boolean }>
   const w = d.spray?.water;
   const bal = w?.balanceIn ?? null;
   const bars = d.rain.hourlyIn ?? [];
-  const max = Math.max(0.05, ...bars.map((b) => b?.in ?? 0));
+  // Keep the SVG's divide-by-zero floor separate from the value the
+  // peak label reads — a shared ``max`` pinned dry days to a hard
+  // 0.05 in.
+  const rawMax = Math.max(0, ...bars.map((b) => b?.in ?? 0));
+  const scaleMax = Math.max(0.05, rawMax);
 
   return (
     <Tile id="water-balance" style={{ gap: s(8) }}>
@@ -559,7 +563,7 @@ export const WaterBalanceTile: React.FC<{ d: DashboardData; compact?: boolean }>
       <svg viewBox="0 0 620 76" preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: s(60), marginTop: 'auto' }}>
         {Array.from({ length: 24 }, (_, i) => {
           const val = bars[i]?.in ?? 0;
-          const h = val > 0 ? Math.max(2, (val / max) * 56) : 0;
+          const h = val > 0 ? Math.max(2, (val / scaleMax) * 56) : 0;
           return <rect key={i} x={i * 25.8 + 2} y={58 - h} width={18} height={h} rx={1} fill={v.chart.rain} />;
         })}
         <line x1={0} y1={58} x2={620} y2={58} stroke={v.ruleHair} strokeWidth={1} />
@@ -570,7 +574,7 @@ export const WaterBalanceTile: React.FC<{ d: DashboardData; compact?: boolean }>
       <div style={{ display: 'flex', ...type('sectionLabel'), color: v.chart.axis }}>
         <span style={{ flex: 1, textAlign: 'left' }}>24h ago</span>
         <span style={{ flex: 2, textAlign: 'center' }}>
-          {max > 0.001 ? `${fmt(max, 2)} in peak` : 'no rain recorded'}
+          {rawMax > 0.001 ? `${fmt(rawMax, 2)} in peak` : 'no rain recorded'}
         </span>
         <span style={{ flex: 1, textAlign: 'right' }}>now</span>
       </div>
