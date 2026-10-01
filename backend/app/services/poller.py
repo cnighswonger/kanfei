@@ -28,6 +28,7 @@ from ..services.calculations import (
     equivalent_potential_temperature,
 )
 from ..services.pressure_trend import analyze_pressure_trend
+from ..utils.units import hpa_tenths_to_inhg_thousandths
 from ..services.alerts import AlertChecker
 from ..models.database import SessionLocal
 from ..models.sensor_meta import SENSOR_BOUNDS
@@ -435,13 +436,8 @@ class Poller:
             if len(results) < 2:
                 return None
 
-            # ``analyze_pressure_trend`` is spec'd in thousandths of inHg
-            # (RISING/FALLING_THRESHOLD are 0.020 inHg over 3h).  The DB
-            # column is tenths of hPa (schema canonical), so convert at
-            # read time — passing tenths-hPa deltas straight into a
-            # thousandths-inHg threshold under-reports a real trend by
-            # a factor of ~3.4.  See pressure_trend.py docstring.
-            from ..utils.units import hpa_tenths_to_inhg_thousandths
+            # DB stores tenths-hPa; analyze_pressure_trend's thresholds
+            # are thousandths-inHg.  Convert each sample at read time.
             readings = [
                 (r.timestamp.timestamp(), hpa_tenths_to_inhg_thousandths(r.barometer))
                 for r in results

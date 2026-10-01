@@ -44,13 +44,9 @@ async def get_forecast(db: Session = Depends(get_db)):
             .first()
         )
 
-        # ``sensor_readings.barometer`` is stored in tenths of hPa
-        # (the schema canonical — see utils.units.si_pressure_to_display_inhg
-        # and archive_sync.py).  ``zambretti_forecast`` expects
-        # thousandths of inHg, so convert BOTH endpoints of the window
-        # before computing the trend diff.  Taking the diff in tenths-
-        # hPa would also silently rescale the RISING/FALLING_THRESHOLD
-        # constants in forecast_local by ~3.4×, under-reporting trends.
+        # DB stores tenths-hPa; zambretti_forecast expects thousandths-
+        # inHg.  Convert BOTH endpoints before diffing — a tenths-hPa
+        # diff would also silently rescale the trend thresholds.
         latest_thousandths = hpa_tenths_to_inhg_thousandths(latest.barometer)
         if oldest is not None and oldest.barometer is not None:
             oldest_thousandths = hpa_tenths_to_inhg_thousandths(oldest.barometer)
