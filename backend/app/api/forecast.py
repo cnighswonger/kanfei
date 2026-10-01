@@ -10,6 +10,7 @@ from ..models.database import get_db
 from ..models.sensor_reading import SensorReadingModel
 from ..services.forecast_local import zambretti_forecast
 from ..services.forecast_nws import fetch_nws_forecast
+from ..utils.units import hpa_tenths_to_inhg_thousandths
 from .config import get_effective_config
 
 logger = logging.getLogger(__name__)
@@ -43,14 +44,22 @@ async def get_forecast(db: Session = Depends(get_db)):
             .first()
         )
 
-        pressure_change = (
-            latest.barometer - oldest.barometer
-            if oldest is not None and oldest.barometer is not None
-            else 0
-        )
+        # ``sensor_readings.barometer`` is stored in tenths of hPa
+        # (the schema canonical — see utils.units.si_pressure_to_display_inhg
+        # and archive_sync.py).  ``zambretti_forecast`` expects
+        # thousandths of inHg, so convert BOTH endpoints of the window
+        # before computing the trend diff.  Taking the diff in tenths-
+        # hPa would also silently rescale the RISING/FALLING_THRESHOLD
+        # constants in forecast_local by ~3.4×, under-reporting trends.
+        latest_thousandths = hpa_tenths_to_inhg_thousandths(latest.barometer)
+        if oldest is not None and oldest.barometer is not None:
+            oldest_thousandths = hpa_tenths_to_inhg_thousandths(oldest.barometer)
+            pressure_change = latest_thousandths - oldest_thousandths
+        else:
+            pressure_change = 0
 
         result = zambretti_forecast(
-            pressure_thousandths=latest.barometer,
+            pressure_thousandths=latest_thousandths,
             pressure_change_3h=pressure_change,
             wind_dir_deg=latest.wind_direction,
             month=now.month,

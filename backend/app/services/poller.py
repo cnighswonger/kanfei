@@ -435,7 +435,17 @@ class Poller:
             if len(results) < 2:
                 return None
 
-            readings = [(r.timestamp.timestamp(), r.barometer) for r in results]
+            # ``analyze_pressure_trend`` is spec'd in thousandths of inHg
+            # (RISING/FALLING_THRESHOLD are 0.020 inHg over 3h).  The DB
+            # column is tenths of hPa (schema canonical), so convert at
+            # read time — passing tenths-hPa deltas straight into a
+            # thousandths-inHg threshold under-reports a real trend by
+            # a factor of ~3.4.  See pressure_trend.py docstring.
+            from ..utils.units import hpa_tenths_to_inhg_thousandths
+            readings = [
+                (r.timestamp.timestamp(), hpa_tenths_to_inhg_thousandths(r.barometer))
+                for r in results
+            ]
             result = analyze_pressure_trend(readings)
             return result.trend if result else None
         finally:
