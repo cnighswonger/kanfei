@@ -680,3 +680,129 @@ class TestCp210xUsbResetEscalation:
         assert ioctl_calls == [(999, logger_main._USBDEVFS_RESET)]
         assert daemon._usb_reset_count == 1
         assert daemon._last_usb_reset_at is not None
+
+    async def test_resolver_soft_returns_on_symlink_loop(
+        self, daemon, monkeypatch,
+    ):
+        """Python 3.10-3.12 raises ``RuntimeError`` (not ``OSError``)
+        when ``Path.resolve()`` hits an infinite symlink loop.  If the
+        helper doesn't catch it, the raise escapes ``_forced_reconnect``
+        and the watchdog's whole recovery cadence stops — exactly the
+        regression this ladder exists to prevent (Codex PR 557 R1
+        blocker)."""
+
+        class _LoopingPath:
+            """Minimal Path stand-in whose ``resolve`` raises
+            ``RuntimeError``, matching the stdlib's behaviour on 3.10-
+            3.12 when it detects a cycle."""
+
+            def __init__(self, s): self._s = s
+
+            def __truediv__(self, other):
+                return _LoopingPath(f"{self._s}/{other}")
+
+            def resolve(self):
+                raise RuntimeError(f"Symlink loop from '{self._s}'")
+
+        monkeypatch.setattr("logger_main.Path", _LoopingPath, raising=False)
+
+        # If RuntimeError escaped the helper the await here would raise
+        # and the test would fail loudly — the point of the fix.
+        await daemon._attempt_usbdevfs_reset("/dev/ttyFAKE")
+
+        assert daemon._usb_reset_count == 0
+        assert daemon._last_usb_reset_at is None
+
+    async def test_resolver_soft_returns_on_unparseable_busnum(
+        self, daemon, monkeypatch, tmp_path,
+    ):
+        """A busnum file whose contents are not an integer (corrupted
+        sysfs, kernel bug, race during enumeration) must log and
+        return instead of raising.  ``int()`` on a non-numeric string
+        raises ``ValueError``, which the helper already handles — this
+        pins the invariant so a future refactor doesn't widen the
+        except clause away."""
+        import fcntl as _fcntl
+
+        sys_root = tmp_path / "sys"
+        usb_dev = sys_root / "devices" / "usbWEIRD"
+        tty_leaf = usb_dev / "ttyWEIRD" / "tty" / "ttyWEIRD"
+        tty_leaf.mkdir(parents=True)
+        (usb_dev / "busnum").write_text("not-a-number\n")
+        (usb_dev / "devnum").write_text("17\n")
+        class_tty = sys_root / "class" / "tty"
+        class_tty.mkdir(parents=True)
+        (class_tty / "ttyWEIRD").symlink_to(tty_leaf)
+
+        import pathlib
+        real_path_cls = pathlib.Path
+
+        def _fake_path(arg):
+            s = str(arg)
+            if s.startswith("/sys/class/tty"):
+                return real_path_cls(str(sys_root) + s[4:])
+            return real_path_cls(arg)
+
+        monkeypatch.setattr("logger_main.Path", _fake_path, raising=False)
+
+        # No ioctl must fire if the resolver bailed.
+        ioctl_calls: list = []
+        monkeypatch.setattr(
+            _fcntl, "ioctl",
+            lambda *a, **k: ioctl_calls.append(a),
+        )
+        monkeypatch.setattr(
+            logger_main.os, "open",
+            lambda *a, **k: pytest.fail("os.open should not be called"),
+        )
+
+        await daemon._attempt_usbdevfs_reset("/dev/ttyWEIRD")
+
+        assert ioctl_calls == []
+        assert daemon._usb_reset_count == 0
+
+    async def test_resolver_soft_returns_on_non_usb_tty(
+        self, daemon, monkeypatch, tmp_path,
+    ):
+        """A built-in UART (ttyS0, ttyAMA0, etc.) has no USB ancestor
+        in sysfs — the walk from ``/sys/class/tty/<name>`` reaches
+        the filesystem root without finding busnum+devnum.  Operators
+        with a mixed-adapter host must not see the helper crash just
+        because its string check matched a non-USB port name."""
+        import fcntl as _fcntl
+
+        # /sys/devices/platform/serial8250/ttyS0 — no busnum anywhere.
+        sys_root = tmp_path / "sys"
+        tty_leaf = (
+            sys_root / "devices" / "platform" / "serial8250" / "ttyS0"
+        )
+        tty_leaf.mkdir(parents=True)
+        class_tty = sys_root / "class" / "tty"
+        class_tty.mkdir(parents=True)
+        (class_tty / "ttyS0").symlink_to(tty_leaf)
+
+        import pathlib
+        real_path_cls = pathlib.Path
+
+        def _fake_path(arg):
+            s = str(arg)
+            if s.startswith("/sys/class/tty"):
+                return real_path_cls(str(sys_root) + s[4:])
+            return real_path_cls(arg)
+
+        monkeypatch.setattr("logger_main.Path", _fake_path, raising=False)
+
+        ioctl_calls: list = []
+        monkeypatch.setattr(
+            _fcntl, "ioctl",
+            lambda *a, **k: ioctl_calls.append(a),
+        )
+        monkeypatch.setattr(
+            logger_main.os, "open",
+            lambda *a, **k: pytest.fail("os.open should not be called"),
+        )
+
+        await daemon._attempt_usbdevfs_reset("/dev/ttyS0")
+
+        assert ioctl_calls == []
+        assert daemon._usb_reset_count == 0

@@ -12,7 +12,9 @@
 # shipping CP210x variants: ea60 (CP2101/2/3/4), ea61 (CP2102N, Vue),
 # ea63 (CP2102N QFN), ea70 (CP2105), ea71 (CP2108).
 #
-# dh_installudev installs this to /lib/udev/rules.d/60-kanfei.rules
-# at package install time.  Reload+trigger is handled by the udev
-# maintainer scripts dh_installudev inserts for us.
+# dh_installudev installs this to /usr/lib/udev/rules.d/60-kanfei.rules
+# at package install time (the /lib → /usr/lib move landed in debhelper
+# 13.11, which is well below our current debhelper-compat 13).  Reload
+# + trigger is handled by the udev maintainer scripts dh_installudev
+# inserts for us.
 SUBSYSTEM=="usb", ATTR{idVendor}=="10c4", ATTR{idProduct}=="ea60|ea61|ea63|ea70|ea71", MODE="0660", GROUP="dialout"

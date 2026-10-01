@@ -692,8 +692,14 @@ class LoggerDaemon:
         # above the tty depending on the hub topology.
         sys_tty = Path("/sys/class/tty") / tty_name
         try:
+            # ``Path.resolve()`` raises ``RuntimeError`` (not ``OSError``)
+            # on an infinite symlink loop on Python 3.10-3.12 — this
+            # was aligned to ``OSError`` only in 3.13.  Catch both so a
+            # broken sysfs tree returns soft, otherwise the raise
+            # escapes the whole ``_forced_reconnect`` and the watchdog
+            # loses its retry cadence (Codex PR 557 R1 blocker).
             real = sys_tty.resolve()
-        except OSError as exc:
+        except (OSError, RuntimeError) as exc:
             logger.warning(
                 "USB reset: cannot resolve %s under /sys/class/tty: %s",
                 port, exc,
