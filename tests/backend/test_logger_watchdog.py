@@ -469,3 +469,340 @@ class TestConnectClearsDriverOnPostHandshakeFailure:
         )
         assert daemon.poller is None
         assert daemon.poller_task is None
+
+
+class TestCp210xUsbResetEscalation:
+    """CP210x wedge recovery escalation (#501).
+
+    After N consecutive ``_forced_reconnect`` failures, the watchdog
+    assumes the CP2102N inside the Vue console is in the AN571 errata
+    state — enumerated but refusing every ``cp210x_open`` with -71
+    EPROTO or -110 ETIMEDOUT — and issues USBDEVFS_RESET on the raw
+    USB node before the next open attempt.  A success resets the
+    streak; past the upper cap the escalation stops to avoid flooding
+    the log on a truly dead cable.
+
+    These tests pin the escalation ladder shape without touching real
+    USB — ``_attempt_usbdevfs_reset`` is monkey-patched to a counter.
+    The sysfs-walking inside it has its own dedicated test below.
+    """
+
+    class _RaisingDriver:
+        connected = False
+
+        async def connect(self):
+            raise OSError(5, "[Errno 5] Input/output error: '/dev/ttyUSB0'")
+
+        async def disconnect(self):
+            return None
+
+    def _wire_reconnect_env(self, daemon, monkeypatch):
+        monkeypatch.setattr(
+            daemon, "_get_serial_config", lambda: ("/dev/ttyUSB0", 19200),
+        )
+        monkeypatch.setattr(
+            daemon, "_get_effective_config",
+            lambda: {"station_driver_type": "vantage"},
+        )
+        monkeypatch.setattr(
+            logger_main, "_create_driver",
+            lambda driver_type, config: self._RaisingDriver(),
+        )
+
+    async def test_streak_starts_at_zero_and_no_reset_on_first_two_failures(
+        self, daemon, monkeypatch,
+    ):
+        """First and second failures must NOT trigger a USB reset.  The
+        chip wedge is a repeat-failure signature; a single open failure
+        after a transient hiccup must not escalate to the stronger
+        remedy."""
+        self._wire_reconnect_env(daemon, monkeypatch)
+        reset_mock = AsyncMock()
+        monkeypatch.setattr(daemon, "_attempt_usbdevfs_reset", reset_mock)
+
+        await daemon._forced_reconnect()
+        assert daemon._reconnect_fail_streak == 1
+        reset_mock.assert_not_called()
+
+        await daemon._forced_reconnect()
+        assert daemon._reconnect_fail_streak == 2
+        reset_mock.assert_not_called()
+
+    async def test_reset_fires_in_escalation_window(
+        self, daemon, monkeypatch,
+    ):
+        """Escalation window is prior-streak ∈ [3, 6): the reset fires
+        BEFORE the connect attempt, so the first fire is on the 4th
+        attempt (after 3 prior failures).  Verifies that first-fire
+        boundary, the still-escalating step, and the final step before
+        the upper cap."""
+        self._wire_reconnect_env(daemon, monkeypatch)
+        reset_mock = AsyncMock()
+        monkeypatch.setattr(daemon, "_attempt_usbdevfs_reset", reset_mock)
+
+        # Burn three failures — reset must NOT fire on any of these
+        # (the check runs before connect; streak starts at 0 on each).
+        for _ in range(3):
+            await daemon._forced_reconnect()
+        assert reset_mock.call_count == 0
+        assert daemon._reconnect_fail_streak == 3
+
+        # Attempts 4-6 all run with streak ∈ {3, 4, 5}, each in-window.
+        for _ in range(3):
+            await daemon._forced_reconnect()
+        assert reset_mock.call_count == 3
+        assert daemon._reconnect_fail_streak == 6
+
+    async def test_no_reset_once_give_up_cap_reached(
+        self, daemon, monkeypatch,
+    ):
+        """Past the upper cap we stop ioctl-ing.  A truly dead cable
+        can't be re-animated by a reset storm, and the log noise just
+        hides the real problem."""
+        self._wire_reconnect_env(daemon, monkeypatch)
+        reset_mock = AsyncMock()
+        monkeypatch.setattr(daemon, "_attempt_usbdevfs_reset", reset_mock)
+
+        # Simulate the daemon already past the give-up threshold.
+        daemon._reconnect_fail_streak = logger_main.USB_RESET_GIVE_UP_AFTER
+        await daemon._forced_reconnect()
+        reset_mock.assert_not_called()
+        # Streak keeps climbing so /api/health still has a monotonic
+        # signal operators can watch for "stuck".
+        assert daemon._reconnect_fail_streak == (
+            logger_main.USB_RESET_GIVE_UP_AFTER + 1
+        )
+
+    async def test_streak_resets_on_successful_reconnect(
+        self, daemon, monkeypatch,
+    ):
+        """A successful ``_connect`` wipes the streak back to zero so
+        the NEXT wedge gets the full escalation ladder from scratch.
+        Pins the invariant that recovery is not a one-shot event."""
+        # Pretend we are mid-escalation after a prior sequence.
+        daemon._reconnect_fail_streak = 4
+
+        class _OKDriver:
+            connected = False
+            station_name = "Fake"
+
+            class _Hw:
+                station_type = None
+            hw_config = _Hw()
+
+            async def connect(self):
+                self.connected = True
+
+            async def disconnect(self):
+                self.connected = False
+
+        monkeypatch.setattr(
+            daemon, "_get_serial_config", lambda: ("/dev/ttyUSB0", 19200),
+        )
+        monkeypatch.setattr(
+            daemon, "_get_effective_config",
+            lambda: {"station_driver_type": "vantage", "poll_interval": 10},
+        )
+        monkeypatch.setattr(
+            logger_main, "_create_driver",
+            lambda driver_type, config: _OKDriver(),
+        )
+        reset_mock = AsyncMock()
+        monkeypatch.setattr(daemon, "_attempt_usbdevfs_reset", reset_mock)
+        # Streak is 4 — within the escalation window, so a reset would
+        # fire before the (succeeding) connect.  Fine; what we're
+        # pinning is what happens AFTER success.
+        await daemon._forced_reconnect()
+        assert daemon._reconnect_fail_streak == 0
+        # And the poller got created — i.e. the success path really
+        # did complete, not just skip past the counter line.
+        assert daemon.poller is not None
+
+    async def test_usbdevfs_reset_resolves_sys_path_and_issues_ioctl(
+        self, daemon, monkeypatch, tmp_path,
+    ):
+        """``_attempt_usbdevfs_reset`` walks /sys/class/tty/<name>
+        upward until it finds busnum+devnum, then opens
+        /dev/bus/usb/BBB/DDD and ioctls USBDEVFS_RESET.  Faking the
+        sysfs tree lets this run on any CI host — no real USB needed.
+        """
+        import fcntl as _fcntl
+
+        # Fake sysfs: /sys/class/tty/ttyFAKE → .../usbFAKE/ttyFAKE/tty/ttyFAKE
+        # with busnum+devnum two levels up.
+        sys_root = tmp_path / "sys"
+        usb_dev = sys_root / "devices" / "usbFAKE"
+        tty_leaf = usb_dev / "ttyFAKE" / "tty" / "ttyFAKE"
+        tty_leaf.mkdir(parents=True)
+        (usb_dev / "busnum").write_text("3\n")
+        (usb_dev / "devnum").write_text("17\n")
+        class_tty = sys_root / "class" / "tty"
+        class_tty.mkdir(parents=True)
+        (class_tty / "ttyFAKE").symlink_to(tty_leaf)
+
+        # Point the helper's resolver at the fake tree.  monkey-patch
+        # the Path constructor only inside the helper by patching
+        # /sys/class/tty via a replacement Path.
+        import pathlib
+        real_path_cls = pathlib.Path
+        fake_root = sys_root
+
+        def _fake_path(arg):
+            s = str(arg)
+            if s.startswith("/sys/class/tty"):
+                return real_path_cls(str(fake_root) + s[4:])  # /sys → tmp/sys
+            return real_path_cls(arg)
+
+        monkeypatch.setattr("logger_main.Path", _fake_path, raising=False)
+
+        # Intercept os.open and fcntl.ioctl so no real device is touched.
+        opened_nodes: list[str] = []
+        ioctl_calls: list[tuple[int, int]] = []
+
+        def _fake_open(path, flags, *args, **kwargs):
+            opened_nodes.append(path)
+            return 999  # sentinel fd
+
+        def _fake_ioctl(fd, request, arg):
+            ioctl_calls.append((fd, request))
+            return 0
+
+        def _fake_close(fd):
+            assert fd == 999
+
+        monkeypatch.setattr(logger_main.os, "open", _fake_open)
+        monkeypatch.setattr(logger_main.os, "close", _fake_close)
+        monkeypatch.setattr(_fcntl, "ioctl", _fake_ioctl)
+
+        await daemon._attempt_usbdevfs_reset("/dev/ttyFAKE")
+
+        assert opened_nodes == ["/dev/bus/usb/003/017"]
+        assert ioctl_calls == [(999, logger_main._USBDEVFS_RESET)]
+        assert daemon._usb_reset_count == 1
+        assert daemon._last_usb_reset_at is not None
+
+    async def test_resolver_soft_returns_on_symlink_loop(
+        self, daemon, monkeypatch,
+    ):
+        """Python 3.10-3.12 raises ``RuntimeError`` (not ``OSError``)
+        when ``Path.resolve()`` hits an infinite symlink loop.  If the
+        helper doesn't catch it, the raise escapes ``_forced_reconnect``
+        and the watchdog's whole recovery cadence stops — exactly the
+        regression this ladder exists to prevent (Codex PR 557 R1
+        blocker)."""
+
+        class _LoopingPath:
+            """Minimal Path stand-in whose ``resolve`` raises
+            ``RuntimeError``, matching the stdlib's behaviour on 3.10-
+            3.12 when it detects a cycle."""
+
+            def __init__(self, s): self._s = s
+
+            def __truediv__(self, other):
+                return _LoopingPath(f"{self._s}/{other}")
+
+            def resolve(self):
+                raise RuntimeError(f"Symlink loop from '{self._s}'")
+
+        monkeypatch.setattr("logger_main.Path", _LoopingPath, raising=False)
+
+        # If RuntimeError escaped the helper the await here would raise
+        # and the test would fail loudly — the point of the fix.
+        await daemon._attempt_usbdevfs_reset("/dev/ttyFAKE")
+
+        assert daemon._usb_reset_count == 0
+        assert daemon._last_usb_reset_at is None
+
+    async def test_resolver_soft_returns_on_unparseable_busnum(
+        self, daemon, monkeypatch, tmp_path,
+    ):
+        """A busnum file whose contents are not an integer (corrupted
+        sysfs, kernel bug, race during enumeration) must log and
+        return instead of raising.  ``int()`` on a non-numeric string
+        raises ``ValueError``, which the helper already handles — this
+        pins the invariant so a future refactor doesn't widen the
+        except clause away."""
+        import fcntl as _fcntl
+
+        sys_root = tmp_path / "sys"
+        usb_dev = sys_root / "devices" / "usbWEIRD"
+        tty_leaf = usb_dev / "ttyWEIRD" / "tty" / "ttyWEIRD"
+        tty_leaf.mkdir(parents=True)
+        (usb_dev / "busnum").write_text("not-a-number\n")
+        (usb_dev / "devnum").write_text("17\n")
+        class_tty = sys_root / "class" / "tty"
+        class_tty.mkdir(parents=True)
+        (class_tty / "ttyWEIRD").symlink_to(tty_leaf)
+
+        import pathlib
+        real_path_cls = pathlib.Path
+
+        def _fake_path(arg):
+            s = str(arg)
+            if s.startswith("/sys/class/tty"):
+                return real_path_cls(str(sys_root) + s[4:])
+            return real_path_cls(arg)
+
+        monkeypatch.setattr("logger_main.Path", _fake_path, raising=False)
+
+        # No ioctl must fire if the resolver bailed.
+        ioctl_calls: list = []
+        monkeypatch.setattr(
+            _fcntl, "ioctl",
+            lambda *a, **k: ioctl_calls.append(a),
+        )
+        monkeypatch.setattr(
+            logger_main.os, "open",
+            lambda *a, **k: pytest.fail("os.open should not be called"),
+        )
+
+        await daemon._attempt_usbdevfs_reset("/dev/ttyWEIRD")
+
+        assert ioctl_calls == []
+        assert daemon._usb_reset_count == 0
+
+    async def test_resolver_soft_returns_on_non_usb_tty(
+        self, daemon, monkeypatch, tmp_path,
+    ):
+        """A built-in UART (ttyS0, ttyAMA0, etc.) has no USB ancestor
+        in sysfs — the walk from ``/sys/class/tty/<name>`` reaches
+        the filesystem root without finding busnum+devnum.  Operators
+        with a mixed-adapter host must not see the helper crash just
+        because its string check matched a non-USB port name."""
+        import fcntl as _fcntl
+
+        # /sys/devices/platform/serial8250/ttyS0 — no busnum anywhere.
+        sys_root = tmp_path / "sys"
+        tty_leaf = (
+            sys_root / "devices" / "platform" / "serial8250" / "ttyS0"
+        )
+        tty_leaf.mkdir(parents=True)
+        class_tty = sys_root / "class" / "tty"
+        class_tty.mkdir(parents=True)
+        (class_tty / "ttyS0").symlink_to(tty_leaf)
+
+        import pathlib
+        real_path_cls = pathlib.Path
+
+        def _fake_path(arg):
+            s = str(arg)
+            if s.startswith("/sys/class/tty"):
+                return real_path_cls(str(sys_root) + s[4:])
+            return real_path_cls(arg)
+
+        monkeypatch.setattr("logger_main.Path", _fake_path, raising=False)
+
+        ioctl_calls: list = []
+        monkeypatch.setattr(
+            _fcntl, "ioctl",
+            lambda *a, **k: ioctl_calls.append(a),
+        )
+        monkeypatch.setattr(
+            logger_main.os, "open",
+            lambda *a, **k: pytest.fail("os.open should not be called"),
+        )
+
+        await daemon._attempt_usbdevfs_reset("/dev/ttyS0")
+
+        assert ioctl_calls == []
+        assert daemon._usb_reset_count == 0

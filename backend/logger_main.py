@@ -215,6 +215,24 @@ WATCHDOG_TICK_SECONDS = 10
 # timeout here is the trigger for the exit-for-systemd backstop.
 FORCED_DISCONNECT_TIMEOUT = 5.0
 
+# CP210x wedge recovery (#501).  After N consecutive _forced_reconnect
+# failures assume the CP2102N inside the Vue console is in the AN571
+# errata state: the device enumerates fine, but every ``cp210x_open``
+# fails with ``-71`` (EPROTO) or ``-110`` (ETIMEDOUT) on the SET_UART
+# control transfer.  USBDEVFS_RESET on the raw usb node is roughly
+# equivalent to a physical cable reseat without cutting Vbus — the
+# only recovery short of a human walking to the bench.  Give up after
+# a higher cap so a truly dead cable doesn't trigger a reset storm.
+USB_RESET_AFTER_FAILURES = 3
+USB_RESET_GIVE_UP_AFTER = 6
+# <linux/usbdevice_fs.h> _IO('U', 20).  Hard-coded so the daemon has
+# no runtime dependency on linux/usbdevice_fs.h headers.
+_USBDEVFS_RESET = 0x5514
+# After the ioctl the kernel re-enumerates the device; give xhci a
+# brief grace period before the next ``_connect`` call tries to
+# open the port.  0.5 s matches what a cable reseat sees empirically.
+_USB_REENUMERATE_GRACE_SECONDS = 0.5
+
 
 class LoggerDaemon:
     """Main logger daemon — station owner, poller, IPC server."""
@@ -256,6 +274,13 @@ class LoggerDaemon:
         # the runaway loop after the first attempt — a successful
         # catchup won't retry, a failed one won't either.
         self._catchup_completed: bool = False
+        # CP210x wedge recovery escalation state (#501).  Streak resets
+        # on a successful _connect; the ioctl counter is cumulative
+        # across the daemon's lifetime so /api/health can surface a
+        # "serial adapter unstable" signal across reconnects.
+        self._reconnect_fail_streak: int = 0
+        self._usb_reset_count: int = 0
+        self._last_usb_reset_at: Optional[datetime] = None
 
     # ---- helpers for LinkDriver-specific operations ----
 
@@ -607,6 +632,19 @@ class LoggerDaemon:
                 logging.shutdown()
                 os._exit(1)
 
+            # CP210x wedge escalation (#501).  If prior attempts have
+            # failed enough times to suggest the AN571 errata state,
+            # issue USBDEVFS_RESET on the raw usb node BEFORE the next
+            # open — the equivalent of a cable reseat without cutting
+            # Vbus.  Give up above the upper cap: continuing to ioctl
+            # a truly dead cable just floods the log.
+            if (
+                USB_RESET_AFTER_FAILURES
+                <= self._reconnect_fail_streak
+                < USB_RESET_GIVE_UP_AFTER
+            ):
+                await self._attempt_usbdevfs_reset(port)
+
             try:
                 await self._connect(port, baud)
                 # ``_connect`` schedules the DMPAFT catchup task (#477)
@@ -614,14 +652,115 @@ class LoggerDaemon:
                 # sequence, so the recovered daemon fills the gap from
                 # the console's ring buffer automatically — no
                 # additional wiring needed here.
+                self._reconnect_fail_streak = 0
                 logger.info("Watchdog reconnect complete")
             except Exception as exc:
+                self._reconnect_fail_streak += 1
                 logger.error(
-                    "Watchdog reconnect failed: %s — daemon will keep "
-                    "retrying via the watchdog's driverless-recovery "
-                    "branch (State B in _watchdog_tick, #482)",
-                    exc,
+                    "Watchdog reconnect failed (streak=%d): %s — daemon "
+                    "will keep retrying via the watchdog's driverless-"
+                    "recovery branch (State B in _watchdog_tick, #482)",
+                    self._reconnect_fail_streak, exc,
                 )
+
+    async def _attempt_usbdevfs_reset(self, port: str) -> None:
+        """Issue USBDEVFS_RESET on the USB device backing *port*.
+
+        The CP2102N inside the Vue console enters an AN571 errata
+        state where every subsequent ``cp210x_open`` fails on the
+        SET_UART control transfer with ``-71`` (EPROTO) or ``-110``
+        (ETIMEDOUT).  The device stays enumerated and the ``tty``
+        node persists, so a tty-layer retry loop can never recover
+        it; only a USB-layer reset or a physical replug does.  This
+        ioctl is the former — it goes through the host controller
+        and is roughly equivalent to a cable reseat that leaves Vbus
+        up (#501 §1).
+
+        Requires ``kanfei`` write access on ``/dev/bus/usb/BBB/DDD``,
+        which the ``debian/kanfei.udev`` rule grants via the
+        ``dialout`` group.  On EACCES we log and return — the next
+        reconnect falls through to the plain driver-layer attempt
+        rather than crash.
+        """
+        import fcntl
+
+        tty_name = os.path.basename(port)
+        # /sys/class/tty/ttyUSB0 →
+        #   /sys/devices/.../usb1/1-5/1-5.3/1-5.3:1.0/ttyUSB0/tty/ttyUSB0
+        # Walk up to the first ancestor directory with busnum+devnum
+        # — that is the USB device node, which may be several levels
+        # above the tty depending on the hub topology.
+        sys_tty = Path("/sys/class/tty") / tty_name
+        try:
+            # ``Path.resolve()`` raises ``RuntimeError`` (not ``OSError``)
+            # on an infinite symlink loop on Python 3.10-3.12 — this
+            # was aligned to ``OSError`` only in 3.13.  Catch both so a
+            # broken sysfs tree returns soft, otherwise the raise
+            # escapes the whole ``_forced_reconnect`` and the watchdog
+            # loses its retry cadence (Codex PR 557 R1 blocker).
+            real = sys_tty.resolve()
+        except (OSError, RuntimeError) as exc:
+            logger.warning(
+                "USB reset: cannot resolve %s under /sys/class/tty: %s",
+                port, exc,
+            )
+            return
+
+        usb_dir: Optional[Path] = None
+        for ancestor in (real, *real.parents):
+            if (ancestor / "busnum").exists() and (ancestor / "devnum").exists():
+                usb_dir = ancestor
+                break
+        if usb_dir is None:
+            logger.warning(
+                "USB reset: no USB device ancestor for %s (resolved to %s)",
+                port, real,
+            )
+            return
+
+        try:
+            bus = int((usb_dir / "busnum").read_text().strip())
+            dev = int((usb_dir / "devnum").read_text().strip())
+        except (OSError, ValueError) as exc:
+            logger.warning(
+                "USB reset: cannot read busnum/devnum under %s: %s",
+                usb_dir, exc,
+            )
+            return
+
+        node = f"/dev/bus/usb/{bus:03d}/{dev:03d}"
+
+        def _do_reset() -> None:
+            fd = os.open(node, os.O_WRONLY)
+            try:
+                fcntl.ioctl(fd, _USBDEVFS_RESET, 0)
+            finally:
+                os.close(fd)
+
+        try:
+            await asyncio.to_thread(_do_reset)
+        except PermissionError:
+            logger.error(
+                "USB reset: EACCES on %s — udev rule from #501 §2 not "
+                "installed, or kanfei not in dialout?",
+                node,
+            )
+            return
+        except OSError as exc:
+            logger.warning(
+                "USB reset: ioctl on %s failed: %s", node, exc,
+            )
+            return
+
+        self._usb_reset_count += 1
+        self._last_usb_reset_at = datetime.now(timezone.utc)
+        logger.warning(
+            "USB reset ioctl issued on %s (bus=%d dev=%d, count=%d) — "
+            "waiting %.1fs for kernel re-enumeration before next reconnect",
+            node, bus, dev, self._usb_reset_count,
+            _USB_REENUMERATE_GRACE_SECONDS,
+        )
+        await asyncio.sleep(_USB_REENUMERATE_GRACE_SECONDS)
 
     async def _teardown_driver(self) -> None:
         if self._midnight_task:
