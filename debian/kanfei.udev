@@ -1,0 +1,18 @@
+# Grant kanfei-logger write access on the raw USB device node for
+# Silicon Labs CP210x family serial adapters.  The daemon needs this
+# to issue USBDEVFS_RESET as part of its wedge-recovery escalation
+# ladder (#501) — the CP2102N in Davis Vantage Vue consoles
+# periodically enters an AN571 errata state where every subsequent
+# cp210x_open on the tty fails with -71 (EPROTO) or -110 (ETIMEDOUT),
+# and only a USB-layer reset (or physical cable reseat) clears it.
+#
+# Matches on the device-level node (not the interface), because
+# USBDEVFS_RESET is issued against /dev/bus/usb/BBB/DDD, which is
+# owned by the device entry's attributes.  Product-id list covers the
+# shipping CP210x variants: ea60 (CP2101/2/3/4), ea61 (CP2102N, Vue),
+# ea63 (CP2102N QFN), ea70 (CP2105), ea71 (CP2108).
+#
+# dh_installudev installs this to /lib/udev/rules.d/60-kanfei.rules
+# at package install time.  Reload+trigger is handled by the udev
+# maintainer scripts dh_installudev inserts for us.
+SUBSYSTEM=="usb", ATTR{idVendor}=="10c4", ATTR{idProduct}=="ea60|ea61|ea63|ea70|ea71", MODE="0660", GROUP="dialout"
