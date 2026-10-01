@@ -28,6 +28,7 @@ from ..services.calculations import (
     equivalent_potential_temperature,
 )
 from ..services.pressure_trend import analyze_pressure_trend
+from ..utils.units import hpa_tenths_to_inhg_thousandths
 from ..services.alerts import AlertChecker
 from ..models.database import SessionLocal
 from ..models.sensor_meta import SENSOR_BOUNDS
@@ -435,7 +436,12 @@ class Poller:
             if len(results) < 2:
                 return None
 
-            readings = [(r.timestamp.timestamp(), r.barometer) for r in results]
+            # DB stores tenths-hPa; analyze_pressure_trend's thresholds
+            # are thousandths-inHg.  Convert each sample at read time.
+            readings = [
+                (r.timestamp.timestamp(), hpa_tenths_to_inhg_thousandths(r.barometer))
+                for r in results
+            ]
             result = analyze_pressure_trend(readings)
             return result.trend if result else None
         finally:
